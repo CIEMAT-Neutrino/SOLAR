@@ -60,14 +60,6 @@ lib.io\_functions module
    :undoc-members:
    :show-inheritance:
 
-lib.mcdf\_functions module
---------------------------
-
-.. automodule:: lib.mcdf_functions
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 lib.osc\_functions module
 -------------------------
 

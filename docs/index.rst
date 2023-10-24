@@ -10,11 +10,15 @@ Welcome to SOLAR's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-
-
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+.. _Python: http://python.org/
+.. _Sphinx: http://sphinx.pocoo.org/
+.. _reStructuredText: http://docutils.sourceforge.net/rst.html
+
+.. _SOLAR: http://solar.readthedocs.io/en/latest/

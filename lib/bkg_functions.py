@@ -1,5 +1,5 @@
 import numpy as np
-from lib.io_functions import print_colored,read_input_file
+from lib.io_functions import print_colored, read_input_file
 
 def get_bkg_config(info,debug=False):
     '''

@@ -94,10 +94,15 @@ def compute_reco_workflow(run,config_files,params={},workflow="ANALYSIS",rm_bran
 def compute_primary_cluster(run, config_files, params={}, rm_branches=False, debug=False):
     '''
     Compute the primary cluster of the events in the TTree. This primary cluster is the one with the highest charge in the event.
-    - run: dictionary containing the TTree branches
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+        
+    Args:
+        run: dictionary containing the TTree branches
+        config_files: dictionary containing the path to the configuration files for each geoemtry
+        params: dictionary containing the parameters for the reco functions
+        debug: print debug information
+    
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches.
     '''
     # New branches
     run["Reco"]["MaxAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
@@ -116,11 +121,15 @@ def compute_primary_cluster(run, config_files, params={}, rm_branches=False, deb
 def compute_recoy(run,config_files,params={},rm_branches=False,debug=False):
     '''
     Compute the reconstructed Y position of the events in the TTree
-    - run: dictionary containing the TTree
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-        - "COMPUTE_MATCHING": if True, compute the matching between the colection and induction planes
-    - debug: print debug information
+
+    Args:
+        run: dictionary containing the TTree
+        config_files: dictionary containing the path to the configuration files for each geoemtry
+        params: dictionary containing the parameters for the reco functions (COMPUTE_MATCHING)
+        debug: print debug information
+    
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches    
     '''
     # New branches
     run["Reco"]["RecoY"] = 1e-6*np.ones(len(run["Reco"]["Event"]),dtype=float)
@@ -150,13 +159,15 @@ def compute_recoy(run,config_files,params={},rm_branches=False,debug=False):
 def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FLASH_PE":None,"RATIO_FLASH_PEvsR":None},rm_branches=False,debug=False):
     '''
     Match the reconstructed events with selected OpFlash
-    - run: dictionary containing the TTree branches
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-        - "MAX_FLASH_R": maximum distance between the reconstructed vertex from cluster and the OpFlash
-        - "MIN_FLASH_PE": minimum PE of the OpFlash
-        - "RATIO_FLASH_PE": maximum ratio between the maximum PE of the OpFlash and the PE of the OpFlash
-    - debug: print debug information
+    
+    Args:
+        run (dict): dictionary containing the TTree branches
+        config_files (dict): dictionary containing the path to the configuration files for each geoemtry
+        params (dict): dictionary containing the parameters for the reco functions (MAX_FLASH_R, MIN_FLASH_PE, RATIO_FLASH_PE)
+        debug (bool): print debug information
+    
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches.
     '''
     # New branches
     run["Reco"]["FlashMathedIdx"]     = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjOpFlashR"][0])),dtype=bool)
@@ -201,10 +212,16 @@ def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FL
 
 def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branches=False,debug=False):
     '''
-    Compute the reconstructed X position of the events in the TTree based on the drift time calculated from the OpFlash matching
-    - run: dictionary containing the TTree
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - debug: print debug information
+    Compute the reconstructed X position of the events in the TTree
+
+    Args:
+        run (dict): dictionary containing the TTree
+        config_files (dict): dictionary containing the path to the configuration files for each geoemtry
+        params (dict): dictionary containing the parameters for the reco functions
+        debug (bool): print debug information
+    
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches
     '''
     
     run["Reco"]["RecoX"] = np.zeros(len(run["Reco"]["Event"]))

@@ -1,5 +1,5 @@
 # PYTHON/GENERAL PACKAGES #
-import os, copy, uproot, math, random, gc
+import os, copy, uproot, math, random, gc, ROOT
 import numpy                 as np
 import pandas                as pd
 import awkward               as ak
@@ -27,15 +27,15 @@ from matplotlib.colors       import Normalize
 from rich.progress           import track
 
 # LARSOFT_CYTOOLS SELF-LIB FUNCTIONS #
-from .io_functions        import *
-from .reco_functions      import *
-from .fit_functions       import *
-from .plt_functions       import *
-from .mcdf_functions      import *
-from .solar_functions     import *
-from .osc_functions       import *
 from .bkg_functions       import *
-from .geo_functions       import *
-from .hit_functions       import *
-from .head_functions      import *
 from .df_functions        import *
+from .fit_functions       import *
+from .geo_functions       import *
+from .head_functions      import *
+from .hit_functions       import *
+from .io_functions        import *
+from .osc_functions       import *
+from .plt_functions       import *
+from .reco_functions      import *
+from .root_functions      import *
+from .solar_functions     import *

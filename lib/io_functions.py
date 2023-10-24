@@ -3,8 +3,6 @@ import numpy   as np
 import pandas  as pd
 import awkward as ak
 
-from .bkg_functions import get_bkg_info
-
 def print_colored(string, color, bold=False):
     '''
     Print a string in a specific color.

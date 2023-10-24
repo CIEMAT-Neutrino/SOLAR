@@ -3,17 +3,17 @@ import numpy as np
 
 from lib.io_functions import resize_subarrays
 
-def process_hit_run(hit_run,tree,debug=False):
+def process_hit_run(hit_run, tree, debug=False):
     '''
     This function takes a hit_run dictionary and returns a processed run dictionary.
     The processed run dictionary is designed to change the hit-based structure into a cluster-based structure.
     VARIABLES:
-        hit_run: dictionary containing the hit_run data
-        tree: string containing the name of the tree to be processed
-        debug: boolean to print debug messages
+    - hit_run: dictionary containing the hit_run data
+    - tree: string containing the name of the tree to be processed
+    - debug: boolean to print debug messages
     
     RETURNS:
-        run: dictionary containing the processed hit_run data
+    - run: dictionary containing the processed hit_run data
     '''
     
     if debug: print("Processing run -> START")
