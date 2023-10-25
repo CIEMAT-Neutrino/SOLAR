@@ -25,6 +25,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots         import make_subplots
 from matplotlib.colors       import Normalize
 from rich.progress           import track
+from ROOT                    import TFile, TTree, TList
 
 # LARSOFT_CYTOOLS SELF-LIB FUNCTIONS #
 from .bkg_functions       import *
