@@ -1,0 +1,2 @@
+This macro can be used to calibrate the charge to energy conversion from the output tree of the SolarNuAna_module. The prefired data-set is composed of marley events with a flat spectrum of 4-20MeV.
+The macro will select electron candidates based on true information and correct the charge for the electron lifetime to obtain a correction factor and reconstruct the electron energy.
