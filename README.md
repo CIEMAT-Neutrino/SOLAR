@@ -5,12 +5,17 @@ SolarNuAna_module Output Library for Analysis &amp; Research
 
 This module is designed to analyze the output of the [SOLAR](https://github.com/DUNE/duneana/blob/develop/duneana/SolarNuAna/SolarNuAna_module.cc) module. It is designed to be used in conjunction with the [DUNE](https://github.com/DUNE) software framework.
 
+Read more about the module [here](https://dune-solar.readthedocs.io/en/latest/).
+
 ## Installation
 
 To use the SolarNuAna_module, you must have a working version of the DUNE software framework. This can be done by following the instructions [here](https://dune.bnl.gov/wiki/Computing#Getting_the_DUNE_Software_Framework). Once you were able to run the module on a given set of marley (+ bkg) data, use this repository to analyse the output tree.
 
 ```bash
 git clone https://github.com/CIEMAT-Neutrino/SOLAR.git
+cd SOLAR
+git checkout -b <branch>
+source scripts/setup.sh
 ```
 
 ## Usage
