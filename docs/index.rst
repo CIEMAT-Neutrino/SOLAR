@@ -3,7 +3,6 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-
 .. raw:: html
 
    <style> 
@@ -41,8 +40,7 @@ You can navigate through the documentation using the table of contents below and
 
    installation
    tutorial
-   source/lib
-   source/modules
+   lib
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 

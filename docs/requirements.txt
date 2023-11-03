@@ -18,14 +18,17 @@ icecream
 iminuit
 inquirer
 ipykernel
+jupyter
 kaleido
 matplotlib
 nbformat
+numba
 numpy
 pandas
 plotly
 plotly_express
 particle
 rich
+root_numpy
 scipy
 uproot
