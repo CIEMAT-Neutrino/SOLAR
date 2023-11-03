@@ -7,10 +7,12 @@ from .io_functions import print_colored
 def get_flag_dict(debug = False):
     '''
     This function returns a dictionary with the available flags for the macros.
-    **VARIABLES:**
-    \n** - debug:** If True, the debug mode is activated.
-    **RETURNS:**
-    \n** - flag_dict** (*dict*): Dictionary with the available flags for the macros.
+    
+    Args:
+        debug (bool): If True, the debug mode is activated.
+    
+    Returns:
+        flag_dict (dict): Dictionary with the available flags for the macros.
     '''
     flag_dict = {("-c","--config_file"):"config_file \t(hd, vd, etc.)",
         ("-d","--debug"):"debug \t(True/False)",
@@ -26,11 +28,15 @@ def get_flag_dict(debug = False):
 def initialize_macro(macro, input_list=["config_file","root_file","debug"], default_dict={}, debug=False):
     '''
     This function initializes the macro by reading the input file and the user input.
-    **VARIABLES:**
-    \n** - macro:**        Name of the macro to be executed.
-    \n** - input_list:**   List with the keys of the user input that need to be updated.
-    \n** - default_dict:** Dictionary with the default values for the user input.
-    \n** - debug:**        If True, the debug mode is activated.
+    
+    Args:
+        macro (str): Name of the macro to be executed.
+        input_list (list(str)): List with the keys of the user input that need to be updated.
+        default_dict (dict): Dictionary with the default values for the user input.
+        debug (bool): If True, the debug mode is activated.
+    
+    Returns:
+        user_input (dict): Dictionary with the user input.
     '''
     from .io_functions import print_colored
 
@@ -62,17 +68,22 @@ def initialize_macro(macro, input_list=["config_file","root_file","debug"], defa
     user_input = update_user_input(user_input,input_list,debug=debug)
     
     user_input["config_file"] = user_input["config_file"][0]
-    user_input["rewrite"] = user_input["rewrite"][0].lower() in ['true', '1', 't', 'y', 'yes']
-    user_input["debug"] = user_input["debug"][0].lower() in ['true', '1', 't', 'y', 'yes']
+    for bool_key in ["debug","rewrite","show","trim"]:
+        if bool_key in user_input.keys():
+            user_input[bool_key] = user_input[bool_key][0].lower() in ['true', '1', 't', 'y', 'yes']
     return user_input
 
 def update_user_input(user_input, new_input_list, debug=False):
     '''
     This function updates the user input by asking the user to provide the missing information.
-    **VARIABLES:**
-    \n** - user_input:**     Dictionary with the user input.
-    \n** - new_input_list:** List with the keys of the user input that need to be updated.
-    \n** - debug:**          If True, the debug mode is activated.
+
+    Args:
+        user_input (dict): Dictionary with the user input.
+        new_input_list (list(str)): List with the keys of the user input that need to be updated.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        new_user_input (dict): Dictionary with the updated user input.
     '''
     from .io_functions import check_key
 
@@ -100,10 +111,15 @@ def select_input_file(user_input, debug=False):
         folder_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/')]
         q1 = [ inquirer.List("config_file", message="Please select input file", choices=folder_names, default="hd") ]
         input_folder = inquirer.prompt(q1)["config_file"]
-        file_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/'+input_folder+'/')]
-        q2 = [ inquirer.List("config_file", message="Please select input file", choices=file_names, default="hd") ]
-        new_user_input["config_file"] = [input_folder+"/"+inquirer.prompt(q2)["config_file"]]
-    
+        # Check if config file exists in the selected folder
+        if not os.path.exists('../config/'+input_folder+'/'+input_folder+'_config.txt'):
+            print_colored("WARNING: No config file found in folder %s"%input_folder,"WARNING")
+            file_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/'+input_folder+'/')]
+            q2 = [ inquirer.List("config_file", message="Please select input file", choices=file_names, default="hd") ]
+            new_user_input["config_file"] = [input_folder+"/"+inquirer.prompt(q2)["config_file"]]
+        else:
+            print_colored("-> Using config file %s"%input_folder+"_config","SUCCESS")
+            new_user_input["config_file"] = [input_folder+"/"+input_folder+"_config"]
     # if debug: print_colored("Using config file %s"%new_user_input["config_file"][0],"INFO")
     return new_user_input
 

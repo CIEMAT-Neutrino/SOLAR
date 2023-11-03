@@ -157,9 +157,7 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
                 if debug: print_colored("Loading rebinned data from %s"%save_path,"DEBUG")
                 df = pd.read_pickle(save_path)
             else:
-                if debug: print_colored("Rebinning data!","DEBUG")
                 df = rebin_df(df,show=False,save=save,save_path=save_path,debug=debug)
-
 
         # if save and glob.glob(path+"/pkl/raw/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) == []:
         #     if debug: print_colored("Saving raw data to: "+path+"/pkl/raw/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")

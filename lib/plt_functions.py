@@ -64,7 +64,7 @@ def format_coustom_plotly(fig,
     fontsize=16,
     figsize=None,
     ranges=(None,None),
-    matches=(None,None),
+    matches=("x","y"),
     tickformat=('.s','.s'),
     log=(False,False),
     margin={"auto":True,"color":"white","margin":(0,0,0,0)},
@@ -165,7 +165,7 @@ def histogram_comparison(df,variable,discriminator,show_residual=False,binning="
             norm_factor = coustom_norm[this_discriminator]
         
         bins[i] = bins[i]/norm_factor
-        # print(norm_factor)
+        
         # Calculate the error on the histogram
         if hist_error == "binomial":
             bins_error[i] = bins[i]/np.sqrt(len(df[variable][df[discriminator]==this_discriminator])/nbins)

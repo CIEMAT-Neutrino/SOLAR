@@ -1,4 +1,4 @@
-import gc
+import gc, numba
 import numpy as np
 from .io_functions import read_input_file,print_colored
 from .fit_functions import exp
@@ -59,8 +59,14 @@ def compute_reco_workflow(run,config_files,params={},workflow="ANALYSIS",rm_bran
     if debug: print_colored("\nComputing reco workflow of type %s"%workflow,"INFO")
 
     if workflow == "BASIC":
+        run = compute_event_idx(run,config_files,params,rm_branches=rm_branches,debug=debug)
         run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
         # run = compute_recoy(run,config_files,params,rm_branches=rm_branches,debug=debug)
+    
+    if workflow == "ADJCL":
+        run = compute_event_idx(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_adjcl_basics(run,config_files,params,rm_branches=rm_branches,debug=debug)
     
     if workflow == "CALIBRATION":
         run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
@@ -89,6 +95,36 @@ def compute_reco_workflow(run,config_files,params={},workflow="ANALYSIS",rm_bran
         run = compute_adjcl_variables(run,config_files,params,rm_branches=rm_branches,debug=debug)
 
     print_colored("\nReco workflow \t-> Done!\n", "SUCCESS")
+    return run
+
+def compute_event_idx(run,config_files,params={},rm_branches=False,debug=False):
+    '''
+    Compute real event index for the events in the TTree
+
+    Args:
+        run: dictionary containing the TTree
+        config_files: dictionary containing the path to the configuration files for each geoemtry
+        params: dictionary containing the parameters for the reco functions
+        debug: print debug information
+    '''
+
+    # New branches
+    run["Reco"]["EventIdx"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
+    for config in config_files:
+        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
+        idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]))
+        @numba.njit
+        def generate_index(event, flag, index):
+            for i in range(1, len(event)):
+                if event[i] != event[i - 1] or flag[i] != flag[i - 1]:
+                    index[i] = index[i - 1] + 1
+                else:
+                    index[i] = index[i - 1]
+            return index
+        run["Reco"]["EventIdx"][idx] = generate_index(run["Reco"]["Event"][idx], run["Reco"]["Flag"][idx], run["Reco"]["EventIdx"][idx])
+
+    print_colored("Event index computation \t-> Done!", "SUCCESS")
+    run = remove_branches(run,rm_branches,[],debug=debug)
     return run
 
 def compute_primary_cluster(run, config_files, params={}, rm_branches=False, debug=False):
@@ -327,16 +363,49 @@ def compute_opflash_variables(run,config_files,params={},rm_branches=False,debug
     print_colored("OpFlash variables computation \t-> Done!", "SUCCESS")
     return run
 
+def compute_adjcl_basics(run,config_files,params={},rm_branches=False,debug=False):
+    '''
+    Compute basic variables for the adjacent clusters
+
+    Args:
+        run: dictionary containing the TTree
+        config_files: dictionary containing the path to the configuration files for each geoemtry
+        params: dictionary containing the parameters for the reco functions
+        debug: print debug information
+    '''
+
+    # New branches
+    run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0,axis=1)
+    run["Reco"]["TotalAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
+    run["Reco"]["MaxAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
+    run["Reco"]["MeanAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
+    run["Reco"]["MeanAdjClR"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
+    run["Reco"]["MeanAdjClTime"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
+    for config in config_files:
+        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
+        idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
+        params = get_param_dict(info,params,debug=False)
+        run["Reco"]["TotalAdjClCharge"][idx] = np.sum(run["Reco"]["AdjClCharge"][idx],axis=1)
+        run["Reco"]["MaxAdjClCharge"][idx] = np.max(run["Reco"]["AdjClCharge"][idx],axis=1)
+        run["Reco"]["MeanAdjClCharge"][idx] = np.mean(run["Reco"]["AdjClCharge"][idx],axis=1)
+        run["Reco"]["MeanAdjClR"][idx] = np.mean(run["Reco"]["AdjClR"][idx],axis=1)
+        run["Reco"]["MeanAdjClTime"][idx] = np.mean(run["Reco"]["AdjClTime"][idx],axis=1)
+
+    print_colored("AdjCl basic computation \t-> Done!", "SUCCESS")
+    run = remove_branches(run,rm_branches,[],debug=debug)
+    return run
+
 def compute_adjcl_variables(run,config_files,params={},rm_branches=False,debug=False):
     '''
     Compute the energy of the individual adjacent clusters based on the main calibration.
-    - run: dictionary containing the TTree
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+
+    Args:
+        run: dictionary containing the TTree
+        config_files: dictionary containing the path to the configuration files for each geoemtry
+        params: dictionary containing the parameters for the reco functions
+        debug: print debug information
     '''
     # New branches
-    run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0,axis=1)
     run["Reco"]["TotalAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["MaxAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     for config in config_files:

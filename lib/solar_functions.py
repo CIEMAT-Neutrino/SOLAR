@@ -13,7 +13,7 @@ from particle import Particle
 from itertools import product
 from scipy import constants as const
 
-from lib.io_functions import read_input_file, get_branches, get_preset_list, resize_subarrays, resize_subarrays_fixed, print_colored
+from lib.io_functions  import print_colored
 from lib.osc_functions import get_nadir_angle, get_oscillation_datafiles
 from lib.bkg_functions import get_bkg_config, get_gen_label, get_gen_weights
 
@@ -66,7 +66,11 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
                 this_auto = auto
             
             (dm2_list,sin13_list,sin12_list) = get_oscillation_datafiles(dm2=this_dm2,sin13=this_sin13,sin12=this_sin12,path="../data/OSCILLATION/pkl/rebin/",ext="pkl",auto=this_auto,debug=debug)
-            for dm2,sin13,sin12 in zip(dm2_list,sin13_list,sin12_list):    
+            # for dm2,sin13,sin12 in zip(dm2_list,sin13_list,sin12_list):
+            for i in track(range(len(dm2_list)), description="Computing oscillation map..."):
+                dm2 = dm2_list[i]
+                sin13 = sin13_list[i]
+                sin12 = sin12_list[i]    
                 oscillation_df = pd.read_pickle("../data/OSCILLATION/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2,sin13,sin12))
             
                 for column in eff_smearing_df.columns:
@@ -93,7 +97,7 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
             efficient_flux = {A: B for A, B in zip(energy_centers, r_hist/t_hist)}
             raised_activity = gen_weigths_dict[(info["GEOMETRY"][0],name)]
             weight = np.ones(len(r_hist))/(raised_activity*int_time)
-            if debug: print_colored("Weight for %s with filter %s: %.2e"%(name,filters[1][ldx],raised_activity),color="INFO")
+            # if debug: print_colored("Weight for %s with filter %s: %.2e"%(name,filters[1][ldx],raised_activity),color="INFO")
             r_hist = r_hist*info["FULL_DETECTOR_FACTOR"][0]*factor*weight
             total_counts = r_hist.tolist()
             
@@ -115,7 +119,7 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
                 if save: weighted_df.to_pickle("../sensitivity/"+config+"/"+name+"/"+gen_label+"/%s_events.pkl"%(gen_label))
                 weighted_df_dict[(None,None,None)] = weighted_df
             
-        if debug:print_colored("Total counts for %s with filter %s: %.2e"%(gen_label,filters[1][ldx],np.sum(total_counts)),color="INFO")     
+        # if debug:print_colored("Total counts for %s with filter %s: %.2e"%(gen_label,filters[1][ldx],np.sum(total_counts)),color="INFO")     
             
         this_dict_array = {
         'Geometry': info["GEOMETRY"][0], 

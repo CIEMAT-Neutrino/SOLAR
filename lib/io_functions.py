@@ -3,13 +3,16 @@ import numpy   as np
 import pandas  as pd
 import awkward as ak
 
-def print_colored(string, color, bold=False):
+from icecream import ic
+
+def print_colored(string, color, bold=False, debug=False):
     '''
-    Print a string in a specific color.
-    VARIABLES:
-        \n - string: string to print
-        \n - color: color of the string (see colors dictionary)
-        \n - bold: if True, the string is printed in bold (default: False)
+    Print a string in a specific color
+
+    Args:
+        string (str): string to be printed
+        color (str): color to be used
+        bold (bool): if True, the bold mode is activated (default: False)
     '''
     colors = {
               "DEBUG":   '\033[35m', #PURPLE
@@ -31,15 +34,19 @@ def print_colored(string, color, bold=False):
     
 def read_input_file(input, path="../config/", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
     '''
-    Obtain the information stored in a .txt input file to load the runs and channels needed.
-    **VARIABLES:**
-    \n** - input:**    name of the input file.
-    \n** - path:**     path of the input file.
-    \n** - INTEGERS:** list of integers to read from the input file.
-    \n** - DOUBLES:**  list of doubles to read from the input file.
-    \n** - STRINGS:**  list of strings to read from the input file.
-    \n** - BOOLS:**    list of booleans to read from the input file.
-    \n** - debug:**    if True, the debug mode is activated.
+    Obtain the information stored in a .txt input file to load the runs and channels needed
+
+    Args:
+        input (str): name of the input file
+        path (str): path of the input file (default: "../config/")
+        INTEGERS (list(str)): list of the variables to be read as integers (default: [])
+        DOUBLES (list(str)): list of the variables to be read as floats (default: [])
+        STRINGS (list(str)): list of the variables to be read as strings (default: [])
+        BOOLS (list(str)): list of the variables to be read as booleans (default: [])
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        info (dict): dictionary with the information from the input file
     '''
     info = dict()
     if INTEGERS == []: INTEGERS = ["EVENT_TICKS","MAX_ADJCL_TIME","DETECTOR_SIZE_X","DETECTOR_SIZE_Y","DETECTOR_SIZE_Z","MAIN_PDG"]
@@ -57,21 +64,21 @@ def read_input_file(input, path="../config/", INTEGERS=[], DOUBLES=[], STRINGS=[
                     doubles = line.split(" ")[1]
                     for i in doubles.split(","):
                         info[LABEL].append(float(i))
-                        if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
+                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
             for LABEL in INTEGERS:
                 if line.startswith(LABEL):
                     info[LABEL] = []
                     integers = line.split(" ")[1]
                     for i in integers.split(","):
                         info[LABEL].append(int(i))
-                        if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
+                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
             for LABEL in STRINGS:
                 if line.startswith(LABEL):
                     info[LABEL] = []
                     strings = line.split(" ")[1]
                     for i in strings.split(","):
                         info[LABEL].append(i.strip('\n'))
-                        if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
+                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
             for LABEL in BOOLS:
                 if line.startswith(LABEL):
                     info[LABEL] = []
@@ -79,24 +86,25 @@ def read_input_file(input, path="../config/", INTEGERS=[], DOUBLES=[], STRINGS=[
                     for i in bools.split(","):
                         if i.strip('\n') == "True":  info[LABEL].append(True)
                         if i.strip('\n') == "False": info[LABEL].append(False)
-                        if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
-
-    if debug: print_colored("InputFile Info:"+str(info.keys()),"SUCCESS")
+                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
+    if debug: ic(info)
     return info
 
 def root2npy(root_info, trim=False, debug=False):
     '''
-    Dumper from .root format to npy files. Input are root input file, path and npy outputfile as strings.
-    \n Depends on uproot, awkward and numpy.
-    \n Size increases x2 times. 
-    VARIABLES:
-    \n root_info: output dictionary from get_root_info function.
-    '''
+    Dumper from .root format to npy files. Input are root input file, path and npy outputfile as strings
 
+    Args:
+        root_info (dict): dictionary with the information of the root file
+        trim (bool): if True, trim the array to the selected size (default: False)
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        0 (int): if the function is executed correctly
+    '''
     path = root_info["Path"]
     name = root_info["Name"]
-    print(root_info["Path"]+root_info["Name"]+".root")
-
+    if debug: print_colored("Converting from: "+root_info["Path"]+root_info["Name"]+".root","DEBUG")
     with uproot.open(root_info["Path"]+root_info["Name"]+".root") as f:
         for tree in root_info["TreeNames"].keys():
             done_root_info = []
@@ -110,45 +118,51 @@ def root2npy(root_info, trim=False, debug=False):
                 if branch not in done_root_info: done_root_info.append(branch) # To avoid repeating branches
                 if debug: print_colored("\n"+tree+" ---> "+out_folder+": " + str(branch),"SUCCESS")
 
-                if "Map" not in branch: 
-                    this_array    = f[root_info["Folder"]+"/"+tree][branch].array()
-                    if trim != False and debug: print("Selected trimming value: ", trim)
-                    resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
-                    np.save(path+name+"/"+out_folder+"/"+branch+".npy", resized_array)
-                    if debug: print(resized_array)
-                    del resized_array
-                    del this_array
+                # if "Map" not in branch: 
+                this_array    = f[root_info["Folder"]+"/"+tree][branch].array()
+                if trim != False and debug: print("Selected trimming value: ", trim)
+                resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
+                np.save(path+name+"/"+out_folder+"/"+branch+".npy", resized_array)
+                if debug: print(resized_array)
+                del resized_array
+                del this_array
 
-                else: 
-                    print("Branch is a map: ", branch)
-                    dicts = []
-                    this_keys   = f[root_info["Folder"]+"/"+tree][branch+"_keys"].array()
-                    this_values = f[root_info["Folder"]+"/"+tree][branch+"_values"].array()
-                    if debug: print_colored("Using keys: " + str(this_keys[0]),"DEBUG"); print_colored("Using values: " + str(this_values[0]),"DEBUG")
-                    for j in range(len(this_keys)): dicts.append(dict(zip(this_keys[j], this_values[j])))
-                    np.save(path+name+"/"+out_folder+"/"+branch+".npy", dicts)
-                    print(dicts[0])
-                    del dicts
+                # else: 
+                #     print("Branch is a map: ", branch)
+                #     dicts = []
+                #     this_keys   = f[root_info["Folder"]+"/"+tree][branch+"_keys"].array()
+                #     this_values = f[root_info["Folder"]+"/"+tree][branch+"_values"].array()
+                #     if debug: print_colored("Using keys: " + str(this_keys[0]),"DEBUG"); print_colored("Using values: " + str(this_values[0]),"DEBUG")
+                #     for j in range(len(this_keys)): dicts.append(dict(zip(this_keys[j], this_values[j])))
+                #     np.save(path+name+"/"+out_folder+"/"+branch+".npy", dicts)
+                #     print(dicts[0])
+                #     del dicts
 
                 if debug: 
                     print_colored("\nSaved data in:" + str(path+name+"/"+out_folder),"SUCCESS")
                     print_colored("----------------------\n","SUCCESS")
+    
+    if debug: print_colored("-> Finished dumping root file to npy files!","SUCCESS")
+    return 0
                     
 def resize_subarrays(array, value, trim=False, debug=False):
     '''
-    Resize the arrays so that the have the same lenght and numpy can handle them.
+    Resize the arrays so that the have the same lenght and numpy can handle them
     The arrays with len < max_len are filled with 0 until they have max_len
-    VARIABLES:
-        \n - array: array to resize
-        \n - branch: name of the branch
-        \n - value: value to fill the array
-        \n - trim: if True, trim the array to the selected size (default: False)
+
+    Args:
+        array (list): array to resize
+        value (int): value to fill the array
+        trim (bool): if True, trim the array to the selected size (default: False)
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        tot_array (np.array): resized array
     '''    
-    array = check_array_type(array,debug=debug)
+    array = array2list(array,debug=debug)
     check_expand = False
     
     try:
-        # Create a good check to determine if array needs to be expanded
         np.asarray(array, dtype=float)
         check_expand = False
         if debug: print_colored("-> Array can be converted to numpy array!","SUCCESS")
@@ -173,12 +187,8 @@ def resize_subarrays(array, value, trim=False, debug=False):
             max_len = trim
             expand = True
         
-        if expand:
-            # if debug: print_colored("Expanding array to %i"%max_len,"DEBUG")
-            tot_array = resize_subarrays_fixed(array, value, max_len, debug=debug)
-        else:
-            tot_array = array
-    
+        if expand:tot_array = resize_subarrays_fixed(array, value, max_len, debug=debug)
+        else:tot_array = array
     else:
         tot_array = np.asarray(array)
 
@@ -187,12 +197,17 @@ def resize_subarrays(array, value, trim=False, debug=False):
 
 def resize_subarrays_fixed(array, value, max_len, debug=False):
     '''
-    Resize the arrays so that the have the same lenght and numpy can handle them.
+    Resize the arrays so that the have the same lenght and numpy can handle them
     The arrays with len < size are filled with 0 until they have selected size
-    VARIABLES:
-        \n - array: array to resize
-        \n - value: value to fill the array
-        \n - size: size of the array
+
+    Args:
+        array (list): array to resize
+        value (int): value to fill the array
+        max_len (int): size of the array
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        return_array (np.array): resized array
     '''
     try:
         tot_array = [this_array.tolist()[:max_len] if len(this_array.tolist()) > max_len else this_array.tolist()+[value]*(max_len-len(this_array)) for this_array in array]
@@ -207,9 +222,16 @@ def resize_subarrays_fixed(array, value, max_len, debug=False):
     return_array = np.asarray(tot_array)
     return return_array
 
-def check_array_type(array, debug=False):
+def array2list(array, debug=False):
     '''
     Check if the array is a list of lists or a list of arrays
+
+    Args:
+        array (list): array to check
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        array (list): array converted to list
     '''
     if type(array) == np.ndarray:
         array = array.tolist()
@@ -231,16 +253,18 @@ def check_array_type(array, debug=False):
         if debug: print_colored("Array type not recognized","ERROR")
         raise TypeError
 
-#===========================================================================#
-#************************* KEYS/BRANCHES ***********************************#
-#===========================================================================#
-
 def get_tree_info(root_file, debug=False):
     '''
     From a root file (root_file = uproot.open(path+name+".root")) you get the two lists with:
-    VARIABLES
-        \n - directory: ["solarnuana", "myanalysis;1"] with as many directories as you root file has
-        \n - tree: ["Pandora_Outpur;1", "MCTruthTree;1", "SolarNuAnaTree;1"] with as many trees as you root file has
+    \n - directory: list of the directories in the root file
+    \n - tree: list of the trees in the root file
+
+    Args:
+        root_file (uproot.rootio.ROOTDirectory): root file to analyze
+        debug (bool): if True, the debug mode is activated (default: False)
+    
+    Returns:
+        directory (list): list of the directories in the root file
     '''
 
     directory = [i for i in root_file.classnames() if root_file.classnames()[i]=="TDirectory"]
@@ -251,13 +275,18 @@ def get_tree_info(root_file, debug=False):
 
     return directory,tree
 
-def get_root_info(name, path, debug=False):
+def get_root_info(name:str, path:str, debug=False):
     '''
     Function which returns a dictionary with the following structure:
     \n {"Path": path, "Name": name, "Folder": folder (from get_tree_info), "TreeNames": {"RootName_Tree1":YourName_Tree1, "RootName_Tree2":YourName_Tree2}, "RootName_Tree1":[BRANCH_LIST], "RootName_Tree2":[BRANCH_LIST]}
-    VARIABLES:
-        \n name: name of the root file
-        \n path: path of the root file
+
+    Args:
+        name (str): name of the root file.
+        path (str): path of the root file.
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        output (dict): dictionary with the information of the root file
     '''
 
     f = uproot.open(path+name+".root")
@@ -329,52 +358,66 @@ def get_root_info(name, path, debug=False):
 
     return output
 
-def get_branches(name, path, debug=False):
+def get_branches(name:str, path:str, debug=False):
     '''
     Function which returns a dictionary with the following structure:
     \n {"YourName_Tree1":[BRANCH_LIST], "YourName_Tree2":[BRANCH_LIST]}
-    **VARIABLES:**
-    \n **name:** name of the root file.
-    \n **path:** path of the root file.
-    '''
 
+    Args:
+        name (str): name of the root file.
+        path (str): path of the root file.
+        debug (bool): if True, the debug mode is activated (default: False)
+    
+    Returns:
+        branch_dict (dict): dictionary with the branches of the root file
+    '''
     branch_dict = dict()
     tree_info   = np.load(path+name+"/"+"TTrees.npy", allow_pickle=True).item()
     
     for tree in tree_info["TreeNames"].keys():
         branch_dict[tree_info["TreeNames"][tree]] = tree_info[tree]
-
-    if debug: print(branch_dict)
-
+    
+    if debug: ic(branch_dict)
     return branch_dict
 
 def get_branches2use(run, debug=False):
     '''
     Function to get the branches of the TTree not in ['Name', 'Path', 'Labels', 'Colors']
-    **VARIABLES:**
-    \n** - run:**   Dictionary with the data to save (delete the keys that you don't want to save or set Force = False to save only the new ones).
-    \n** - debug:** If True, the debug mode is activated.
+
+    Args:
+        run (dict): dictionary with the data to load
+        debug (bool): if True, the debug mode is activated (default: False)
     '''
     branches_raw = list(run.keys())
     branches     = [i for i in branches_raw if i not in ['Name', 'Path', 'Labels', 'Colors']]
     if debug: print_colored("\nFounded keys " + str(branches) + " to construct the dictionaries.", "DEBUG")
-
     return branches
 
-def check_key(my_dict,key):
+def check_key(my_dict,key,debug=False):
     '''
     Check if a given dict contains a key and return True or False
     '''
     try: my_dict[key]; return True    
     except KeyError:   return False
 
-def delete_keys(run,keys):
+def delete_keys(run,keys,debug=False):
     '''
     Delete the keys list introduced as 2nd variable
     '''
     for key in keys: del run[key]
+    return run
 
-def remove_processed_branches(root_info,debug=False):    
+def remove_processed_branches(root_info,debug=False):
+    '''
+    Removes the branches that have been already processed
+    
+    Args:
+        root_info (dict): dictionary with the information of the root file
+        debug (bool): if True, the debug mode is activated (default: False)
+    
+    Returns:
+        root_info (dict): updated dictionary with the information of the root file
+    '''    
     path = root_info["Path"] + root_info["Name"] + "/"
     for tree in root_info["TreeNames"]:
         # print(root_info[tree])
@@ -389,61 +432,21 @@ def remove_processed_branches(root_info,debug=False):
         if debug: print_colored("New branch list to process for Tree %s: %s"%(tree,root_info[tree]),color="SUCCESS")
     return root_info
 
-#===========================================================================#
-#************************** LOAD/SAVE NPY **********************************#
-#===========================================================================# 
-
-def get_preset_list(name,path="../data",preset="ALL",debug=False):
-    '''
-    Return as output presets lists for load npy files.
-    VARIABLES:
-        \n - name: name of the file
-        \n - path: loading path
-        \n - preset: 
-            (a) "ALL": all the existing keys/branches (default)
-            (b) "ROOT": the ROOT branches (i.e the default branches given in the root file)
-            (c) "NON_ROOT": the NEW branches (i.e the ones that are not in the root file)
-    '''
-
-    root_keys = get_branches(name, path, debug=False)
-    npy_keys = dict()
-    
-    for tree in root_keys.keys(): # Truth, Reco, etc
-        key_list = os.listdir(path+"/"+name+"/"+tree)
-
-        if preset == "ALL": # Save/Load all keys for each branch
-            remove = ["Branches.npy"]; aux = []
-            for key in key_list:
-                if key not in remove: 
-                    aux.append(key.replace(".npy",""))
-            key_list = aux 
-        # Save Raw branches (i.e the default branches given in the root file)
-        elif preset == "ROOT": key_list  = root_keys[tree] # i.e EventID, ADC, mcEnergy, etc
-
-        elif preset == "NON_ROOT":  # Save NEW branches (i.e the ones that are not in the root file)
-            remove = root_keys[tree]; aux=[]
-            for key in key_list:
-                if key not in remove: aux.append(key)
-            key_list = aux
-
-        else:     print_colored("Preset not found!","ERROR")
-        if debug: print_colored("\nPreset key_list:" + str(key_list), "DEBUG")
-        npy_keys[tree] = key_list
-
-    return npy_keys
-
-def load_multi(names,configs,load_all=False,preset="",branches={},generator_swap=False,debug=False):
+def load_multi(names:dict,configs:dict,load_all=False,preset="",branches={},generator_swap=False,debug=False):
     '''
     Load multiple files with different configurations and merge them into a single dictionary
-    VARIABLES:
-        \n - names: dict of lists with names of the files
-        \n - configs: dict of configurations (i.e {geo1:"config1",geo2:"config2"})
-        \n - load_all: if True, load all the branches and keys (default: True)
-        \n - preset:
-            (a) "ALL": all the existing keys/branches (default)
-            (b) "ROOT": the ROOT branches
-            (c) "NON_ROOT": the NEW branches
-        \n - branches: dictionary of branches to load (i.e {"Tree1":["Branch1","Branch2"], "Tree2":["Branch1","Branch2"]})
+
+    Args:
+        names (dict): dictionary with the names of the files to load, e.g. {"hd":["Marley","wbkg]}
+        configs (dict): dictionary with the configurations of the files to load, e.g. {"hd":"hd_config"}
+        load_all (bool): if True, load all the branches from the input file (default: False)
+        preset (str): if not "", load the branches from the preset list (default: "")
+        branches (dict): dictionary with the branches to load (default: {})
+        generator_swap (bool): if True, swap the generator for the background files (default: False)
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        run (dict): dictionary with the loaded data
     '''
     run = dict()
     for idx,config in enumerate(configs):
@@ -457,9 +460,8 @@ def load_multi(names,configs,load_all=False,preset="",branches={},generator_swap
 
         for jdx,name in enumerate(names[config]):
             if debug: print_colored("\nLoading file %s%s"%(path,name),"DEBUG")
-            if load_all == True: branches_dict = get_branches(name,path=path,debug=debug)                   # Get ALL the branches
-            elif preset == "":   branches_dict = branches                                                   # Get CUSTOMIZED branches from the input
-            elif preset != "":   branches_dict = get_preset_list(name,path=path,preset=preset,debug=debug)  # Get PRESET branches
+            if load_all == True: branches_dict = get_branches(name,path=path,debug=debug)    # Get ALL the branches
+            else: branches_dict = branches                                                   # Get CUSTOMIZED branches from the input
 
             for tree in branches_dict.keys(): 
                 if branches_dict[tree] == []: continue # If the tree is empty, skip it
@@ -519,10 +521,15 @@ def load_multi(names,configs,load_all=False,preset="",branches={},generator_swap
 def save_proccesed_variables(run, info={}, force=False, debug=False):
     '''
     Save a copy of run with all modifications. 
-    VARIABLES:
-         \n - run: dictionary with the data to save (delete the keys that you don't want to save or set Force = False to save only the new ones)
-         \n - info: 
-         \n - force: if True, overwrite the existing files
+
+    Args:
+        run (dict): dictionary with the data to save (delete the keys that you don't want to save or set Force = False to save only the new ones)
+        info (dict): dictionary with the information of the input file (default: {})
+        force (bool): if True, overwrite the existing files (default: False)
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        0 (int): if the function is executed correctly
     '''
 
     aux  = copy.deepcopy(run) 
@@ -549,86 +556,314 @@ def save_proccesed_variables(run, info={}, force=False, debug=False):
                     print_colored(path+branch+"/"+key+".npy", "SUCCESS")
 
     del run
-    print("Saved data in: ",path+branch)
+    if debug: print_colored("Saved data in: "+path+branch, "DEBUG")
+    return 0
 
-
-#===========================================================================#
-#*************************** DATA FRAMES ***********************************#
-#===========================================================================# 
-
-def npy2df(run,tree,branches=[],debug=False):
+def get_bkg_config(info,debug=False):
     '''
-    Function to convert the dictionary of the TTree into a pandas Dataframe.
-    VARIABLES:
-        \n - run: dictionary with the data to save (delete the keys that you don't want to save or set Force = False to save only the new ones)
-        \n - tree: name of the tree to convert to dataframe
-        \n - branches: list of branches to convert to dataframe (default: [])
+    This function returns a dictionary of background names according to the input file.
+    Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
+
+    Args:
+        info (dict): dictionary with the information of the input file
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        bkg_dict (dict): dictionary with the background names
     '''
-    reco_df = pd.DataFrame()
-    if branches == []: branches = run[tree].keys()
-    for branch in branches:
-        if debug: print("Evaluated branch: ",branch)
-        try:
-            reco_df[branch] = run[tree][branch].tolist()
-        except AttributeError:
-            try: reco_df[branch] = run[tree][branch]
-            except ValueError:
-                print("ValueError: ",branch)
-                continue
-    # if debug: display(reco_df.info())
-    if debug: print(reco_df.info())
+    bkg_dict = {}; color_dict = {}
+    if (info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6"):
+        bkg_list = ["Unknown",
+            "Marley",
+            "Ar39GenInLAr",
+            "Kr85GenInLAr",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "Rn222ChainRn222GenInLAr",
+            "Rn222ChainPo218GenInLAr",
+            "Rn222ChainPb214GenInLAr",
+            "Rn222ChainBi214GenInLAr",
+            "Rn222ChainPb210GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "K40GenInCPA",
+            "U238ChainGenInCPA",
+            "K42From42ArGenInCPA",
+            "Rn222ChainPo218GenInCPA",
+            "Rn222ChainPb214GenInCPA",
+            "Rn222ChainBi214GenInCPA",
+            "Rn222ChainPb210GenInCPA",
+            "Rn222ChainFromBi210GenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
+            "Co60GenInAPA",
+            "U238ChainGenInAPA",
+            "Th232ChainGenInAPA",
+            "Rn222ChainGenInPDS",
+            "GammasInCavernwall",
+            "GammasInFoam",
+            "NeutronsInCavernwall",
+            "GammasInCryostat",
+            "GammasInCavern"]
+            
+    elif info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
+        bkg_list = ["Unknown",
+            "Marley",
+            "APA",
+            "Neutron",
+            "Po210InLAr",
+            "CPA",
+            "Ar42InLAr",
+            "Kr85InLAr",
+            "Ar39InLAr",
+            "Rn222InLAr",
+            ]
 
-    return reco_df
+    elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
+        bkg_list = ["Unknown",
+            "Marley",
+            "Ar39InLAr",
+            "Kr85InLAr",
+            "Ar42InLAr",
+            "K42-Ar42InLAr",
+            "Rn222InLAr",
+            "CPAK42-Ar42",
+            "CPAK40",
+            "CPAU238",
+            "PDSRn222",
+            "Neutron",
+            "Gamma"]
+        
+    elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x6_3view_30deg":
+        bkg_list = ["Unknown",
+            "marley",
+            "Ar39GenInLAr",
+            "Kr85GenInLAr",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "Rn222ChainRn222GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "K40GenInCathode",
+            "U238ChainGenInCathode",
+            "K42From42ArGenInCathode",
+            "Rn220ChainFromPb212GenInCathode",
+            "Rn222ChainGenInPDS",
+            "GammasInCavernwall",
+            "GammasInFoam",
+            "NeutronsInCavernwall",
+            "GammasInCryostat",
+            "GammasInCavern"]
+    
+    color_ass = get_bkg_color(bkg_list)
+    for idx,bkg in enumerate(bkg_list):
+        bkg_dict[idx] = bkg
+        color_dict[idx] = color_ass[bkg]
+        
+    if debug: print_colored("Loaded background dictionary: %s"%str(bkg_dict),"INFO")
+    return bkg_dict,color_dict
 
-def dict2df(run, debug=False):
+def get_gen_label(config_files, debug=False):
     '''
-    Function to convert the dictionary of the TTree into a list of pandas Dataframes of len = len(branches)
-    i.e. df_list = [df_truth, df_reco, ...]
+    Get the generator label from configuration.
     '''
+    gen_dict = dict()
+    for idx,config in enumerate(config_files):
+        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        geo = info["GEOMETRY"][0]
+        version = info["VERSION"][0]
+        for idx,gen in enumerate(get_bkg_config(info,debug)[0].values()):
+            gen_dict[(geo,version,idx)] = gen
+    return gen_dict
 
-    branches = get_branches2use(run,debug=debug) # Load the branches of the TTree not in ['Name', 'Path', 'Labels', 'Colors']
-    df_list = []
-    for branch in branches:
-        df = pd.DataFrame()
-        for key in run[branch].keys():
-            try: df[key] = run[branch][key].tolist()
-            except AttributeError: df[key] = run[branch][key]
-            if debug: print_colored(" --- Dataframe for key %s created"%key, "DEBUG"); print("\n"); print_colored(df[key],"DEBUG"); print("\n")
-        df_list.append(df)
-
-        if debug: print_colored(" --- Dataframe for branch %s created"%branch, "DEBUG")
-
-    return df_list
-
-def merge_df(df1, df2, label1, label2, debug=False):
-    '''
-    Function to merge two dataframes in one adding an extra column to indicate its origin. 
-    Also maintain the columns that are not in both df an include NaNs in the missing columns.
-    VARIABLES:
-        \n - df1: first dataframe
-        \n - df2: second dataframe
-        \n - label1: label of the first dataframe
-        \n - label2: label of the second dataframe
+def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
     '''
     
-    df1["Label"] = label1 # Add a column to indicate the origin of the event
-    df2["Label"] = label2 # Add a column to indicate the origin of the event
-    df = pd.concat([df1,df2], ignore_index=True) # Merge the two dataframes
-    if debug: print_colored(" --- New dataframe from %s, %s created"%(label1,label2), "DEBUG")
-    
-    return df
+    '''
+    info = read_input_file(config,path="../config/"+config+"/",debug=debug)
+    weight_list = get_bkg_weights(info)
+    truth_values = []; reco_values = []
+    for bkg_idx,bkg in enumerate(mean_truth_df.index):
+        truth_values.append(mean_truth_df.values[bkg_idx]*np.power(info["TIMEWINDOW"][0]*weight_list[bkg],-1))
+        reco_values.append(count_reco_df.values[0][bkg_idx]*np.power(count_truth_df.values[bkg_idx]*info["TIMEWINDOW"][0],-1))
+        if debug: print(count_truth_df.values[bkg_idx],reco_values)
+    return truth_values,reco_values
 
-# def add_labels(run, name, path, labels, label):
-#     label_branches = []
-#     try: 
-#         os.mkdir(path+name+"/Label")
-#     except FileExistsError:
-#         print("Label") 
+def get_bkg_color(name_list, debug=False):
+    '''
+    Get the color for each background according to its "simple" name.
+
+    Args:
+        name_list (list): list of the background names
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        color_dict (dict): dictionary with the colors of the backgrounds
+    '''
+    color_dict = dict()
+    simple_name_list = get_simple_name(name_list,debug=debug)
+
+    for name in name_list:
+        if simple_name_list[name] == "Unknown":
+            color_dict[name] = "black"
+        elif simple_name_list[name] == "Marley":
+            color_dict[name] = "orange"
+        elif simple_name_list[name] == "APA":
+            color_dict[name] = "violet"
+        elif simple_name_list[name] == "Neutron":
+            color_dict[name] = "green"
+        elif simple_name_list[name] == "CPA":
+            color_dict[name] = "purple"
+        elif simple_name_list[name] == "Ar42":
+            color_dict[name] = "blue"
+        elif simple_name_list[name] == "K42":
+            color_dict[name] = "blue"
+        elif simple_name_list[name] == "Kr85":
+            color_dict[name] = "pink"
+        elif simple_name_list[name] == "Ar39":
+            color_dict[name] = "grey"
+        elif simple_name_list[name] == "Rn22":
+            color_dict[name] = "yellow"
+        elif simple_name_list[name] == "Po210":
+            color_dict[name] = "brown"
+        elif simple_name_list[name] == "PDS":
+            color_dict[name] = "red"
+        else:
+            color_dict[name] = "black"
+
+    return color_dict
+
+def reorder_df(df,info, bkg_dict, color_dict, debug=False):
+    '''
+    Reorder the dataframe according to the background dictionary.
+
+    Args:
+        df (pd.DataFrame): dataframe to reorder
+        info (dict): dictionary with the information of the input file
+        bkg_dict (dict): dictionary with the background names
+        color_dict (dict): dictionary with the colors of the backgrounds
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        df (pd.DataFrame): reordered dataframe
+        color_list (list): list of the colors of the backgrounds
+    '''
+    if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
+        order = ["Po210InLAr",
+            "CPA",
+            "APA",
+            "Ar42InLAr",
+            "Neutron",
+            "Rn222InLAr",
+            "Kr85InLAr",
+            "Ar39InLAr"]
     
-#     for l in range(len(label)):
-#         np.save(path+name+"/Label/"+label[l]+".npy",np.asarray(labels[l]))
-#         label_branches.append(label[l])
-#     np.save(path+name+"/Label/Branches.npy",np.asarray(label_branches))
+    elif info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6":
+        order = ["Rn222ChainGenInPDS",
+            "K40GenInCPA",
+            "U238ChainGenInCPA",
+            "K42From42ArGenInCPA",
+            "Rn222ChainPo218GenInCPA",
+            "Rn222ChainPb214GenInCPA",
+            "Rn222ChainBi214GenInCPA",
+            "Rn222ChainPb210GenInCPA",
+            "Rn222ChainFromBi210GenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
+            "Co60GenInAPA",
+            "U238ChainGenInAPA",
+            "Th232ChainGenInAPA",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "NeutronsInCavernwall",
+            "Rn222ChainRn222GenInLAr",
+            "Rn222ChainPo218GenInLAr",
+            "Rn222ChainPb214GenInLAr",
+            "Rn222ChainBi214GenInLAr",
+            "Rn222ChainPb210GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "Kr85GenInLAr",
+            "Ar39GenInLAr",
+            "GammasInCryostat",
+            "GammasInCavern",
+            "GammasInFoam",
+            "GammasInCavernwall",
+            ]
+            
+    elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
+        order = ["CPAU238",
+            "CPAK42-Ar42",
+            "CPAK40",
+            "Ar42",
+            "K42-Ar42",
+            "Neutron",
+            "PDSRn222",
+            "Rn222",
+            "Kr85",
+            "Ar39",
+            "Gamma"]
+
+    else: order = list(bkg_dict.values())[2:]
+
+    df = df[order]
+    color_list = []
+    for bkg in order:
+        color_list.append(color_dict[list(bkg_dict.values()).index(bkg)])
     
-#     print("Adding labels -> Done!")
-#     return run
+    if debug: print_colored("Reordered dataframe with columns: %s"%order,"INFO")
+    return df,color_list
+
+def get_simple_name(name_list, debug=False):
+    simple_name = dict()
+    basic_names = ["Ar42","Ar39","Kr85","Po210","Rn22"]
+    for name in name_list:
+        if "LAr" in name:
+            for basic_name in basic_names:
+                if basic_name in name:
+                    simple_name[name] = basic_name
+            if "K42" in name:
+                simple_name[name] = "Ar42"
+        
+        elif "Gamma" in name:
+            simple_name[name] = "Gamma"
+        elif "Neutron" in name:
+            simple_name[name] = "Neutron"
+        elif "CPA" in name:
+            simple_name[name] = "CPA"
+        elif "APA" in name:
+            simple_name[name] = "APA"
+        elif "PDS" in name:
+            simple_name[name] = "PDS"
+        else:
+            simple_name[name] = name
+
+    if debug: print_colored("Loaded simple name dictionary: %s"%str(simple_name),"INFO")
+    return simple_name
+
+def get_gen_weights(config_files, names, debug=False):
+    weights_dict = dict()
+    for idx,config in enumerate(config_files):
+        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
+        geo = info["GEOMETRY"][0]
+        name_list = names[config]
+        geo_weights_dict = get_bkg_weights(info,name_list)
+        for idx,name in enumerate(name_list):
+            weights_dict[(geo,name)] = geo_weights_dict[name]
+    return weights_dict
+
+def get_bkg_weights(info, names, debug = False):
+    bkg_dict,color_dict = get_bkg_config(info,debug=False)
+    weights_dict = dict()
+    for bkg in bkg_dict.values():
+        weights_dict[bkg] = 1
+    if "wbkg" in names:
+        weights_dict["wbkg"] = 1
+        return weights_dict
+    else:
+        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6":
+            custom_weights = {"NeutronsInCavernwall":1e3}
+        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
+            custom_weights = {"Po210":1e4,"APA":1e4,"CPA":1e2,"Ar42":1e4,"Neutron":1e2,"Rn222":1e4}
+        if info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
+            custom_weights = {"Neutron":1e2}
+        
+        for bkg in custom_weights:
+            weights_dict[bkg] = custom_weights[bkg]
+        return weights_dict
