@@ -24,8 +24,8 @@ Welcome to SOLAR's documentation!
 
 `Sergio Manthey Corchado <https://github.com/mantheys>`_
 
-The **SolarNuAna_module Output Library for Analysis & Research** (:tealstext:`SOLAR`) is a python library to analyze mc data generated with the [DUNE](https://github.com/DUNE) software framework
-and analysied with the [SOLAR](https://github.com/DUNE/duneana/blob/develop/duneana/SolarNuAna/SolarNuAna_module.cc) module.
+The **SolarNuAna_module Output Library for Analysis & Research** (:tealstext:`SOLAR`) is a python library to analyze mc data generated with the `DUNE <https://github.com/DUNE>`_ software framework
+and analysied with the `SolarNuAna <https://github.com/DUNE/duneana/blob/develop/duneana/SolarNuAna/SolarNuAna_module.cc>`_ module.
 
 You can navigate through the documentation using the table of contents below and you can search for specific keywords using the search tab placed at left side.
 

@@ -10,28 +10,14 @@ build:
   os: "ubuntu-22.04"
   tools:
     python: "mambaforge-22.9"
+    # You can also specify other tool versions:
+    # nodejs: "16"
+    # rust: "1.55"
+    # golang: "1.17"
 
+# Create a conda environment and install dependencies from environment.yml
 conda:
   environment: docs/environment.yaml
-  
-  # jobs:
-    # pre_install:
-      # - wget https://ecsft.cern.ch/dist/cvmfs/cvmfs-release/cvmfs-release-latest_all.deb
-      # - sudo dpkg -i cvmfs-release-latest_all.deb
-      # - rm -f cvmfs-release-latest_all.deb
-      # - sudo apt-get update
-      # - sudo apt-get install cvmfs
-      # - source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.24.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
-   # commands:
-   #   - mkdir -p $READTHEDOCS_OUTPUT/html/
-   #   - pip install Sphinx
-   #   - pip install --upgrade pip
-   #   - pip install myst_parser
-   #   - cp --recursive docs/ _readthedocs/html/
-     # You can also specify other tool versions:
-     # nodejs: "16"
-     # rust: "1.55"
-     # golang: "1.17"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:

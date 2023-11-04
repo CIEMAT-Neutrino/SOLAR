@@ -14,9 +14,9 @@ nbformat
 numba
 numpy
 pandas
+particle
 plotly
 plotly_express
-particle
 rich
 root_numpy
 scipy
