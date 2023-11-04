@@ -4,9 +4,13 @@ channels:
   - defaults
 dependencies:
   - python=3.6
+  - conda-forge::root
   - pip
   - pip:
-    - sphinx
+    - sphinx==4.1.0
+    - alabaster==0.7.13
+    - sphinx_book_theme
+    - myst-nb
     - myst-parser
     - sphinxcontrib-bibtex
     - sphinxcontrib-plantuml
@@ -19,5 +23,8 @@ dependencies:
     - sphinxcontrib-seqdiag
     - sphinxcontrib-plantuml
     - sphinxcontrib-plantuml
-    - sphinx
-  - conda-forge::root
+    - sphinxemoji
+    - nbsphinx
+    - sphinx_plotly_directive
+    - sphinx_rtd_theme==0.5.0rc1
+    - sphinx_copybutton
