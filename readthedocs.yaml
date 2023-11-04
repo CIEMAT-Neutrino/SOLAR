@@ -11,17 +11,17 @@ build:
   tools:
     python: "3.6"
 
-  apt_packages:
-    - cvmfs
+  conda:
+    environment: environment.yml
   
-  jobs:
-    pre_install:
+  # jobs:
+    # pre_install:
       # - wget https://ecsft.cern.ch/dist/cvmfs/cvmfs-release/cvmfs-release-latest_all.deb
       # - sudo dpkg -i cvmfs-release-latest_all.deb
       # - rm -f cvmfs-release-latest_all.deb
       # - sudo apt-get update
       # - sudo apt-get install cvmfs
-      - source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.24.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
+      # - source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.24.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
    # commands:
    #   - mkdir -p $READTHEDOCS_OUTPUT/html/
    #   - pip install Sphinx

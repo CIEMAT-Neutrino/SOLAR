@@ -1,0 +1,25 @@
+name: test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.6
+  - pip
+  - pip:
+    - sphinx
+    - myst-parser
+    - sphinxcontrib-bibtex
+    - sphinxcontrib-plantuml
+    - sphinxcontrib-mermaid
+    - sphinxcontrib-matlabdomain
+    - sphinxcontrib-inkscapeconverter
+    - sphinxcontrib-svg2pdfconverter
+    - sphinxcontrib-actdiag
+    - sphinxcontrib-blockdiag
+    - sphinxcontrib-nwdiag
+    - sphinxcontrib-seqdiag
+    - sphinxcontrib-umlet
+    - sphinxcontrib-plantuml
+    - sphinxcontrib-plantuml
+    - sphinx
+    - conda-forge::root
