@@ -29,6 +29,9 @@ and analysied with the `SolarNuAna <https://github.com/DUNE/duneana/blob/develop
 
 You can navigate through the documentation using the table of contents below and you can search for specific keywords using the search tab placed at left side.
 
+.. warning::
+   🚧 This project is still under development. Please, contact if you spot any bugs or want for more information.🚧
+
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 **Contents**
@@ -46,9 +49,6 @@ You can navigate through the documentation using the table of contents below and
    source/lib
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
-
-.. warning::
-   🚧 This project is still under development. Please, contact the authors for more information.🚧
 
 **SUMMARY**
 ------------
