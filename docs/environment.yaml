@@ -12,7 +12,6 @@ dependencies:
     - sphinxcontrib-plantuml
     - sphinxcontrib-mermaid
     - sphinxcontrib-matlabdomain
-    - sphinxcontrib-inkscapeconverter
     - sphinxcontrib-svg2pdfconverter
     - sphinxcontrib-actdiag
     - sphinxcontrib-blockdiag
