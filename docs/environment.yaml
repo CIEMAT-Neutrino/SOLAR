@@ -17,7 +17,6 @@ dependencies:
     - sphinxcontrib-blockdiag
     - sphinxcontrib-nwdiag
     - sphinxcontrib-seqdiag
-    - sphinxcontrib-umlet
     - sphinxcontrib-plantuml
     - sphinxcontrib-plantuml
     - sphinx
