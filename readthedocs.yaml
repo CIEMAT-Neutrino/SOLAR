@@ -11,8 +11,8 @@ build:
   tools:
     python: "3.6"
 
-  conda:
-    environment: environment.yml
+conda:
+  environment: environment.yml
   
   # jobs:
     # pre_install:
