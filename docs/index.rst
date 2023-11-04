@@ -43,7 +43,7 @@ You can navigate through the documentation using the table of contents below and
 
    installation
    tutorial
-   source/modules
+   source/lib
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
