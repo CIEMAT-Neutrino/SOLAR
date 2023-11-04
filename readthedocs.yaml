@@ -9,6 +9,7 @@ version: 2
 build:
   os: "ubuntu-22.04"
   tools:
+    cvmfs: true
     python: "3.6"
 
   jobs:
