@@ -22,4 +22,4 @@ dependencies:
     - sphinxcontrib-plantuml
     - sphinxcontrib-plantuml
     - sphinx
-    - conda-forge::root
+  - conda-forge::root
