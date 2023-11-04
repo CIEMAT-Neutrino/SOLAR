@@ -40,8 +40,7 @@ You can navigate through the documentation using the table of contents below and
 
    installation
    tutorial
-   lib
-
+   source/lib
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 .. warning::
@@ -52,7 +51,7 @@ You can navigate through the documentation using the table of contents below and
 
 For a quick summary or just as a reminder follow the next steps:
 
-You need to have ``git``, ``python (>=3.7)`` and ``pip3`` installed.
+You need to have ``git``, ``python (>=3.6)`` and ``pip3`` installed.
 
 0.- Clone the repository into a local directory and create your branch:
 
@@ -66,18 +65,20 @@ You need to have ``git``, ``python (>=3.7)`` and ``pip3`` installed.
 1.- Install packages needed for the library to run:
 
 * **[RECOMENDED] Work with VSCode**:
-   - Install VSCode and some extensions: Remote-SSH, Jupyter, vscode-numpy-viewer, **Python Environment Manager**
-   - CREATE VIRTUAL ENVIROMENT: **VSCode venv extension**. It will recomend you the ``/scripts/requirements.txt`` packages and it will automatically install them :)
-   
+
 * From CIEMAT computers
    - CREATE VIRTUAL ENVIROMENT:
+   - Install VSCode and some extensions: Remote-SSH, Jupyter, vscode-numpy-viewer, **Python Environment Manager**
+   - CREATE VIRTUAL ENVIROMENT: **VSCode venv extension**. It will recomend you the ``/scripts/requirements.txt`` packages and it will automatically install them 😊
+   
+* From your local machine use conda (follow this `tutorial <https://docs.conda.io/projects/miniconda/en/latest/>`_) to create a virtual enviroment and install the packages from the ``/scripts/requirements.txt`` file:
 
 .. code-block:: bash
-   
-   mkdir venv_python3.7
-   cd venv_python3.7
-   /cvmfs/sft.cern.ch/lcg/releases/Python/3.7.3-f4f57/x86_64-centos7-gcc7-opt/bin/python3 -m venv .
-   source bin/activate
+
+      conda create -n <your_env_name> python=3.6
+      conda activate <your_env_name>
+      conda install -c conda-forge root
+      pip install -r scripts/requirements.txt
 
 2.- Prepare the library to be run (just the first time):
 
