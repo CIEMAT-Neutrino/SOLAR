@@ -10,10 +10,15 @@ build:
   os: "ubuntu-22.04"
   tools:
     cvmfs: true
-    python: "3.6"
+    python: "3.6.8"
 
   jobs:
     pre_install:
+      - bash wget https://ecsft.cern.ch/dist/cvmfs/cvmfs-release/cvmfs-release-latest_all.deb
+      - bash dpkg -i cvmfs-release-latest_all.deb
+      - bash rm -f cvmfs-release-latest_all.deb
+      - bash apt-get update
+      - bash apt-get install cvmfs
       - bash source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.24.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
    # commands:
    #   - mkdir -p $READTHEDOCS_OUTPUT/html/
