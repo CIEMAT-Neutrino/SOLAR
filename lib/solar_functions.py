@@ -1,17 +1,17 @@
-
-import sys; sys.path.insert(0, '../');
 import os
 import plotly
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
-from scipy import interpolate
-from particle import Particle
-from itertools import product
-from scipy import constants as const
+from scipy         import interpolate
+from particle      import Particle
+from itertools     import product
+from rich.progress import track
+from scipy         import constants as const
 
 from lib.io_functions  import print_colored
 from lib.osc_functions import get_nadir_angle, get_oscillation_datafiles
@@ -20,17 +20,31 @@ from lib.bkg_functions import get_bkg_config, get_gen_label, get_gen_weights
 def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_edges,int_time,filters,truth_filter,reco_filter,factor="SOLAR",input_dm2="DEFAULT",input_sin13="DEFAULT",input_sin12="DEFAULT",auto=False,save=False,debug=False):
     '''
     Get the weighted spectrum for a given background and configuration
-    **VARIABLES**:
-        \n - run: dictionary of dataframes
-        \n - info: dictionary of input file variables
-        \n - config_files: dictionary of configurations (i.e {geo1:"config1",geo2:"config2"})
-        \n - config: name of the configuration file
-        \n - names: dictionary of lists with names of the data files
-        \n - name: name of the data file
-        \n - energy_edges: energy array
-        \n - int_time: integration time
-        \n - weight_type: type of weights to apply (default: SOLAR = 1/400kt·yr)
-        \n - terminal_output: if True, print the total number of solar events above 10MeV (default: False)
+
+    Args:
+        run (dict): dictionary with the run data
+        info (dict): dictionary with the run info
+        config_files (dict): dictionary with the config files
+        config (str): name of the config
+        names (dict): dictionary with the names
+        name (str): name of the background
+        gen (int): generator of the background
+        energy_edges (np.array): energy edges
+        int_time (int): integration time
+        filters (list): list of filters
+        truth_filter (str): truth filter
+        reco_filter (str): reco filter
+        factor (str): factor to scale the spectrum (default: "SOLAR")
+        input_dm2 (float): input dm2 value (default: "DEFAULT")
+        input_sin13 (float): input sin13 value (default: "DEFAULT")
+        input_sin12 (float): input sin12 value (default: "DEFAULT")
+        auto (bool): if True, use the auto mode (default: False)
+        save (bool): if True, save the output (default: False)
+        debug (bool): if True, print debug messages (default: False)
+    
+    Returns:
+        dict_array (list): list of dictionaries with the weighted spectrum
+        weighted_df_dict (dict): dictionary with the weighted spectrum
     '''
     dict_array = []
     weighted_df_dict = {}

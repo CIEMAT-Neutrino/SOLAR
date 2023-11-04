@@ -24,7 +24,7 @@ Welcome to SOLAR's documentation!
 
 `Sergio Manthey Corchado <https://github.com/mantheys>`_
 
-The **SolarNuAna_module Output Library for Analysis & Research** (:tealstext:`SOLAR`) is a python library to analyze mc data generated with the `DUNE <https://github.com/DUNE>`_ software framework
+The **SolarNuAna_module Output Library for Analysis & Research** is a python library to analyze mc data generated with the `DUNE <https://github.com/DUNE>`_ software framework
 and analysied with the `SolarNuAna <https://github.com/DUNE/duneana/blob/develop/duneana/SolarNuAna/SolarNuAna_module.cc>`_ module.
 
 You can navigate through the documentation using the table of contents below and you can search for specific keywords using the search tab placed at left side.
@@ -34,13 +34,17 @@ You can navigate through the documentation using the table of contents below and
 **Contents**
 =================================
 
+.. automodule:: lib.__init__
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    installation
    tutorial
-   source/lib
+   source/modules
+
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 .. warning::
@@ -87,14 +91,14 @@ You need to have ``git``, ``python (>=3.6)`` and ``pip3`` installed.
    cd SCINT/scripts
    sh setup.sh
 
-To be run from the ``scripts`` folder (it will ask you for confirmation) and it will download the ``notebooks`` folder to make your analysis. 
-Additionally, if you have created your own virtual enviroment in a CIEMAT computer you need to install some packages (make sure it is activated) and answer ``y`` to the INSTALL question. If have created the virtual enviroment with the VSCode extension you will have them installed already, answer ``n``.
+To be run from the ``scripts`` folder (it will ask you for confirmation) and it will mount the ``notebooks`` folder to make your analysis. 
+Additionally, if you have created your own virtual enviroment in a CIEMAT computer you need to install some packages (make sure it is activated) and answer ``y`` to the INSTALL question.
+If have created the virtual enviroment with the VSCode extension you will have them installed already, answer ``n``.
 
 3.- Make sure you have access to data to analyse:
 
-* **[RECOMENDED] Configure VSCode SSH conection** and work from ``gaeuidc1.ciemat.es`` (you will have access to the data in ``/pc/choozdsk01/palomare/SCINT/folders``)
-* Mount the folder with the data in your local machine ``sshfs pcaeXYZ:/pc/choozdsk01/palomare/SCINT/folder ../data`` making sure you have an empty ``data`` folder 📂.
-* Copy the data to your local machine. See ``sh scripts/copy_data.sh`` for an example on how to copy the ``TUTORIAL`` data
+* **[RECOMENDED] Configure VSCode SSH conection** and work from ``gaeuidc1.ciemat.es`` (you will have access to the data in ``/pc/choozdsk01/palomare/DUNE/SOLAR/``)
+* Mount the folder with the data in your local machine ``sshfs pcaeXYZ:/pc/choozdsk01/palomare/DUNE/SOLAR/ data`` making sure you have an empty ``data`` folder 📂.
 
 4.- Have a look on the ``notebooks`` folder to see how to visualize data and run the macros:
 

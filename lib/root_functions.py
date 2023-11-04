@@ -1,8 +1,10 @@
 import ROOT
+
 import numpy as np
 import pandas as pd
+
 from iminuit import Minuit
-from ROOT import TFile, TTree, TList
+from ROOT    import TFile, TTree, TList
 
 from .io_functions import print_colored
 

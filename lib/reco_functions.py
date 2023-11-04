@@ -1,12 +1,15 @@
-import gc, numba
+import gc
+import numba
+
 import numpy as np
+
 from .io_functions import read_input_file,print_colored
 from .fit_functions import exp
 
 
 def get_param_dict(info,in_params,debug=False):
     '''
-    Get the parameters for the reco workflow from the input files
+    Get the parameters for the reco workflow from the input files.
     '''
     params = {
         # "MAX_ADJCL_R":None,
@@ -49,11 +52,20 @@ def get_param_dict(info,in_params,debug=False):
 
 def compute_reco_workflow(run,config_files,params={},workflow="ANALYSIS",rm_branches=True,debug=False):
     '''
-    Compute the reco variables for the events in the TTree
-    - run: dictionary containing the TTree branches
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+    Compute the reco variables for the events in the run.
+    All functions are called in the order they are defined in this file.
+    All functions get the same arguments.
+
+    Args:
+        run: dictionary containing the run data.
+        config_files: dictionary containing the path to the configuration files for each geoemtry.
+        params: dictionary containing the parameters for the reco functions.
+        workflow: string containing the reco workflow to be used.
+        rm_branches: boolean to remove the branches used in the reco workflow.
+        debug: print debug information.
+
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches.
     '''
     # Compute reco variables
     if debug: print_colored("\nComputing reco workflow of type %s"%workflow,"INFO")
@@ -99,15 +111,8 @@ def compute_reco_workflow(run,config_files,params={},workflow="ANALYSIS",rm_bran
 
 def compute_event_idx(run,config_files,params={},rm_branches=False,debug=False):
     '''
-    Compute real event index for the events in the TTree
-
-    Args:
-        run: dictionary containing the TTree
-        config_files: dictionary containing the path to the configuration files for each geoemtry
-        params: dictionary containing the parameters for the reco functions
-        debug: print debug information
+    Compute real event index for the events in the run.
     '''
-
     # New branches
     run["Reco"]["EventIdx"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
     for config in config_files:
@@ -129,16 +134,8 @@ def compute_event_idx(run,config_files,params={},rm_branches=False,debug=False):
 
 def compute_primary_cluster(run, config_files, params={}, rm_branches=False, debug=False):
     '''
-    Compute the primary cluster of the events in the TTree. This primary cluster is the one with the highest charge in the event.
-        
-    Args:
-        run: dictionary containing the TTree branches
-        config_files: dictionary containing the path to the configuration files for each geoemtry
-        params: dictionary containing the parameters for the reco functions
-        debug: print debug information
-    
-    Returns:
-        run (dict): dictionary containing the TTree with the new branches.
+    Compute the primary cluster of the events in the run.
+    This primary cluster is the one with the highest charge in the event.
     '''
     # New branches
     run["Reco"]["MaxAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
@@ -156,16 +153,7 @@ def compute_primary_cluster(run, config_files, params={}, rm_branches=False, deb
 
 def compute_recoy(run,config_files,params={},rm_branches=False,debug=False):
     '''
-    Compute the reconstructed Y position of the events in the TTree
-
-    Args:
-        run: dictionary containing the TTree
-        config_files: dictionary containing the path to the configuration files for each geoemtry
-        params: dictionary containing the parameters for the reco functions (COMPUTE_MATCHING)
-        debug: print debug information
-    
-    Returns:
-        run (dict): dictionary containing the TTree with the new branches    
+    Compute the reconstructed Y position of the events in the run.   
     '''
     # New branches
     run["Reco"]["RecoY"] = 1e-6*np.ones(len(run["Reco"]["Event"]),dtype=float)
@@ -194,16 +182,7 @@ def compute_recoy(run,config_files,params={},rm_branches=False,debug=False):
 
 def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FLASH_PE":None,"RATIO_FLASH_PEvsR":None},rm_branches=False,debug=False):
     '''
-    Match the reconstructed events with selected OpFlash
-    
-    Args:
-        run (dict): dictionary containing the TTree branches
-        config_files (dict): dictionary containing the path to the configuration files for each geoemtry
-        params (dict): dictionary containing the parameters for the reco functions (MAX_FLASH_R, MIN_FLASH_PE, RATIO_FLASH_PE)
-        debug (bool): print debug information
-    
-    Returns:
-        run (dict): dictionary containing the TTree with the new branches.
+    Match the reconstructed events with selected OpFlash candidates.
     '''
     # New branches
     run["Reco"]["FlashMathedIdx"]     = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjOpFlashR"][0])),dtype=bool)
@@ -248,16 +227,7 @@ def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FL
 
 def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branches=False,debug=False):
     '''
-    Compute the reconstructed X position of the events in the TTree
-
-    Args:
-        run (dict): dictionary containing the TTree
-        config_files (dict): dictionary containing the path to the configuration files for each geoemtry
-        params (dict): dictionary containing the parameters for the reco functions
-        debug (bool): print debug information
-    
-    Returns:
-        run (dict): dictionary containing the TTree with the new branches
+    Compute the reconstructed X position of the events in the run.
     '''
     
     run["Reco"]["RecoX"] = np.zeros(len(run["Reco"]["Event"]))
@@ -292,11 +262,7 @@ def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branche
 
 def compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":None,"DEFAULT_ADJCL_ENERGY_TIME":None},rm_branches=False,debug=False):
     '''
-    Correct the charge of the events in the TTree according to the correction file.
-    - run: dictionary containing the TTree
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+    Correct the charge of the events in the run according to the correction file.
     '''
     run["Reco"]["Correction"]      = np.ones(len(run["Reco"]["Event"]))
     run["Reco"]["Energy"]          = np.zeros(len(run["Reco"]["Event"]))
@@ -322,11 +288,7 @@ def compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":None,"
 
 def compute_reco_energy(run,config_files,params={},rm_branches=False,debug=False):
     '''
-    Compute the total energy of the events in the TTree
-    - run: dictionary containing the TTree
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+    Compute the total energy of the events in the run.
     '''    
     run["Reco"]["RecoEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     run["Reco"]["TotalEnergy"] = np.zeros(len(run["Reco"]["Event"]))
@@ -351,11 +313,7 @@ def compute_reco_energy(run,config_files,params={},rm_branches=False,debug=False
 
 def compute_opflash_variables(run,config_files,params={},rm_branches=False,debug=False):
     '''
-    Compute the OpFlash variables for the events in the TTree
-    - run: dictionary containing the TTree branches
-    - config_files: dictionary containing the path to the configuration files for each geoemtry
-    - params: dictionary containing the parameters for the reco functions
-    - debug: print debug information
+    Compute the OpFlash variables for the events in the run.
     '''
     # New branches
     run["Reco"]["AdjOpFlashNum"] = np.sum(run["Reco"]["AdjOpFlashR"] != 0,axis=1)
@@ -505,127 +463,24 @@ def compute_solarnuana_filters(run,config_files,config,name,gen,filter_list,para
     return filters,labels
 
 def remove_branches(run, remove, branches, debug=False):
+    '''
+    Remove branches from the run dictionary
+
+    Args:
+        run (dict): dictionary containing the TTree
+        remove (bool): if True, remove the branches
+        branches (list): list of branches to be removed
+        debug (bool): print debug information
+
+    Returns:
+        run (dict): dictionary containing the TTree with the new branches
+    '''
     if remove:
         if debug: print_colored("-> Removing branches: %s"%(branches),"WARNING")
         for branch in branches:
             run["Reco"].pop(branch)
             gc.collect()
-    else:
-        pass
-
+    else: pass
+    
+    if debug: print_colored("-> Branches removed!","WARNING")
     return run
-        
-# def old_compute_primary_cluster(run,config_files,params={"MAX_ADJCL_R":None,"MAX_ADJCL_TIME":None},rm_branches=False,debug=False):
-#     '''
-#     Compute the primary cluster of the events in the TTree
-#     - run: dictionary containing the TTree branches
-#     - config_files: dictionary containing the path to the configuration files for each geoemtry
-#     - params: dictionary containing the parameters for the reco functions
-#         - "MAX_ADJCL_R": maximum distance between the reconstructed vertex from cluster and the background clusters
-#         - "MAX_ADJCL_TIME": maximum time between the reconstructed vertex from cluster and the background clusters
-#     - debug: print debug information
-#     '''
-#     this_event = 0
-#     this_flag = 0
-#     run["Reco"]["Primary"] = np.ones(len(run["Reco"]["Event"]),dtype=bool)
-
-#     for config in config_files:
-#         info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
-#         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-#         # Get values from the configuration file or use the ones given as input
-#         params = get_param_dict(info,params,debug=debug)
-#         # Select primary cluster
-#         for i in idx[0]:
-#             if run["Reco"]["Event"][i] == this_event and run["Reco"]["Flag"][i] == this_flag:
-#                 if (np.sqrt(np.power(run["Reco"]["RecoY"][i] - run["Reco"]["RecoY"][i-1],2) + np.power(run["Reco"]["RecoZ"][i] - run["Reco"]["RecoZ"][i-1],2)) < params["MAX_ADJCL_R"] and
-#                     abs(run["Reco"]["Time"][i] - run["Reco"]["Time"][i-1]) < params["MAX_ADJCL_TIME"]):
-#                     if run["Reco"]["Charge"][i] > run["Reco"]["Charge"][i-1]:
-#                         run["Reco"]["Primary"][i-1] = False
-#                     else:
-#                         run["Reco"]["Primary"][i] = False
-#             else:
-#                 pass
-#             this_event = run["Reco"]["Event"][i]
-#             this_flag = run["Reco"]["Flag"][i]
-
-#     print_colored("Primary cluster computation \t-> Done!", "SUCCESS")
-#     return run
-
-# def compute_charge_calibration(run,config_files,params={"DEFAULT_RECOCHARGE_TIME":None},rm_branches=False,debug=False):
-#     '''
-#     Calibrate the charge of the events in the TTree according to the calibration file
-#     - run: dictionary containing the TTree
-#     - config_files: dictionary containing the path to the configuration files for each geoemtry
-#     - params: dictionary containing the parameters for the reco functions
-#         - "DEFAULT_RECOCHARGE_TIME": default time to be used for the reco charge
-#     - debug: print debug information
-#     '''
-#     run["Reco"]["Calibration"] = np.ones(len(run["Reco"]["Event"]))
-#     for config in config_files:
-#         info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
-#         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-        
-#         # Get values from the configuration file or use the ones given as input
-#         params = get_param_dict(info,params,debug=False)
-#         calib_file = config.split("config")[0]+"_calibration"
-#         calib_info = read_input_file(calib_file,path="../config/"+config+"/",DOUBLES = ["CHARGE_AMP","E0_CORRECTION","MEAN_TAU"],debug=debug)
-#         run["Reco"]["Calibration"][idx] = np.exp(np.abs(run["Reco"][params["DEFAULT_RECOCHARGE_TIME"]][idx])/calib_info["MEAN_TAU"][0])/calib_info["CHARGE_AMP"][0]
-#         print_colored("-> Using "+params["DEFAULT_RECOCHARGE_TIME"]+" for the reco charge in config "+config, "WARNING")
-    
-#     print_colored("Computing charge corecction \t-> Done!", "SUCCESS")
-#     return run
-
-# def compute_total_charge(run,config_files,params={},rm_branches=False,debug=False):
-#     '''
-#     Compute the total charge of the events in the TTree
-#     - run: dictionary containing the TTree
-#     - config_files: dictionary containing the path to the configuration files for each geoemtry
-#     - params: dictionary containing the parameters for the reco functions
-#         - "MIN_BKG_R": minimum distance between the reconstructed vertex from cluster and the background clusters
-#         - "MAX_BKG_CHARGE": maximum charge of the background clusters
-#     - debug: print debug information
-#     '''
-#     run["Reco"]["AdjClMatched"] = np.zeros(len(run["Reco"]["Event"]),dtype=bool)
-#     run["Reco"]["TotalAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
-#     run["Reco"]["TotalCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
-#     run["Reco"]["TotalNHits"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
-#     for config in config_files:
-#         if debug: print("Computing total charge for "+config+"...")
-#         info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
-#         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-#         # Get values from the configuration file or use the ones given as input
-#         params = get_param_dict(info,params,debug=False)
-#         bkg_r_filter = run["Reco"]["AdjClR"][idx] > params["MIN_BKG_R"]
-#         bkg_charge_filter = run["Reco"]["AdjClCharge"][idx] < params["MAX_BKG_CHARGE"]
-        
-#         run["Reco"]["AdjClMatched"][idx] = np.sum((((bkg_r_filter)*(bkg_charge_filter)) == False)*(run["Reco"]["AdjClCharge"][idx] > 0),axis=1) > 0
-#         run["Reco"]["TotalAdjClCharge"][idx] = np.sum(run["Reco"]["AdjClCharge"][idx]*(((bkg_r_filter)*(bkg_charge_filter)) == False)*(run["Reco"]["AdjClCharge"][idx] > 0),axis=1)
-#         run["Reco"]["TotalCharge"][idx] = run["Reco"]["Charge"][idx] + run["Reco"]["TotalAdjClCharge"][idx]
-#         run["Reco"]["TotalNHits"][idx] = run["Reco"]["NHits"][idx] + np.sum(run["Reco"]["AdjClNHit"][idx],axis=1)
-    
-#     print_colored("Total charge computation \t-> Done!", "SUCCESS")
-#     return run
-
-# def compute_total_energy(run,config_files,params={"DEFAULT_CHARGE_VARIABLE":None},rm_branches=False,debug=False):
-#     '''
-#     Compute the total energy of the events in the TTree
-#     - run: dictionary containing the TTree
-#     - config_files: dictionary containing the path to the configuration files for each geoemtry
-#     - params: dictionary containing the parameters for the reco functions
-#     - debug: print debug information
-#     '''    
-#     run["Reco"]["Energy"]      = np.zeros(len(run["Reco"]["Event"]))
-#     run["Reco"]["TotalEnergy"] = np.zeros(len(run["Reco"]["Event"]))
-#     run["Reco"]["EnergyPerHit"] = np.zeros(len(run["Reco"]["Event"]))
-#     for config in config_files:
-#         info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
-#         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-#         # Get values from the configuration file or use the ones given as input
-#         params = get_param_dict(info,params,debug=False)
-#         run["Reco"]["Energy"][idx]      = 1.9 + run["Reco"]["Calibration"][idx]*run["Reco"][params["DEFAULT_CHARGE_VARIABLE"]][idx]
-#         run["Reco"]["TotalEnergy"][idx] = 1.9 + run["Reco"]["Calibration"][idx]*run["Reco"]["TotalCharge"][idx]
-#         run["Reco"]["EnergyPerHit"][idx] = run["Reco"]["TotalEnergy"][idx]/run["Reco"]["TotalNHits"][idx]
-#         print_colored("-> Using "+params["DEFAULT_CHARGE_VARIABLE"]+" for the energy in config "+config, "WARNING")
-    
-#     print_colored("Total energy computation \t-> Done!", "SUCCESS")
-#     return run
