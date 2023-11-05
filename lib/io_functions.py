@@ -1,4 +1,4 @@
-import uproot, os, copy, stat, inquirer
+import uproot, os, copy, stat, json
 import numpy   as np
 import pandas  as pd
 import awkward as ak
@@ -32,7 +32,7 @@ def print_colored(string, color, bold=False, debug=False):
     print(output)
     return output
     
-def read_input_file(input, path="../config/", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
+def read_input_file(input_file, path="../config/", preset="default_input", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
     '''
     Obtain the information stored in a .txt input file to load the runs and channels needed
 
@@ -49,44 +49,46 @@ def read_input_file(input, path="../config/", INTEGERS=[], DOUBLES=[], STRINGS=[
         info (dict): dictionary with the information from the input file
     '''
     info = dict()
-    if INTEGERS == []: INTEGERS = ["EVENT_TICKS","MAX_ADJCL_TIME","DETECTOR_SIZE_X","DETECTOR_SIZE_Y","DETECTOR_SIZE_Z","MAIN_PDG"]
-    if DOUBLES  == []: DOUBLES  = ["FULL_DETECTOR_FACTOR","TIMEWINDOW","MAX_ADJCL_R","MAX_FLASH_R","MIN_FLASH_PE","RATIO_FLASH_PEvsR","MAX_DRIFT_FACTOR","MIN_BKG_R","MAX_BKG_CHARGE","MAX_ENERGY_PER_HIT","MIN_ENERGY_PER_HIT","FIDUTIAL_FACTOR","MAX_MAIN_E","MIN_MAIN_E","MAX_CL_E","MIN_CL_E","MAX_ADJCL_E","MIN_ADJCL_E"]
-    if STRINGS  == []: STRINGS  = ["NAME","PATH","GEOMETRY","VERSION","DEFAULT_ANALYSIS_ENERGY","DEFAULT_RECOX_TIME","DEFAULT_ENERGY_TIME","DEFAULT_ADJCL_ENERGY_TIME","DEFAULT_CHARGE_VARIABLE"]
-    if BOOLS    == []: BOOLS    = ["COMPUTE_MATCHING"]
-    
-    with open(path+input+".txt", 'r') as txt_file:
+    if INTEGERS == [] and DOUBLES == [] and STRINGS == [] and BOOLS == []: 
+        json_config = json.load(open(path+preset+".json","r"))
+        DOUBLES  = json_config["DOUBLES"]
+        INTEGERS = json_config["INTEGERS"]
+        STRINGS  = json_config["STRINGS"]
+        BOOLS    = json_config["BOOLS"]
+
+    with open(path+input_file+".txt", 'r') as txt_file:
         lines = txt_file.readlines()
 
         for line in lines:
-            for LABEL in DOUBLES:
-                if line.startswith(LABEL):
-                    info[LABEL] = []
+            for key in DOUBLES:
+                if line.startswith(key):
+                    info[key] = []
                     doubles = line.split(" ")[1]
                     for i in doubles.split(","):
-                        info[LABEL].append(float(i))
-                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
-            for LABEL in INTEGERS:
-                if line.startswith(LABEL):
-                    info[LABEL] = []
+                        info[key].append(float(i))
+                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+            for key in INTEGERS:
+                if line.startswith(key):
+                    info[key] = []
                     integers = line.split(" ")[1]
                     for i in integers.split(","):
-                        info[LABEL].append(int(i))
-                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
-            for LABEL in STRINGS:
-                if line.startswith(LABEL):
-                    info[LABEL] = []
+                        info[key].append(int(i))
+                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+            for key in STRINGS:
+                if line.startswith(key):
+                    info[key] = []
                     strings = line.split(" ")[1]
                     for i in strings.split(","):
-                        info[LABEL].append(i.strip('\n'))
-                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
-            for LABEL in BOOLS:
-                if line.startswith(LABEL):
-                    info[LABEL] = []
+                        info[key].append(i.strip('\n'))
+                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+            for key in BOOLS:
+                if line.startswith(key):
+                    info[key] = []
                     bools = line.split(" ")[1]
                     for i in bools.split(","):
-                        if i.strip('\n') == "True":  info[LABEL].append(True)
-                        if i.strip('\n') == "False": info[LABEL].append(False)
-                        # if debug: print_colored(string="Found %s: "%LABEL+str(info[LABEL]), color="DEBUG")
+                        if i.strip('\n') == "True":  info[key].append(True)
+                        if i.strip('\n') == "False": info[key].append(False)
+                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
     if debug: ic(info)
     return info
 
