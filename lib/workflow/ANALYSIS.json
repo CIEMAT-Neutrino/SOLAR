@@ -3,7 +3,8 @@
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
-            "TruthPart": 1
+            "TruthPart": 1,
+            "TNuE":  1e3
         },
         "DOUBLES": {},
         "STRINGS": {},
