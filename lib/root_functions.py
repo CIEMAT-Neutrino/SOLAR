@@ -8,18 +8,7 @@ from ROOT    import TFile, TTree, TList
 
 from .io_functions import print_colored
 
-def load_root_file(user_input, info, debug=False):
-    # Start by opening the input file
-    if debug: print_colored("\nLoading data...","DEBUG")
-    input_file = TFile(info["PATH"][0]+info["NAME"][0]+user_input["root_file"][0]+".root")
-    folder_name = input_file.GetListOfKeys()[0].GetName()
-    tree = input_file.Get(folder_name + "/" + "SolarNuAnaTree")
-    print_colored("-> Found tree: %s"%tree.GetName(), "SUCCESS")
-    # Return pointer to the tree
-    print(type(tree))
-    return tree
-
-def create_th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=False):
+def th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=False):
     '''
     Create a TH2F histogram from a pandas DataFrame.
     
@@ -51,7 +40,10 @@ def create_th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=Fa
     if debug: print_colored("Created TH2F histogram: %s"%name,"INFO")
     return th2f
 
-def create_synthetic_histograms():
+def generate_synthetic_histograms():
+    '''
+    Create synthetic histograms for testing purposes.
+    '''
     nbins_x = 10
     nbins_y = 10
 
@@ -72,6 +64,22 @@ def create_synthetic_histograms():
     return obs_hist, solar_hist, neut_hist
 
 class Fitter:
+    '''
+    Class to fit the solar neutrino histograms for each set of oscillation parameters.
+
+    Args:
+        obs (ROOT.TH2F): observed data histogram.
+        solar (ROOT.TH2F): solar data histogram.
+        neut (ROOT.TH2F): neutrino data histogram.
+        DayNight (bool): True if Day-Night asymmetry is included, False otherwise (default: True).
+        SigmaSolar (float): uncertainty on the solar neutrino flux (default: 0.04).
+        SigmaNeut (float): uncertainty on the atmospheric neutrino flux (default: 0.02).
+
+    Returns:
+        chisq (float): chi-squared value.
+        A_solar (float): best-fit value of the solar neutrino flux.
+        A_neut (float): best-fit value of the atmospheric neutrino flux.
+    '''
     def __init__(self, obs, solar, neut, DayNight=True, SigmaSolar=0.04, SigmaNeut=0.02):
         self.fObs = obs
         self.fSolar = solar
@@ -123,35 +131,3 @@ class Fitter:
         A_neut = m.values['A_neut']
 
         return m.fval, A_solar, A_neut
-
-# Writte the same Fitter class but using the cost function from iminuit that is faster
-
-class FastFitter:
-    def __init__(self, obs, solar, neut, DayNight=True, SigmaSolar=0.04, SigmaNeut=0.02):
-        self.fObs = obs
-        self.fSolar = solar
-        self.fNeut = neut
-        self.fDayNight = DayNight
-        self.fSigmaSolar = SigmaSolar
-        self.fSigmaNeut = SigmaNeut
-
-    def residuals(self, A_solar, A_neut):
-        for i in range(1, self.fObs.GetNbinsX() + 1):
-            for j in range(1, self.fObs.GetNbinsY() + 1):
-                if self.fDayNight == False and j < (self.fObs.GetNbinsY() + 1)/2:
-                    e = 0
-                    o = 0
-                else:
-                    N_neut = (1 + A_neut) * self.fNeut.GetBinContent(i, j)
-                    N_solar = (1 + A_solar) * self.fSolar.GetBinContent(i, j)
-                
-                    e = N_neut + N_solar
-                    o = self.fObs.GetBinContent(i, j)
-                
-                if o == 0:
-                    continue
-                
-                if o == 0:
-                    yield 2 * (e - o)
-                else:
-                    yield 2 * (e - o + o * np.log(o / e))
