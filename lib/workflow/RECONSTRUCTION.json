@@ -1,6 +1,9 @@
 {
     "TRUE": {
-        "INTEGERS": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
         "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {}

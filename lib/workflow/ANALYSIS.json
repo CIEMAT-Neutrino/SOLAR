@@ -2,7 +2,8 @@
     "TRUE": {
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1
+            "Flag": 1,
+            "TruthPart": 1
         },
         "DOUBLES": {},
         "STRINGS": {},
