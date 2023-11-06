@@ -101,7 +101,7 @@ def get_bkg_config(info,debug=False):
 def get_gen_label(config_files, debug=False):
     gen_dict = dict()
     for idx,config in enumerate(config_files):
-        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        info = read_input_file(config+'/'+config_files[config],debug=debug)
         geo = info["GEOMETRY"][0]
         version = info["VERSION"][0]
         for idx,gen in enumerate(get_bkg_config(info,debug)[0].values()):
@@ -254,7 +254,7 @@ def get_simple_name(name_list, debug=False):
 def get_gen_weights(config_files, names, debug=False):
     weights_dict = dict()
     for idx,config in enumerate(config_files):
-        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        info = read_input_file(config+'/'+config_files[config],debug=debug)
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"][0]
         name_list = names[config]
