@@ -29,7 +29,7 @@ run = compute_reco_workflow(run,config_files,workflow="CALIBRATION",debug=True)
 
 # Filter the data for calibration
 max_energy = 20; acc = 50
-info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
+info = read_input_file(config+'/'+config_files[config],debug=False)
 total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] > 0.9
 geo_filter          = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
@@ -46,7 +46,7 @@ fig, corr_popt, perr = get_hist2d_fit(np.abs(run["Reco"]["Time"][filter1]),(run[
 
 # Save the true energy fit parameters to a txt file
 if not os.path.exists("../config/"+config+"/"+config+"_calib/"): os.makedirs("../config/"+config+"/"+config+"_calib/")
-with open("../config/"+config+"/"+config+"_calib/"+config+"_corr_config.txt",'w') as f:
+with open("../config/"+config+"/"+config+"_calib/"+config+"_charge_correction.txt",'w') as f:
     f.write("CHARGE_AMP: %f\n"%corr_popt[0])
     f.write("ELECTRON_TAU: %f\n"%corr_popt[1])
 plt.close()
@@ -73,7 +73,7 @@ fig.update_layout(coloraxis=dict(colorscale="Turbo",colorbar=dict(title="Counts"
     )
 
 fig = format_coustom_plotly(fig,fontsize=18)
-if not os.path.exists("../plots/calibration/%s_calibration/"%config): os.makedirs("../plots/calibration/%s_calibration/"%config)
-fig.write_image("../plots/calibration/%s_calibration/%s_calibration.png"%(config,config), width=2400, height=1080)
-print_colored("-> Saved plots to ../plots/calibration/%s_calibration/%s_calibration.png"%(config,config),"SUCCESS")
+if not os.path.exists("../images/calibration/%s_calibration/"%config): os.makedirs("../images/calibration/%s_calibration/"%config)
+fig.write_image("../images/calibration/%s_calibration/%s_calibration.png"%(config,config), width=2400, height=1080)
+print_colored("-> Saved images to ../images/calibration/%s_calibration/%s_calibration.png"%(config,config),"SUCCESS")
 fig.show()

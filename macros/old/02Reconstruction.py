@@ -29,7 +29,7 @@ run = compute_reco_workflow(run,config_files,workflow="ANALYSIS",rm_branches=Fal
 
 for jdx,config in enumerate(config_files):
     print("Processing %s"%config)
-    info = read_input_file(config_files[config],path="../config/"+config+"/",debug=False)
+    info = read_input_file(config+'/'+config_files[config],debug=False)
 
     max_energy = 30; acc = 50
     total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3
@@ -41,7 +41,7 @@ for jdx,config in enumerate(config_files):
     
     filter1 = (total_energy_filter)*(geo_filter)*(version_filter)*(neutron_filter)*(time_filter)*(run["Reco"]["Primary"])
 
-    calibration_info = read_input_file(config+"_corr_config",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=False)
+    calibration_info = read_input_file(config+"_charge_correction",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=False)
     corr_popt = [calibration_info["CHARGE_AMP"][0],calibration_info["ELECTRON_TAU"][0]]
 
     run["Reco"]["ElectronE"] = 1e3*run["Reco"]["TMarleyE"][:,2]
@@ -54,7 +54,7 @@ for jdx,config in enumerate(config_files):
     
     # Save the true energy fit parameters to a txt file
     if not os.path.exists("../config/"+config+"/"+config+"_calib/"): os.makedirs("../config/"+config+"/"+config+"_calib/")
-    with open("../config/"+config+"/"+config+"_calib/"+config+"_calib_config.txt",'w') as f:
+    with open("../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.txt",'w') as f:
         f.write("ENERGY_AMP: %f\n"%true_popt[0])
         f.write("INTERSECTION: %f\n"%true_popt[1])
     plt.close()
@@ -79,6 +79,6 @@ for jdx,config in enumerate(config_files):
         )
     fig.update_yaxes(title_text="True Neutrino Energy [MeV]")
     fig.update_layout(showlegend=False)
-    if not os.path.exists("../plots/calibration/%s_calibration/"%(config)): os.makedirs("../plots/calibration/%s_calibration/"%(config))
-    fig.write_image("../plots/calibration/%s_calibration/%s_reco_energy.png"%(config,config), width=2400, height=1080)
-    print_colored("-> Saved reco energy plot to ../plots/calibration/%s_calibration/%s_reco_energy.png"%(config,config),"SUCCESS")
+    if not os.path.exists("../images/calibration/%s_calibration/"%(config)): os.makedirs("../images/calibration/%s_calibration/"%(config))
+    fig.write_image("../images/calibration/%s_calibration/%s_reco_energy.png"%(config,config), width=2400, height=1080)
+    print_colored("-> Saved reco energy plot to ../images/calibration/%s_calibration/%s_reco_energy.png"%(config,config),"SUCCESS")
