@@ -5,7 +5,7 @@ import awkward as ak
 
 from icecream import ic
 
-def print_colored(string, color, bold=False, debug=False):
+def print_colored(string, color, bold=False, italic=False, debug=False):
     '''
     Print a string in a specific color
 
@@ -14,23 +14,18 @@ def print_colored(string, color, bold=False, debug=False):
         color (str): color to be used
         bold (bool): if True, the bold mode is activated (default: False)
     '''
-    colors = {
-              "DEBUG":   '\033[35m', #PURPLE
-              "ERROR":   '\033[91m', #RED
-              "SUCCESS": '\033[92m', #GREEN
-              "WARNING": '\033[93m', #YELLOW
-              "INFO":    '\033[94m', #BLUE
-              "magenta": '\033[95m',
-              "cyan":    '\033[96m',
-              "white":   '\033[97m',
-              "black":   '\033[98m',
-              "end":     '\033[0m'
-              }
+    from rich import print as rprint
+    colors = {"DEBUG":'purple',"ERROR":'red',"SUCCESS":'green',"WARNING":'yellow',"INFO":'blue'}
+    if color in list(colors.values()): color = colors[color]
     
-    if bold == False: output = colors[color] + string + colors["end"]
-    if bold == True:  output = '\033[1m' + colors[color] + string + colors["end"]
-    print(output)
-    return output
+    if bold == False and italic == False:   output = '['+colors[color]+']' + string + '['+colors[color]+']'
+    elif bold == True  and italic == False: output = '['+'bold '+colors[color]+']' + string + '['+'/bold '+colors[color]+']'
+    elif bold == False and italic == True:  output = '['+'italic '+colors[color]+']' + string + '['+'/italic '+colors[color]+']'
+    elif bold == True  and italic == True:  output = '['+'bold italic '+colors[color]+']' + string + '['+'/bold italic '+colors[color]+']'
+    else: output = string
+    
+    rprint(output)
+    return 0
     
 def read_input_file(input_file, path="../config/", preset="default_input", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
     '''
@@ -56,6 +51,7 @@ def read_input_file(input_file, path="../config/", preset="default_input", INTEG
         STRINGS  = json_config["STRINGS"]
         BOOLS    = json_config["BOOLS"]
 
+    for key in INTEGERS+DOUBLES+STRINGS+BOOLS: info[key] = None
     with open(path+input_file+".txt", 'r') as txt_file:
         lines = txt_file.readlines()
 
@@ -668,7 +664,7 @@ def get_gen_label(config_files, debug=False):
     '''
     gen_dict = dict()
     for idx,config in enumerate(config_files):
-        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        info = read_input_file(config+'/'+config_files[config],debug=debug)
         geo = info["GEOMETRY"][0]
         version = info["VERSION"][0]
         for idx,gen in enumerate(get_bkg_config(info,debug)[0].values()):
@@ -841,7 +837,7 @@ def get_simple_name(name_list, debug=False):
 def get_gen_weights(config_files, names, debug=False):
     weights_dict = dict()
     for idx,config in enumerate(config_files):
-        info = read_input_file(config_files[config],path="../config/"+config+"/",debug=debug)
+        info = read_input_file(config+'/'+config_files[config],debug=debug)
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"][0]
         name_list = names[config]
