@@ -62,8 +62,8 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
 
         if gen == 1:
             int_time = 1
-            t_hist, bin_edges = np.histogram(run["Truth"]["TNuE"][(truth_filter)],bins=1e-3*energy_edges)
-            r_hist, bin_edges = np.histogram(run["Reco"]["TNuE"][this_filter],bins=1e-3*energy_edges)
+            t_hist, bin_edges = np.histogram(run["Truth"]["TNuE"][(truth_filter)],bins=energy_edges)
+            r_hist, bin_edges = np.histogram(run["Reco"]["TNuE"][this_filter],bins=energy_edges)
             efficient_flux = {A: B for A, B in zip(energy_centers, r_hist/t_hist)}
 
             eff_smearing_df = smearing_df.mul(efficient_flux)*factor
@@ -154,9 +154,11 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
 def get_truth_count(run,info,config,names,debug=False):
     bkg_dict,color_dict = get_bkg_config(info)
     truth_gen_df = pd.DataFrame(np.asarray(run["Truth"]["TruthPart"])[:,0:len(list(bkg_dict.values())[1:])],columns=list(bkg_dict.values())[1:])
-    truth_gen_df["Geometry"] = run["Truth"]["Geometry"]
-    truth_gen_df["Version"] = run["Truth"]["Version"]
-    truth_gen_df["Name"] = run["Truth"]["Name"]
+    truth_gen_df["Geometry"] = info["GEOMETRY"][0]
+    truth_gen_df["Version"] = info["VERSION"][0]
+    
+    try: truth_gen_df["Name"] = run["Truth"]["Name"]
+    except KeyError: truth_gen_df["Name"] = names[config]
     truth_gen_df = truth_gen_df[(truth_gen_df["Geometry"] == info["GEOMETRY"][0]) & (truth_gen_df["Version"] == info["VERSION"][0])]
     
     count_truth_df = truth_gen_df.groupby("Name").count().drop(columns=["Geometry"])
@@ -218,15 +220,17 @@ def get_solar_spectrum(components,bins,weigths="BS05",show=False,out=False,in_pa
     '''
     Read in the solar flux data and interpolate it to the desired energy bins.
 
-    VARIABLES:
-    
-        \n - components: list of components to include in the solar flux (default: ["b8","hep"])
-        \n - bins: energy bins
-        \n - weigths: type of solar flux to use (default: BS05)
-        \n - show: if True, show the solar flux components (default: False)
-        \n - out: if True, save the solar flux components (default: False)
-        \n - in_path: path to the solar flux data (default: ../data/SOLAR/)
-        \n - out_path: path to the output folder (default: ../data/OUTPUT/)
+    Args:
+        components (list): list of components
+        bins (np.array): energy bins
+        weigths (str): weigths (default: "BS05")
+        show (bool): if True, show the plot (default: False)
+        out (bool): if True, save the output (default: False)
+        in_path (str): input path (default: "../data/SOLAR/")
+        out_path (str): output path (default: "../data/OUTPUT/")
+
+    Returns:
+        y (np.array): interpolated flux values
     '''
 
     if out: output = open(out_path+'neutrino_flux.txt','w')    # Output text file.
