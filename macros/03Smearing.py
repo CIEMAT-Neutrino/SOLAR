@@ -24,7 +24,7 @@ eff_flux_hep = get_detected_solar_spectrum(bins=energy_centers,components=["hep"
 
 list_hist = []
 data_filter = {"max_energy": 30, "min_energy": 0, "pre_nhits": 3, "primary": True, "neutron": True}
-data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="SMEARING", debug=user_input["debug"])
+true, data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="SMEARING", debug=user_input["debug"])
 print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_idx),data["Event"].size),"SUCCESS")
 
 for idx,energy_bin in enumerate(energy_centers):

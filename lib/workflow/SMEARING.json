@@ -1,0 +1,42 @@
+{
+    "TRUE": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "RECO": {
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "Generator": 1,
+            "NHits": 1,
+            "AdjClNum": 0,
+            "AdjOpFlashNum": 0
+        },
+
+        "DOUBLES": {
+            "TNuE":  1e3,
+            "ElectronE": 1,
+            "GammaE": 1,
+            "NeutronP": 0,  
+            "VisEnergy": 1,
+            "Time": 1,
+            "Charge": 1,
+            "Correction": 1,
+            "Energy": 0,
+            "TotalEnergy": 0,
+            "RecoEnergy": 0,
+            "TotalAdjClEnergy": 0,
+            "MaxAdjClEnergy": 0
+        },
+
+        "STRINGS": {
+
+        },
+
+        "BOOLS": {
+            "Primary": 1
+        }
+    }
+}

@@ -1,0 +1,69 @@
+{
+    "TRUE": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "RECO": {
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "Generator": 1,
+            "Ind0TPC": 1,
+            "Ind1TPC": 1,
+            "NHits": 1,
+            "Ind0NHits": 1,
+            "Ind1NHits": 1,
+            "MainPDG": 1,
+            "AdjClNum": 0,
+            "AdjOpFlashNum": 0,
+            "AssFlashIdx": 0,  
+            "Matching": -1
+        },
+
+        "DOUBLES": {
+            "TNuE":  1e3,
+            "ElectronE": 1,
+            "GammaE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1,
+            "Time": 1,
+            "Ind0dT": 1,
+            "Ind1dT": 1,
+            "Charge": 1,
+            "Ind0Charge": 1,
+            "Ind1Charge": 1,
+            "MaxCharge": 1,
+            "Ind0MaxCharge": 1,
+            "Ind1MaxCharge": 1,
+            "Ind0RecoY": 1,
+            "Ind1RecoY": 1,
+            "RecoZ": 1,
+            "MainE": 1,
+            "MainP": 1,
+            "RecoY": -1e6,
+            "RecoX": -1e6,
+            "MatchedOpFlashTime": -1e6,
+            "MatchedOpFlashPE": -1e6,
+            "MatchedOpFlashR": -1e6,
+            "DriftTime": -1e6,
+            "Correction": -1e6,
+            "Energy": -1e6,
+            "MaxAdjClEnergy": -1e6,
+            "TotalAdjClEnergy": -1e6,
+            "TotalEnergy": -1e6,
+            "RecoEnergy": -1e6
+        },
+
+        "STRINGS": {
+
+        },
+
+        "BOOLS": {
+            "Primary": 1,
+            "FlashMatched": 1
+        }
+    }
+}

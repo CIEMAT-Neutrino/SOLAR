@@ -20,7 +20,7 @@ info = read_input_file(user_input["config_file"],path="../config/",debug=user_in
 
 acc = 50
 data_filter = {"max_energy": 20, "min_energy": 0, "pre_nhits": 4, "primary": True, "neutron": True}
-data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="BASIC", debug=user_input["debug"])
+true, data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="CALIBRATION", debug=user_input["debug"])
 print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_idx),data["Event"].size),"SUCCESS")
 
 # Plot the calibration workflow
