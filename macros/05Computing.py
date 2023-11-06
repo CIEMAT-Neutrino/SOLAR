@@ -14,7 +14,7 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 # Compute data: root -> numpy #
 info = read_input_file(user_input["config_file"],path="../config/",debug=False)
 config = user_input["config_file"].split("/")[-1].split("_config")[0]    
-params = get_param_dict(info,in_params={},debug=user_input["debug"])
+params = get_param_dict(user_input["config_file"],in_params={},debug=user_input["debug"])
 
 # Start by opening the input file
 print_colored("\nLoading data...","DEBUG")
@@ -29,9 +29,9 @@ print_colored("-> Found tree: %s"%tree.GetName(), "SUCCESS")
 #     print_colored("   - %s"%branch.GetName(),"INFO")
 
 # Load calibration parameters
-corr_info = read_input_file(config+"_corr_config",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=False)
+corr_info = read_input_file(config+"_charge_correction",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=False)
 corr_popt = [corr_info["CHARGE_AMP"][0],corr_info["ELECTRON_TAU"][0]]
-calib_info = read_input_file(config+"_calib_config",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["ENERGY_AMP","INTERSECTION"],debug=False)
+calib_info = read_input_file(config+"_energy_calibration",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["ENERGY_AMP","INTERSECTION"],debug=False)
 
 data = {"AdjClNum":     np.zeros(tree.GetEntries(), dtype=np.int16),
         "AdjOpFlashNum":np.zeros(tree.GetEntries(), dtype=np.int16),

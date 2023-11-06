@@ -1,8 +1,9 @@
 import sys; sys.path.insert(0, '../');
+import os, ROOT
 import pandas as pd
-import os
 
 from rich.progress      import track
+from ROOT               import TFile, TTree, TList
 
 from lib.root_functions import *
 from lib.io_functions   import read_input_file
@@ -20,7 +21,12 @@ solar_sin12_df = pd.DataFrame(columns=np.unique(sin12_list),index=np.unique(dm2_
 react_df = pd.DataFrame(columns=["dm2","sin13","sin12","chi2"])
 solar_df = pd.DataFrame(columns=["dm2","sin13","sin12","chi2"])
 
-bkg_df = pd.read_pickle(path+"Neutron/Neutron_events.pkl")
+bkg_df = pd.read_pickle(path+"APA/APA_events.pkl")
+# Make a copy of the background dataframe but fill it with zeros
+# bkg_df = bkg_df.copy(deep=True)
+# for col in bkg_df.columns:
+#     bkg_df[col].values[:] = 0
+
 solar_tuple = (analysis_info["SOLAR_DM2"][0],analysis_info["SIN13"][0],analysis_info["SIN12"][0])
 react_tuple = (analysis_info["REACT_DM2"][0],analysis_info["SIN13"][0],analysis_info["SIN12"][0])
 pred1_df = pd.read_pickle(path+"Marley/solar_events_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%solar_tuple)
@@ -35,9 +41,9 @@ initial_A_solar = 0.0
 initial_A_bkg   = 0.0
 
 # Create the Fitter object
-solar_hist = create_th2f_from_dataframe(pred1_df)
-react_hist = create_th2f_from_dataframe(pred2_df)
-bkg_hist = create_th2f_from_dataframe(bkg_df)
+solar_hist = th2f_from_dataframe(pred1_df)
+react_hist = th2f_from_dataframe(pred2_df)
+bkg_hist   = th2f_from_dataframe(bkg_df)
 
 for i in track(range(len(fake_df_dict.keys())), description="Computing data..."):
     params = list(fake_df_dict.keys())[i]
@@ -78,9 +84,9 @@ for i in track(range(len(fake_df_dict.keys())), description="Computing data...")
     react_df.loc[i] = [params[0],params[1],params[2],chi2]
 
 if not os.path.exists(path+"/results/"): os.makedirs(path+"/results/")
-solar_sin12_df.to_pickle(path+"/results/solar_sin12_df.pkl")
-solar_sin13_df.to_pickle(path+"/results/solar_sin13_df.pkl")
-react_sin12_df.to_pickle(path+"/results/react_sin12_df.pkl")
-react_sin13_df.to_pickle(path+"/results/react_sin13_df.pkl")
-solar_df.to_pickle(path+"/results/solar_df.pkl")
-react_df.to_pickle(path+"/results/react_df.pkl")
+solar_sin12_df.to_pickle(path+"/results/marley_solar_sin12_df.pkl")
+solar_sin13_df.to_pickle(path+"/results/marley_solar_sin13_df.pkl")
+react_sin12_df.to_pickle(path+"/results/marley_react_sin12_df.pkl")
+react_sin13_df.to_pickle(path+"/results/marley_react_sin13_df.pkl")
+solar_df.to_pickle(path+"/results/marley_solar_df.pkl")
+react_df.to_pickle(path+"/results/marley_react_df.pkl")
