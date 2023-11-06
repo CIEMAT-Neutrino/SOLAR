@@ -7,7 +7,117 @@ import plotly.graph_objects as go
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
 
+def format_coustom_plotly(fig,title="",fontsize=16,figsize=None,ranges=(None,None),matches=("x","y"),
+    tickformat=('.s','.s'),log=(False,False),margin={"auto":True,"color":"white","margin":(0,0,0,0)},add_units=False,debug=False):
+    '''
+    Format a plotly figure
+
+    Args:
+        fig (plotly.graph_objects.Figure): plotly figure
+        title (str): title of the figure (default: "")
+        fontsize (int): font size (default: 16)
+        figsize (tuple): figure size (default: None)
+        ranges (tuple): axis ranges (default: (None,None))
+        matches (tuple): axis matches (default: ("x","y"))
+        tickformat (tuple): axis tick format (default: ('.s','.s'))
+        log (tuple): axis log scale (default: (False,False))
+        margin (dict): figure margin (default: {"auto":True,"color":"white","margin":(0,0,0,0)})
+        add_units (bool): True to add units to axis labels, False otherwise (default: False)
+        debug (bool): True to print debug statements, False otherwise (default: False)
+
+    Returns:
+        fig (plotly.graph_objects.Figure): plotly figure
+    '''
+    fig.update_layout(title=title,template="presentation",font=dict(size=fontsize),paper_bgcolor=margin["color"]) # font size and template
+    
+    fig.update_xaxes(matches=matches[0],showline=True,
+        mirror="ticks",showgrid=True,minor_ticks="inside",tickformat=tickformat[0],range=ranges[0]) # tickformat=",.1s" for scientific notation
+    
+    fig.update_yaxes(matches=matches[1],showline=True,
+        mirror="ticks",showgrid=True,minor_ticks="inside",tickformat=tickformat[1],range=ranges[1]) # tickformat=",.1s" for scientific notation
+    
+    if figsize != None:
+        fig.update_layout(width=figsize[0],height=figsize[1])
+    if log[0]:
+        fig.update_xaxes(type="log",tickmode="linear")
+    if log[1]:
+        fig.update_yaxes(type="log",tickmode="linear")
+    if margin["auto"] == False:
+        fig.update_layout(margin=dict(l=margin["margin"][0], r=margin["margin"][1], t=margin["margin"][2], b=margin["margin"][3]))
+    # Update axis labels to include units
+    if add_units:
+        fig.update_xaxes(title_text=fig.layout.xaxis.title.text+get_units(fig.layout.xaxis.title.text,debug=debug))
+        fig.update_yaxes(title_text=fig.layout.yaxis.title.text+get_units(fig.layout.yaxis.title.text,debug=debug))
+    return fig
+
+def get_units(var,debug=True):
+    '''
+    Returns the units of a variable based on the variable name
+
+    Args:
+        var (str): variable name
+    '''
+    units = {"R":" [cm] ","X":" [cm] ","Y":" [cm] ","Z":" [cm] ","Time":" [tick] ","Energy":" [MeV] ", "Charge": " [ADC x tick] "}
+    for unit_key in list(units.keys()):
+        if debug: print("Checking for "+unit_key +" in "+var)
+        if var.endswith(unit_key):
+            unit = units[unit_key]
+            if debug: print("Unit found for "+var)
+            break
+        else:
+            if debug: print("No unit found for "+var)
+            unit = ""
+    return unit
+
+def unicode(x):
+    '''
+    Returns the unicode character for a given string
+
+    Args:
+        x (str): string to convert to unicode
+    '''
+    if type(x) != str:
+        raise TypeError("Input must be a string")
+    unicode_greek  = {"Delta":"\u0394","mu":"\u03BC","pi":"\u03C0","gamma":"\u03B3","Sigma":"\u03A3","Lambda":"\u039B",
+        "alpha":"\u03B1","beta":"\u03B2","gamma":"\u03B3","delta":"\u03B4","epsilon":"\u03B5","zeta":"\u03B6","eta":"\u03B7",
+        "theta":"\u03B8","iota":"\u03B9","kappa":"\u03BA","lambda":"\u03BB","mu":"\u03BC","nu":"\u03BD","xi":"\u03BE",
+        "omicron":"\u03BF","pi":"\u03C0","rho":"\u03C1","sigma":"\u03C3","tau":"\u03C4","upsilon":"\u03C5","phi":"\u03C6",
+        "chi":"\u03C7","psi":"\u03C8","omega":"\u03C9"}
+    
+    unicode_symbol = {"PlusMinus":"\u00B1","MinusPlus":"\u2213","Plus":"\u002B","Minus":"\u2212","Equal":"\u003D","NotEqual":"\u2260",
+        "LessEqual":"\u2264","GreaterEqual":"\u2265","Less":"\u003C","Greater":"\u003E","Approximately":"\u2248","Proportional":"\u221D",
+        "Infinity":"\u221E","Degree":"\u00B0","Prime":"\u2032","DoublePrime":"\u2033","TriplePrime":"\u2034","QuadruplePrime":"\u2057",
+        "Micro":"\u00B5","PerMille":"\u2030","Permyriad":"\u2031","Minute":"\u2032","Second":"\u2033","Dot":"\u02D9","Cross":"\u00D7",
+        "Star":"\u22C6","Circle":"\u25CB","Square":"\u25A1","Diamond":"\u25C7","Triangle":"\u25B3","LeftTriangle":"\u22B2",
+        "RightTriangle":"\u22B3","LeftTriangleEqual":"\u22B4","RightTriangleEqual":"\u22B5","LeftTriangleBar":"\u29CF",
+        "RightTriangleBar":"\u29D0","LeftTriangleEqualBar":"\u29CF","RightTriangleEqualBar":"\u29D0","LeftRightArrow":"\u2194",
+        "UpDownArrow":"\u2195","UpArrow":"\u2191","DownArrow":"\u2193","LeftArrow":"\u2190","RightArrow":"\u2192","UpArrowDownArrow":"\u21C5",
+        "LeftArrowRightArrow":"\u21C4","LeftArrowLeftArrow":"\u21C7","UpArrowUpArrow":"\u21C8","RightArrowRightArrow":"\u21C9",
+        "DownArrowDownArrow":"\u21CA","LeftRightVector":"\u294E","RightUpDownVector":"\u294F","DownLeftRightVector":"\u2950",
+        "LeftUpDownVector":"\u2951","LeftVectorBar":"\u2952","RightVectorBar":"\u2953","RightUpVectorBar":"\u2954","RightDownVectorBar":"\u2955"}
+    
+    unicode_dict = {**unicode_greek,**unicode_symbol}
+    return unicode_dict[x]
+
+def update_legend(fig,dict,debug=False):
+    '''
+    Update the legend of a plotly figure.
+    '''
+    fig.for_each_trace(lambda t: t.update(name = dict[t.name],legendgroup = dict[t.name],hovertemplate = t.hovertemplate.replace(t.name, dict[t.name])))
+    return fig
+
 def change_hist_color(n,patches,logy=False):
+    '''
+    Change the color of a plt.hist based on the bin content
+
+    Args:
+        n (array): bin content
+        patches (array): histogram patches
+        logy (bool): True if log scale, False otherwise (default: False)
+
+    Returns:
+        patches (array): histogram patches with updated color
+    '''
     try:
         for i in range(len(n)):
             n[i] = n[i].astype('int') # it MUST be integer# Good old loop. Choose colormap of your taste
@@ -59,62 +169,24 @@ def get_common_colorbar(data_list,bins):
 
     return max_hist, min_hist
 
-def format_coustom_plotly(fig,
-    title="",
-    fontsize=16,
-    figsize=None,
-    ranges=(None,None),
-    matches=("x","y"),
-    tickformat=('.s','.s'),
-    log=(False,False),
-    margin={"auto":True,"color":"white","margin":(0,0,0,0)},
-    add_units=False,
-    debug=False):
-    '''
-    Format a plotly figure
-    VARIABLES:
-        \n fig: plotly figure
-        \n fontsize: (int) font size
-        \n figsize: (tuple) figure size
-        \n ranges: (tuple of 2 lists) axis ranges
-        \n tickformat: (tuple of 2 strings) axis tick format
-        \n log: (tuple of 2 bool) axis log scale
-        \n margin: (dict) margin settings
-        \n add_units: (bool) add units to axis labels
-        \n debug: (bool) debug mode
-    '''
-    fig.update_layout(title=title,template="presentation",font=dict(size=fontsize),paper_bgcolor=margin["color"]) # font size and template
-    
-    fig.update_xaxes(matches=matches[0],showline=True,
-        mirror="ticks",showgrid=True,minor_ticks="inside",tickformat=tickformat[0],range=ranges[0]) # tickformat=",.1s" for scientific notation
-    
-    fig.update_yaxes(matches=matches[1],showline=True,
-        mirror="ticks",showgrid=True,minor_ticks="inside",tickformat=tickformat[1],range=ranges[1]) # tickformat=",.1s" for scientific notation
-    
-    if figsize != None:
-        fig.update_layout(width=figsize[0],height=figsize[1])
-    if log[0]:
-        fig.update_xaxes(type="log",tickmode="linear")
-    if log[1]:
-        fig.update_yaxes(type="log",tickmode="linear")
-    if margin["auto"] == False:
-        fig.update_layout(margin=dict(l=margin["margin"][0], r=margin["margin"][1], t=margin["margin"][2], b=margin["margin"][3]))
-    # Update axis labels to include units
-    if add_units:
-        fig.update_xaxes(title_text=fig.layout.xaxis.title.text+get_units(fig.layout.xaxis.title.text,debug=debug))
-        fig.update_yaxes(title_text=fig.layout.yaxis.title.text+get_units(fig.layout.yaxis.title.text,debug=debug))
-    return fig
-
 def histogram_comparison(df,variable,discriminator,show_residual=False,binning="auto",
     hist_error="binomial",norm="none",coustom_norm={},debug=False):
     '''
     Compare two histograms of the same variable with different discriminator & plot the residual
-    VARIABLES:
-        \n df: (pandas dataframe) dataframe containing the data
-        \n variable: (string) variable to plot
-        \n discriminator: (string) discriminator to plot
-        \n binning_mode: (string) binning mode
-        \n debug: (bool) debug mode
+
+    Args:
+        df (pandas.DataFrame): pandas DataFrame containing the data
+        variable (str): variable to plot
+        discriminator (str): discriminator to compare
+        show_residual (bool): True to show the residual, False otherwise (default: False)
+        binning (str): binning method (default: auto)
+        hist_error (str): histogram error calculation method (default: binomial)
+        norm (str): histogram normalisation method (default: none)
+        coustom_norm (dict): coustom normalisation factor for each discriminator (default: {})
+        debug (bool): True to print debug statements, False otherwise (default: False)
+
+    Returns:
+        fig (plotly.graph_objects.Figure): plotly figure
     '''
     # Generate a residual plot from the histograms defined above
     discriminator_list = df[discriminator].unique()
@@ -200,49 +272,4 @@ def histogram_comparison(df,variable,discriminator,show_residual=False,binning="
     # fig.update_xaxes(title_text=fig.layout.xaxis.title.text+get_units(fig.layout.xaxis.title.text,debug=debug))
     # fig.update_yaxes(title_text=fig.layout.yaxis.title.text+get_units(fig.layout.yaxis.title.text,debug=debug))
     if debug: print("Histogram comparison done")
-    return fig
-
-def get_units(var,debug=True):
-    '''
-    Returns the units of a variable based on the variable name
-    VARIABLES:
-        \n var: (string) variable name
-        \n debug: (bool) debug mode
-    '''
-    units = {"R":" [cm] ","X":" [cm] ","Y":" [cm] ","Z":" [cm] ","Time":" [tick] ","Energy":" [MeV] ", "Charge": " [ADC x tick] "}
-    for unit_key in list(units.keys()):
-        if debug: print("Checking for "+unit_key +" in "+var)
-        if var.endswith(unit_key):
-            unit = units[unit_key]
-            if debug: print("Unit found for "+var)
-            break
-        else:
-            if debug: print("No unit found for "+var)
-            unit = ""
-    return unit
-
-def unicode(x):
-    unicode_greek  = {"Delta":"\u0394","mu":"\u03BC","pi":"\u03C0","gamma":"\u03B3","Sigma":"\u03A3","Lambda":"\u039B",
-        "alpha":"\u03B1","beta":"\u03B2","gamma":"\u03B3","delta":"\u03B4","epsilon":"\u03B5","zeta":"\u03B6","eta":"\u03B7",
-        "theta":"\u03B8","iota":"\u03B9","kappa":"\u03BA","lambda":"\u03BB","mu":"\u03BC","nu":"\u03BD","xi":"\u03BE",
-        "omicron":"\u03BF","pi":"\u03C0","rho":"\u03C1","sigma":"\u03C3","tau":"\u03C4","upsilon":"\u03C5","phi":"\u03C6",
-        "chi":"\u03C7","psi":"\u03C8","omega":"\u03C9"}
-    
-    unicode_symbol = {"PlusMinus":"\u00B1","MinusPlus":"\u2213","Plus":"\u002B","Minus":"\u2212","Equal":"\u003D","NotEqual":"\u2260",
-        "LessEqual":"\u2264","GreaterEqual":"\u2265","Less":"\u003C","Greater":"\u003E","Approximately":"\u2248","Proportional":"\u221D",
-        "Infinity":"\u221E","Degree":"\u00B0","Prime":"\u2032","DoublePrime":"\u2033","TriplePrime":"\u2034","QuadruplePrime":"\u2057",
-        "Micro":"\u00B5","PerMille":"\u2030","Permyriad":"\u2031","Minute":"\u2032","Second":"\u2033","Dot":"\u02D9","Cross":"\u00D7",
-        "Star":"\u22C6","Circle":"\u25CB","Square":"\u25A1","Diamond":"\u25C7","Triangle":"\u25B3","LeftTriangle":"\u22B2",
-        "RightTriangle":"\u22B3","LeftTriangleEqual":"\u22B4","RightTriangleEqual":"\u22B5","LeftTriangleBar":"\u29CF",
-        "RightTriangleBar":"\u29D0","LeftTriangleEqualBar":"\u29CF","RightTriangleEqualBar":"\u29D0","LeftRightArrow":"\u2194",
-        "UpDownArrow":"\u2195","UpArrow":"\u2191","DownArrow":"\u2193","LeftArrow":"\u2190","RightArrow":"\u2192","UpArrowDownArrow":"\u21C5",
-        "LeftArrowRightArrow":"\u21C4","LeftArrowLeftArrow":"\u21C7","UpArrowUpArrow":"\u21C8","RightArrowRightArrow":"\u21C9",
-        "DownArrowDownArrow":"\u21CA","LeftRightVector":"\u294E","RightUpDownVector":"\u294F","DownLeftRightVector":"\u2950",
-        "LeftUpDownVector":"\u2951","LeftVectorBar":"\u2952","RightVectorBar":"\u2953","RightUpVectorBar":"\u2954","RightDownVectorBar":"\u2955"}
-    
-    unicode_dict = {**unicode_greek,**unicode_symbol}
-    return unicode_dict[x]
-
-def update_legend(fig,dict):
-    fig.for_each_trace(lambda t: t.update(name = dict[t.name],legendgroup = dict[t.name],hovertemplate = t.hovertemplate.replace(t.name, dict[t.name])))
     return fig
