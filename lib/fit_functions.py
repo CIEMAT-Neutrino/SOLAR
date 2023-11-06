@@ -31,14 +31,6 @@ def polynomial_line(x, coefficients, debug=False):
     if debug: print("Polynomial coefficients: ",coefficients)
     return np.polyval(coefficients, x)
 
-def generate_data(x_range, num_points, amplitude, noise_level, debug=False):
-    x = np.linspace(x_range[0], x_range[1], num_points)
-    polynomial_coefficients = np.random.randn(3)  # Generating random coefficients for the polynomial line (change the number for higher degree polynomials)
-    y_polynomial = polynomial_line(x, polynomial_coefficients)
-    noise = noise_level * np.random.randn(num_points)  # Adding random noise to the polynomial line
-    z = amplitude * np.ones(num_points)  # Constant amplitude
-    return x, y_polynomial + noise, z
-
 def fit_hist2d(x, y, z, func="polynomial",debug=False):
     if x.shape != z.shape:
         print("\nFlattening 2D histogram...")
@@ -226,7 +218,7 @@ def fit_hist1d(x, y, func="polynomial", trimm=0, debug=False):
     perr = np.sqrt(np.diag(pcov))
     return func,labels,popt,perr
 
-def get_hist2d_fit(x, y, acc, fig, row, col, trimm=5, threshold=0.4, spec_type="max", func_type="linear", debug=False):
+def get_hist2d_fit(x, y, acc, fig, row, col, trimm=5, threshold=0.4, spec_type="max", func_type="linear", density=None, debug=False):
     '''
     Given x and y arrays, generate a 2D histogram and fit a function to the histogram.
 
@@ -244,23 +236,24 @@ def get_hist2d_fit(x, y, acc, fig, row, col, trimm=5, threshold=0.4, spec_type="
     Returns:
         fig (plotly figure): plotly figure.
     '''
+    # Compute percentile for x & y array determination using a numpy fucntion
     x_array = np.linspace(np.min(x),np.max(x),acc+1)
     y_array = np.linspace(np.min(y),np.max(y),acc+1)
-    h, x, y = np.histogram2d(x,y,bins=[x_array,y_array])
+    h, x, y = np.histogram2d(x,y,bins=[x_array,y_array],density=density)
     x, y = (x[1:]+x[:-1])/2, (y[1:]+y[:-1])/2
 
     fig.add_trace(go.Heatmap(z=h.T,x=x,y=y,coloraxis="coloraxis"),row=row,col=col)
     if spec_type == "top+bottom":
         x_spec, y_top, y_bottom = spectrum_hist2d(x,y,h,threshold,spec_type=spec_type,debug=debug)
-        top_func, labels, top_popt, top_perr = fit_hist1d(x_spec,y_top,trimm=trimm,func=func_type,debug=debug)
+        top_func, raw_labels, top_popt, top_perr = fit_hist1d(x_spec,y_top,trimm=trimm,func=func_type,debug=debug)
         if debug: fig.add_trace(go.Scatter(x=x_spec,y=y_top,mode="markers",marker=dict(color="grey"),name="Top Spectrum"),row=row,col=col)
         fig.add_trace(go.Scatter(x=x_spec,y=top_func(x_spec,*top_popt),mode="lines",marker=dict(color="grey"),name="Top Fit",error_y=dict(type='data',array=top_func(x_spec,*top_perr),visible=True)),row=row,col=col)
         bottom_func, labels, bottom_popt, bottom_perr = fit_hist1d(x_spec,y_bottom,trimm=trimm,func=func_type,debug=debug)
         if debug: fig.add_trace(go.Scatter(x=x_spec,y=y_bottom,mode="markers",marker=dict(color="grey"),name="Bottom Spectrum"),row=row,col=col)
         fig.add_trace(go.Scatter(x=x_spec,y=bottom_func(x_spec,*bottom_popt),mode="lines",marker=dict(color="grey"),name="Bottom Fit",error_y=dict(type='data',array=bottom_func(x_spec,*bottom_perr),visible=True)),row=row,col=col)
         fig.update_layout(xaxis=dict(range=[np.min(x_spec),np.max(x_spec)]),yaxis=dict(range=[np.min(y_bottom),np.max(y_top)]))
-        labels = ["Top"+label for label in labels]
-        labels += ["Bottom"+label for label in labels]
+        labels = ["Top"+label for label in raw_labels]
+        labels = labels + ["Bottom"+label for label in raw_labels]
         popt = np.concatenate((top_popt,bottom_popt))
         perr = np.concatenate((top_perr,bottom_perr))
     else:
