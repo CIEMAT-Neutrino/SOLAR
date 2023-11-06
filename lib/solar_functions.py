@@ -59,7 +59,7 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
 
     smearing_df = pd.read_pickle("../config/"+config+"/"+config+"_calib/"+config+"_smearing.pkl")
     for ldx,this_filter in enumerate(filters[0]):
-
+        if debug: print_colored("Filtering: %s"%this_filter,"DEBUG")
         if gen == 1:
             int_time = 1
             t_hist, bin_edges = np.histogram(run["Truth"]["TNuE"][(truth_filter)],bins=energy_edges)
@@ -69,6 +69,8 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
             eff_smearing_df = smearing_df.mul(efficient_flux)*factor
             eff_smearing_df = eff_smearing_df.replace(np.nan,0)
             
+            if not os.path.exists("../sensitivity/"+config+"/"+name+"/"):
+                os.makedirs("../sensitivity/"+config+"/"+name+"/")
             eff_smearing_df.to_pickle("../sensitivity/"+config+"/"+name+"/eff_smearing.pkl")
 
             this_dm2,this_sin13,this_sin12 = "DEFAULT","DEFAULT","DEFAULT"
@@ -81,7 +83,7 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
             
             (dm2_list,sin13_list,sin12_list) = get_oscillation_datafiles(dm2=this_dm2,sin13=this_sin13,sin12=this_sin12,path="../data/OSCILLATION/pkl/rebin/",ext="pkl",auto=this_auto,debug=debug)
             # for dm2,sin13,sin12 in zip(dm2_list,sin13_list,sin12_list):
-            for i in track(range(len(dm2_list)), description="Computing oscillation map..."):
+            for i in track(range(len(dm2_list)), description="Computing oscillation maps..."):
                 dm2 = dm2_list[i]
                 sin13 = sin13_list[i]
                 sin12 = sin12_list[i]    
