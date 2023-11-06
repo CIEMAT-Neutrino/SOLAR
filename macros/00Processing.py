@@ -1,10 +1,9 @@
-# ln -s /pc/choozdsk01/palomare/DUNE/SOLAR/data/ .
-
-import sys; sys.path.insert(0, '../'); from lib import *
+import sys
+sys.path.insert(0, '../')
+from lib import initialize_macro, check_macro_config, read_input_file, get_root_info, root2npy, remove_processed_branches
 
 default_dict = {}
 user_input = initialize_macro("00Process",["config_file","root_file","rewrite","trim","debug"],default_dict=default_dict, debug=True)
-user_input["trim"] = user_input["trim"][0].lower() in ['true', '1', 't', 'y', 'yes']
 user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Process data: root -> numpy #
