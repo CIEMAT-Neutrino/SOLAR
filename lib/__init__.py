@@ -37,3 +37,4 @@ from .plt_functions       import *
 from .reco_functions      import *
 # from .root_functions      import *
 from .solar_functions     import *
+from .wkf_functions       import *
