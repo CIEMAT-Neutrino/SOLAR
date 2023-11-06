@@ -156,9 +156,7 @@ def get_truth_count(run,info,config,names,debug=False):
     truth_gen_df = pd.DataFrame(np.asarray(run["Truth"]["TruthPart"])[:,0:len(list(bkg_dict.values())[1:])],columns=list(bkg_dict.values())[1:])
     truth_gen_df["Geometry"] = info["GEOMETRY"][0]
     truth_gen_df["Version"] = info["VERSION"][0]
-    
-    try: truth_gen_df["Name"] = run["Truth"]["Name"]
-    except KeyError: truth_gen_df["Name"] = names[config]
+    truth_gen_df["Name"] = run["Truth"]["Name"]
     truth_gen_df = truth_gen_df[(truth_gen_df["Geometry"] == info["GEOMETRY"][0]) & (truth_gen_df["Version"] == info["VERSION"][0])]
     
     count_truth_df = truth_gen_df.groupby("Name").count().drop(columns=["Geometry"])
