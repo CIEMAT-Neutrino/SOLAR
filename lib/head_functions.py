@@ -18,7 +18,7 @@ def get_flag_dict(debug = False):
         ("-d","--debug"):"debug \t(True/False)",
         ("-r","--root_file"):"root_file \t(Marley, wbkg, etc.)",
         ("-rw","--rewrite"):"rewrite \t(True/False)",
-        ("-s","--show"):"show \t(Show resulting plots)",
+        ("-s","--show"):"show \t(Show resulting images)",
         ("-t","--trim"):"trim \t(True/False)",
         ("-v","--variable"):"variable \t(RecoEnergy, TotalEnergy, etc.)",
         }
