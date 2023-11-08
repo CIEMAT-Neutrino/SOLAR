@@ -17,14 +17,14 @@ from lib.io_functions  import print_colored
 from lib.osc_functions import get_nadir_angle, get_oscillation_datafiles
 from lib.bkg_functions import get_bkg_config, get_gen_label, get_gen_weights
 
-def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_edges,int_time,filters,truth_filter,reco_filter,factor="SOLAR",input_dm2="DEFAULT",input_sin13="DEFAULT",input_sin12="DEFAULT",auto=False,save=False,debug=False):
+def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,int_time,filters,truth_filter,reco_filter,factor="SOLAR",input_dm2="DEFAULT",input_sin13="DEFAULT",input_sin12="DEFAULT",auto=False,save=False,debug=False):
     '''
     Get the weighted spectrum for a given background and configuration
 
     Args:
         run (dict): dictionary with the run data
         info (dict): dictionary with the run info
-        config_files (dict): dictionary with the config files
+        configs (dict): dictionary with the config files
         config (str): name of the config
         names (dict): dictionary with the names
         name (str): name of the background
@@ -49,9 +49,9 @@ def compute_solar_spectrum(run,info,config_files,config,names,name,gen,energy_ed
     dict_array = []
     weighted_df_dict = {}
     energy_centers = 0.5*(energy_edges[1:] + energy_edges[:-1])
-    gen_label_dict   = get_gen_label(config_files)
+    gen_label_dict   = get_gen_label(configs)
     gen_label = gen_label_dict[(info["GEOMETRY"][0],info["VERSION"][0],gen)]
-    gen_weigths_dict = get_gen_weights(config_files,names)
+    gen_weigths_dict = get_gen_weights(configs,names)
     nadir = get_nadir_angle(show=False,debug=debug)
     
     if factor == "SOLAR": factor = 40*60*60*24*365

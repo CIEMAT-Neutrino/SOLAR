@@ -449,7 +449,7 @@ def load_multi(names:dict,configs:dict,load_all=False,preset="",branches={},gene
     run = dict()
     for idx,config in enumerate(configs):
         if debug: print_colored("\nLoading config %s"%configs[config],"DEBUG")
-        info = read_input_file(configs[config],path="../config/"+config+"/",debug=False)
+        info = read_input_file(config+'/'+configs[config],debug=False)
         path = info["PATH"][0]+info["NAME"][0]
         geo  = info["GEOMETRY"][0]
         vers = info["VERSION"][0]
@@ -658,13 +658,13 @@ def get_bkg_config(info,debug=False):
     if debug: print_colored("Loaded background dictionary: %s"%str(bkg_dict),"INFO")
     return bkg_dict,color_dict
 
-def get_gen_label(config_files, debug=False):
+def get_gen_label(configs, debug=False):
     '''
     Get the generator label from configuration.
     '''
     gen_dict = dict()
-    for idx,config in enumerate(config_files):
-        info = read_input_file(config+'/'+config_files[config],debug=debug)
+    for idx,config in enumerate(configs):
+        info = read_input_file(config+'/'+configs[config],debug=debug)
         geo = info["GEOMETRY"][0]
         version = info["VERSION"][0]
         for idx,gen in enumerate(get_bkg_config(info,debug)[0].values()):
@@ -834,10 +834,10 @@ def get_simple_name(name_list, debug=False):
     if debug: print_colored("Loaded simple name dictionary: %s"%str(simple_name),"INFO")
     return simple_name
 
-def get_gen_weights(config_files, names, debug=False):
+def get_gen_weights(configs, names, debug=False):
     weights_dict = dict()
-    for idx,config in enumerate(config_files):
-        info = read_input_file(config+'/'+config_files[config],debug=debug)
+    for idx,config in enumerate(configs):
+        info = read_input_file(config+'/'+configs[config],debug=debug)
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"][0]
         name_list = names[config]
