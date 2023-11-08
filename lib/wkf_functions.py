@@ -1,14 +1,13 @@
-import ROOT, root_numpy, json
-
+import json
+import numba
 import numpy as np
-
-from ROOT          import TFile
 from rich.progress import track
-
 from lib.io_functions import print_colored, read_input_file
-from lib.reco_functions import get_param_dict
+from lib.reco_functions import get_param_dict, generate_index
 
 def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debug=False):
+    import ROOT, root_numpy
+    from ROOT import TFile
     config = user_input["config_file"].split("/")[0]   
     all_true, all_reco = {}, {}
     for name_idx, name in enumerate(user_input["root_file"]):
@@ -68,6 +67,7 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
         if workflow in ["SMEARING","VERTEXING","ANALYSIS","FULL"]:
             calib_info = read_input_file(config+"_energy_calibration",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["ENERGY_AMP","INTERSECTION"],debug=False)
 
+        true, reco = compute_reco_efficiency(true, reco, debug=debug)
         for i in track(range(reco_tree.GetEntries()),description="Computing %s data..."%(name)):
             reco_tree.GetEntry(i)
             try: reco["Primary"][i] = reco_tree.Charge > max(reco_tree.AdjClCharge)
@@ -200,3 +200,9 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
 
     if debug: print_colored("--> Combined %i files into one data structure"%(name_idx+1),"DEBUG")
     return all_true, all_reco, filter_idx
+
+def compute_reco_efficiency(true, reco, debug=False):
+    # Check if true and reco have the keys event, flag
+    if debug: print_colored("--> Computing reco efficiency...","DEBUG")
+    true["RecoIndex"],true["RecoMatch"],true["ClCount"],true["HitCount"],reco["TrueIndex"] = generate_index(true["Event"], true["Flag"], reco["Event"], reco["Flag"], reco["NHits"], debug=debug)
+    return true, reco

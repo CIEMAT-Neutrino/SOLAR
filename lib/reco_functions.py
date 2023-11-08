@@ -3,7 +3,7 @@ import numpy as np
 from icecream import ic
 from .io_functions import read_input_file,print_colored
 
-def compute_reco_workflow(run, config_files, params={}, workflow="ANALYSIS", rm_branches=True, debug=False):
+def compute_reco_workflow(run, configs, params={}, workflow="ANALYSIS", rm_branches=True, debug=False):
     '''
     Compute the reco variables for the events in the run.
     All functions are called in the order they are defined in this file.
@@ -11,7 +11,7 @@ def compute_reco_workflow(run, config_files, params={}, workflow="ANALYSIS", rm_
 
     Args:
         run: dictionary containing the run data.
-        config_files: dictionary containing the path to the configuration files for each geoemtry.
+        configs: dictionary containing the path to the configuration files for each geoemtry.
         params: dictionary containing the parameters for the reco functions.
         workflow: string containing the reco workflow to be used.
         rm_branches: boolean to remove the branches used in the reco workflow.
@@ -24,68 +24,49 @@ def compute_reco_workflow(run, config_files, params={}, workflow="ANALYSIS", rm_
     if debug: print_colored("\nComputing reco workflow of type %s"%workflow,"INFO")
 
     if workflow == "BASIC":
-        run = compute_event_idx(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        # run = compute_recoy(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        # run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
     
     if workflow == "ADJCL":
-        run = compute_event_idx(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_adjcl_basics(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_adjcl_basics(run,configs,params,rm_branches=rm_branches,debug=debug)
     
     if workflow == "CALIBRATION":
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recoy(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
 
     if workflow == "VERTEXING":
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recoy(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_opflash_matching(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recox(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
 
     if workflow == "ANALYSIS":
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recoy(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_opflash_matching(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recox(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_cluster_energy(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_cluster_energy(run,configs,params,rm_branches=rm_branches,debug=debug)
     
     if workflow == "FULL":
-        run = compute_primary_cluster(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_opflash_matching(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_recox(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_cluster_energy(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_reco_energy(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_opflash_variables(run,config_files,params,rm_branches=rm_branches,debug=debug)
-        run = compute_adjcl_variables(run,config_files,params,rm_branches=rm_branches,debug=debug)
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_cluster_energy(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_reco_energy(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_opflash_variables(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_adjcl_variables(run,configs,params,rm_branches=rm_branches,debug=debug)
 
     print_colored("\nReco workflow \t-> Done!\n", "SUCCESS")
     return run
 
-def compute_event_idx(run, config_files, params={}, rm_branches=False, debug=False):
-    '''
-    Compute real event index for the events in the run.
-    '''
-    # New branches
-    run["Reco"]["EventIdx"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
-        idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]))
-        @numba.njit
-        def generate_index(event, flag, index):
-            for i in range(1, len(event)):
-                if event[i] != event[i - 1] or flag[i] != flag[i - 1]:
-                    index[i] = index[i - 1] + 1
-                else:
-                    index[i] = index[i - 1]
-            return index
-        run["Reco"]["EventIdx"][idx] = generate_index(run["Reco"]["Event"][idx], run["Reco"]["Flag"][idx], run["Reco"]["EventIdx"][idx])
-
-    print_colored("Event index computation \t-> Done!", "SUCCESS")
-    run = remove_branches(run,rm_branches,[],debug=debug)
-    return run
-
-def compute_primary_cluster(run, config_files, params={}, rm_branches=False, debug=False):
+def compute_primary_cluster(run, configs, params={}, rm_branches=False, debug=False):
     '''
     Compute the primary cluster of the events in the run.
     This primary cluster is the one with the highest charge in the event.
@@ -94,8 +75,8 @@ def compute_primary_cluster(run, config_files, params={}, rm_branches=False, deb
     run["Reco"]["MaxAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["Primary"] = np.zeros(len(run["Reco"]["Event"]),dtype=bool)
 
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
         run["Reco"]["MaxAdjClCharge"][idx] = np.max(run["Reco"]["AdjClCharge"][idx],axis=1,initial=0)
         run["Reco"]["Primary"][idx] = run["Reco"]["Charge"][idx] > run["Reco"]["MaxAdjClCharge"][idx]
@@ -104,7 +85,29 @@ def compute_primary_cluster(run, config_files, params={}, rm_branches=False, deb
     run = remove_branches(run,rm_branches,["MaxAdjClCharge"],debug=debug)
     return run
 
-def compute_recoy(run, config_files, params={}, rm_branches=False, debug=False):
+def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=False):
+    run["Truth"]["RecoIndex"] = np.zeros(len(run["Truth"]["Event"]),dtype=int)
+    run["Truth"]["RecoMatch"] = np.zeros(len(run["Truth"]["Event"]),dtype=bool)
+    run["Truth"]["ClCount"] = np.zeros(len(run["Truth"]["Event"]),dtype=int)
+    run["Truth"]["HitCount"] = np.zeros(len(run["Truth"]["Event"]),dtype=int)
+    run["Reco"]["TrueIndex"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
+
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
+        idx = np.where((np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Truth"]["Version"]) == info["VERSION"][0]))
+        
+        result = generate_index(run["Truth"]["Event"][idx], run["Truth"]["Flag"][idx], run["Reco"]["Event"][idx], run["Reco"]["Flag"][idx], run["Reco"]["NHits"][idx], debug=debug)
+        run["Truth"]["RecoIndex"][idx] = np.asarray(result[0])
+        run["Truth"]["RecoMatch"][idx] = np.asarray(result[1])
+        run["Truth"]["ClCount"][idx]   = np.asarray(result[2])
+        run["Truth"]["HitCount"][idx]  = np.asarray(result[3])
+        run["Reco"]["TrueIndex"][idx]  = np.asarray(result[4])
+    
+    print_colored("True efficiency computation \t-> Done!", "SUCCESS")
+    run = remove_branches(run,rm_branches,[],debug=debug)
+    return run
+
+def compute_recoy(run, configs, params={}, rm_branches=False, debug=False):
     '''
     Compute the reconstructed Y position of the events in the run.   
     '''
@@ -112,10 +115,10 @@ def compute_recoy(run, config_files, params={}, rm_branches=False, debug=False):
     run["Reco"]["RecoY"] = 1e-6*np.ones(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["Matching"] = -np.ones(len(run["Reco"]["Event"]),dtype=int)
     
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
         idx_2match = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0])*(run["Reco"]["Ind0NHits"] > 2)*(run["Reco"]["Ind1NHits"] > 2))
         idx_1match = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0])*(run["Reco"]["Ind0NHits"] <= 2)*(run["Reco"]["Ind1NHits"] > 2))
         idx_0match = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0])*(run["Reco"]["Ind0NHits"] > 2)*(run["Reco"]["Ind1NHits"] <= 2))
@@ -133,7 +136,7 @@ def compute_recoy(run, config_files, params={}, rm_branches=False, debug=False):
     run = remove_branches(run,rm_branches,["Ind0RecoY","Ind1RecoY","Matching"],debug=debug)
     return run
 
-def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FLASH_PE":None,"RATIO_FLASH_PEvsR":None},rm_branches=False,debug=False):
+def compute_opflash_matching(run,configs,params={"MAX_FLASH_R":None,"MIN_FLASH_PE":None,"RATIO_FLASH_PEvsR":None},rm_branches=False,debug=False):
     '''
     Match the reconstructed events with selected OpFlash candidates.
     '''
@@ -147,11 +150,11 @@ def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FL
     run["Reco"]["DriftTime"]          = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["AdjClDriftTime"]     = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjClTime"][0])),dtype=float)
 
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
 
         # Select all FlashMatch candidates
         max_r_filter = run["Reco"]["AdjOpFlashR"][idx] < params["MAX_FLASH_R"]
@@ -178,7 +181,7 @@ def compute_opflash_matching(run,config_files,params={"MAX_FLASH_R":None,"MIN_FL
     run = remove_branches(run,rm_branches,["FlashMathedIdx","AssFlashIdx"],debug=debug)
     return run
 
-def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branches=False,debug=False):
+def compute_recox(run,configs,params={"DEFAULT_RECOX_TIME":None},rm_branches=False,debug=False):
     '''
     Compute the reconstructed X position of the events in the run.
     '''
@@ -187,11 +190,11 @@ def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branche
     run["Reco"]["AdjCldT"] = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjClTime"][0])),dtype=float)
     # run["Reco"]["AdjCl3DR"] = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjClR"][0])),dtype=float)
 
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
 
         repeated_array = np.repeat(run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
         converted_array = np.reshape(repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0])))
@@ -213,7 +216,7 @@ def compute_recox(run,config_files,params={"DEFAULT_RECOX_TIME":None},rm_branche
     run = remove_branches(run,rm_branches,["AdjCldT"],debug=debug)
     return run
 
-def compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":None,"DEFAULT_ADJCL_ENERGY_TIME":None},rm_branches=False,debug=False):
+def compute_cluster_energy(run,configs,params={"DEFAULT_ENERGY_TIME":None,"DEFAULT_ADJCL_ENERGY_TIME":None},rm_branches=False,debug=False):
     '''
     Correct the charge of the events in the run according to the correction file.
     '''
@@ -222,11 +225,11 @@ def compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":None,"
     run["Reco"]["AdjClCorrection"] = np.ones((len(run["Reco"]["Event"]),len(run["Reco"]["AdjClCharge"][0])),dtype=float)
     run["Reco"]["AdjClEnergy"]     = np.zeros((len(run["Reco"]["Event"]),len(run["Reco"]["AdjClCharge"][0])),dtype=float)
 
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
         
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
         corr_info = read_input_file(config+"_charge_correction",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=False)
         corr_popt = [corr_info["CHARGE_AMP"][0],corr_info["ELECTRON_TAU"][0]]
         
@@ -239,17 +242,17 @@ def compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":None,"
     run = remove_branches(run,rm_branches,["Correction","AdjClCorrection"],debug=debug)
     return run
 
-def compute_reco_energy(run,config_files,params={},rm_branches=False,debug=False):
+def compute_reco_energy(run,configs,params={},rm_branches=False,debug=False):
     '''
     Compute the total energy of the events in the run.
     '''    
     run["Reco"]["RecoEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     run["Reco"]["TotalEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     run["Reco"]["TotalAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]))
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
         calib_info = read_input_file(config+"_energy_calibration",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["ENERGY_AMP","INTERSECTION"],debug=debug)
         
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(run["Reco"]["AdjClEnergy"][idx],axis=1)
@@ -264,7 +267,7 @@ def compute_reco_energy(run,config_files,params={},rm_branches=False,debug=False
     run = remove_branches(run,rm_branches,["TotalAdjClEnergy"],debug=debug)
     return run
 
-def compute_opflash_variables(run,config_files,params={},rm_branches=False,debug=False):
+def compute_opflash_variables(run,configs,params={},rm_branches=False,debug=False):
     '''
     Compute the OpFlash variables for the events in the run.
     '''
@@ -274,13 +277,13 @@ def compute_opflash_variables(run,config_files,params={},rm_branches=False,debug
     print_colored("OpFlash variables computation \t-> Done!", "SUCCESS")
     return run
 
-def compute_adjcl_basics(run,config_files,params={},rm_branches=False,debug=False):
+def compute_adjcl_basics(run,configs,params={},rm_branches=False,debug=False):
     '''
     Compute basic variables for the adjacent clusters
 
     Args:
         run: dictionary containing the TTree
-        config_files: dictionary containing the path to the configuration files for each geoemtry
+        configs: dictionary containing the path to the configuration files for each geoemtry
         params: dictionary containing the parameters for the reco functions
         debug: print debug information
     '''
@@ -292,10 +295,10 @@ def compute_adjcl_basics(run,config_files,params={},rm_branches=False,debug=Fals
     run["Reco"]["MeanAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["MeanAdjClR"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["MeanAdjClTime"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
         run["Reco"]["TotalAdjClCharge"][idx] = np.sum(run["Reco"]["AdjClCharge"][idx],axis=1)
         run["Reco"]["MaxAdjClCharge"][idx] = np.max(run["Reco"]["AdjClCharge"][idx],axis=1)
         run["Reco"]["MeanAdjClCharge"][idx] = np.mean(run["Reco"]["AdjClCharge"][idx],axis=1)
@@ -306,23 +309,23 @@ def compute_adjcl_basics(run,config_files,params={},rm_branches=False,debug=Fals
     run = remove_branches(run,rm_branches,[],debug=debug)
     return run
 
-def compute_adjcl_variables(run,config_files,params={},rm_branches=False,debug=False):
+def compute_adjcl_variables(run,configs,params={},rm_branches=False,debug=False):
     '''
     Compute the energy of the individual adjacent clusters based on the main calibration.
 
     Args:
         run: dictionary containing the TTree
-        config_files: dictionary containing the path to the configuration files for each geoemtry
+        configs: dictionary containing the path to the configuration files for each geoemtry
         params: dictionary containing the parameters for the reco functions
         debug: print debug information
     '''
     # New branches
     run["Reco"]["TotalAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
     run["Reco"]["MaxAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]),dtype=float)
-    for config in config_files:
-        info = read_input_file(config+'/'+config_files[config],debug=False)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
         idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"] )== info["VERSION"][0]))
-        params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+        params = get_param_dict(config+"/"+configs[config],params,debug=debug)
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(run["Reco"]["AdjClEnergy"][idx],axis=1)
         run["Reco"]["MaxAdjClEnergy"][idx] = np.max(run["Reco"]["AdjClEnergy"][idx],axis=1)
         
@@ -356,13 +359,13 @@ def add_filter(filters, labels, this_filter, this_label, cummulative, debug=Fals
     if debug: print("Filter "+this_label+" added -> Done!")
     return filters,labels
 
-def compute_solarnuana_filters(run,config_files,config,name,gen,filter_list,params={},cummulative=True,debug=False):
+def compute_solarnuana_filters(run,configs,config,name,gen,filter_list,params={},cummulative=True,debug=False):
     '''
     Compute the filters for the solar workflow computation.
 
     Args:
         run: dictionary containing the data.
-        config_files: dictionary containing the path to the configuration files for each geoemtry.
+        configs: dictionary containing the path to the configuration files for each geoemtry.
         config: string containing the name of the configuration.
         name: string containing the name of the reco.
         gen: string containing the name of the generator.
@@ -375,7 +378,7 @@ def compute_solarnuana_filters(run,config_files,config,name,gen,filter_list,para
         filters: list of filters to be applied (each filter is a list of bools).
     '''
     filters = []; labels = []
-    info = read_input_file(config+'/'+config_files[config],debug=debug)
+    info = read_input_file(config+'/'+configs[config],debug=debug)
     
     # Select filters to be applied to the data
     geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0] 
@@ -387,7 +390,7 @@ def compute_solarnuana_filters(run,config_files,config,name,gen,filter_list,para
     labels.append("All")
     filters.append(base_filter)
     
-    params = get_param_dict(config+"/"+config_files[config],params,debug=debug)
+    params = get_param_dict(config+"/"+configs[config],params,debug=debug)
     for this_filter in filter_list:
         if this_filter == "Primary":
             primary_filter = run["Reco"]["Primary"] == True
@@ -468,4 +471,56 @@ def remove_branches(run, remove, branches, debug=False):
     else: pass
     
     if debug: print_colored("-> Branches removed!","WARNING")
+    return run
+
+@numba.njit
+def generate_index(true_event, true_flag, reco_event, reco_flag, reco_nhits, debug=False):
+    true_index  = np.arange(len(true_event), dtype=np.int32)
+    true_result = np.zeros(len(true_event), dtype=np.int32)-1
+    true_match  = np.zeros(len(true_event), dtype=np.bool_)
+    true_counts = np.zeros(len(true_event), dtype=np.int32)
+    true_nhits  = np.zeros(len(true_event), dtype=np.int32)
+    reco_result = np.zeros(len(reco_event), dtype=np.int32)
+    end_j = 0
+    for i in range(len(reco_event)):
+        start_j = reco_result[i]
+        j = 0
+        for z in range(true_index[end_j], true_index[-1]+1): 
+            if reco_event[i+1] != true_event[z] and reco_flag[i+1] != true_flag[z]:
+                j = j+1
+            else:
+                start_j = end_j
+                end_j = end_j+j
+                break
+        for k in range(start_j, end_j+1):
+            if reco_event[i] == true_event[k] and reco_flag[i] == true_flag[k]:
+                reco_result[i] = int(k)
+                true_result[k] = int(i)
+                true_match[k] = True
+                true_counts[k] = true_counts[k]+1
+                true_nhits[k] = true_nhits[k]+reco_nhits[i]
+                break
+    return true_result, true_match, true_counts, true_nhits, reco_result
+
+def compute_event_idx(run, configs, params={}, rm_branches=False, debug=False):
+    '''
+    Compute real event index for the events in the run.
+    '''
+    # New branches
+    run["Reco"]["EventIdx"] = np.zeros(len(run["Reco"]["Event"]),dtype=int)
+    for config in configs:
+        info = read_input_file(config+'/'+configs[config],debug=False)
+        idx = np.where((np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0])*(np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]))
+        @numba.njit
+        def generate_index(event, flag, index):
+            for i in range(1, len(event)):
+                if event[i] != event[i - 1] or flag[i] != flag[i - 1]:
+                    index[i] = index[i - 1] + 1
+                else:
+                    index[i] = index[i - 1]
+            return index
+        run["Reco"]["EventIdx"][idx] = generate_index(run["Reco"]["Event"][idx], run["Reco"]["Flag"][idx], run["Reco"]["EventIdx"][idx])
+
+    print_colored("Event index computation \t-> Done!", "SUCCESS")
+    run = remove_branches(run,rm_branches,[],debug=debug)
     return run
