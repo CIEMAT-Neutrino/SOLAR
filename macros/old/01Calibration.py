@@ -12,11 +12,11 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Format input file names and load analysis data
 config = user_input["config_file"].split("/")[-1].split("_config")[0]    
-config_files = {config:config+"_config"}
+configs = {config:config+"_config"}
 names = {config:user_input["root_file"]}
 
 truth_labels, reco_labels = get_workflow_branches(workflow="CALIBRATION",debug=False)
-run = load_multi(names,config_files,load_all=False,preset="",branches={"Truth":truth_labels,"Reco":reco_labels},debug=False)
+run = load_multi(names,configs,load_all=False,preset="",branches={"Truth":truth_labels,"Reco":reco_labels},debug=False)
 
 # Load analysis configuration
 analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
@@ -25,11 +25,11 @@ energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
 bin_width = energy_edges[1]-energy_edges[0]
 
 # Compute the calibration workflow
-run = compute_reco_workflow(run,config_files,workflow="CALIBRATION",debug=True)
+run = compute_reco_workflow(run,configs,workflow="CALIBRATION",debug=True)
 
 # Filter the data for calibration
 max_energy = 20; acc = 50
-info = read_input_file(config+'/'+config_files[config],debug=False)
+info = read_input_file(config+'/'+configs[config],debug=False)
 total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] > 0.9
 geo_filter          = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
@@ -51,7 +51,7 @@ with open("../config/"+config+"/"+config+"_calib/"+config+"_charge_correction.tx
     f.write("ELECTRON_TAU: %f\n"%corr_popt[1])
 plt.close()
 
-run = compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":"Time","DEFAULT_ADJCL_ENERGY_TIME":"AdjClTime"},debug=user_input["debug"])
+run = compute_cluster_energy(run,configs,params={"DEFAULT_ENERGY_TIME":"Time","DEFAULT_ADJCL_ENERGY_TIME":"AdjClTime"},debug=user_input["debug"])
 
 fig.add_trace(go.Histogram2d(x=run["Reco"]["Time"][filter1],
     y=(run["Reco"]["Charge"]*run["Reco"]["Correction"]/(corr_popt[0]*1e3*run["Reco"]["TMarleyE"][:,2]))[filter1],

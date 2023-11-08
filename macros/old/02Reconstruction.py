@@ -9,11 +9,11 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Format input file names and load analysis data
 config = user_input["config_file"].split("/")[-1].split("_config")[0]      
-config_files = {config:config+"_config"}
+configs = {config:config+"_config"}
 names = {config:user_input["root_file"]}
 
 truth_labels, reco_labels = get_workflow_branches(workflow="ANALYSIS",debug=user_input["debug"])
-run = load_multi(names,config_files,load_all=False,preset="",branches={"Truth":truth_labels,"Reco":reco_labels},debug=user_input["debug"])
+run = load_multi(names,configs,load_all=False,preset="",branches={"Truth":truth_labels,"Reco":reco_labels},debug=user_input["debug"])
 
 ### DATA SELECTION ###
 analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
@@ -25,11 +25,11 @@ bin_width = energy_edges[1]-energy_edges[0]
 # eff_flux_b8 = get_detected_solar_spectrum(bins=energy_centers,components=["b8"])
 # eff_flux_hep = get_detected_solar_spectrum(bins=energy_centers,components=["hep"])
 
-run = compute_reco_workflow(run,config_files,workflow="ANALYSIS",rm_branches=False,debug=user_input["debug"])
+run = compute_reco_workflow(run,configs,workflow="ANALYSIS",rm_branches=False,debug=user_input["debug"])
 
-for jdx,config in enumerate(config_files):
+for jdx,config in enumerate(configs):
     print("Processing %s"%config)
-    info = read_input_file(config+'/'+config_files[config],debug=False)
+    info = read_input_file(config+'/'+configs[config],debug=False)
 
     max_energy = 30; acc = 50
     total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3
@@ -59,8 +59,8 @@ for jdx,config in enumerate(config_files):
         f.write("INTERSECTION: %f\n"%true_popt[1])
     plt.close()
 
-    # run = compute_cluster_energy(run,config_files,params={"DEFAULT_ENERGY_TIME":"DriftTime","DEFAULT_ADJCL_ENERGY_TIME":"AdjClDriftTime"},rm_branches=False,debug=False)
-    run = compute_reco_energy(run,config_files,params={},rm_branches=False,debug=user_input["debug"])
+    # run = compute_cluster_energy(run,configs,params={"DEFAULT_ENERGY_TIME":"DriftTime","DEFAULT_ADJCL_ENERGY_TIME":"AdjClDriftTime"},rm_branches=False,debug=False)
+    run = compute_reco_energy(run,configs,params={},rm_branches=False,debug=user_input["debug"])
 
     reco_df  = npy2df(run,"Reco",debug=False)
     this_df = reco_df[(reco_df["NeutronP"] == 0) & (reco_df["Primary"] == True) & (reco_df["TNuE"] < max_energy*1e-3)]
