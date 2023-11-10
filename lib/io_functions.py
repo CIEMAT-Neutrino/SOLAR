@@ -173,7 +173,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
         if type(trim) == bool:
             max_len = max(map(len, array))
             mean_len = sum(map(len, array))/len(array)
-            if debug: print_colored("Max/Mean length of subarrays are %s/%s: "%(str(max_len),str(mean_len)),"DEBUG")
+            if debug: print_colored("-> Max/Mean length of subarrays are %i/%.1f: "%(max_len,mean_len),"DEBUG")
 
             if max_len != mean_len:
                 expand = True
