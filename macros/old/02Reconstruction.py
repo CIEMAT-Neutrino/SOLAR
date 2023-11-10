@@ -17,7 +17,7 @@ run = load_multi(names,configs,load_all=False,preset="",branches={"Truth":truth_
 
 ### DATA SELECTION ###
 analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
-energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"][0]+1)
+energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
 energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
 bin_width = energy_edges[1]-energy_edges[0]
 

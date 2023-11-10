@@ -27,8 +27,8 @@ bkg_df = pd.read_pickle(path+"APA/APA_events.pkl")
 # for col in bkg_df.columns:
 #     bkg_df[col].values[:] = 0
 
-solar_tuple = (analysis_info["SOLAR_DM2"][0],analysis_info["SIN13"][0],analysis_info["SIN12"][0])
-react_tuple = (analysis_info["REACT_DM2"][0],analysis_info["SIN13"][0],analysis_info["SIN12"][0])
+solar_tuple = (analysis_info["SOLAR_DM2"],analysis_info["SIN13"],analysis_info["SIN12"])
+react_tuple = (analysis_info["REACT_DM2"],analysis_info["SIN13"],analysis_info["SIN12"])
 pred1_df = pd.read_pickle(path+"Marley/solar_events_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%solar_tuple)
 pred2_df = pd.read_pickle(path+"Marley/solar_events_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%react_tuple)
 
@@ -57,10 +57,10 @@ for i in track(range(len(fake_df_dict.keys())), description="Computing data...")
     # fitter = Fitter(obs_df, pred1_df, bkg_df, DayNight=True)
     chi2, best_A_solar, best_A_bkg = fitter.Fit(initial_A_solar, initial_A_bkg)
     print("Solar Chi2:", chi2)
-    if params[2] == analysis_info["SIN12"][0]: 
+    if params[2] == analysis_info["SIN12"]: 
         print("Saving data to sin13")
         solar_sin13_df.loc[params[0],params[1]] = chi2
-    if params[1] == analysis_info["SIN13"][0]: 
+    if params[1] == analysis_info["SIN13"]: 
         print("Saving data to sin12")
         solar_sin12_df.loc[params[0],params[2]] = chi2
     if params[2] != analysis_info['SIN12'][0] and params[1] != analysis_info['SIN13'][0]:
@@ -72,10 +72,10 @@ for i in track(range(len(fake_df_dict.keys())), description="Computing data...")
     # fitter = Fitter(obs_df, pred2_df, bkg_df, DayNight=True)
     chi2, best_A_solar, best_A_bkg = fitter.Fit(initial_A_solar, initial_A_bkg)
     print("Reactor Chi2:", chi2)
-    if params[2] == analysis_info["SIN12"][0]: 
+    if params[2] == analysis_info["SIN12"]: 
         print("Saving data to sin13")
         react_sin13_df.loc[params[0],params[1]] = chi2
-    if params[1] == analysis_info["SIN13"][0]: 
+    if params[1] == analysis_info["SIN13"]: 
         print("Saving data to sin12")
         react_sin12_df.loc[params[0],params[2]] = chi2
     if params[2] != analysis_info['SIN12'][0] and params[1] != analysis_info['SIN13'][0]:
