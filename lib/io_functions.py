@@ -3,7 +3,7 @@ import numpy   as np
 import pandas  as pd
 import awkward as ak
 
-from icecream import ic
+from rich import print as rprint
 
 def print_colored(string, color, bold=False, italic=False, debug=False):
     '''
@@ -45,47 +45,51 @@ def read_input_file(input_file, path="../config/", preset="default_input", INTEG
     '''
     info = dict()
     if INTEGERS == [] and DOUBLES == [] and STRINGS == [] and BOOLS == []: 
-        json_config = json.load(open(path+preset+".json","r"))
+        try: json_config = json.load(open(path+preset+".json","r"))
+        except FileNotFoundError: raise FileNotFoundError("ERROR: No lines or preset provided!")
         DOUBLES  = json_config["DOUBLES"]
         INTEGERS = json_config["INTEGERS"]
         STRINGS  = json_config["STRINGS"]
         BOOLS    = json_config["BOOLS"]
 
     for key in INTEGERS+DOUBLES+STRINGS+BOOLS: info[key] = None
-    with open(path+input_file+".txt", 'r') as txt_file:
-        lines = txt_file.readlines()
+    try:
+        info = json.load(open(path+input_file+".json", 'r'))
+    except FileNotFoundError:
+        with open(path+input_file+".txt", 'r') as txt_file:
+            lines = txt_file.readlines()
 
-        for line in lines:
-            for key in DOUBLES:
-                if line.startswith(key):
-                    info[key] = []
-                    doubles = line.split(" ")[1]
-                    for i in doubles.split(","):
-                        info[key].append(float(i))
-                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
-            for key in INTEGERS:
-                if line.startswith(key):
-                    info[key] = []
-                    integers = line.split(" ")[1]
-                    for i in integers.split(","):
-                        info[key].append(int(i))
-                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
-            for key in STRINGS:
-                if line.startswith(key):
-                    info[key] = []
-                    strings = line.split(" ")[1]
-                    for i in strings.split(","):
-                        info[key].append(i.strip('\n'))
-                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
-            for key in BOOLS:
-                if line.startswith(key):
-                    info[key] = []
-                    bools = line.split(" ")[1]
-                    for i in bools.split(","):
-                        if i.strip('\n') == "True":  info[key].append(True)
-                        if i.strip('\n') == "False": info[key].append(False)
-                        # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
-    if debug: ic(info)
+            for line in lines:
+                for key in DOUBLES:
+                    if line.startswith(key):
+                        info[key] = []
+                        doubles = line.split(" ")[1]
+                        for i in doubles.split(","):
+                            info[key].append(float(i))
+                            # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+                for key in INTEGERS:
+                    if line.startswith(key):
+                        info[key] = []
+                        integers = line.split(" ")[1]
+                        for i in integers.split(","):
+                            info[key].append(int(i))
+                            # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+                for key in STRINGS:
+                    if line.startswith(key):
+                        info[key] = []
+                        strings = line.split(" ")[1]
+                        for i in strings.split(","):
+                            info[key].append(i.strip('\n'))
+                            # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+                for key in BOOLS:
+                    if line.startswith(key):
+                        info[key] = []
+                        bools = line.split(" ")[1]
+                        for i in bools.split(","):
+                            if i.strip('\n') == "True":  info[key].append(True)
+                            if i.strip('\n') == "False": info[key].append(False)
+                            # if debug: print_colored(string="Found %s: "%key+str(info[key]), color="DEBUG")
+    if debug: rprint(info)
     return info
 
 def root2npy(root_info, trim=False, debug=False):
@@ -352,8 +356,7 @@ def get_root_info(name:str, path:str, debug=False):
         output["TreeNames"][tree] = out_folder[i]
         np.save(path+name+"/"+"TTrees.npy", output) 
 
-    if debug: print(output)
-
+    if debug: rprint(output)
     return output
 
 def get_branches(name:str, path:str, debug=False):
@@ -375,7 +378,7 @@ def get_branches(name:str, path:str, debug=False):
     for tree in tree_info["TreeNames"].keys():
         branch_dict[tree_info["TreeNames"][tree]] = tree_info[tree]
     
-    if debug: ic(branch_dict)
+    if debug: rprint(branch_dict)
     return branch_dict
 
 def get_branches2use(run, debug=False):
