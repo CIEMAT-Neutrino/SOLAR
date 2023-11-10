@@ -13,11 +13,16 @@ from itertools import product
 from lib.io_functions import print_colored, read_input_file
 from lib.plt_functions import format_coustom_plotly, unicode
 
-def get_nadir_angle(show=False,debug=False):
+def get_nadir_angle(show=False, debug=False):
     '''
     This function can be used to obtain the nadir angle distribution for DUNE.
-    VARIABLES:
-        \n - show: if True, show the plot (default: False)
+
+    Args:
+        show (bool): If True, show the plot (default: False)
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        (xnadir_centers,ynadir_centers): tuple containing the nadir angle and the PDF. 
     '''
     with uproot.open("../data/OSCILLATION/nadir.root") as nadir:
         # Loas pdf histogram
@@ -39,14 +44,18 @@ def get_nadir_angle(show=False,debug=False):
 def get_oscillation_datafiles(dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",path="../data/OSCILLATION/",ext="root",auto=False,debug=False):
     '''
     This function can be used to obtain the oscillation data files for DUNE's solar analysis.  
-    VARIABLES:
-        \n - dm2: list of dm2 values (default: [6e-5,7.4e-5]).
-        \n - sin13: list of sin13 values (default: [0.021]).
-        \n - sin12: list of sin12 values (default: [0.303]).
-        \n - path: path to the data files (default: "../data/OSCILLATION/root/").
-        \n - auto: if True, automatically find all the data files in the path (default: True).
-    RETURNS:
-        \n - (dm2,sin13,sin12): tuple containing the dm2, sin13 and sin12 values found in the path.
+
+    Args:
+        dm2 (float): Solar mass squared difference (default: "DEFAULT")
+        sin13 (float): Solar mixing angle (default: "DEFAULT")
+        sin12 (float): Solar mixing angle (default: "DEFAULT")
+        path (str): Path to the oscillation data files (default: "../data/OSCILLATION/")
+        ext (str): Extension of the oscillation data files (default: "root")
+        auto (bool): If True, the function will look for all the oscillation data files in the path (default: False)
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        (found_dm2,found_sin13,found_sin12): tuple containing the dm2, sin13 and sin12 values of the found oscillation data files.
     '''
     if auto:
         data_files = glob.glob(path+'*_dm2_*_sin13_*_sin12_*')
@@ -93,10 +102,22 @@ def get_oscillation_datafiles(dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",path
 def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",auto=True,rebin=True,output="interp",save=False,show=False,ext="root",debug=False):
     '''
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
-    VARIABLES:
-        \n - nadir_centers: tuple containing the nadir angle and the PDF (output of get_nadir_angle)
-        \n - show: if True, show the plot (default: False)
-        \n - save: if True, save the oscillation correction to a numpy array (default: False)
+
+    Args:
+        path (str): Path to the oscillation data files (default: "../data/OSCILLATION/")
+        dm2 (float): Solar mass squared difference (default: "DEFAULT")
+        sin13 (float): Solar mixing angle (default: "DEFAULT")
+        sin12 (float): Solar mixing angle (default: "DEFAULT")
+        auto (bool): If True, the function will look for all the oscillation data files in the path (default: True)
+        rebin (bool): If True, rebin the oscillation map (default: True)
+        output (str): If "interp", the function will return the interpolation dictionary. If "df", the function will return the dataframe dictionary (default: "interp")
+        save (bool): If True, save the rebin dataframes (default: False)
+        show (bool): If True, show the oscillation map (default: False)
+        ext (str): Extension of the oscillation data files (default: "root")
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        interp_dict (dict): Dictionary containing the interpolation functions for each dm2, sin13 and sin12 value.
     '''
     
     df_dict = {}
@@ -109,7 +130,7 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
     dm2,sin13,sin12 = get_oscillation_datafiles(dm2,sin13,sin12,path=path+ext+'/'+subfolder,ext=ext,auto=auto,debug=debug)
     analysis_info = read_input_file("analysis",INTEGERS=["ROOT_NADIR_RANGE","ROOT_NADIR_BINS"],debug=debug)
 
-    root_nadir_edges = np.linspace(analysis_info["ROOT_NADIR_RANGE"][0],analysis_info["ROOT_NADIR_RANGE"][1],analysis_info["ROOT_NADIR_BINS"][0]+1)
+    root_nadir_edges = np.linspace(analysis_info["ROOT_NADIR_RANGE"][0],analysis_info["ROOT_NADIR_RANGE"][1],analysis_info["ROOT_NADIR_BINS"]+1)
     root_nadir_centers = (root_nadir_edges[1:]+root_nadir_edges[:-1])/2
     
     for dm2_value,sin13_value,sin12_value in zip(dm2,sin13,sin12):
@@ -191,13 +212,21 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
 def rebin_df(df,xarray=[],yarray=[],show=False,save=True,save_path="../data/pkl/rebin/df.pkl",debug=False):
     '''
     This function can be used to rebin any dataframe that has a 2D index (like an imshow dataset).
-    VARIABLES:
-    \n - df: dataframe to rebin
-    \n - xarray: array of xbins (default: [])
-    \n - yarray: array of ybins (default: [])
+    
+    Args:
+        df (pandas.DataFrame): Dataframe to rebin.
+        xarray (list): List of xbins to use for the rebinning.
+        yarray (list): List of ybins to use for the rebinning.
+        show (bool): If True, show the rebinning result (default: False)
+        save (bool): If True, save the rebinning result (default: True)
+        save_path (str): Path to save the rebinning result (default: "../data/pkl/rebin/df.pkl")
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        small_df (pandas.DataFrame): Rebinning result.
     '''
     analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
-    energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"][0]+1)
+    energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
     energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
     
     df.index = df.index.astype(float)
@@ -249,11 +278,15 @@ def rebin_df(df,xarray=[],yarray=[],show=False,save=True,save_path="../data/pkl/
 def compute_log_likelihood(pred_df,fake_df,method="log-likelihood",debug=False):
     '''
     This function can be used to compute the log likelihood of a prediction given a fake data set.
-    VARIABLES:
-        \n - pred_df: prediction dataframe. Must have the same shape as fake_data_df.
-        \n - fake_data_df: fake data dataframe. Must have the same shape as pred_df.
-    RESULT:
-        \n - ll: log likelihood of the prediction given the fake data.
+
+    Args:
+        pred_df (pandas.DataFrame): Prediction dataframe.
+        fake_df (pandas.DataFrame): Fake dataframe.
+        method (str): Method to compute the log likelihood (default: "log-likelihood")
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        ll (float): Log likelihood.
     '''
     
     if method == "log-likelihood":

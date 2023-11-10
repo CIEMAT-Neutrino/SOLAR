@@ -7,6 +7,17 @@ from dask import delayed
 from .io_functions import print_colored, get_branches2use
 
 def explode(df, columns_to_explode, debug=False):
+    '''
+    Function to explode a list of columns of a dataframe.
+
+    Args:
+        df (pandas.DataFrame): Dataframe to explode.
+        columns_to_explode (list(str)): List of columns to explode.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        result_df (pandas.DataFrame): Dataframe exploded.
+    '''
     # Convert Pandas DataFrame to Dask DataFrame
     ddf = dd.from_pandas(df, npartitions=2)  # Adjust the number of partitions as needed
 

@@ -474,6 +474,9 @@ def remove_branches(run, remove, branches, debug=False):
 
 @numba.njit
 def generate_index(true_event, true_flag, reco_event, reco_flag, reco_nhits, debug=False):
+    '''
+    Generate the event index for the true and reco events.
+    '''
     true_index  = np.arange(len(true_event), dtype=np.int32)
     true_result = np.zeros(len(true_event), dtype=np.int32)-1
     true_match  = np.zeros(len(true_event), dtype=np.bool_)

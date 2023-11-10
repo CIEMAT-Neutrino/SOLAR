@@ -153,7 +153,10 @@ def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,i
     
     return dict_array,weighted_df_dict
 
-def get_truth_count(run,info,config,names,debug=False):
+def get_truth_count(run, info, config, names, debug=False):
+    '''
+    Get the truth count for a given background and configuration
+    '''
     bkg_dict,color_dict = get_bkg_config(info)
     truth_gen_df = pd.DataFrame(np.asarray(run["Truth"]["TruthPart"])[:,0:len(list(bkg_dict.values())[1:])],columns=list(bkg_dict.values())[1:])
     truth_gen_df["Geometry"] = info["GEOMETRY"][0]
@@ -169,12 +172,18 @@ def get_truth_count(run,info,config,names,debug=False):
     return count_truth_df
 
 def get_pdg_name(unique_value_list):
+    '''
+    Get the name for each pdg.
+    '''
     pdg_dict = dict()
     for pdg in unique_value_list:
         pdg_dict[pdg] = Particle.from_pdgid(pdg).name
     return pdg_dict
 
 def get_pdg_color(unique_value_list):
+    '''
+    Get the color for each pdg.
+    '''
     color_dict = dict()
     for pdg in unique_value_list:
         if pdg == 11: color_dict[pdg] = "blue"
@@ -186,6 +195,9 @@ def get_pdg_color(unique_value_list):
     return color_dict
 
 def get_solar_weigths(weights="BS05"):
+    '''
+    Get the solar flux weights.
+    '''
     if weights == "BS05":
         weights_dict = {"pp":5.991E+00,"pep":1e-10,"b7":1e-10,"n13":3.066E-02,"o15":2.331E-02,"f17":5.836E-04,"b8":5.691E-04,"hep":7.930E-07}    # Flux amp of each component
         return weights_dict 
@@ -195,6 +207,9 @@ def get_solar_weigths(weights="BS05"):
         return weights_dict
 
 def get_solar_colors(source):
+    '''
+    Use plotly colors to color the solar flux components.
+    '''
     colors = plotly.colors.qualitative.Prism
     # source_list = ["pp","pep","b7","n13","o15","f17","b8","hep"]    # Flux amp of each component
     source_list = list(get_solar_weigths().keys())
@@ -202,6 +217,9 @@ def get_solar_colors(source):
         if this_source == source: return colors[idx]
     
 def read_solar_data(in_path,source,weigths):
+    '''
+    Read in the solar flux data and interpolate it to the desired energy bins.
+    '''
     data = get_solar_weigths(weigths)
     energy = []
     flux = []
@@ -273,7 +291,21 @@ def get_neutrino_cs(bins,path="../data/SOLAR",interpolation="extrapolate",debug=
         func = interpolate.interp1d(energies,cc,kind='cubic',bounds_error=False,fill_value="extrapolate")
     return func(bins)
 
-def get_detected_solar_spectrum(bins,mass=10e9,components=[],interpolation="extrapolate",show=False,debug=False):
+def get_detected_solar_spectrum(bins, mass=10e9, components=[], interpolation="extrapolate", show=False, debug=False):
+    '''
+    Get the detected solar spectrum.
+
+    Args:
+        bins (np.array): energy bins
+        mass (float): mass (default: 10e9)
+        components (list): list of components (default: [])
+        interpolation (str): interpolation method (default: "extrapolate")
+        show (bool): if True, show the plot (default: False)
+        debug (bool): if True, print debug messages (default: False)
+
+    Returns:
+        fig (plotly.graph_objects.Figure): plotly figure
+    '''
     # Prepare solar spectrum to convolve with marley signal
     # nbins = 60
     # CS    = 1e-42                 # Cross-section for CC interactions in Ar [cm²]
@@ -307,7 +339,11 @@ def get_detected_solar_spectrum(bins,mass=10e9,components=[],interpolation="extr
     else:
         return CS*spectrum*factor # Flux [1/s]
 
+@numba.njit
 def get_marleyfrac_vectors(run,frac_name):
+    '''
+    Fast function to get the marley particles from background data.
+    '''
     electron = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:,0]
     gamma    = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:,1]
     neutron  = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:,2]
@@ -317,8 +353,13 @@ def get_marleyfrac_vectors(run,frac_name):
 def get_workflow_branches(workflow="BASIC",debug=False):
     '''
     Get the workflow variables from the input file.
-    VARIABLES:
-        \n - workflow: name of the workflow (default: DEFAULT)
+
+    Args:
+        workflow (str): workflow (default: "BASIC")
+        debug (bool): if True, print debug messages (default: False)
+
+    Returns:
+        truth_list (list): list of truth variables
     '''
     if workflow == "TRUTH":
         truth_list = ["Event","Flag","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
@@ -360,7 +401,10 @@ def get_workflow_branches(workflow="BASIC",debug=False):
     if debug: print_colored("\nLoaded workflow variables: %s"%str(truth_list+reco_list),"INFO")
     return truth_list,reco_list
 
-def compute_generator_df(reco_df,gen_labels,column_name="Generator",debug=False):
+def compute_generator_df(reco_df, gen_labels, column_name="Generator", debug=False):
+    '''
+    Compute the generator dataframe from the reco dataframe.
+    '''
     reco_gen_df = pd.DataFrame(reco_df[column_name].value_counts())
     reco_gen_df = reco_gen_df.reset_index()
     reco_gen_df = reco_gen_df.rename(columns={"index":column_name,column_name:"Value"})

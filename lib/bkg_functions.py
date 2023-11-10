@@ -1,13 +1,18 @@
 import numpy as np
+from rich import print as rprint
 from lib.io_functions import print_colored, read_input_file
 
 def get_bkg_config(info,debug=False):
     '''
     This function returns a dictionary of background names according to the input file.
     Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
-    **VARIABLES:**
-    ** - info:**  dictionary containing the input file information
-    ** - debug:** boolean to print debug messages
+
+    Args:
+        info (dict): dictionary with the input file information.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+
+    Returns:
+        dict: dictionary with the background names.
     '''
     bkg_dict = {}; color_dict = {}
     if (info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6"):
@@ -99,6 +104,9 @@ def get_bkg_config(info,debug=False):
     return bkg_dict,color_dict
 
 def get_gen_label(configs, debug=False):
+    '''
+    Returns the generator names corresponding to each background.
+    '''
     gen_dict = dict()
     for idx,config in enumerate(configs):
         info = read_input_file(config+'/'+configs[config],debug=debug)
@@ -106,9 +114,14 @@ def get_gen_label(configs, debug=False):
         version = info["VERSION"][0]
         for idx,gen in enumerate(get_bkg_config(info,debug)[0].values()):
             gen_dict[(geo,version,idx)] = gen
+    
+    if debug: rprint(gen_dict)
     return gen_dict
 
 def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
+    '''
+    Returns weight corresponding to each background.
+    '''
     info = read_input_file(config,path="../config/"+config+"/",debug=debug)
     weight_list = get_bkg_weights(info)
     truth_values = []; reco_values = []
@@ -122,9 +135,13 @@ def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=Fal
 def get_bkg_color(name_list, debug=False):
     '''
     Get the color for each background according to its "simple" name.
-    **VARIABLES:**
-    ** - name_list:** list of background names.
-    ** - debug:** boolean to print debug messages.
+
+    Args:
+        name_list (list): list of background names.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+        
+    Returns:
+        dict: dictionary with the background colors.
     '''
     color_dict = dict()
     simple_name_list = get_simple_name(name_list,debug=debug)
@@ -160,6 +177,20 @@ def get_bkg_color(name_list, debug=False):
     return color_dict
 
 def reorder_df(df,info, bkg_dict, color_dict, debug=False):
+    '''
+    Reorder the dataframe according to the background names.
+
+    Args:
+        df (pandas.DataFrame): dataframe with the background information.
+        info (dict): dictionary with the input file information.
+        bkg_dict (dict): dictionary with the background names.
+        color_dict (dict): dictionary with the background colors.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+
+    Returns:
+        pandas.DataFrame: reordered dataframe.
+        list: list of background colors.
+    '''
     if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
         order = ["Po210InLAr",
             "CPA",
@@ -225,6 +256,16 @@ def reorder_df(df,info, bkg_dict, color_dict, debug=False):
     return df,color_list
 
 def get_simple_name(name_list, debug=False):
+    '''
+    Get the "simple" name for each background based on the full name.
+    
+    Args:
+        name_list (list): list of background names.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+
+    Returns:
+        dict: dictionary with the "simple" background names.
+    '''
     simple_name = dict()
     basic_names = ["Ar42","Ar39","Kr85","Po210","Rn22"]
     for name in name_list:
@@ -252,6 +293,17 @@ def get_simple_name(name_list, debug=False):
     return simple_name
 
 def get_gen_weights(configs, names, debug=False):
+    '''
+    Get the weights for each background according to the input file.
+
+    Args:
+        configs (dict): dictionary with the configuration names.
+        names (list): list of background names.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+
+    Returns:
+        dict: dictionary with the background weights.
+    '''
     weights_dict = dict()
     for idx,config in enumerate(configs):
         info = read_input_file(config+'/'+configs[config],debug=debug)
@@ -264,6 +316,17 @@ def get_gen_weights(configs, names, debug=False):
     return weights_dict
 
 def get_bkg_weights(info, names, debug = False):
+    '''
+    Get the weights for each background according to the input file.
+
+    Args:
+        info (dict): dictionary with the input file information.
+        names (list): list of background names.
+        debug (bool, optional): boolean to print debug messages. Defaults to False.
+
+    Returns:
+        dict: dictionary with the background weights.
+    '''
     bkg_dict,color_dict = get_bkg_config(info,debug=False)
     weights_dict = dict()
     for bkg in bkg_dict.values():

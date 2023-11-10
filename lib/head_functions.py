@@ -1,6 +1,6 @@
 import sys, inquirer, os
 import numpy as np
-from icecream import ic
+from rich import print as rprint
 
 from .io_functions import print_colored
 
@@ -22,7 +22,7 @@ def get_flag_dict(debug = False):
         ("-t","--trim"):"trim \t(True/False)",
         ("-v","--variable"):"variable \t(RecoEnergy, TotalEnergy, etc.)",
         }
-    if debug: ic(flag_dict)
+    if debug: rprint(flag_dict)
     return flag_dict
 
 def initialize_macro(macro, input_list=["config_file","root_file","debug"], default_dict={}, debug=False):
@@ -100,9 +100,13 @@ def update_user_input(user_input, new_input_list, debug=False):
 def select_input_file(user_input, debug=False):
     '''
     This function asks the user to select the input file.
-    **VARIABLES:**
-    \n** - user_input:** Dictionary with the user input.
-    \n** - debug:**      If True, the debug mode is activated.
+
+    Args:
+        user_input (dict): Dictionary with the user input.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        new_user_input (dict): Dictionary with the updated user input.
     '''
     from .io_functions import check_key, print_colored
     
@@ -126,10 +130,14 @@ def select_input_file(user_input, debug=False):
 def use_default_input(user_input, default_dict, debug=False):
     '''
     This function updates the user input by asking the user to provide the missing information.
-    **VARIABLES:**
-    \n** - user_input:** Dictionary with the user input.
-    \n** - info:**       Dictionary with the information from the input file.
-    \n** - debug:**      If True, the debug mode is activated.
+
+    Args:
+        user_input (dict): Dictionary with the user input.
+        default_dict (dict): Dictionary with the default values for the user input.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        new_user_input (dict): Dictionary with the updated user input.
     '''
     from .io_functions import check_key, print_colored, read_input_file
     
@@ -140,13 +148,18 @@ def use_default_input(user_input, default_dict, debug=False):
 def check_macro_config(user_input, debug=False):
     '''
     This function asks the user to confirm the macro configuration.
-    **VARIABLES:**
-    \n** - user_input:** Dictionary with the user input.
+
+    Args:
+        user_input (dict): Dictionary with the user input.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        user_input (dict): Dictionary with the user input.
     '''
     # Print macro configuration
     print_colored("\nMacro configuration:","WARNING")
     for key in user_input.keys():
-        print("  "+key+": "+str(user_input[key]))
+        rprint("  "+key+": "+str(user_input[key]))
 
     proceed = input("Proceed? [y/n]: ")
     if proceed.lower() in ["n","no","f","false"]: sys.exit()
@@ -154,15 +167,25 @@ def check_macro_config(user_input, debug=False):
     return user_input
 
 def print_macro_info(macro, debug=False):
+    '''
+    This function prints the information of the macro.
+
+    Args:
+        macro (str): Name of the macro to be executed.
+        debug (bool): If True, the debug mode is activated.
+    '''
     f = open('../info/'+macro+'.txt', 'r')
     file_contents = f.read()
-    print (file_contents+"\n")
+    rprint (file_contents+"\n")
     f.close
-    if debug: print("----- Debug mode activated -----")
+    if debug: rprint("----- Debug mode activated -----")
 
 def print_header(debug = False):
+    '''
+    This function prints the header of the macro.
+    '''
     f = open('../info/header.txt', 'r')
     file_contents = f.read()
-    print (file_contents)
+    rprint (file_contents)
     f.close
-    print("----- Starting macro -----")
+    rprint("----- Starting macro -----")

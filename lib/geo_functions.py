@@ -1,6 +1,9 @@
 import plotly.graph_objects as go
 
 def add_geometry_planes(fig, geo, debug=False):
+    '''
+    Function to add the TPC planes to the 3D plot of a given geometry.
+    '''
     if geo == "hd":
         fig.add_trace(go.Surface(x=[[-350,-350],[-350,-350]],y=[[-600, 600], [-600, 600]],z=[[0, 0], [1400, 1400]],opacity=0.25,name="CPA",text="CPA",colorscale=[[0,'orange'], [1,'orange']],showscale=False))
         fig.add_trace(go.Surface(x=[[350,350],[350,350]],    y=[[-600, 600], [-600, 600]],z=[[0, 0], [1400, 1400]],opacity=0.25,name="CPA",text="CPA",colorscale=[[0,'orange'], [1,'orange']],showscale=False))

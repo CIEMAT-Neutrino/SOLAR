@@ -6,11 +6,17 @@ from scipy.optimize import curve_fit
 from .io_functions import print_colored
 
 def exp(x, coefficients, debug=False):
+    '''
+    Exponential decay function.
+    '''
     a = coefficients[0]
     tau = coefficients[1]
     return a*np.exp(-x/tau)
 
 def gauss(x, coefficients, debug=False):
+    '''
+    Gaussian function.
+    '''
     a = coefficients[0]
     x0 = coefficients[1]
     sigma = coefficients[2]
@@ -18,20 +24,32 @@ def gauss(x, coefficients, debug=False):
     return a*np.exp(-0.5*np.power((x-x0)/sigma,2))
 
 def quadratic(x, coefficients, debug=False):
+    '''
+    Quadratic function.
+    '''
     a = coefficients[0]
     n = coefficients[1]
     return a*np.power(x,2)+n
 
 def linear(x, coefficients, debug=False):
+    '''
+    Linear function.
+    '''
     m = coefficients[0]
     n = coefficients[1]
     return m*np.asarray(x)+n
 
-def polynomial_line(x, coefficients, debug=False):
+def polynomial(x, coefficients, debug=False):
+    '''
+    Polynomial function.
+    '''
     if debug: print("Polynomial coefficients: ",coefficients)
     return np.polyval(coefficients, x)
 
 def fit_hist2d(x, y, z, func="polynomial",debug=False):
+    '''
+    Given a 2D histogram, fit a function to the histogram's cresst.
+    '''
     if x.shape != z.shape:
         print("\nFlattening 2D histogram...")
         x,y,z = flatten_hist2d(x, y, z, debug=debug)
@@ -39,7 +57,7 @@ def fit_hist2d(x, y, z, func="polynomial",debug=False):
     if func == "polynomial":
         print("Fitting polynomial...")
         def func(x, *coefficients, debug=False):
-            return z + polynomial_line(x, coefficients, debug=debug)
+            return z + polynomial(x, coefficients, debug=debug)
         initial_guess = np.random.randn(3)  # Provide an initial guess for the polynomial coefficients
 
     if func == "exponential":
@@ -194,7 +212,7 @@ def fit_hist1d(x, y, func="polynomial", trimm=0, debug=False):
     if func == "polynomial":
         print("Fitting polynomial...")
         def func(x, *coefficients, debug=False):
-            return polynomial_line(x, coefficients, debug=debug)
+            return polynomial(x, coefficients, debug=debug)
         initial_guess = np.random.randn(3)  # Provide an initial guess for the polynomial coefficients
         labels = len(initial_guess)*["coef"]
     

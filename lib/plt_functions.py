@@ -137,6 +137,18 @@ def change_hist_color(n,patches,logy=False):
         return patches
 
 def draw_hist_colorbar(fig,n,ax,logy=False,pos="right",size="5%",pad=0.05):
+    '''
+    Draw a colorbar for a histogram or a set of histograms
+
+    Args:
+        fig (matplotlib.figure.Figure): matplotlib figure
+        n (array): bin content
+        ax (matplotlib.axes.Axes): matplotlib axes
+        logy (bool): True if log scale, False otherwise (default: False)
+        pos (str): position of the colorbar (default: "right")
+        size (str): size of the colorbar (default: "5%")
+        pad (float): padding of the colorbar (default: 0.05)
+    '''
     cNorm = colors.Normalize(vmin=0, vmax=np.max(n))
     if logy: cNorm = colors.LogNorm(vmin=1, vmax=np.max(n))
     divider = make_axes_locatable(ax)
@@ -147,6 +159,9 @@ def draw_hist_colorbar(fig,n,ax,logy=False,pos="right",size="5%",pad=0.05):
     fig.colorbar(cm.ScalarMappable(norm=cNorm,cmap=cm.viridis),cax=cax)
 
 def draw_hist2d_colorbar(fig,h,ax,pos="right",size="5%",pad=0.05):
+    '''
+    Draw a colorbar for a 2D histogram or a set of 2D histograms
+    '''
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(pos, size=size, pad=pad)
     if pos == "left":
@@ -155,6 +170,9 @@ def draw_hist2d_colorbar(fig,h,ax,pos="right",size="5%",pad=0.05):
     fig.colorbar(h[3],ax=ax,cax=cax)
 
 def get_common_colorbar(data_list,bins):
+    '''
+    Get the common colorbar for a set of histograms
+    '''
     for idx,data in enumerate(data_list):
         # Calculate histogram values
         hist, bins = np.histogram(data[data != 0], bins=bins)
