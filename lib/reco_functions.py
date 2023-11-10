@@ -23,6 +23,10 @@ def compute_reco_workflow(run, configs, params={}, workflow="ANALYSIS", rm_branc
     # Compute reco variables
     if debug: print_colored("\nComputing reco workflow of type %s"%workflow,"INFO")
 
+    if workflow == "TRUTH":
+        run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
+        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
+
     if workflow == "BASIC":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
@@ -30,24 +34,20 @@ def compute_reco_workflow(run, configs, params={}, workflow="ANALYSIS", rm_branc
     
     if workflow == "ADJCL":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
-        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_adjcl_basics(run,configs,params,rm_branches=rm_branches,debug=debug)
     
     if workflow == "CALIBRATION":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
-        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
 
     if workflow == "VERTEXING":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
-        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
 
     if workflow == "ANALYSIS":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
-        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recoy(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
@@ -55,7 +55,6 @@ def compute_reco_workflow(run, configs, params={}, workflow="ANALYSIS", rm_branc
     
     if workflow == "FULL":
         run = compute_primary_cluster(run,configs,params,rm_branches=rm_branches,debug=debug)
-        run = compute_true_efficiency(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_opflash_matching(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_recox(run,configs,params,rm_branches=rm_branches,debug=debug)
         run = compute_cluster_energy(run,configs,params,rm_branches=rm_branches,debug=debug)
