@@ -635,17 +635,17 @@ def get_bkg_config(info,debug=False):
         
     elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x6_3view_30deg":
         bkg_list = ["Unknown",
-            "marley",
+            "Marley",
             "Ar39GenInLAr",
             "Kr85GenInLAr",
             "Ar42GenInLAr",
             "K42From42ArGenInLAr",
             "Rn222ChainRn222GenInLAr",
             "Rn220ChainPb212GenInLAr",
-            "K40GenInCathode",
-            "U238ChainGenInCathode",
-            "K42From42ArGenInCathode",
-            "Rn220ChainFromPb212GenInCathode",
+            "K40GenInCPA",
+            "U238ChainGenInCPA",
+            "K42From42ArGenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
             "Rn222ChainGenInPDS",
             "GammasInCavernwall",
             "GammasInFoam",
@@ -799,6 +799,25 @@ def reorder_df(df,info, bkg_dict, color_dict, debug=False):
             "Kr85",
             "Ar39",
             "Gamma"]
+        
+    elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x6_3view_30deg":
+        order = ["Rn222ChainGenInPDS",
+            "U238ChainGenInCPA",
+            "K42From42ArGenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
+            "K40GenInCPA",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "NeutronsInCavernwall",
+            "Rn222ChainRn222GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "Kr85GenInLAr",
+            "Ar39GenInLAr",
+            "GammasInCryostat",
+            "GammasInCavern",
+            "GammasInFoam",
+            "GammasInCavernwall"
+            ]
 
     else: order = list(bkg_dict.values())[2:]
 
