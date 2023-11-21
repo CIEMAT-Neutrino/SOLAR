@@ -27,7 +27,7 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
     rprint(output)
     return 0
     
-def read_input_file(input_file, path="../config/", preset="default_input", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
+def read_input_file(input_file:str, path="../config/", preset="default_input", INTEGERS=[], DOUBLES=[], STRINGS=[], BOOLS=[], debug=False):
     '''
     Obtain the information stored in a .txt input file to load the runs and channels needed
 
@@ -394,21 +394,21 @@ def get_branches2use(run, debug=False):
     if debug: print_colored("\nFounded keys " + str(branches) + " to construct the dictionaries.", "DEBUG")
     return branches
 
-def check_key(my_dict,key,debug=False):
+def check_key(my_dict, key, debug=False):
     '''
     Check if a given dict contains a key and return True or False
     '''
     try: my_dict[key]; return True    
     except KeyError:   return False
 
-def delete_keys(run,keys,debug=False):
+def delete_keys(run, keys, debug=False):
     '''
     Delete the keys list introduced as 2nd variable
     '''
     for key in keys: del run[key]
     return run
 
-def remove_processed_branches(root_info,debug=False):
+def remove_processed_branches(root_info, debug=False):
     '''
     Removes the branches that have been already processed
     
@@ -433,7 +433,7 @@ def remove_processed_branches(root_info,debug=False):
         if debug: print_colored("New branch list to process for Tree %s: %s"%(tree,root_info[tree]),color="SUCCESS")
     return root_info
 
-def load_multi(names:dict,configs:dict,load_all=False,preset="",branches={},generator_swap=False,debug=False):
+def load_multi(names:dict, configs:dict, load_all=False, preset=None, branches={}, generator_swap=False, debug=False):
     '''
     Load multiple files with different configurations and merge them into a single dictionary
 
@@ -462,6 +462,9 @@ def load_multi(names:dict,configs:dict,load_all=False,preset="",branches={},gene
         for jdx,name in enumerate(names[config]):
             if debug: print_colored("\nLoading file %s%s"%(path,name),"DEBUG")
             if load_all == True: branches_dict = get_branches(name,path=path,debug=debug)    # Get ALL the branches
+            elif preset != None:
+                truth_labels, reco_labels = get_workflow_branches(workflow=preset,debug=False)          # Get PRESET branches
+                branches_dict = {"Truth":truth_labels,"Reco":reco_labels}
             else: branches_dict = branches                                                   # Get CUSTOMIZED branches from the input
 
             for tree in branches_dict.keys(): 
@@ -506,15 +509,15 @@ def load_multi(names:dict,configs:dict,load_all=False,preset="",branches={},gene
                         if key == "Event": print_colored("Loaded %s events:\t%i\t from %s -> %s"%(config,len(branch),tree,name),"INFO")
     
     try:
-        print("\n- Keys extracted from the truth tree:\n",run["Truth"].keys(),"\n") # Check that all keys from the original TTree are recovered!
-        print("- Total events: ",len(run["Truth"]["Event"]),"\n") 
+        rprint("\n- Keys extracted from the truth tree:\n",run["Truth"].keys(),"\n") # Check that all keys from the original TTree are recovered!
+        rprint("- Total events: ",len(run["Truth"]["Event"]),"\n") 
     except:
-        print("\n- No truth tree found!\n")
+        rprint("\n- No truth tree found!\n")
     try:
-        print("- Keys extracted from the reco tree:\n",run["Reco"].keys(),"\n")  
-        print("- Total reco clusters: ",len(run["Reco"]["Event"]),"\n") 
+        rprint("- Keys extracted from the reco tree:\n",run["Reco"].keys(),"\n")  
+        rprint("- Total reco clusters: ",len(run["Reco"]["Event"]),"\n") 
     except KeyError:
-        print("- No reco tree found!\n")
+        rprint("- No reco tree found!\n")
 
     print_colored("\nLoaded *%s* files with trees: %s\n"%(list(configs),list(run.keys())),"SUCCESS")
     return run
@@ -621,17 +624,35 @@ def get_bkg_config(info,debug=False):
     elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
         bkg_list = ["Unknown",
             "Marley",
-            "Ar39InLAr",
-            "Kr85InLAr",
-            "Ar42InLAr",
-            "K42-Ar42InLAr",
-            "Rn222InLAr",
-            "CPAK42-Ar42",
-            "CPAK40",
-            "CPAU238",
-            "PDSRn222",
-            "Neutron",
-            "Gamma"]
+            "Ar39GenInLAr",
+            "Kr85GenInLAr",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "Rn222ChainRn222GenInLAr",
+            "Rn222ChainPo218GenInLAr",
+            "Rn222ChainPb214GenInLAr",
+            "Rn222ChainBi214GenInLAr",
+            "Rn222ChainPb210GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "K40GenInCPA",
+            "U238ChainGenInCPA",
+            "Th232ChainGenInCPA",
+            "K40GenInAPA",
+            "U238ChainGenInAPA",
+            "Th232ChainGenInAPA",
+            "Rn222ChainGenInPDS",
+            "K42From42ArGenInCPA",
+            "Rn222ChainFromPo218GenInCPA",
+            "Rn222ChainFromPb214GenInCPA",
+            "Rn222ChainFromBi214GenInCPA",
+            "Rn222ChainFromPb210GenInCPA",
+            "Rn222ChainFromBi210GenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
+            "GammasInCavernwall",
+            "GammasInFoam",
+            "NeutronsInCavernwall",
+            "GammasInCryosta",
+            "GammasInCavern"]
         
     elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x6_3view_30deg":
         bkg_list = ["Unknown",
@@ -686,50 +707,6 @@ def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=Fal
         reco_values.append(count_reco_df.values[0][bkg_idx]*np.power(count_truth_df.values[bkg_idx]*info["TIMEWINDOW"][0],-1))
         if debug: print(count_truth_df.values[bkg_idx],reco_values)
     return truth_values,reco_values
-
-def get_bkg_color(name_list, debug=False):
-    '''
-    Get the color for each background according to its "simple" name.
-
-    Args:
-        name_list (list): list of the background names
-        debug (bool): if True, the debug mode is activated (default: False)
-
-    Returns:
-        color_dict (dict): dictionary with the colors of the backgrounds
-    '''
-    color_dict = dict()
-    simple_name_list = get_simple_name(name_list,debug=debug)
-
-    for name in name_list:
-        if simple_name_list[name] == "Unknown":
-            color_dict[name] = "black"
-        elif simple_name_list[name] == "Marley":
-            color_dict[name] = "orange"
-        elif simple_name_list[name] == "APA":
-            color_dict[name] = "violet"
-        elif simple_name_list[name] == "Neutron":
-            color_dict[name] = "green"
-        elif simple_name_list[name] == "CPA":
-            color_dict[name] = "purple"
-        elif simple_name_list[name] == "Ar42":
-            color_dict[name] = "blue"
-        elif simple_name_list[name] == "K42":
-            color_dict[name] = "blue"
-        elif simple_name_list[name] == "Kr85":
-            color_dict[name] = "pink"
-        elif simple_name_list[name] == "Ar39":
-            color_dict[name] = "grey"
-        elif simple_name_list[name] == "Rn22":
-            color_dict[name] = "yellow"
-        elif simple_name_list[name] == "Po210":
-            color_dict[name] = "brown"
-        elif simple_name_list[name] == "PDS":
-            color_dict[name] = "red"
-        else:
-            color_dict[name] = "black"
-
-    return color_dict
 
 def reorder_df(df,info, bkg_dict, color_dict, debug=False):
     '''
@@ -788,17 +765,35 @@ def reorder_df(df,info, bkg_dict, color_dict, debug=False):
             ]
             
     elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
-        order = ["CPAU238",
-            "CPAK42-Ar42",
-            "CPAK40",
-            "Ar42",
-            "K42-Ar42",
-            "Neutron",
-            "PDSRn222",
-            "Rn222",
-            "Kr85",
-            "Ar39",
-            "Gamma"]
+        order = ["Ar39GenInLAr",
+            "Kr85GenInLAr",
+            "Ar42GenInLAr",
+            "K42From42ArGenInLAr",
+            "Rn222ChainRn222GenInLAr",
+            "Rn222ChainPo218GenInLAr",
+            "Rn222ChainPb214GenInLAr",
+            "Rn222ChainBi214GenInLAr",
+            "Rn222ChainPb210GenInLAr",
+            "Rn220ChainPb212GenInLAr",
+            "K40GenInCPA",
+            "U238ChainGenInCPA",
+            "Th232ChainGenInCPA",
+            "K40GenInAPA",
+            "U238ChainGenInAPA",
+            "Th232ChainGenInAPA",
+            "Rn222ChainGenInPDS",
+            "K42From42ArGenInCPA",
+            "Rn222ChainFromPo218GenInCPA",
+            "Rn222ChainFromPb214GenInCPA",
+            "Rn222ChainFromBi214GenInCPA",
+            "Rn222ChainFromPb210GenInCPA",
+            "Rn222ChainFromBi210GenInCPA",
+            "Rn220ChainFromPb212GenInCPA",
+            "GammasInCavernwall",
+            "GammasInFoam",
+            "NeutronsInCavernwall",
+            "GammasInCryosta",
+            "GammasInCavern"]
         
     elif info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x6_3view_30deg":
         order = ["Rn222ChainGenInPDS",
@@ -829,6 +824,82 @@ def reorder_df(df,info, bkg_dict, color_dict, debug=False):
     if debug: print_colored("Reordered dataframe with columns: %s"%order,"INFO")
     return df,color_list
 
+def get_bkg_color(name_list, debug=False):
+    '''
+    Get the color for each background according to its "simple" name.
+
+    Args:
+        name_list (list): list of the background names
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        color_dict (dict): dictionary with the colors of the backgrounds
+    '''
+    color_dict = dict()
+    simple_name_list = get_simple_name(name_list,debug=debug)
+
+    for name in name_list:
+        if simple_name_list[name] == "Unknown":
+            color_dict[name] = "black"
+        elif simple_name_list[name] == "Marley":
+            color_dict[name] = "orange"
+        elif simple_name_list[name] == "APA":
+            color_dict[name] = "violet"
+        elif simple_name_list[name] == "Neutron":
+            color_dict[name] = "green"
+        elif simple_name_list[name] == "CPA":
+            color_dict[name] = "purple"
+        elif simple_name_list[name] == "Ar42":
+            color_dict[name] = "blue"
+        elif simple_name_list[name] == "K42":
+            color_dict[name] = "blue"
+        elif simple_name_list[name] == "Kr85":
+            color_dict[name] = "pink"
+        elif simple_name_list[name] == "Ar39":
+            color_dict[name] = "grey"
+        elif simple_name_list[name] == "Rn22":
+            color_dict[name] = "yellow"
+        elif simple_name_list[name] == "Po210":
+            color_dict[name] = "brown"
+        elif simple_name_list[name] == "PDS":
+            color_dict[name] = "red"
+        else:
+            color_dict[name] = "black"
+
+    return color_dict
+
+def get_bkg_weights(info, names, debug = False):
+    bkg_dict,color_dict = get_bkg_config(info,debug=False)
+    weights_dict = dict()
+    for bkg in bkg_dict.values():
+        weights_dict[bkg] = 1
+    if "wbkg" in names:
+        weights_dict["wbkg"] = 1
+        return weights_dict
+    else:
+        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6":
+            custom_weights = {"NeutronsInCavernwall":1e3}
+        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
+            custom_weights = {"Po210":1e4,"APA":1e4,"CPA":1e2,"Ar42":1e4,"Neutron":1e2,"Rn222":1e4}
+        if info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
+            custom_weights = {"Neutron":1e2}
+        
+        for bkg in custom_weights:
+            weights_dict[bkg] = custom_weights[bkg]
+        return weights_dict
+
+def get_gen_weights(configs, names, debug=False):
+    weights_dict = dict()
+    for idx,config in enumerate(configs):
+        info = read_input_file(config+'/'+configs[config],debug=debug)
+        # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
+        geo = info["GEOMETRY"][0]
+        name_list = names[config]
+        geo_weights_dict = get_bkg_weights(info,name_list)
+        for idx,name in enumerate(name_list):
+            weights_dict[(geo,name)] = geo_weights_dict[name]
+    return weights_dict  
+
 def get_simple_name(name_list, debug=False):
     simple_name = dict()
     basic_names = ["Ar42","Ar39","Kr85","Po210","Rn22"]
@@ -856,34 +927,84 @@ def get_simple_name(name_list, debug=False):
     if debug: print_colored("Loaded simple name dictionary: %s"%str(simple_name),"INFO")
     return simple_name
 
-def get_gen_weights(configs, names, debug=False):
-    weights_dict = dict()
-    for idx,config in enumerate(configs):
-        info = read_input_file(config+'/'+configs[config],debug=debug)
-        # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
-        geo = info["GEOMETRY"][0]
-        name_list = names[config]
-        geo_weights_dict = get_bkg_weights(info,name_list)
-        for idx,name in enumerate(name_list):
-            weights_dict[(geo,name)] = geo_weights_dict[name]
-    return weights_dict
+def get_workflow_branches(workflow="BASIC",debug=False):
+    '''
+    Get the workflow variables from the input file.
 
-def get_bkg_weights(info, names, debug = False):
-    bkg_dict,color_dict = get_bkg_config(info,debug=False)
-    weights_dict = dict()
-    for bkg in bkg_dict.values():
-        weights_dict[bkg] = 1
-    if "wbkg" in names:
-        weights_dict["wbkg"] = 1
-        return weights_dict
-    else:
-        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6":
-            custom_weights = {"NeutronsInCavernwall":1e3}
-        if info["GEOMETRY"][0] == "hd" and info["VERSION"][0] == "hd_1x2x6_legacy":
-            custom_weights = {"Po210":1e4,"APA":1e4,"CPA":1e2,"Ar42":1e4,"Neutron":1e2,"Rn222":1e4}
-        if info["GEOMETRY"][0] == "vd" and info["VERSION"][0] == "vd_1x8x14_3view_30deg":
-            custom_weights = {"Neutron":1e2}
+    Args:
+        workflow (str): workflow (default: "BASIC")
+        debug (bool): if True, print debug messages (default: False)
+
+    Returns:
+        truth_list (list): list of truth variables
+    '''
+    if workflow == "TRUTH":
+        truth_list = ["Event","Flag",
+            "TruthPart","TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
+        reco_list =  ["Event","Flag",
+            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuX","TNuY","TNuZ","Purity","TNuE","Charge","NHits",
+            "MainVertex","MainE",
+            "MainParentVertex","MainParentE",
+            "AdjClCharge","AdjClR","AdjClTime","AdjClGen"]
+
+    if workflow == "BASIC":
+        truth_list = ["Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
+        reco_list =  ["Event","Flag",
+            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuE","TNuX","TNuY","TNuZ","NHits","Charge","Generator","Time","Purity","RecoZ","TPC",
+            "AdjClCharge"]
         
-        for bkg in custom_weights:
-            weights_dict[bkg] = custom_weights[bkg]
-        return weights_dict
+    if workflow == "CALIBRATION":
+        truth_list = ["Event","Flag",
+            "TNuE","TruthPart"]
+        reco_list =  ["Event","Flag",
+            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP",
+            "TNuY","TNuZ","TNuE","Generator","NHits","Charge","Time","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
+            "AdjClNHit","AdjClR","AdjClCharge","AdjClTime",
+            "AdjClMainE","AdjClMainPDG"]
+    
+    if workflow == "VERTEXING":
+        truth_list = ["Event","Flag","TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
+        reco_list =  ["Event","Flag",
+            "TNuX","TNuY","TNuZ","TNuE",
+            "MainVertex","MainParentVertex",
+            "Generator","TPC","NHits","Charge","Time","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0dT","Ind1dT",
+            "AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ","AdjClMainPDG",
+            "AdjOpFlashR","AdjOpFlashPE","AdjOpFlashTime","AdjOpFlashMaxPE"]
+        
+    if workflow == "ADJCL":
+        truth_list = ["Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ"]
+        reco_list =  ["Event","Flag",
+            "TNuX","TNuY","TNuZ","TNuE",
+            "MainVertex","MainParentVertex",
+            "Generator","TPC","NHits","Charge","Time","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0dT","Ind1dT",
+            "AdjClNHit","AdjClR","AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ"]
+
+    if workflow == "ADJFLASH":
+        truth_list = ["Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ"]
+        reco_list =  ["Event","Flag",
+            "TNuX","TNuY","TNuZ","TNuE",
+            "MainVertex","MainParentVertex",
+            "Generator","TPC","NHits","Charge","Time","RecoZ",
+            "AdjClR","AdjClCharge","AdjClTime",
+            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR","AdjOpFlashPur"]
+    
+    if workflow == "ANALYSIS" :
+        truth_list = ["Event","Flag",
+            "TruthPart","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
+        reco_list =  ["Event","Flag",
+            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuE","NHits","Charge","Generator","Time","Purity","RecoZ","TPC",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
+            "AdjClNHit","AdjClR","AdjClPur","AdjClCharge","AdjClTime",
+            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR"]
+        
+    if debug: print_colored("\nLoaded workflow variables: %s"%str(truth_list+reco_list),"INFO")
+    return truth_list,reco_list
