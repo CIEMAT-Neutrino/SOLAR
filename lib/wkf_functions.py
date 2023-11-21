@@ -40,25 +40,27 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
         try: root = root_numpy.tree2array(true_tree, branches=true_branches)
         except ValueError: pass
         for object_type in object_types.keys():
+            if debug: print_colored('\t TRUTH:','DEBUG')
             for key in data_config["TRUE"][object_type]: 
                 # try:
                 true[key] = data_config["TRUE"][object_type][key]*root[key]
                 if type(true[key][0]) == np.ndarray:
                     true[key] = np.vstack(true[key])
-                if debug: print_colored("\t-> TRUE: Found %s with type %s"%(key,object_types[object_type]),"DEBUG")
+                if debug: print_colored("\t-> Found %s with type %s"%(key,object_types[object_type]),"DEBUG")
                 # except ValueError: continue
 
         try: root = root_numpy.tree2array(reco_tree, branches=reco_branches)
         except ValueError: pass
         for object_type in object_types.keys():
+            if debug: print_colored('\t RECO:','DEBUG')
             for key in data_config["RECO"][object_type]: 
                 try:
                     reco[key] = data_config["RECO"][object_type][key]*np.asarray(root[key],dtype=object_types[object_type])
-                    if debug: print_colored("\t-> RECO: Found %s with type %s"%(key,type(reco[key][0])),"DEBUG")
+                    if debug: print_colored("\t-> Found %s with type %s"%(key,type(reco[key][0])),"DEBUG")
                 except ValueError:
                     reco[key] = data_config["RECO"][object_type][key]*np.ones(reco_tree.GetEntries(),dtype=object_types[object_type])
                     branch_info = (key,object_types[object_type],data_config["RECO"][object_type][key])
-                    if debug: print_colored("\t-> RECO: Created %s as type %s with factor %.2e"%branch_info,"DEBUG")
+                    if debug: print_colored("\t-> Created %s as type %s with factor %.2e"%branch_info,"DEBUG")
         
         if workflow in ["RECONSTRUCTION","SMEARING","VERTEXING","ANALYSIS","FULL"]:
             calibration_info = read_input_file(config+"_charge_correction",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["CHARGE_AMP","ELECTRON_TAU"],debug=user_input["debug"])
@@ -83,8 +85,9 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
                 ############################
                 # True Computation
                 ############################
-                reco["ElectronE"][i] = 1e3*reco_tree.TMarleyE[2]
                 for j in range(len(reco_tree.TMarleyPDG)):
+                    if reco_tree.TMarleyPDG[j] == 11 and 1e3*reco_tree.TMarleyE[j] > reco["ElectronE"][i]:
+                        reco["ElectronE"][i] = 1e3*reco_tree.TMarleyE[j]
                     if reco_tree.TMarleyPDG[j] == 22: reco["GammaE"][i]+=1e3*reco_tree.TMarleyE[j]
                     if reco_tree.TMarleyPDG[j] == 2112: reco["NeutronP"][i]+=1e3*reco_tree.TMarleyP[j] 
                 reco["VisEnergy"][i] = reco["ElectronE"][i] + reco["GammaE"][i]
@@ -167,9 +170,11 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
             except KeyError: pass
             try:
                 if reco["TNuE"][i] < data_filter["min_energy"]: continue
+                if reco["ElectronE"][i] < data_filter["min_energy"]: continue
             except KeyError: pass
             try:
                 if reco["TNuE"][i] > data_filter["max_energy"]: continue
+                if reco["ElectronE"][i] > data_filter["max_energy"]: continue
             except KeyError: pass
             try:
                 if reco["NHits"][i] < data_filter["pre_nhits"]: continue
@@ -204,5 +209,5 @@ def compute_root_workflow(user_input, info, data_filter, workflow="BASICS", debu
 def compute_reco_efficiency(true, reco, debug=False):
     # Check if true and reco have the keys event, flag
     if debug: print_colored("--> Computing reco efficiency...","DEBUG")
-    true["RecoIndex"],true["RecoMatch"],true["ClCount"],true["HitCount"],reco["TrueIndex"] = generate_index(true["Event"], true["Flag"], reco["Event"], reco["Flag"], reco["NHits"], debug=debug)
+    true["RecoIndex"],true["RecoMatch"],true["ClCount"],true["HitCount"],reco["TrueIndex"] = generate_index(true["Event"], true["Flag"], reco["Event"], reco["Flag"], reco["NHits"], reco["Charge"], debug=debug)
     return true, reco
