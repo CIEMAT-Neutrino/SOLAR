@@ -13,7 +13,7 @@ from itertools import product
 from lib.io_functions import print_colored, read_input_file
 from lib.plt_functions import format_coustom_plotly, unicode
 
-def get_nadir_angle(show=False, debug=False):
+def get_nadir_angle(path:str="../data/OSCILLATION/", show:bool=False, debug:bool=False):
     '''
     This function can be used to obtain the nadir angle distribution for DUNE.
 
@@ -24,7 +24,7 @@ def get_nadir_angle(show=False, debug=False):
     Returns:
         (xnadir_centers,ynadir_centers): tuple containing the nadir angle and the PDF. 
     '''
-    with uproot.open("../data/OSCILLATION/nadir.root") as nadir:
+    with uproot.open(path+"nadir.root") as nadir:
         # Loas pdf histogram
         pdf = nadir["nadir;1"]
         pdf_array = pdf.to_hist().to_numpy()
@@ -41,17 +41,17 @@ def get_nadir_angle(show=False, debug=False):
     if debug: print_colored("Nadir angle loaded!","DEBUG")
     return (xnadir_centers,ynadir_centers)
 
-def get_oscillation_datafiles(dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",path="../data/OSCILLATION/",ext="root",auto=False,debug=False):
+def get_oscillation_datafiles(dm2=None, sin13=None, sin12=None, path:str="../data/OSCILLATION/", ext:str="root", auto:bool=False, debug:bool=False):
     '''
     This function can be used to obtain the oscillation data files for DUNE's solar analysis.  
 
     Args:
-        dm2 (float): Solar mass squared difference (default: "DEFAULT")
-        sin13 (float): Solar mixing angle (default: "DEFAULT")
-        sin12 (float): Solar mixing angle (default: "DEFAULT")
-        path (str): Path to the oscillation data files (default: "../data/OSCILLATION/")
-        ext (str): Extension of the oscillation data files (default: "root")
-        auto (bool): If True, the function will look for all the oscillation data files in the path (default: False)
+        dm2 (float/list):   Solar mass squared difference (default: analysis["DM2"])
+        sin13 (float/list): Solar mixing angle (default: analysis["SIN13"])
+        sin12 (float/list): Solar mixing angle (default: analysis["SIN12"])
+        path (str):   Path to the oscillation data files (default: "../data/OSCILLATION/")
+        ext (str):    Extension of the oscillation data files (default: "root")
+        auto (bool):  If True, the function will look for all the oscillation data files in the path (default: False)
         debug (bool): If True, the debug mode is activated.
 
     Returns:
@@ -82,24 +82,25 @@ def get_oscillation_datafiles(dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",path
                 found_sin12 = [sin12]
             else:
                 print_colored("WARNING: file %sosc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e"%(path,this_dm2,this_sin13,this_sin12)+'.'+ext+" not found! Returning default.","WARNING")
-                dm2, sin13, sin12 = "DEFAULT", "DEFAULT", "DEFAULT"
+                dm2, sin13, sin12 = None, None, None
         
-        elif dm2 == "DEFAULT" and sin13 == "DEFAULT" and sin12 == "DEFAULT":
-            analysis_info = read_input_file("analysis",DOUBLES=["SOLAR_DM2","SIN13","SIN12"],debug=debug)
+        elif dm2 == None and sin13 == None and sin12 == None:
+            analysis_info = read_input_file("analysis",debug=debug)
             found_dm2, found_sin13, found_sin12 = analysis_info["SOLAR_DM2"], analysis_info["SIN13"], analysis_info["SIN12"]
 
         else:
-            print_colored("ERROR: dm2 and sin12 must be both lists or floats!","FAIL")
+            print_colored("ERROR: oscillation parameters must be floats or lists!","FAIL")
             raise TypeError
         
     if type(auto) != bool:
         print_colored("ERROR: auto must be a boolean!","FAIL")
         raise TypeError
     
-    if debug: print_colored("Found %d oscillation files!"%len(found_dm2),"INFO")
+    if debug and type(found_dm2) == list: print_colored("Found %d oscillation files!"%len(found_dm2),"INFO")
+    if debug and type(found_dm2) == float: print_colored("Found 1 oscillation file!","INFO")
     return (found_dm2,found_sin13,found_sin12)
 
-def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT",sin12="DEFAULT",auto=True,rebin=True,output="interp",save=False,show=False,ext="root",debug=False):
+def get_oscillation_map(path="../data/OSCILLATION/", dm2=None, sin13=None, sin12=None, ext="root", auto=True, rebin=True, output="df", save=False, debug=False):
     '''
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
 
@@ -122,30 +123,47 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
     
     df_dict = {}
     interp_dict = {}
-    nadir_data = get_nadir_angle()
-    subfolder=''
+    nadir_data = get_nadir_angle(path=path,show=False,debug=debug)
+    subfolder = ''
     if ext == 'pkl': 
-        if subfolder == True: subfolder = 'rebin/'
-        else: subfolder = 'raw/'
-    dm2,sin13,sin12 = get_oscillation_datafiles(dm2,sin13,sin12,path=path+ext+'/'+subfolder,ext=ext,auto=auto,debug=debug)
-    analysis_info = read_input_file("analysis",INTEGERS=["ROOT_NADIR_RANGE","ROOT_NADIR_BINS"],debug=debug)
+        if rebin == True: subfolder = 'rebin'
+        else: subfolder = 'raw'
+
+    dm2,sin13,sin12 = get_oscillation_datafiles(dm2,sin13,sin12,path=path+ext+'/'+subfolder+'/',ext=ext,auto=auto,debug=debug)
+    analysis_info = read_input_file("analysis",debug=debug)
 
     root_nadir_edges = np.linspace(analysis_info["ROOT_NADIR_RANGE"][0],analysis_info["ROOT_NADIR_RANGE"][1],analysis_info["ROOT_NADIR_BINS"]+1)
     root_nadir_centers = (root_nadir_edges[1:]+root_nadir_edges[:-1])/2
     
+    if type(dm2) == float and type(sin13) == float and type(sin12) == float:
+        dm2, sin13, sin12 = [dm2], [sin13], [sin12]
+
     for dm2_value,sin13_value,sin12_value in zip(dm2,sin13,sin12):
         # Format dm2 and sin12 values to be used in the file name with appropriate precision
         dm2_value = float("%.3e"%dm2_value)
         sin12_value = float("%.3e"%sin12_value)
-        if glob.glob(path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) != []:
-            if debug: print_colored("Loading rebin data from: "+path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
-            df = pd.read_pickle(path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
         
-        if rebin == False and glob.glob(path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) != []:
-            if debug: print_colored("Loading rebin data from: "+path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
-            df = pd.read_pickle(path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
+        if ext == 'pkl':
+            if glob.glob(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) != []:
+                if debug: print_colored("Loading data from: "+path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
+                df = pd.read_pickle(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
 
-        else:
+                if rebin:
+                    save_path = path+ext+"/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)
+                    if glob.glob(save_path) != []:
+                        if debug: print_colored("Loading rebinned data from %s"%save_path,"DEBUG")
+                        df = pd.read_pickle(save_path)
+                    else:
+                        df = rebin_df(df,show=False,save=save,save_path=save_path,debug=debug)
+            
+            else:
+                print_colored("ERROR: file %sosc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(path,dm2_value,sin13_value,sin12_value)+" not found!","FAIL")
+                return None
+            # if rebin == False and glob.glob(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) != []:
+            #     if debug: print_colored("Loading rebin data from: "+path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
+            #     df = pd.read_pickle(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
+
+        elif ext == 'root':
             if debug: print_colored("Loading raw data from: "+path+"/root/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e%s"%(dm2_value,sin13_value,sin12_value,'.'+ext),"DEBUG")
             data = uproot.open(path+"/root/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e%s"%(dm2_value,sin13_value,sin12_value,'.'+ext))
             # Convert the histogram to a pandas DataFrame
@@ -172,22 +190,17 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
             nadir_y = nadir_y/nadir_y.sum()
             df = df.mul(nadir_y,axis=0)
         
-        if rebin:
-            save_path = path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)
-            if glob.glob(save_path) != []:
-                if debug: print_colored("Loading rebinned data from %s"%save_path,"DEBUG")
-                df = pd.read_pickle(save_path)
-            else:
-                df = rebin_df(df,show=False,save=save,save_path=save_path,debug=debug)
-
-        # if save and glob.glob(path+"/pkl/raw/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) == []:
-        #     if debug: print_colored("Saving raw data to: "+path+"/pkl/raw/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
-        #     df.to_pickle("../data/OSCILLATION/pkl/raw/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
-
-        if show:
-            fig = px.imshow(df,color_continuous_scale='turbo', origin='lower', aspect='auto')
-            fig = format_coustom_plotly(fig,figsize=(800,600))
-            fig.show()
+            if rebin:
+                save_path = path+"/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)
+                if glob.glob(save_path) != []:
+                    if debug: print_colored("Loading rebinned data from %s"%save_path,"DEBUG")
+                    df = pd.read_pickle(save_path)
+                else:
+                    df = rebin_df(df,show=False,save=save,save_path=save_path,debug=debug)
+        
+        else:
+            print_colored("ERROR: ext must be 'root' or 'pkl'!","FAIL")
+            return None
         
         if output == "interp":                
             osc_map_x = df.loc[df.index[0],:].keys().to_list()
@@ -197,11 +210,16 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
         
         df_dict[(dm2_value,sin13_value,sin12_value)] = df
     
-    if output == "interp":
+    if output == "figure":
+        fig = px.imshow(df,color_continuous_scale='turbo', origin='lower', aspect='auto')
+        fig = format_coustom_plotly(fig,figsize=(800,600))
+        return fig
+
+    elif output == "interp":
         if debug: print_colored("Returning interpolation dictionary!","DEBUG")
         return interp_dict
     
-    if output == "df":
+    elif output == "df":
         if debug: print_colored("Returning dataframe dictionary!","DEBUG")
         return df_dict
     
@@ -209,7 +227,7 @@ def get_oscillation_map(path="../data/OSCILLATION/",dm2="DEFAULT",sin13="DEFAULT
         print_colored("ERROR: output must be 'interp' or 'df'!","FAIL")
         return None
     
-def rebin_df(df,xarray=[],yarray=[],show=False,save=True,save_path="../data/pkl/rebin/df.pkl",debug=False):
+def rebin_df(df,save_path="../data/pkl/rebin/df.pkl",xarray=[],yarray=[],show=False,save=True,debug=False):
     '''
     This function can be used to rebin any dataframe that has a 2D index (like an imshow dataset).
     
@@ -225,7 +243,7 @@ def rebin_df(df,xarray=[],yarray=[],show=False,save=True,save_path="../data/pkl/
     Returns:
         small_df (pandas.DataFrame): Rebinning result.
     '''
-    analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
+    analysis_info = read_input_file("analysis",debug=False)
     energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
     energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
     
