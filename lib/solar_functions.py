@@ -13,11 +13,10 @@ from itertools     import product
 from rich.progress import track
 from scipy         import constants as const
 
-from lib.io_functions  import print_colored
+from lib.io_functions  import print_colored,get_bkg_config, get_gen_label, get_gen_weights
 from lib.osc_functions import get_nadir_angle, get_oscillation_datafiles
-from lib.bkg_functions import get_bkg_config, get_gen_label, get_gen_weights
 
-def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,int_time,filters,truth_filter,reco_filter,factor="SOLAR",input_dm2="DEFAULT",input_sin13="DEFAULT",input_sin12="DEFAULT",auto=False,save=False,debug=False):
+def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,int_time,filters,truth_filter,reco_filter,factor="SOLAR",input_dm2=None,input_sin13=None,input_sin12=None,auto=False,save=False,debug=False):
     '''
     Get the weighted spectrum for a given background and configuration
 
@@ -35,9 +34,9 @@ def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,i
         truth_filter (str): truth filter
         reco_filter (str): reco filter
         factor (str): factor to scale the spectrum (default: "SOLAR")
-        input_dm2 (float): input dm2 value (default: "DEFAULT")
-        input_sin13 (float): input sin13 value (default: "DEFAULT")
-        input_sin12 (float): input sin12 value (default: "DEFAULT")
+        input_dm2 (float): input dm2 value (default: analysis["SOLAR_DM2"])
+        input_sin13 (float): input sin13 value (default: analysis["SIN13"])
+        input_sin12 (float): input sin12 value (default: analysis["SIN12"])
         auto (bool): if True, use the auto mode (default: False)
         save (bool): if True, save the output (default: False)
         debug (bool): if True, print debug messages (default: False)
@@ -81,7 +80,7 @@ def compute_solar_spectrum(run,info,configs,config,names,name,gen,energy_edges,i
                 this_sin12 = input_sin12
                 this_auto = auto
             
-            (dm2_list,sin13_list,sin12_list) = get_oscillation_datafiles(dm2=this_dm2,sin13=this_sin13,sin12=this_sin12,path="../data/OSCILLATION/pkl/rebin/",ext="pkl",auto=this_auto,debug=debug)
+            (dm2_list,sin13_list,sin12_list) = get_oscillation_datafiles(dm2=this_dm2,sin13=this_sin13,sin12=this_sin12,ext="pkl",auto=this_auto,debug=debug)
             # for dm2,sin13,sin12 in zip(dm2_list,sin13_list,sin12_list):
             for i in track(range(len(dm2_list)), description="Computing oscillation maps..."):
                 dm2 = dm2_list[i]
@@ -234,7 +233,7 @@ def read_solar_data(in_path,source,weigths):
     
     return np.array([energy,flux])
 
-def get_solar_spectrum(components,bins,weigths="BS05",show=False,out=False,in_path="../data/SOLAR/",out_path="../data/OUTPUT/"):
+def get_solar_spectrum(components, bins, weigths="BS05", interpolation=(0,0), show=False, out=False, in_path="../data/SOLAR/", out_path="../data/OUTPUT/", debug=False):
     '''
     Read in the solar flux data and interpolate it to the desired energy bins.
 
@@ -242,10 +241,12 @@ def get_solar_spectrum(components,bins,weigths="BS05",show=False,out=False,in_pa
         components (list): list of components
         bins (np.array): energy bins
         weigths (str): weigths (default: "BS05")
+        interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: (0,0))
         show (bool): if True, show the plot (default: False)
         out (bool): if True, save the output (default: False)
         in_path (str): input path (default: "../data/SOLAR/")
         out_path (str): output path (default: "../data/OUTPUT/")
+        debug (bool): if True, print debug messages (default: False)
 
     Returns:
         y (np.array): interpolated flux values
@@ -276,7 +277,7 @@ def get_solar_spectrum(components,bins,weigths="BS05",show=False,out=False,in_pa
     
     return y
 
-def get_neutrino_cs(bins,path="../data/SOLAR",interpolation="extrapolate",debug=False):
+def get_neutrino_cs(bins,interpolation,path="../data/SOLAR",debug=False):
     '''
     Read in marley data and return the neutrino cc spectrum.
     '''
@@ -284,14 +285,12 @@ def get_neutrino_cs(bins,path="../data/SOLAR",interpolation="extrapolate",debug=
     data = np.loadtxt(path+"/neutrino_cc.txt")
     energies = data[:,0]
     cc = data[:,1]
-    # Expand the spectrum to the desired energy bins
-    # if interpolation == "min_max":
-    #     func = interpolate.interp1d(energies,cc,kind='cubic',bounds_error=False,fill_value=(np.min(cc),np.max(cc)))
-    if interpolation == "extrapolate":
-        func = interpolate.interp1d(energies,cc,kind='cubic',bounds_error=False,fill_value="extrapolate")
+
+    if debug: print_colored("Interpolation: %s"%interpolation,"DEBUG")
+    func = interpolate.interp1d(energies,cc,kind='cubic',bounds_error=False,fill_value=interpolation)
     return func(bins)
 
-def get_detected_solar_spectrum(bins, mass=10e9, components=[], interpolation="extrapolate", show=False, debug=False):
+def get_detected_solar_spectrum(bins, mass=10e9, components=[], interpolation=(0,0), show=False, debug=False):
     '''
     Get the detected solar spectrum.
 
@@ -317,7 +316,7 @@ def get_detected_solar_spectrum(bins, mass=10e9, components=[], interpolation="e
     # Get the solar spectrum
     # components=["pp","f17","o15","n13","b8","hep"]
     if components == []: components = ["b8","hep"]
-    flux = get_solar_spectrum(components,bins,weigths="BS05",show=False)    # Flux [1/(cm²*s*Mev)]
+    flux = get_solar_spectrum(components,bins,weigths="BS05",interpolation=interpolation,show=False)    # Flux [1/(cm²*s*Mev)]
     func = interpolate.interp1d(bins,flux,kind='cubic',bounds_error=False,fill_value=0)
     # Compute the effective flux by convolving with the cross-section and detcector prporties
     spectrum = func(bins)
@@ -349,57 +348,6 @@ def get_marleyfrac_vectors(run,frac_name):
     neutron  = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:,2]
     other    = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:,3]
     return [electron,gamma,neutron,other],["Electron","Gamma","Neutron","Other"]
-
-def get_workflow_branches(workflow="BASIC",debug=False):
-    '''
-    Get the workflow variables from the input file.
-
-    Args:
-        workflow (str): workflow (default: "BASIC")
-        debug (bool): if True, print debug messages (default: False)
-
-    Returns:
-        truth_list (list): list of truth variables
-    '''
-    if workflow == "TRUTH":
-        truth_list = ["Event","Flag","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
-        reco_list =  ["Event","Flag","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ"
-                      "TNuX","TNuY","TNuZ","TNuE",
-                      "MainVertex","MainE",
-                      "MainParentVertex","MainParentE",]
-
-    if workflow == "BASIC":
-        truth_list = ["Event","Flag","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
-        reco_list =  ["Event","Flag","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-                     "TNuE","NHits","Charge","Generator","Time","Purity","RecoZ","TPC"]
-        
-    if workflow == "CALIBRATION":
-        truth_list = ["Event","Flag","TNuE","TruthPart"]
-        reco_list =  ["Event","Flag","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP",
-                     "TNuY","TNuZ","TNuE","Generator","NHits","Charge","Time","RecoZ",
-                     "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
-                     "AdjClNHit","AdjClR","AdjClCharge","AdjClTime",
-                     "AdjClMainE","AdjClMainPDG"]
-    
-    if workflow == "VERTEXING":
-        truth_list = ["Event","Flag"]
-        reco_list =  ["Event","Flag",
-                     "TNuX","TNuY","TNuZ","TNuE",
-                     "MainVertex","MainParentVertex",
-                     "Generator","TPC","NHits","Charge","Time","RecoZ",
-                     "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0dT","Ind1dT",
-                     "AdjClCharge","AdjClTime","AdjOpFlashR","AdjOpFlashPE","AdjOpFlashTime","AdjOpFlashMaxPE",]
-        
-    if workflow == "ANALYSIS":
-        truth_list = ["Event","Flag","TruthPart","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"]
-        reco_list =  ["Event","Flag","TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-                     "TNuE","NHits","Charge","Generator","Time","Purity","RecoZ","TPC",
-                     "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
-                     "AdjClNHit","AdjClR","AdjClPur","AdjClCharge","AdjClTime",
-                     "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR"]
-        
-    if debug: print_colored("\nLoaded workflow variables: %s"%str(truth_list+reco_list),"INFO")
-    return truth_list,reco_list
 
 def compute_generator_df(reco_df, gen_labels, column_name="Generator", debug=False):
     '''
