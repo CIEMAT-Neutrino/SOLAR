@@ -1,6 +1,7 @@
 {
     "INTEGERS":[
-        "MAIN_PDG"
+        "MAIN_PDG",
+        "PRESELECTION_NHITS"
     ],
     "DOUBLES":[
         "MAX_ADJCL_R",
