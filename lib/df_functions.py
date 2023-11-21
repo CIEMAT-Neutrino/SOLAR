@@ -4,6 +4,7 @@ import itertools
 import dask.dataframe as dd
 from dask import delayed
 
+from rich import print as rprint
 from .io_functions import print_colored, get_branches2use
 
 def explode(df, columns_to_explode, debug=False):
@@ -41,7 +42,7 @@ def explode(df, columns_to_explode, debug=False):
     if debug: print_colored("Dataframe exploded!","SUCCESS")
     return result_df
 
-def npy2df(run,tree="",branches=[],debug=False):
+def npy2df(run, tree="", branches=[], debug=False):
     '''
     Function to convert the dictionary of the TTree into a pandas Dataframe.
 
@@ -68,8 +69,8 @@ def npy2df(run,tree="",branches=[],debug=False):
                 except ValueError:
                     print("ValueError: ",branch)
                     continue
-    # if debug: display(reco_df.info())
-    if debug: print(df.info())
+    
+    if debug: rprint(df.groupby(["Geometry","Version","Name"])["Event"].count())
     print_colored("Dataframe for tree %s created"%tree,"SUCCESS")
     return df
 
