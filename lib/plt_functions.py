@@ -8,7 +8,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
 
 def format_coustom_plotly(fig,title="",fontsize=16,figsize=None,ranges=(None,None),matches=("x","y"),
-    tickformat=('.s','.s'),log=(False,False),margin={"auto":True,"color":"white","margin":(0,0,0,0)},add_units=False,debug=False):
+    tickformat=('.s','.s'),log=(False,False),margin={"auto":True},add_units=False,debug=False):
     '''
     Format a plotly figure
 
@@ -28,6 +28,12 @@ def format_coustom_plotly(fig,title="",fontsize=16,figsize=None,ranges=(None,Non
     Returns:
         fig (plotly.graph_objects.Figure): plotly figure
     '''
+    default_margin = {"color":"white","margin":(0,0,0,0)}
+    if margin != None:
+        for key in default_margin.keys():
+            if key not in margin.keys():
+                margin[key] = default_margin[key]
+
     fig.update_layout(title=title,template="presentation",font=dict(size=fontsize),paper_bgcolor=margin["color"]) # font size and template
     
     fig.update_xaxes(matches=matches[0],showline=True,
