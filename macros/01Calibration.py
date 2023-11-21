@@ -8,6 +8,7 @@ import plotly.graph_objects  as go
  
 from ROOT          import TFile
 from rich.progress import track
+from rich          import print as rprint
 from lib import initialize_macro, check_macro_config, read_input_file, print_colored, make_subplots, format_coustom_plotly, get_hist2d_fit, get_hist1d_fit, compute_root_workflow
 np.seterr(divide='ignore', invalid='ignore')
 
