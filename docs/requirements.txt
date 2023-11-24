@@ -1,9 +1,9 @@
 awkward
 chart_studio
+dask
 datashader
 datashape
 hist
-icecream
 iminuit
 inquirer
 ipykernel
