@@ -18,6 +18,5 @@ particle
 plotly
 plotly_express
 rich
-root_numpy
 scipy
 uproot
