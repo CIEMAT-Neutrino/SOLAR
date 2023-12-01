@@ -34,7 +34,7 @@ run = compute_reco_energy(run,configs,debug=user_input["debug"])
 
 # Filter the data for calibration
 max_energy = 30; acc = 50
-info = read_input_file(config+'/'+configs[config],debug=False)
+info = json.load(open('../config/'+config+'/'+configs[config]+'.json', 'r'))
 total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] == 1
 geo_filter          = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]

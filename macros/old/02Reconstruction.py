@@ -29,7 +29,7 @@ run = compute_reco_workflow(run,configs,workflow="ANALYSIS",rm_branches=False,de
 
 for jdx,config in enumerate(configs):
     print("Processing %s"%config)
-    info = read_input_file(config+'/'+configs[config],debug=False)
+    info = json.load(open('../config/'+config+'/'+configs[config]+'.json', 'r'))
 
     max_energy = 30; acc = 50
     total_energy_filter = run["Reco"]["TNuE"] < max_energy*1e-3

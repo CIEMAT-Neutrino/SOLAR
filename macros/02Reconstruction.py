@@ -1,6 +1,5 @@
-import sys; sys.path.insert(0, '../'); from lib.__init__ import *
-import ROOT, root_numpy
-from ROOT import TFile, TTree
+import sys, json 
+sys.path.insert(0, '../'); from lib.__init__ import *
 np.seterr(divide='ignore', invalid='ignore')
 plt.rcParams.update({'font.size': 15})
 
@@ -10,14 +9,14 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Load analysis data and configuration
 config = user_input["config_file"].split("/")[-1].split("_config")[0]      
-info = read_input_file(user_input["config_file"],path="../config/",debug=user_input["debug"])
+info = json.load(open('../config/'+user_input['config_file']+'.json', 'r'))
 
 acc = 50
 data_filter = {"max_energy": 20, "min_energy": 0, "pre_nhits": 3, "primary": True, "neutron": True}
 true, data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="RECONSTRUCTION", debug=user_input["debug"])
 print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_idx),data["Event"].size),"SUCCESS")
 
-density = "density"
+density = ""
 fig = make_subplots(rows=2, cols=3,subplot_titles=("Electron","Gamma","Electron+Gamma"))
 fig, top_bottom_popt, top_bottom_perr = get_hist2d_fit(data["ElectronE"][filter_idx],data["TNuE"][filter_idx],acc,fig,1,1,trimm=15,threshold=0.3,spec_type="top+bottom",func_type="linear",density=density,debug=user_input["debug"])
 top_popt = top_bottom_popt[:2]; bottom_popt = top_bottom_popt[2:]
@@ -52,11 +51,11 @@ fig.update_layout(showlegend=False)
 if not os.path.exists("../images/calibration/%s_calibration/"%(config)): os.makedirs("../images/calibration/%s_calibration/"%(config))
 fig.write_image("../images/calibration/%s_calibration/%s_reco_energy.png"%(config,config), width=2400, height=1080)
 print_colored("-> Saved reco energy plot to ../images/calibration/%s_calibration/%s_reco_energy.png"%(config,config),"SUCCESS")
-if user_input["show"]: fig.show()
 
-# Save the true energy fit parameters to a txt file
+# Save as json file
 if not os.path.exists("../config/"+config+"/"+config+"_calib/"): os.makedirs("../config/"+config+"/"+config+"_calib/")
-with open("../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.txt",'w') as f:
-    f.write("ENERGY_AMP: %f\n"%bottom_popt[0])
-    f.write("INTERSECTION: %f\n"%bottom_popt[1])
+with open("../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.json",'w') as f:
+    json.dump({"ENERGY_AMP": bottom_popt[0], "INTERSECTION": bottom_popt[1]}, f)
+
 print_colored("-> Saved reco energy fit parameters to ../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.txt","SUCCESS")
+if user_input["show"]: fig.show()

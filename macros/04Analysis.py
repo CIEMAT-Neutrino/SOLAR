@@ -1,6 +1,6 @@
-import sys
+import sys, json
 sys.path.insert(0, '../')
-import ROOT, root_numpy
+import ROOT
 
 import numpy          as np
 import pandas         as pd
@@ -8,7 +8,7 @@ import plotly.express as px
 
 from ROOT import TFile, TTree
 
-from lib import compute_solarnuana_filters, compute_solar_spectrum, get_truth_count, get_gen_label, initialize_macro, check_macro_config, read_input_file, print_colored, make_subplots, format_coustom_plotly, compute_root_workflow, explode, get_simple_name, get_bkg_color
+from lib import compute_solarnuana_filters, compute_solar_spectrum, get_truth_count, get_gen_label, initialize_macro, check_macro_config, print_colored, make_subplots, format_coustom_plotly, compute_root_workflow, explode, get_simple_name, get_bkg_color
 np.seterr(divide='ignore', invalid='ignore')
 
 # Load macro configuration
@@ -17,9 +17,8 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Format input file names and load analysis data
 config = user_input["config_file"].split("/")[-1].split("_config")[0]    
-info = read_input_file(user_input["config_file"],path="../config/",debug=user_input["debug"])
-
-analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
+info = json.load(open('../config/'+user_input['config_file']+'.json', 'r'))
+analysis_info = json.load(open('../import/analysis.json', 'r'))
 energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
 energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
 bin_width = energy_edges[1]-energy_edges[0]
@@ -41,19 +40,20 @@ for jdx,name in enumerate(user_input["root_file"]):
     print("\n- Generators found for",name,":",gen_list,"\n")
     # Get the total number of events for this file
     if "wbkg" not in user_input["root_file"]:
-        int_time = count_truth_df[name]*info["TIMEWINDOW"][0]
+        int_time = count_truth_df[name]*info["TIMEWINDOW"]
         print("Total number of events for",name,"is",str(count_truth_df[name]))
     else: 
-        int_time = count_truth_df["Marley"].values[0]*info["TIMEWINDOW"][0]
+        print(count_truth_df)
+        int_time = count_truth_df["Marley"].values[0]*info["TIMEWINDOW"]
         print("Total number of events for",name,"is",str(count_truth_df["Marley"]))
     # Start generator loop
     for kdx,gen in enumerate(gen_list):
         filters = compute_solarnuana_filters(run,{config:config+'_config'},config,name,gen,filter_list=["Primary"],
             params={"FIDUTIAL_FACTOR":0.075,"MIN_CL_E":5,"MAX_CL_E":20},cummulative=True,debug=False)
 
-        gen_label = get_gen_label({config:config+'_config'})[(info["GEOMETRY"][0],info["VERSION"][0],gen)]
+        gen_label = get_gen_label({config:config+'_config'})[(info["GEOMETRY"],info["VERSION"],gen)]
         this_dict_array,df_dict[config][gen_label] = compute_solar_spectrum(run,info,{config:config+'_config'},config,{config:user_input["root_file"]},name,
-            gen,energy_edges,int_time,filters,truth_filter,reco_filter,input_dm2="DEFAULT",input_sin13="DEFAULT",input_sin12="DEFAULT",auto=False,save=True,debug=True)
+            gen,energy_edges,int_time,filters,truth_filter,reco_filter,auto=False,save=True,debug=True)
                 
         dict_array = dict_array + this_dict_array
 

@@ -10,9 +10,10 @@ user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Format input file names and load analysis data
 config = user_input["config_file"].split("/")[-1].split("_config")[0]    
-info = read_input_file(user_input["config_file"],path="../config/",debug=user_input["debug"])
+info = json.load(open('../config/'+user_input['config_file']+'.json', 'r'))
 
-analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
+# analysis_info = read_input_file("analysis",INTEGERS=["RECO_ENERGY_RANGE","RECO_ENERGY_BINS","NADIR_RANGE","NADIR_BINS"],debug=False)
+analysis_info = json.load(open('../import/analysis.json', 'r'))
 energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
 energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
 bin_width = energy_edges[1]-energy_edges[0]
@@ -23,6 +24,7 @@ eff_flux_b8 = get_detected_solar_spectrum(bins=energy_centers,components=["b8"])
 eff_flux_hep = get_detected_solar_spectrum(bins=energy_centers,components=["hep"])
 
 list_hist = []
+output_dict = {}
 data_filter = {"max_energy": 30, "min_energy": 0, "pre_nhits": 3, "primary": True, "neutron": True}
 true, data, filter_idx = compute_root_workflow(user_input, info, data_filter, workflow="SMEARING", debug=user_input["debug"])
 print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_idx),data["Event"].size),"SUCCESS")
@@ -30,7 +32,7 @@ print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_id
 for idx,energy_bin in enumerate(energy_centers):
     neutrino_energy_filter = (data["TNuE"] > (energy_bin - bin_width/2))*(data["TNuE"] < (energy_bin + bin_width/2))                         # Filtering genereted neutrinos in 1GeV energy bin
     filter = neutrino_energy_filter
-    hist, bin_edges = np.histogram(data[info["DEFAULT_ANALYSIS_ENERGY"][0]][filter],bins=energy_edges)
+    hist, bin_edges = np.histogram(data[info["DEFAULT_ANALYSIS_ENERGY"]][filter],bins=energy_edges)
     hist = hist/np.sum(hist)
     hist = np.nan_to_num(hist,0)
     flux = hist*eff_flux[idx]
@@ -38,8 +40,8 @@ for idx,energy_bin in enumerate(energy_centers):
     fluxhep = hist*eff_flux_hep[idx]
     
     list_hist.append(
-        {"Geometry":info["GEOMETRY"][0],
-            "Version": info["VERSION"][0],
+        {"Geometry":info["GEOMETRY"],
+            "Version": info["VERSION"],
             "Name": user_input["root_file"][0],
             "Generator": 1,
             "TrueEnergy":energy_bin,
@@ -52,7 +54,7 @@ for idx,energy_bin in enumerate(energy_centers):
     )
 
     fig = make_subplots(rows=1, cols=1,subplot_titles=("Charge Calibration"))
-    fig, popt, perr = get_hist1d_fit(data[info["DEFAULT_ANALYSIS_ENERGY"][0]][filter],energy_edges,fig,1,1,func_type="gauss",debug=user_input["debug"])
+    fig, popt, perr = get_hist1d_fit(data[info["DEFAULT_ANALYSIS_ENERGY"]][filter],energy_edges,fig,1,1,func_type="gauss",debug=user_input["debug"])
     if len(popt) == 0: popt = [0,0,0]; perr = [0,0,0]
     fig.update_layout(coloraxis=dict(colorscale="Turbo",colorbar=dict(title="Counts")),showlegend=False,
         title="Calibration",
@@ -65,10 +67,14 @@ for idx,energy_bin in enumerate(energy_centers):
     fig.write_image("../images/calibration/%s_calibration/%s_calibration_mono/%s_calibration_%.2f.png"%(config,config,config,energy_bin), width=2400, height=1080)
     print_colored("-> Saved images to ../images/calibration/%s_calibration/%s_calibration_mono/%s_calibration_%.2f.png"%(config,config,config,energy_bin),"SUCCESS")
     
-    with open("../config/"+config+"/"+config+"_calib/"+config+"_{:.2f}".format(energy_bin)+"MeV_energy_calibration.txt",'w') as f:
-        f.write("ENERGY: %f\n"%(energy_bin))
-        f.write("SIGMA: %f\n"%popt[2])
-    plt.close()
+    # with open("../config/"+config+"/"+config+"_calib/"+config+"_{:.2f}".format(energy_bin)+"MeV_energy_calibration.txt",'w') as f:
+    #     f.write("ENERGY: %f\n"%(energy_bin))
+    #     f.write("SIGMA: %f\n"%popt[2])
+    # plt.close()
+    output_dict["{:.2f}".format(energy_bin)] = {"ENERGY":energy_bin,"SIGMA":popt[2],"SIGMA_ERR":perr[2]}
+
+with open("../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.json",'w') as f: json.dump(output_dict, f)
+print_colored("-> Saved reco energy fit parameters to ../config/"+config+"/"+config+"_calib/"+config+"_energy_calibration.json","SUCCESS")
     
 df = pd.DataFrame(list_hist)
 smearing_df = df.drop(columns=["Generator","Name"])

@@ -12,7 +12,7 @@ user_input = initialize_macro("04Computing",["config_file","root_file","rewrite"
 user_input = check_macro_config(user_input,debug=user_input["debug"])
 
 # Compute data: root -> numpy #
-info = read_input_file(user_input["config_file"],path="../config/",debug=False)
+info = json.load(open('../config/'+config+'/'+configs[config]+'.json', 'r'))
 config = user_input["config_file"].split("/")[-1].split("_config")[0]    
 params = get_param_dict(user_input["config_file"],in_params={},debug=user_input["debug"])
 
