@@ -4,7 +4,7 @@
 
 # Description: Setup the environment for the project
 # source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.22.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
-source /scr/neutrinos/rodrigoa/x86_64-centos7-gcc48-opt/bin/thisroot.sh
+# source /scr/neutrinos/rodrigoa/x86_64-centos7-gcc48-opt/bin/thisroot.sh
 
 # Mount the key directories (data, notebooks, sensitivity) to the right path in the repository
 if [ -L data ]; then
