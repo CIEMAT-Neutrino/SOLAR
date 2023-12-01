@@ -1,6 +1,4 @@
-import os
-import glob
-import uproot
+import os, glob, uproot, json
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -10,7 +8,7 @@ from scipy.stats import chi2
 from scipy import interpolate
 from itertools import product
 
-from lib.io_functions import print_colored, read_input_file
+from lib.io_functions import print_colored
 from lib.plt_functions import format_coustom_plotly, unicode
 
 def get_nadir_angle(path:str="../data/OSCILLATION/", show:bool=False, debug:bool=False):
@@ -85,19 +83,22 @@ def get_oscillation_datafiles(dm2=None, sin13=None, sin12=None, path:str="../dat
                 dm2, sin13, sin12 = None, None, None
         
         elif dm2 == None and sin13 == None and sin12 == None:
-            analysis_info = read_input_file("analysis",debug=debug)
+            analysis_info = json.load(open('../import/analysis.json', 'r'))
             found_dm2, found_sin13, found_sin12 = analysis_info["SOLAR_DM2"], analysis_info["SIN13"], analysis_info["SIN12"]
 
         else:
-            print_colored("ERROR: oscillation parameters must be floats or lists!","FAIL")
+            print_colored("ERROR: oscillation parameters must be floats or lists!","ERROR")
             raise TypeError
-        
+
     if type(auto) != bool:
         print_colored("ERROR: auto must be a boolean!","FAIL")
         raise TypeError
     
     if debug and type(found_dm2) == list: print_colored("Found %d oscillation files!"%len(found_dm2),"INFO")
-    if debug and type(found_dm2) == float: print_colored("Found 1 oscillation file!","INFO")
+    if debug and type(found_dm2) == float: 
+        print_colored("Found 1 oscillation file!","INFO")
+        found_dm2, found_sin13, found_sin12 = [found_dm2], [found_sin13], [found_sin12]
+    
     return (found_dm2,found_sin13,found_sin12)
 
 def get_oscillation_map(path="../data/OSCILLATION/", dm2=None, sin13=None, sin12=None, ext="root", auto=True, rebin=True, output="df", save=False, debug=False):
@@ -130,7 +131,7 @@ def get_oscillation_map(path="../data/OSCILLATION/", dm2=None, sin13=None, sin12
         else: subfolder = 'raw'
 
     dm2,sin13,sin12 = get_oscillation_datafiles(dm2,sin13,sin12,path=path+ext+'/'+subfolder+'/',ext=ext,auto=auto,debug=debug)
-    analysis_info = read_input_file("analysis",debug=debug)
+    analysis_info = json.load(open('../import/analysis.json', 'r'))
 
     root_nadir_edges = np.linspace(analysis_info["ROOT_NADIR_RANGE"][0],analysis_info["ROOT_NADIR_RANGE"][1],analysis_info["ROOT_NADIR_BINS"]+1)
     root_nadir_centers = (root_nadir_edges[1:]+root_nadir_edges[:-1])/2
@@ -243,7 +244,7 @@ def rebin_df(df,save_path="../data/pkl/rebin/df.pkl",xarray=[],yarray=[],show=Fa
     Returns:
         small_df (pandas.DataFrame): Rebinning result.
     '''
-    analysis_info = read_input_file("analysis",debug=False)
+    analysis_info = json.load(open('../import/analysis.json', 'r'))
     energy_edges = np.linspace(analysis_info["RECO_ENERGY_RANGE"][0],analysis_info["RECO_ENERGY_RANGE"][1],analysis_info["RECO_ENERGY_BINS"]+1)
     energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
     

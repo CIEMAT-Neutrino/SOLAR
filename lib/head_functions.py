@@ -1,4 +1,4 @@
-import sys, inquirer, os
+import sys, inquirer, os, json
 import numpy as np
 from rich import print as rprint
 
@@ -116,7 +116,7 @@ def select_input_file(user_input, debug=False):
         q1 = [ inquirer.List("config_file", message="Please select input file", choices=folder_names, default="hd") ]
         input_folder = inquirer.prompt(q1)["config_file"]
         # Check if config file exists in the selected folder
-        if not os.path.exists('../config/'+input_folder+'/'+input_folder+'_config.txt'):
+        if not os.path.exists('../config/'+input_folder+'/'+input_folder+'_config.json'):
             print_colored("WARNING: No config file found in folder %s"%input_folder,"WARNING")
             file_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/'+input_folder+'/')]
             q2 = [ inquirer.List("config_file", message="Please select input file", choices=file_names, default="hd") ]
@@ -139,9 +139,9 @@ def use_default_input(user_input, default_dict, debug=False):
     Returns:
         new_user_input (dict): Dictionary with the updated user input.
     '''
-    from .io_functions import check_key, print_colored, read_input_file
+    from .io_functions import check_key, print_colored
     
-    info = read_input_file(user_input["config_file"])
+    info = json.open(open('../config/'+user_input["config_file"]))
     new_user_input = user_input.copy()
     return new_user_input
 

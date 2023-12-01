@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import numpy as np
 import itertools
@@ -119,6 +120,36 @@ def merge_df(df1, df2, label1, label2, debug=False):
     df1["Label"] = label1 # Add a column to indicate the origin of the event
     df2["Label"] = label2 # Add a column to indicate the origin of the event
     df = pd.concat([df1,df2], ignore_index=True) # Merge the two dataframes
-    if debug: print_colored(" --- New dataframe from %s, %s created"%(label1,label2), "DEBUG")
     
+    if debug: print_colored(" --- New dataframe from %s, %s created"%(label1,label2), "DEBUG")
     return df
+
+def reorder_df(df,info, bkg_dict, color_dict, debug=False):
+    '''
+    Reorder the dataframe according to the background dictionary.
+
+    Args:
+        df (pd.DataFrame): dataframe to reorder
+        info (dict): dictionary with the information of the input file
+        bkg_dict (dict): dictionary with the background names
+        color_dict (dict): dictionary with the colors of the backgrounds
+        debug (bool): if True, the debug mode is activated (default: False)
+
+    Returns:
+        df (pd.DataFrame): reordered dataframe
+        color_list (list): list of the colors of the backgrounds
+    '''
+
+    f = json.load(open("../import/generator_order.json", 'r'))
+    bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
+    bkg_order = f[info["GEOMETRY"]][info["VERSION"]].values()
+
+    # Reorder bkg_list according to bkg_order
+    order = [x for _,x in sorted(zip(bkg_order,bkg_list))][2:]
+    df = df[order]
+    color_list = []
+    for bkg in order:
+        color_list.append(color_dict[list(bkg_dict.values()).index(bkg)])
+    
+    if debug: print_colored("Reordered dataframe with columns: %s"%order,"INFO")
+    return df,color_list
