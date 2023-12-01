@@ -1,0 +1,110 @@
+{
+    "BASIC":{
+        "TRUTH": [
+            "Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuE","TNuX","TNuY","TNuZ",
+            "Primary","NHits","Charge","Generator","Time","Purity","RecoY","RecoZ","TPC",
+            "AdjClCharge"
+        ]
+    },
+    
+    "TRUTH": {
+        "TRUTH": [
+            "Event","Flag",
+            "TruthPart","TNuE","TNuX","TNuY","TNuZ",
+            "TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
+            "TMarleyXDepList","TMarleyYDepList","TMarleyZDepList",
+            "HitNum","ClusterNum"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuX","TNuY","TNuZ","Purity","TNuE",
+            "Generator","MainVertex","MainE",
+            "MainParentVertex","MainParentE",
+            "Primary","Charge","NHits","RecoY","RecoZ",
+            "AdjClCharge","AdjClR","AdjClTime","AdjClGen"
+        ]
+    },
+    
+    "CALIBRATION":{
+        "TRUTH": [
+            "Event","Flag",
+            "TNuE","TruthPart"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP",
+            "TNuY","TNuZ","TNuE","Generator","NHits","Charge","Time","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
+            "AdjClNHit","AdjClR","AdjClCharge","AdjClTime",
+            "AdjClMainE","AdjClMainPDG"
+        ]
+    },
+  
+    "VERTEXING":{
+        "TRUTH": [
+            "Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
+            "TMarleyXDepList","TMarleyYDepList","TMarleyZDepList"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
+            "MainPDG","MainVertex","MainParentVertex",
+            "Primary","Generator","TPC","NHits","Charge","Time","RecoY","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0dT","Ind1dT",
+            "AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ","AdjClMainPDG",
+            "AdjOpFlashR","AdjOpFlashPE","AdjOpFlashTime","AdjOpFlashMaxPE"
+        ]
+    },
+
+    "ADJCL":{
+        "TRUTH": [
+            "Event","Flag","TruthPart",
+            "TNuE","TNuX","TNuY","TNuZ"
+        ],
+        "RECO": [
+            "Event","Flag","TruthPart",
+            "TNuX","TNuY","TNuZ","TNuE",
+            "MainVertex",
+            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
+            "AdjClMainPDG","AdjClGen","AdjClNHit","AdjClR","AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ"
+        ]
+    },
+
+    "ADJFLASH":{
+        "TRUTH": [
+            "Event","Flag",
+            "TNuE","TNuX","TNuY","TNuZ"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "TNuX","TNuY","TNuZ","TNuE",
+            "MainVertex","MainParentVertex",
+            "Generator","TPC","NHits","Charge","Time","RecoZ",
+            "AdjClR","AdjClCharge","AdjClTime",
+            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR","AdjOpFlashPur"
+        ]
+    },
+    
+    "ANALYSIS": {
+        "TRUTH": [
+            "Event","Flag",
+            "TruthPart","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"
+        ],
+        "RECO": [
+            "Event","Flag",
+            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
+            "TNuE","NHits","Charge","Generator","Time","Purity","RecoZ","TPC",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
+            "AdjClNHit","AdjClR","AdjClPur","AdjClCharge","AdjClTime",
+            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR"
+        ]
+    }
+}
