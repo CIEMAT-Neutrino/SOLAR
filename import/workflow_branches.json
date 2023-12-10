@@ -40,8 +40,9 @@
         "RECO": [
             "Event","Flag",
             "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP",
-            "TNuY","TNuZ","TNuE","Generator","NHits","Charge","Time","RecoZ",
-            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
+            "TNuY","TNuZ","TNuE",
+            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
+            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0Charge","Ind1Charge","Ind0dT","Ind1dT",
             "AdjClNHit","AdjClR","AdjClCharge","AdjClTime",
             "AdjClMainE","AdjClMainPDG"
         ]
@@ -58,8 +59,8 @@
             "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
             "MainPDG","MainVertex","MainParentVertex",
             "Primary","Generator","TPC","NHits","Charge","Time","RecoY","RecoZ",
-            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0dT","Ind1dT",
-            "AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ","AdjClMainPDG",
+            "AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ","AdjClMainPDG","AdjClGen",
+            "AdjClMainX","AdjClMainY","AdjClMainZ",
             "AdjOpFlashR","AdjOpFlashPE","AdjOpFlashTime","AdjOpFlashMaxPE"
         ]
     },
@@ -87,7 +88,7 @@
             "Event","Flag",
             "TNuX","TNuY","TNuZ","TNuE",
             "MainVertex","MainParentVertex",
-            "Generator","TPC","NHits","Charge","Time","RecoZ",
+            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
             "AdjClR","AdjClCharge","AdjClTime",
             "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR","AdjOpFlashPur"
         ]
@@ -101,7 +102,7 @@
         "RECO": [
             "Event","Flag",
             "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-            "TNuE","NHits","Charge","Generator","Time","Purity","RecoZ","TPC",
+            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
             "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
             "AdjClNHit","AdjClR","AdjClPur","AdjClCharge","AdjClTime",
             "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR"

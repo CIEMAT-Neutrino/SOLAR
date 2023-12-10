@@ -21,7 +21,7 @@
     "DEFAULT_ADJCLCHARGE_VARIABLE": "AdjCharge",
     "MIN_BKG_R": 20,
     "MAX_BKG_CHARGE": 75,
-    "DEFAULT_ANALYSIS_ENERGY": "TotalEnergy",
+    "DEFAULT_ANALYSIS_ENERGY": "RecoEnergy",
     "COMPUTE_MATCHING": true,
     "MAIN_PDG": 22,
     "MAX_ADJCL_E": 30,

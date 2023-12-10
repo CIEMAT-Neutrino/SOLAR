@@ -1,4 +1,14 @@
-{
+{   
+    "CONFIG": {
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+
     "TRUE": {
         "INTEGERS": {
             "Event": 1,
@@ -8,6 +18,7 @@
         "STRINGS": {},
         "BOOLS": {}
     },
+    
     "RECO": {
         "INTEGERS": {
             "Event": 1,
@@ -19,7 +30,7 @@
         },
 
         "DOUBLES": {
-            "TNuE":  1e3,
+            "TNuE":  1,
             "ElectronE": 1,
             "GammaE": 1,
             "NeutronP": 0,  
