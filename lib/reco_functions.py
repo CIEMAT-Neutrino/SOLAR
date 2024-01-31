@@ -34,6 +34,9 @@ def compute_reco_workflow(
         run = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
+        run = compute_particle_energies(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
 
     if workflow == "ADJCL":
         run = compute_adjcl_basics(
@@ -97,6 +100,16 @@ def compute_reco_workflow(
         )
 
     rprint("[green]Reco workflow \t-> Done![/green]")
+    return run
+
+
+def compute_main_variables(run, configs, params={}, rm_branches=False, debug=False):
+    """
+    Compute the main (backtracked) variables of main particle correspondong to the cluster in the run.
+    """
+    run["Reco"]["MainX"] = run["Reco"]["MainVertex"][:, 0]
+    run["Reco"]["MainY"] = run["Reco"]["MainVertex"][:, 1]
+    run["Reco"]["MainZ"] = run["Reco"]["MainVertex"][:, 2]
     return run
 
 
@@ -173,6 +186,86 @@ def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=Fa
 
     print_colored(
         "True efficiency computation \t-> Done! (%s)" % new_branches, "SUCCESS"
+    )
+    run = remove_branches(run, rm_branches, [], debug=debug)
+    return run
+
+
+def compute_particle_energies(run, configs, params={}, rm_branches=False, debug=False):
+    """
+    This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
+    """
+    new_branches = ["ElectronE", "GammaE", "NeutronE", "OtherE"]
+    run["Truth"][new_branches[0]] = np.zeros(len(run["Truth"]["Event"]), dtype=float)
+    run["Truth"][new_branches[1]] = np.zeros(len(run["Truth"]["Event"]), dtype=float)
+    run["Truth"][new_branches[2]] = np.zeros(len(run["Truth"]["Event"]), dtype=float)
+    run["Truth"][new_branches[3]] = np.zeros(len(run["Truth"]["Event"]), dtype=float)
+    run["Reco"][new_branches[0]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+    run["Reco"][new_branches[1]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+    run["Reco"][new_branches[2]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+    run["Reco"][new_branches[3]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+
+    for config in configs:
+        info = json.load(
+            open("../config/" + config + "/" + configs[config] + ".json", "r")
+        )
+        idx = np.where(
+            (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
+        )
+
+        jdx = np.where(
+            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+        )
+
+        run["Truth"]["ElectronE"][idx] = np.sum(
+            run["Truth"]["TMarleyE"][idx]
+            * np.array(run["Truth"]["TMarleyPDG"][idx] == 11),
+            axis=1,
+        )
+        run["Reco"]["ElectronE"][jdx] = np.sum(
+            run["Reco"]["TMarleyE"][jdx]
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] == 11),
+            axis=1,
+        )
+        run["Truth"]["GammaE"][idx] = np.sum(
+            run["Truth"]["TMarleyE"][idx]
+            * np.array(run["Truth"]["TMarleyPDG"][idx] == 22),
+            axis=1,
+        )
+        run["Reco"]["GammaE"][jdx] = np.sum(
+            run["Reco"]["TMarleyE"][jdx]
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] == 22),
+            axis=1,
+        )
+        run["Truth"]["NeutronE"][idx] = np.sum(
+            run["Truth"]["TMarleyE"][idx]
+            * np.array(run["Truth"]["TMarleyPDG"][idx] == 2112),
+            axis=1,
+        )
+        run["Reco"]["NeutronE"][jdx] = np.sum(
+            run["Reco"]["TMarleyE"][jdx]
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] == 2112),
+            axis=1,
+        )
+        run["Truth"]["OtherE"][idx] = np.sum(
+            run["Truth"]["TMarleyE"][idx]
+            * np.array(run["Truth"]["TMarleyPDG"][idx] != 11)
+            * np.array(run["Truth"]["TMarleyPDG"][idx] != 22)
+            * np.array(run["Truth"]["TMarleyPDG"][idx] != 2112),
+            axis=1,
+        )
+        run["Reco"]["OtherE"][jdx] = np.sum(
+            run["Reco"]["TMarleyE"][jdx]
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] != 11)
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] != 22)
+            * np.array(run["Reco"]["TMarleyPDG"][jdx] != 2112),
+            axis=1,
+        )
+
+    print_colored(
+        "Particle energy combination \t-> Done! (%s)" % new_branches, "SUCCESS"
     )
     run = remove_branches(run, rm_branches, [], debug=debug)
     return run
@@ -305,8 +398,10 @@ def compute_opflash_matching(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        if len(run["Reco"]["AdjClTime"][idx][0]) == 0:
+        # If run["Reco"]["AdjClTime"][idx][0] empty skip the config:
+        if run["Reco"]["AdjOpFlashTime"][idx].sum() == 0:
             continue
+
         # Get values from the configuration file or use the ones given as input
         params = get_param_dict(config + "/" + configs[config], params, debug=debug)
 
@@ -725,9 +820,7 @@ def compute_adjcl_advanced(run, configs, params={}, rm_branches=False, debug=Fal
     return run
 
 
-def compute_filtered_run(
-    run, configs, params: dict = {}, rm_branches=False, debug=False
-):
+def compute_filtered_run(run, configs, params: dict = {}, debug=False):
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
     """
@@ -738,19 +831,24 @@ def compute_filtered_run(
     # Find unique list of tree keys in the params dictionary
     tree_keys = np.unique([key[0] for key in params.keys()])
     for tree in tree_keys:
+        branch_list = list(run[tree].keys())
         idx = np.ones(len(run[tree]["Event"]), dtype=bool)
         for param in params:
             if param[0] != tree:
+                rprint(f"[cyan]INFO: Tree {param[0]} not found in the run![/cyan]")
                 continue
+
             if type(param) != tuple or len(param) != 2:
-                print_colored("Filter must be a tuple or list of length 2!", "ERROR")
+                # print_colored("Filter must be a tuple or list of length 2!", "ERROR")
+                rprint(f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
                 return run
             if type(params[param]) != tuple or len(params[param]) != 2:
-                print_colored("Filter must be a tuple or list of length 2!", "ERROR")
+                # print_colored("Filter must be a tuple or list of length 2!", "ERROR")
+                rprint(f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
                 return run
 
             if param[1] not in run[param[0]].keys():
-                print_colored("Branch %s not found in the run!", "ERROR")
+                rprint(f"[red]ERROR: Branch {param[1]} not found in the run![/red]")
                 return run
 
             if params[param][0] == "bigger":
@@ -762,16 +860,21 @@ def compute_filtered_run(
             elif params[param][0] == "different":
                 idx = idx & (run[param[0]][param[1]] != params[param][1])
             else:
-                print_colored("Filter not recognized!", "ERROR")
+                rprint(f"[red]ERROR: Filter not recognized![/red]")
 
             rprint(
-                "[yellow]Filtering %s %s %s resulting in %f[/yellow]"
-                %(param[1], params[param][0], params[param][1], 100*np.sum(idx)/len(idx))
+                "[yellow]Filtering %s %s %s resulting in %i[/yellow]"
+                % (
+                    param[1],
+                    params[param][0],
+                    params[param][1],
+                    np.sum(idx),
+                )
             )
-        for branch in run[tree].keys():
-            # Idx is list of bools, so we can use it to filter the branches. Remove the entries where idx is False
-            aux = filter_nb(np.asarray(run[tree][branch]), np.asarray(idx))
-            run[tree][branch] = aux
+        jdx = np.where(idx == True)
+        for branch in branch_list:
+            run[tree][branch] = np.asarray(run[tree][branch])[jdx]
+
     debug_str = "DEBUG:\n[magenta]"
     rprint("[green]Filtered run \t\t\t-> Done![/green]")
     return run
@@ -782,18 +885,20 @@ def get_param_dict(config_file, in_params, debug=False):
     Get the parameters for the reco workflow from the input files.
     """
     params = json.load(open("../config/" + config_file + ".json", "r"))
+    terminal_print = ""
     for param in params.keys():
         try:
             params[param] = in_params[param]
-            print_colored(
-                "-> Using %s: %s from the input dictionary" % (param, in_params[param]),
-                "WARNING",
+            terminal_print = (
+                terminal_print
+                + "-> Using %s: %s from the input dictionary\n"
+                % (param, in_params[param])
             )
         except KeyError:
             pass
-
     if debug:
-        rprint(params)
+        if terminal_print != "":
+            rprint(terminal_print)
     return params
 
 
@@ -859,7 +964,11 @@ def compute_solarnuana_filters(
             filters, labels = add_filter(
                 filters, labels, (primary_filter), "Primary", cummulative, debug
             )
-
+        if this_filter == "NHits":
+            hit_filter = run["Reco"]["NHits"] >= params["PRESELECTION_NHITS"]
+            filters, labels = add_filter(
+                filters, labels, (hit_filter), "NHits", cummulative, debug
+            )
         if this_filter == "OpFlash":
             flash_filter = run["Reco"]["FlashMatched"] == True
             filters, labels = add_filter(
@@ -1054,6 +1163,7 @@ def generate_index(
 @numba.njit
 def count_occurrences(row, length, debug=False):
     return np.bincount(row, minlength=length)
+
 
 def filter_nb(arr, cond):
     return np.fromiter((arr[i] for i in range(len(arr)) if cond[i]), dtype=arr.dtype)
