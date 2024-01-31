@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
+from plotly.subplots import make_subplots
 from scipy import interpolate
 from particle import Particle
-from itertools import product
 from rich.progress import track
 from scipy import constants as const
 from rich import print as rprint
@@ -20,7 +20,12 @@ from lib.io_functions import (
     get_gen_label,
     get_gen_weights,
 )
-from lib.osc_functions import get_nadir_angle, get_oscillation_datafiles
+from lib.osc_functions import (
+    get_nadir_angle,
+    get_oscillation_datafiles,
+    get_oscillation_map,
+)
+from lib.plt_functions import format_coustom_plotly, unicode
 
 
 def compute_solar_spectrum(
@@ -78,7 +83,7 @@ def compute_solar_spectrum(
     gen_label_dict = get_gen_label(configs)
     gen_label = gen_label_dict[(info["GEOMETRY"], info["VERSION"], gen)]
     gen_weigths_dict = get_gen_weights(configs, names)
-    nadir = get_nadir_angle(show=False, debug=debug)
+    nadir = get_nadir_angle(show=False, debug=False)
 
     if factor == "SOLAR":
         factor = 40 * 60 * 60 * 24 * 365
@@ -90,7 +95,8 @@ def compute_solar_spectrum(
     )
     for ldx, this_filter in enumerate(filters[0]):
         if debug:
-            print_colored("Filtering: %s" % (filters[1][ldx]), "DEBUG")
+            rprint("Filtering: %s" % (filters[1][ldx]))
+
         if gen == 1:
             int_time = 1
             t_hist, bin_edges = np.histogram(
@@ -122,6 +128,7 @@ def compute_solar_spectrum(
                 dm2=this_dm2,
                 sin13=this_sin13,
                 sin12=this_sin12,
+                path="../data/OSCILLATION/pkl/rebin/",
                 ext="pkl",
                 auto=this_auto,
                 debug=debug,
@@ -194,7 +201,12 @@ def compute_solar_spectrum(
             efficient_flux = {A: B for A, B in zip(energy_centers, r_hist / t_hist)}
             raised_activity = gen_weigths_dict[(info["GEOMETRY"], name)]
             weight = np.ones(len(r_hist)) / (raised_activity * int_time)
-            # if debug: print_colored("Weight for %s with filter %s: %.2e"%(name,filters[1][ldx],raised_activity),color="INFO")
+            if debug:
+                print_colored(
+                    "Weight for %s with filter %s: %.2e"
+                    % (name, filters[1][ldx], raised_activity),
+                    color="INFO",
+                )
             r_hist = r_hist * info["FULL_DETECTOR_FACTOR"] * factor * weight
             total_counts = r_hist.tolist()
 
@@ -317,7 +329,7 @@ def get_pdg_color(pdg_list, debug=False):
         return color_dict
 
 
-def get_solar_weigths(weights="BS05"):
+def get_solar_weigths(weights="B16-GS98"):
     """
     Get the solar flux weights.
     """
@@ -333,17 +345,43 @@ def get_solar_weigths(weights="BS05"):
             "hep": 7.930e-07,
         }  # Flux amp of each component
         return weights_dict
+
+    if weights == "B16-GS98":
+        weights_dict = {
+            "pp": 5.98e00,
+            "pep": 1.44e-10,
+            "b7": 4.93e-10,
+            "n13": 2.78e-02,
+            "o15": 2.05e-02,
+            "f17": 5.29e-04,
+            "b8": 5.46e-04,
+            "hep": 7.98e-07,
+        }  # Flux amp of each component
+        return weights_dict
+
+    # if weights == "B16-AGSS09met":
+    #     weights_dict = {
+    #         "pp": 5.991e00,
+    #         "pep": 1e-10,
+    #         "b7": 1e-10,
+    #         "n13": 3.066e-02,
+    #         "o15": 2.331e-02,
+    #         "f17": 5.836e-04,
+    #         "b8": 5.691e-04,
+    #         "hep": 7.930e-07,
+    #     }  # Flux amp of each component
+    #     return weights_dict
     else:
         print("ERROR: Weights not defined, using BS05!")
         weights_dict = {
-            "pp": 5.991e00,
-            "pep": 1e-10,
-            "b7": 1e-10,
-            "n13": 3.066e-02,
-            "o15": 2.331e-02,
-            "f17": 5.836e-04,
-            "b8": 5.691e-04,
-            "hep": 7.930e-07,
+            "pp": 6.03e00,
+            "pep": 1.46e-10,
+            "b7": 4.50e-10,
+            "n13": 2.04e-02,
+            "o15": 1.44e-02,
+            "f17": 3.26e-04,
+            "b8": 4.50e-04,
+            "hep": 8.25e-07,
         }  # Flux amp of each component
         return weights_dict
 
@@ -380,14 +418,10 @@ def read_solar_data(in_path, source, weigths):
 
 
 def get_solar_spectrum(
-    components,
+    components: list,
     bins,
-    weigths="BS05",
-    interpolation=(0, 0),
-    show=False,
-    out=False,
+    weigths="B16-GS98",
     in_path="../data/SOLAR/",
-    out_path="../data/OUTPUT/",
     debug=False,
 ):
     """
@@ -398,23 +432,16 @@ def get_solar_spectrum(
         bins (np.array): energy bins
         weigths (str): weigths (default: "BS05")
         interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: (0,0))
-        show (bool): if True, show the plot (default: False)
-        out (bool): if True, save the output (default: False)
         in_path (str): input path (default: "../data/SOLAR/")
-        out_path (str): output path (default: "../data/OUTPUT/")
         debug (bool): if True, print debug messages (default: False)
 
     Returns:
         y (np.array): interpolated flux values
     """
 
-    if out:
-        output = open(out_path + "neutrino_flux.txt", "w")  # Output text file.
     x = bins
     y = np.zeros(len(x))  # Array that will host the interpolated flux values.
 
-    fig = go.Figure()
-    colors = px.colors.qualitative.Plotly
     for idx, source in enumerate(components):
         array = read_solar_data(in_path, source, weigths)
         if source != "pep" and source != "b7":
@@ -423,39 +450,71 @@ def get_solar_spectrum(
             )
             y = y + func(x)
 
-        if show:
-            if source != "b7":
-                fig.add_trace(
-                    go.Scatter(
-                        x=array[0],
-                        y=array[1],
-                        name=source,
-                        line=dict(color=get_solar_colors(source)),
-                    )
-                )
-            else:
-                fig.add_trace(
-                    go.Scatter(
-                        x=array[0][:2],
-                        y=array[1][:2],
-                        name=source,
-                        line=dict(color=get_solar_colors(source)),
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=array[0][2:],
-                        y=array[1][2:],
-                        name=source,
-                        line=dict(color=get_solar_colors(source)),
-                    )
-                )
-            # plt.plot(array[0],array[1],label=source)
-
-    if show:
-        return fig
-
     return y
+
+
+def plot_solar_spectrum(
+    fig,
+    idx,
+    components: list = ["pp", "pep", "b7", "f17", "o15", "n13", "b8", "hep"],
+    weigths="B16-GS98",
+    in_path="../data/SOLAR/",
+    debug=False,
+):
+    """
+    Plot the solar flux data.
+
+    Args:
+        components (list): list of components
+        bins (np.array): energy bins
+        weigths (str): weigths (default: "BS05")
+        interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: (0,0))
+        in_path (str): input path (default: "../data/SOLAR/")
+        show (bool): if True, show the plot (default: False)
+
+    Returns:
+        fig (plotly.graph_objects.Figure): the plotly figure object
+    """
+    for source in components:
+        array = read_solar_data(in_path, source, weigths)
+        if source != "b7":
+            fig.add_trace(
+                go.Scatter(
+                    legendgrouptitle_text="Solar Flux",
+                    legendgroup=idx,
+                    x=array[0],
+                    y=array[1],
+                    name=source,
+                    line=dict(color=get_solar_colors(source)),
+                ),
+                col=1 + idx,
+                row=1,
+            )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    legendgroup=idx,
+                    x=array[0][:2],
+                    y=array[1][:2],
+                    name=source,
+                    line=dict(color=get_solar_colors(source)),
+                ),
+                col=1 + idx,
+                row=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    legendgroup=idx,
+                    x=array[0][2:],
+                    y=array[1][2:],
+                    name=source,
+                    line=dict(color=get_solar_colors(source)),
+                ),
+                col=1 + idx,
+                row=1,
+            )
+    # fig.update_layout(title="Solar Neutrino Spectrum",xaxis_title="Energy [MeV]",yaxis_title="Flux [Hz/MeV·cm²]")
+    return fig
 
 
 def get_neutrino_cs(bins, interpolation, path="../data/SOLAR", debug=False):
@@ -468,7 +527,7 @@ def get_neutrino_cs(bins, interpolation, path="../data/SOLAR", debug=False):
     cc = data[:, 1]
 
     if debug:
-        print_colored("Interpolation: %s" % interpolation, "DEBUG")
+        rprint("Interpolation: %s" % interpolation)
     func = interpolate.interp1d(
         energies, cc, kind="cubic", bounds_error=False, fill_value=interpolation
     )
@@ -476,94 +535,189 @@ def get_neutrino_cs(bins, interpolation, path="../data/SOLAR", debug=False):
 
 
 def get_detected_solar_spectrum(
-    bins, mass=10e9, components=[], interpolation=(0, 0), show=False, debug=False
+    bins, mass=10e9, components=[], interpolation=(0, 0), debug=False
 ):
     """
-    Get the detected solar spectrum.
+    Get the data for the detected solar spectrum.
 
     Args:
         bins (np.array): energy bins
         mass (float): mass (default: 10e9)
         components (list): list of components (default: [])
         interpolation (str): interpolation method (default: "extrapolate")
-        show (bool): if True, show the plot (default: False)
+        debug (bool): if True, print debug messages (default: False)
+
+    Returns:
+        spectrum (np.array): detected solar spectrum data
+    """
+    # Prepare solar spectrum to convolve with marley signal
+    CS = get_neutrino_cs(bins, interpolation=interpolation)
+    mol = 39.948  # Molar mass [g/mol]
+
+    # Get the solar spectrum
+    if components == []:
+        components = ["b8", "hep"]
+    flux = get_solar_spectrum(components, bins)
+    func = interpolate.interp1d(
+        bins, flux, kind="cubic", bounds_error=False, fill_value=0
+    )
+    # Compute the effective flux by convolving with the cross-section and detector properties
+    spectrum = func(bins)
+    factor = (bins[1] - bins[0]) * mass * const.N_A / mol
+
+    return CS * spectrum * factor  # Flux [1/s]
+
+
+def plot_detected_solar_spectrum(
+    fig,
+    idx,
+    bins,
+    mass=10e9,
+    components: list = ["b8", "hep"],
+    interpolation=(0, 0),
+    osc=False,
+    debug=False,
+):
+    """
+    Plot the detected solar spectrum.
+
+    Args:
+        bins (np.array): energy bins
+        mass (float): mass (default: 10e9)
+        components (list): list of components (default: [])
+        interpolation (str): interpolation method (default: "extrapolate")
         debug (bool): if True, print debug messages (default: False)
 
     Returns:
         fig (plotly.graph_objects.Figure): plotly figure
     """
-    # Prepare solar spectrum to convolve with marley signal
-    # nbins = 60
-    # CS    = 1e-42                 # Cross-section for CC interactions in Ar [cm²]
-    CS = get_neutrino_cs(bins, interpolation=interpolation)
-    mol = 39.948  # Molar mass [g/mol]
-    # mass  = 10e9                # Mass in [g]
-    # sec_to_year = 60*60*24*365  # Time factor [s/year]
-
-    # Get the solar spectrum
-    # components=["pp","f17","o15","n13","b8","hep"]
-    if components == []:
-        components = ["b8", "hep"]
-    flux = get_solar_spectrum(
-        components, bins, weigths="BS05", interpolation=interpolation, show=False
-    )  # Flux [1/(cm²*s*Mev)]
-    func = interpolate.interp1d(
-        bins, flux, kind="cubic", bounds_error=False, fill_value=0
+    info = ""
+    colors = plotly.colors.qualitative.Prism
+    oscillation = get_oscillation_map(output="interp1d")
+    osc_func = oscillation[list(oscillation.keys())[0]]
+    spectrum = get_detected_solar_spectrum(
+        bins, mass=mass, components=components, interpolation=interpolation, debug=debug
     )
-    # Compute the effective flux by convolving with the cross-section and detcector prporties
-    spectrum = func(bins)
-    factor = (bins[1] - bins[0]) * mass * const.N_A / mol
-    if show:
-        fig = go.Figure()
-        for source in components:
-            array = read_solar_data("../data/SOLAR/", source, "BS05")
-            func = interpolate.interp1d(
-                array[0], array[1], kind="cubic", bounds_error=False, fill_value=0
-            )
-            this_spectrum = func(bins)
-            fig.add_trace(
-                go.Scatter(
-                    x=bins,
-                    y=CS * this_spectrum * factor,
-                    name=source,
-                    line=dict(color=get_solar_colors(source)),
-                )
-            )
-            print_colored(
-                "Total counts for %s: %.2e [Counts/10kt·s]"
-                % (source, np.sum(CS * this_spectrum * factor)),
-                color="INFO",
-            )
-            print_colored(
-                "Total counts for %s: %.2e [Counts/70kt·year]"
-                % (
-                    source,
-                    np.sum(CS * this_spectrum * factor) * 60 * 60 * 24 * 365 * 7,
-                ),
-                color="INFO",
-            )
-
+    for source in components:
+        this_spectrum = get_detected_solar_spectrum(
+            bins,
+            mass=mass,
+            components=[source],
+            interpolation=interpolation,
+            debug=debug,
+        )
+        # If value in spectrum smaller than 1e-10, set it to NaN
+        this_spectrum[this_spectrum < 1e-10] = 0
+        if osc:
+            this_spectrum = osc_func(bins) * this_spectrum
         fig.add_trace(
             go.Scatter(
+                legendgroup=str(idx),
                 x=bins,
-                y=CS * spectrum * factor,
-                name="Spectrum",
-                line=dict(color="blue", dash="dash"),
-            )
+                y=this_spectrum / (bins[1] - bins[0]),
+                name=source,
+                line=dict(color=get_solar_colors(source)),
+            ),
+            col=1 + idx,
+            row=1,
         )
-        print_colored(
-            "Total counts for all sources: %.2e [Counts/10kt·s]"
-            % (np.sum(CS * spectrum * factor)),
-            color="INFO",
+        info = info + "\nTotal counts for %s:\t%.2e [Counts/10kt·s]" % (
+            source,
+            np.sum(this_spectrum),
         )
-        print_colored(
-            "Total counts for all sources: %.2e [Counts/70kt·year]"
-            % (np.sum(CS * spectrum * factor) * 60 * 60 * 24 * 365 * 7),
-            color="INFO",
+        info = info + "\nTotal counts for %s:\t%.2e [Counts/70kt·year]" % (
+            source,
+            np.sum(this_spectrum) * 60 * 60 * 24 * 365 * 7,
         )
-        return fig
-    else:
-        return CS * spectrum * factor  # Flux [1/s]
+
+    # If value in spectrum smaller than 1e-10, set it to NaN
+    spectrum[spectrum < 1e-10] = 0
+    if osc:
+        spectrum = osc_func(bins) * spectrum
+    fig.add_trace(
+        go.Scatter(
+            legendgrouptitle_text="Interacting Spectrum",
+            legendgroup=idx,
+            x=bins,
+            y=spectrum / (bins[1] - bins[0]),
+            name="Combined ",
+            line=dict(color=colors[-1], dash="dash"),
+        ),
+        col=1 + idx,
+        row=1,
+    )
+    info = info + "\nTotal counts for all:\t%.2e [Counts/10kt·s]" % (np.sum(spectrum))
+    info = info + "\nTotal counts for all:\t%.2e [Counts/70kt·year]" % (
+        np.sum(spectrum) * 60 * 60 * 24 * 365 * 7
+    )
+
+    if debug:
+        rprint(info)
+    return fig
+
+
+def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
+    """
+    Plot the detected solar spectrum.
+
+    Args:
+        bins (np.array): energy bins
+        mass (float): mass (default: 10e9)
+        components (list): list of components (default: [])
+        interpolation (str): interpolation method (default: "extrapolate")
+        debug (bool): if True, print debug messages (default: False)
+
+    Returns:
+        fig (plotly.graph_objects.Figure): plotly figure
+    """
+    colors = plotly.colors.qualitative.Prism
+    cc_array = get_neutrino_cs(bins, interpolation="extrapolate")
+    fig = make_subplots(
+        rows=1,
+        cols=3,
+        subplot_titles=(
+            "True Solar Neutrino Spectrum",
+            "X-Section for " + unicode("nu") + " + 40Ar Interaction",
+            "Interacting Solar Neutrino Spectrum",
+        ),
+    )
+    # 1st plot
+    fig = plot_solar_spectrum(fig, 0)
+    fig.update_xaxes(range=[-1, 1.4], row=1, col=1)
+    fig.update_yaxes(range=[1, 12], title_text="Flux [Hz/MeV·cm²]", row=1, col=1)
+    # 2nd plot
+    fig.add_trace(
+        go.Scatter(
+            legendgrouptitle_text="Marley X-Section",
+            legendgroup=1,
+            x=bins,
+            y=cc_array,
+            mode="lines",
+            name="NuE-Ar CC",
+            line=dict(color=colors[-1]),
+        ),
+        row=1,
+        col=2,
+    )
+    fig.update_yaxes(range=[-44, -40], title_text="Cross Section [cm²]", row=1, col=2)
+    # 3rd plot
+    fig = plot_detected_solar_spectrum(
+        fig, 2, bins, components=components, osc=osc, debug=debug
+    )
+    fig.update_yaxes(
+        range=[-8, -3], title_text="Counts/Energy·10kt·s [Hz/MeV]", row=1, col=3
+    )
+    fig = format_coustom_plotly(
+        fig,
+        log=(True, True),
+        tickformat=(".0f", ".0e"),
+        matches=(None, None),
+        figsize=(2200, 600),
+    )
+
+    fig.update_xaxes(title_text="Energy [MeV]")
+
+    return fig
 
 
 @numba.njit
@@ -576,23 +730,3 @@ def get_marleyfrac_vectors(run, frac_name):
     neutron = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:, 2]
     other = run["Reco"][frac_name][np.where(run["Reco"]["Generator"] == 1)][:, 3]
     return [electron, gamma, neutron, other], ["Electron", "Gamma", "Neutron", "Other"]
-
-
-def compute_generator_df(reco_df, gen_labels, column_name="Generator", debug=False):
-    """
-    Compute the generator dataframe from the reco dataframe.
-    """
-    reco_gen_df = pd.DataFrame(reco_df[column_name].value_counts())
-    reco_gen_df = reco_gen_df.reset_index()
-    reco_gen_df = reco_gen_df.rename(
-        columns={"index": column_name, column_name: "Value"}
-    )
-    if debug:
-        rprint(reco_gen_df)
-    # reco_gen_df.set_index(column_name,inplace=True)
-    new_index = pd.Index(range(len(gen_labels)), name=column_name)
-    reco_gen_df = reco_gen_df.reindex(new_index, fill_value=0, method=None)
-    reco_gen_df.reset_index(inplace=True)
-    reco_gen_df[column_name] = gen_labels
-    reco_gen_df = reco_gen_df.set_index("Generator").T
-    return reco_gen_df
