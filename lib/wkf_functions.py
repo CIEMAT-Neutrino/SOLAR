@@ -11,7 +11,7 @@ def compute_root_workflow(
     user_input, info, data_filter, workflow="BASICS", debug=False
 ):
     config = user_input["config_file"].split("/")[0]
-    all_true, all_reco = {}, {}
+    all_conf, all_true, all_reco = {}, {}, {}
     for name_idx, name in enumerate(user_input["root_file"]):
         debug_str = []
         debug_str.append("\nLoading %s data..." % (name))
@@ -19,6 +19,7 @@ def compute_root_workflow(
             info["PATH"] + info["NAME"] + user_input["root_file"][0] + ".root"
         )
         folder_name = input_file.GetListOfKeys()[0].GetName()
+        conf_tree = input_file.Get(folder_name + "/" + "ConfigTree")
         true_tree = input_file.Get(folder_name + "/" + "MCTruthTree")
         reco_tree = input_file.Get(folder_name + "/" + "SolarNuAnaTree")
 
@@ -26,9 +27,18 @@ def compute_root_workflow(
             user_input["config_file"], in_params={}, debug=user_input["debug"]
         )
 
-        true, reco = {}, {}
+        conf, true, reco = {}, {}, {}
         filter_idx = np.array([], dtype=int)
-        reco_branches, new_reco_branches, true_branches, new_true_branches = (
+        (
+            reco_branches,
+            new_reco_branches,
+            true_branches,
+            new_true_branches,
+            conf_branches,
+            new_conf_branches,
+        ) = (
+            [],
+            [],
             [],
             [],
             [],
@@ -43,12 +53,19 @@ def compute_root_workflow(
 
         data_config = json.load(open("../lib/workflow/" + workflow + ".json", "r"))
         for object_type in object_types.keys():
+            new_conf_branches = new_conf_branches + list(
+                data_config["CONFIG"][object_type].keys()
+            )
             new_true_branches = new_true_branches + list(
                 data_config["TRUE"][object_type].keys()
             )
             new_reco_branches = new_reco_branches + list(
                 data_config["RECO"][object_type].keys()
             )
+
+        for branch in new_conf_branches:
+            if branch in conf_tree.GetListOfBranches():
+                conf_branches.append(branch)
 
         for branch in new_true_branches:
             if branch in true_tree.GetListOfBranches():
@@ -58,25 +75,68 @@ def compute_root_workflow(
             if branch in reco_tree.GetListOfBranches():
                 reco_branches.append(branch)
 
-        # try: root = root_numpy.tree2array(true_tree, branches=true_branches)
-        try:
-            root = RDataFrame(true_tree).AsNumpy(true_branches)
-        except ValueError:
-            pass
+        # try:
+        #     root = RDataFrame(conf_tree).AsNumpy(conf_branches)
+        # except ValueError:
+        #     pass
+
+        # debug_str.append("\nCONFIG:")
+        # for object_type in object_types.keys():
+        #     for key in data_config["CONFIG"][object_type]:
+        #         conf[key] = data_config["CONFIG"][object_type][key] * np.asarray(
+        #             conf_tree.GetBranch(key).GetLeaf(key).GetValue(0),
+        #             dtype=object_types[object_type],
+        #         )
+        #         debug_str.append(
+        #             "\n\t-> Found %s \t %s" % (key, object_types[object_type])
+        #         )
+
+        # try:
+        #     root = RDataFrame(true_tree).AsNumpy(true_branches)
+        # except ValueError:
+        #     pass
+
         debug_str.append("\nTRUTH:")
         for object_type in object_types.keys():
             for key in data_config["TRUE"][object_type]:
-                true[key] = data_config["TRUE"][object_type][key] * root[key]
-                if type(true[key][0]) == np.ndarray:
-                    true[key] = np.vstack(true[key])
-                debug_str.append(
-                    "\n\t-> Found %s \t %s" % (key, object_types[object_type])
-                )
+                try:
+                    true[key] = data_config["TRUE"][object_type][key] * root[key]
+                    if type(true[key][0]) == np.ndarray:
+                        true[key] = np.vstack(true[key])
+                    debug_str.append(
+                        "\n\t-> Found %s \t %s" % (key, object_types[object_type])
+                    )
+                except ValueError:
+                    true[key] = data_config["TRUE"][object_type][key] * np.ones(
+                        true_tree.GetEntries(), dtype=object_types[object_type]
+                    )
+                    branch_info = (
+                        key,
+                        object_types[object_type],
+                        data_config["TRUE"][object_type][key],
+                    )
+                    debug_str.append(
+                        "\n\t-> Created %s \t %s with factor %.2e" % branch_info
+                    )
+                except UnboundLocalError:
+                    true[key] = data_config["TRUE"][object_type][key] * np.ones(
+                        true_tree.GetEntries(), dtype=object_types[object_type]
+                    )
+                    branch_info = (
+                        key,
+                        object_types[object_type],
+                        data_config["TRUE"][object_type][key],
+                    )
+                    debug_str.append(
+                        "\n\t-> WARNING: Key %s not found in true tree!" % key
+                    )
+                    continue
 
         try:
             root = RDataFrame(reco_tree).AsNumpy(reco_branches)
         except ValueError:
             pass
+
         debug_str.append("\nRECO:")
         for object_type in object_types.keys():
             for key in data_config["RECO"][object_type]:
@@ -135,24 +195,23 @@ def compute_root_workflow(
             ]
 
         if workflow in ["SMEARING", "VERTEXING", "ANALYSIS", "FULL"]:
-            # calib_info = read_input_file(config+"_energy_calibration",path="../config/"+config+"/"+config+"_calib/",DOUBLES=["ENERGY_AMP","INTERSECTION"],debug=False)
-            calib_info = json.load(
-                open(
-                    "../config/"
-                    + config
-                    + "/"
-                    + config
-                    + "_calib/"
-                    + config
-                    + "_energy_calibration.json",
-                    "r",
-                )
-            )
+            calib_info = json.load(open(f"../config/{config}/{config}_calib/{config}_energy_calibration.json","r"))
 
         # debug_str.append("\n--> Computing reco efficiency...")
-        true, reco = compute_event_matching(true, reco, debug=debug)
+        # true, reco = compute_event_matching(true, reco, debug=debug)
         for i in track(
-            range(reco_tree.GetEntries()), description="Computing %s data..." % (name)
+            range(true_tree.GetEntries()),
+            description="Getting Truth %s data..." % (name),
+        ):
+            true_tree.GetEntry(i)
+            true["Event"][i] = true_tree.Event
+            true["Flag"][i] = true_tree.Flag
+            if workflow in ["SMEARING"]:
+                true["TNuE"][i] = true_tree.TNuE
+
+        for i in track(
+            range(reco_tree.GetEntries()),
+            description="Getting Reco %s data..." % (name),
         ):
             reco_tree.GetEntry(i)
             try:
@@ -172,7 +231,6 @@ def compute_root_workflow(
                 ############################
                 reco["AdjClNum"][i] = len(reco_tree.AdjClR)
                 reco["AdjOpFlashNum"][i] = len(reco_tree.AdjOpFlashR)
-                # print("Primary: ",reco["Primary"][i])
 
                 ############################
                 # True Computation
@@ -180,13 +238,13 @@ def compute_root_workflow(
                 for j in range(len(reco_tree.TMarleyPDG)):
                     if (
                         reco_tree.TMarleyPDG[j] == 11
-                        and 1e3 * reco_tree.TMarleyE[j] > reco["ElectronE"][i]
+                        and reco_tree.TMarleyE[j] > reco["ElectronE"][i]
                     ):
-                        reco["ElectronE"][i] = 1e3 * reco_tree.TMarleyE[j]
+                        reco["ElectronE"][i] = reco_tree.TMarleyE[j]
                     if reco_tree.TMarleyPDG[j] == 22:
-                        reco["GammaE"][i] += 1e3 * reco_tree.TMarleyE[j]
+                        reco["GammaE"][i] += reco_tree.TMarleyE[j]
                     if reco_tree.TMarleyPDG[j] == 2112:
-                        reco["NeutronP"][i] += 1e3 * reco_tree.TMarleyP[j]
+                        reco["NeutronP"][i] += reco_tree.TMarleyP[j]
                 reco["VisEnergy"][i] = reco["ElectronE"][i] + reco["GammaE"][i]
 
             if workflow in ["VERTEXING", "ANALYSIS", "FULL"]:
@@ -304,28 +362,47 @@ def compute_root_workflow(
                     adj_cl_energy = (
                         reco_tree.AdjClCharge.at(z) * adj_cl_correction / corr_popt[0]
                     )
+                    adj_cl_r = reco_tree.AdjClR.at(z)
+
                     if adj_cl_energy > reco["MaxAdjClEnergy"][i]:
                         reco["MaxAdjClEnergy"][i] = adj_cl_energy
+                        reco["MaxAdjClR"][i] = adj_cl_r
+
                     reco["TotalAdjClEnergy"][i] += adj_cl_energy
-                reco["TotalEnergy"][i] = (
-                    reco["TotalAdjClEnergy"][i] + reco["Energy"][i] + 1.9
-                )
+                    reco["TotalAdjClR"][i] += adj_cl_r
+
+                reco["TotalEnergy"][i] = (reco["TotalAdjClEnergy"][i] + reco["Energy"][i])
 
             if workflow in ["SMEARING", "FULL"]:
                 ############################
                 # Reco Energy Computation
                 ############################
-                if reco["RecoEnergy"][i] > 1.5:
-                    (
-                        reco["Energy"][i] * calib_info["ENERGY_AMP"]
-                        + calib_info["INTERSECTION"]
+                reco["TotalEnergy"][i] = (
+                    (reco["TotalAdjClEnergy"][i] + reco["Energy"][i])
+                / calib_info["TOTAL"]["ENERGY_AMP"] - calib_info["TOTAL"][
+                    "INTERSECTION"
+                ])
+
+                reco["Discriminant"][i] = (
+                    reco["MaxAdjClEnergy"][i] / 8 + reco["AdjClNum"][i] / 6
+                )
+
+                if reco["Discriminant"][i] >= 0.41:
+                    reco["RecoEnergy"][i] = (
+                        reco["Energy"][i] / calib_info["LOWER"]["ENERGY_AMP"]
+                        - calib_info["LOWER"]["INTERSECTION"]
                     )
-                if reco["RecoEnergy"][i] < 1.5:
-                    (
-                        reco["Energy"][i] * calib_info["ENERGY_AMP"]
-                        + calib_info["INTERSECTION"]
-                        + 2.5
+
+                if reco["Discriminant"][i] < 0.41:
+                    reco["RecoEnergy"][i] = (
+                        reco["Energy"][i] / calib_info["UPPER"]["ENERGY_AMP"]
+                        - calib_info["UPPER"]["INTERSECTION"]
                     )
+
+                reco["RecoEnergy"][i] = (
+                    reco["RecoEnergy"][i] / calib_info["RECO"]["ENERGY_AMP"]
+                    - calib_info["RECO"]["INTERSECTION"]
+                )
 
             ############################
             # Reco Filter Computation
@@ -372,21 +449,29 @@ def compute_root_workflow(
             filter_idx = np.append(filter_idx, i)
 
         rprint("[green]-> Finished computing data![/green]")
+        conf["Geometry"], conf["Version"], conf["Name"] = (
+            np.asarray([info["GEOMETRY"]] * conf_tree.GetEntries()),
+            np.asarray([info["VERSION"]] * conf_tree.GetEntries()),
+            np.asarray([name] * conf_tree.GetEntries()),
+        )
         true["Geometry"], true["Version"], true["Name"] = (
-            np.asarray([info["GEOMETRY"][0]] * len(true["Event"])),
-            np.asarray([info["VERSION"][0]] * len(true["Event"])),
-            np.asarray([name] * len(true["Event"])),
+            np.asarray([info["GEOMETRY"]] * true_tree.GetEntries()),
+            np.asarray([info["VERSION"]] * true_tree.GetEntries()),
+            np.asarray([name] * true_tree.GetEntries()),
         )
         reco["Geometry"], reco["Version"], reco["Name"] = (
-            np.asarray([info["GEOMETRY"][0]] * len(reco["Event"])),
-            np.asarray([info["VERSION"][0]] * len(reco["Event"])),
-            np.asarray([name] * len(reco["Event"])),
+            np.asarray([info["GEOMETRY"]] * reco_tree.GetEntries()),
+            np.asarray([info["VERSION"]] * reco_tree.GetEntries()),
+            np.asarray([name] * reco_tree.GetEntries()),
         )
 
         if name_idx == 0:
+            all_conf = conf
             all_true = true
             all_reco = reco
         else:
+            for key in conf.keys():
+                all_conf[key] = np.append(all_conf[key], conf[key])
             for key in true.keys():
                 all_true[key] = np.append(all_true[key], true[key])
             for key in reco.keys():
