@@ -16,7 +16,7 @@
     "TRUTH": {
         "TRUTH": [
             "Event","Flag",
-            "TruthPart","TNuE","TNuX","TNuY","TNuZ",
+            "TruthPart","TNuE","TNuX","TNuY","TNuZ","TNuQSqr",
             "TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
             "TMarleyXDepList","TMarleyYDepList","TMarleyZDepList",
             "HitNum","ClusterNum"
@@ -74,7 +74,7 @@
             "Event","Flag","TruthPart",
             "TNuX","TNuY","TNuZ","TNuE",
             "MainVertex",
-            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
+            "Primary","Generator","Purity","NHits","Charge","Time","RecoY","RecoZ",
             "AdjClMainPDG","AdjClGen","AdjClNHit","AdjClR","AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ"
         ]
     },

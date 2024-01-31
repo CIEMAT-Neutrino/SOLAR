@@ -1,5 +1,12 @@
 {
-    "CONFIG": {
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+
+    "Truth": {
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
@@ -9,22 +16,16 @@
         "BOOLS": {}
     },
 
-    "TRUE": {
-        "INTEGERS": {
-            "Event": 1,
-            "Flag": 1
-        },
-        "DOUBLES": {},
-        "STRINGS": {},
-        "BOOLS": {}
-    },
-
-    "RECO": {
+    "Reco": {
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
             "Generator": 1,
             "NHits": 1,
+            "Ind0NHits": 1,
+            "Ind1NHits": 1,
+            "Ind0dT": 1,
+            "Ind1dT": 1,
             "AdjClNum": 0,
             "AdjOpFlashNum": 0
         },

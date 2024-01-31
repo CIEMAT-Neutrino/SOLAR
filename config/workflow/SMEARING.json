@@ -1,15 +1,26 @@
-{
-    "TRUE": {
+{   
+    "CONFIG": {
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1,
-            "TruthPart": 1,
-            "TNuE":  1e3
+            "Flag": 1
         },
         "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {}
     },
+
+    "TRUE": {
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {
+            "TNuE":  1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    
     "RECO": {
         "INTEGERS": {
             "Event": 1,
@@ -17,13 +28,11 @@
             "Generator": 1,
             "NHits": 1,
             "AdjClNum": 0,
-            "AdjOpFlashNum": 0,
-            "AssFlashIdx": 0,  
-            "Matching": -1
+            "AdjOpFlashNum": 0
         },
 
         "DOUBLES": {
-            "TNuE":  1e3,
+            "TNuE":  1,
             "ElectronE": 1,
             "GammaE": 1,
             "NeutronP": 0,  
@@ -36,12 +45,9 @@
             "RecoEnergy": 0,
             "TotalAdjClEnergy": 0,
             "MaxAdjClEnergy": 0,
-            "RecoY": -1e6,
-            "RecoX": -1e6,
-            "MatchedOpFlashTime": -1e6,
-            "MatchedOpFlashPE": -1e6,
-            "MatchedOpFlashR": -1e6,
-            "DriftTime": -1e6
+            "MaxAdjClR": 0,
+            "TotalAdjClR": 0,
+            "Discriminant": 0
         },
 
         "STRINGS": {
@@ -49,8 +55,7 @@
         },
 
         "BOOLS": {
-            "Primary": 1,
-            "FlashMatched": 1
+            "Primary": 1
         }
     }
 }

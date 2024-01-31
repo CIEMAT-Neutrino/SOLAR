@@ -2,7 +2,7 @@ import uproot, os, copy, stat, json
 import numpy as np
 import pandas as pd
 import awkward as ak
-
+import plotly.express as px
 from rich import print as rprint
 
 
@@ -87,18 +87,15 @@ def root2npy(root_info, trim=False, debug=False):
     path = root_info["Path"]
     name = root_info["Name"]
     if debug:
-        print_colored(
-            "Converting from: " + root_info["Path"] + root_info["Name"] + ".root",
-            "DEBUG",
-        )
+        rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"].keys():
             done_root_info = []
             out_folder = root_info["TreeNames"][tree]
 
             if debug:
-                print_colored("----------------------", "DEBUG")
-                print_colored("Dumping file:" + str(path + name), "DEBUG")
+                rprint("----------------------")
+                rprint("Dumping file:" + str(path + name))
 
             for branch in root_info[tree]:
                 if branch not in done_root_info:
@@ -122,17 +119,6 @@ def root2npy(root_info, trim=False, debug=False):
                     print(resized_array)
                 del resized_array
                 del this_array
-
-                # else:
-                #     print("Branch is a map: ", branch)
-                #     dicts = []
-                #     this_keys   = f[root_info["Folder"]+"/"+tree][branch+"_keys"].array()
-                #     this_values = f[root_info["Folder"]+"/"+tree][branch+"_values"].array()
-                #     if debug: print_colored("Using keys: " + str(this_keys[0]),"DEBUG"); print_colored("Using values: " + str(this_values[0]),"DEBUG")
-                #     for j in range(len(this_keys)): dicts.append(dict(zip(this_keys[j], this_values[j])))
-                #     np.save(path+name+"/"+out_folder+"/"+branch+".npy", dicts)
-                #     print(dicts[0])
-                #     del dicts
 
                 if debug:
                     print_colored(
@@ -517,6 +503,7 @@ def remove_processed_branches(root_info, debug=False):
 def load_multi(
     names: dict,
     configs: dict,
+    tree_labels: list = ["Config", "Truth", "Reco"],
     load_all: bool = False,
     preset=None,
     branches={},
@@ -538,10 +525,9 @@ def load_multi(
     Returns:
         run (dict): dictionary with the loaded data
     """
+    out = ""
     run = dict()
     for idx, config in enumerate(configs):
-        if debug:
-            print_colored("\nLoading config %s" % configs[config], "DEBUG")
         info = json.load(
             open("../config/" + config + "/" + configs[config] + ".json", "r")
         )
@@ -552,17 +538,20 @@ def load_multi(
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
         for jdx, name in enumerate(names[config]):
-            if debug:
-                print_colored("\nLoading file %s%s" % (path, name), "DEBUG")
             if load_all == True:
                 branches_dict = get_branches(
                     name, path=path, debug=debug
                 )  # Get ALL the branches
             elif preset != None:
-                truth_labels, reco_labels = get_workflow_branches(
-                    workflow=preset, debug=False
+                tree_branches = get_workflow_branches(
+                    tree_list=tree_labels, workflow=preset, debug=False
                 )  # Get PRESET branches
-                branches_dict = {"Truth": truth_labels, "Reco": reco_labels}
+                # branches_dict = {"Truth": truth_labels, "Reco": reco_labels}
+                branches_dict = {
+                    tree_labels[i]: tree_branches[i] for i in range(len(tree_labels))
+                }
+                if debug:
+                    rprint(branches_dict)
             else:
                 branches_dict = branches  # Get CUSTOMIZED branches from the input
 
@@ -641,10 +630,9 @@ def load_multi(
                             )
                             if generator_swap == True:
                                 if key == "Generator" and name in bkg_dict.values():
-                                    print_colored(
-                                        "-> Changing the generator for %s to %s"
-                                        % (name, inv_bkg_dict[name]),
-                                        "WARNING",
+                                    out = (
+                                        out
+                                        + f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
                                     )
                                     mapped_gen = inv_bkg_dict[name]
                                     # branch[branch == 2] = mapped_gen # Map the generator to the correct background
@@ -679,31 +667,23 @@ def load_multi(
                                         run[tree][key], 0, trim=False, debug=debug
                                     )
                             if key == "Event":
-                                print_colored(
-                                    "Loaded %s events:\t%i\t from %s -> %s"
-                                    % (config, len(branch), tree, name),
-                                    "INFO",
+                                out = (
+                                    out
+                                    + f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
                                 )
                         except FileNotFoundError:
-                            print_colored("File not found!", "ERROR")
+                            out = out + f"\n[red]File {key} not found![/red]"
 
-    try:
-        rprint(
-            "\n- Keys extracted from the truth tree:\n", run["Truth"].keys(), "\n"
-        )  # Check that all keys from the original TTree are recovered!
-        rprint("- Total events: ", len(run["Truth"]["Event"]), "\n")
-    except:
-        rprint("\n- No truth tree found!\n")
-    try:
-        rprint("- Keys extracted from the reco tree:\n", run["Reco"].keys(), "\n")
-        rprint("- Total reco clusters: ", len(run["Reco"]["Event"]), "\n")
-    except KeyError:
-        rprint("- No reco tree found!\n")
+    if debug:
+        for tree in branches_dict.keys():
+            try:
+                out = out + f"\nKeys extracted from the reco tree:\n"
+                out = out + str(run[tree].keys())
+                out = out + "\n-> Total reco clusters: %i\n" % len(run[tree]["Event"])
+            except KeyError:
+                out = out + "- No reco tree found!\n"
 
-    print_colored(
-        "\nLoaded *%s* files with trees: %s\n" % (list(configs), list(run.keys())),
-        "SUCCESS",
-    )
+    rprint(out)
     return run
 
 
@@ -838,32 +818,32 @@ def get_bkg_color(name_list, debug=False):
     """
     color_dict = dict()
     simple_name_list = get_simple_name(name_list, debug=debug)
-
+    colors = px.colors.qualitative.Prism
     for name in name_list:
         if simple_name_list[name] == "Unknown":
             color_dict[name] = "black"
         elif simple_name_list[name] == "Marley":
-            color_dict[name] = "orange"
+            color_dict[name] = colors[6]
         elif simple_name_list[name] == "APA":
-            color_dict[name] = "violet"
+            color_dict[name] = colors[8]
         elif simple_name_list[name] == "Neutron":
-            color_dict[name] = "green"
+            color_dict[name] = colors[3]
         elif simple_name_list[name] == "CPA":
-            color_dict[name] = "purple"
+            color_dict[name] = colors[9]
         elif simple_name_list[name] == "Ar42":
-            color_dict[name] = "blue"
+            color_dict[name] = colors[1]
         elif simple_name_list[name] == "K42":
-            color_dict[name] = "blue"
+            color_dict[name] = colors[1]
         elif simple_name_list[name] == "Kr85":
             color_dict[name] = "pink"
         elif simple_name_list[name] == "Ar39":
-            color_dict[name] = "grey"
+            color_dict[name] = colors[10]
         elif simple_name_list[name] == "Rn22":
-            color_dict[name] = "yellow"
+            color_dict[name] = colors[5]
         elif simple_name_list[name] == "Po210":
             color_dict[name] = "brown"
         elif simple_name_list[name] == "PDS":
-            color_dict[name] = "red"
+            color_dict[name] = colors[7]
         else:
             color_dict[name] = "black"
 
@@ -930,6 +910,10 @@ def get_simple_name(name_list, debug=False):
             simple_name[name] = "Neutron"
         elif "CPA" in name:
             simple_name[name] = "CPA"
+        elif "Cathode" in name:
+            simple_name[name] = "CPA"
+        elif "CRP" in name:
+            simple_name[name] = "APA"
         elif "APA" in name:
             simple_name[name] = "APA"
         elif "PDS" in name:
@@ -942,7 +926,7 @@ def get_simple_name(name_list, debug=False):
     return simple_name
 
 
-def get_workflow_branches(workflow: str = "BASIC", debug=False):
+def get_workflow_branches(tree_list, workflow: str = "BASIC", debug=False):
     """
     Get the workflow variables from the input file.
 
@@ -953,12 +937,17 @@ def get_workflow_branches(workflow: str = "BASIC", debug=False):
     Returns:
         truth_list (list): list of truth variables
     """
-    f = json.load(open("../import/workflow_branches.json", "r"))
-    truth_list = f[workflow]["TRUTH"]
-    reco_list = f[workflow]["RECO"]
-
+    f = json.load(open(f"../config/workflow/{workflow}.json", "r"))
+    branch_lists = []
+    for tree in tree_list:
+        tree_branch_list = []
+        if tree not in f.keys():
+            raise KeyError(f"Tree {tree} not found in the workflow file")
+        else:
+            for branch_type in f[tree]:
+                for branch in f[tree][branch_type]:
+                    tree_branch_list.append(branch)
+            branch_lists.append(tree_branch_list)
     if debug:
-        print_colored(
-            "\nLoaded workflow variables: %s" % str(truth_list + reco_list), "INFO"
-        )
-    return truth_list, reco_list
+        rprint()
+    return branch_lists
