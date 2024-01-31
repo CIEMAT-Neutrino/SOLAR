@@ -1,3 +1,6 @@
+import json
+import pandas as pd
+import plotly.express as px
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.colors as colors
@@ -11,7 +14,8 @@ from plotly.subplots import make_subplots
 
 def format_coustom_plotly(
     fig,
-    title="",
+    title=None,
+    legend=dict(),
     fontsize=16,
     figsize=None,
     ranges=(None, None),
@@ -27,7 +31,8 @@ def format_coustom_plotly(
 
     Args:
         fig (plotly.graph_objects.Figure): plotly figure
-        title (str): title of the figure (default: "")
+        title (str): title of the figure (default: None)
+        legend (dict): legend options (default: dict())
         fontsize (int): font size (default: 16)
         figsize (tuple): figure size (default: None)
         ranges (tuple): axis ranges (default: (None,None))
@@ -43,12 +48,18 @@ def format_coustom_plotly(
     """
     # Find the number of subplots
     if type(fig) == go.Figure:
-        rows, cols = fig._get_subplot_rows_columns()
-        rows, cols = rows[-1], cols[-1]
+        try:
+            rows, cols = fig._get_subplot_rows_columns()
+            rows, cols = rows[-1], cols[-1]
+        except Exception:
+            rows, cols = 1, 1
+            rprint("[red]Error: unknown figure type[/red]")
     else:
         rows, cols = 1, 1
         rprint("[red]Error: unknown figure type[/red]")
-    rprint("[blue]Detected number of subplots: " + str(rows * cols) + "[/blue]")
+
+    if debug:
+        rprint("[blue]Detected number of subplots: " + str(rows * cols) + "[/blue]")
 
     if figsize == None:
         figsize = (800 + 400 * (cols - 1), 600 + 200 * (rows - 1))
@@ -61,6 +72,7 @@ def format_coustom_plotly(
 
     fig.update_layout(
         title=title,
+        legend=legend,
         template="presentation",
         font=dict(size=fontsize),
         paper_bgcolor=margin["color"],
@@ -73,8 +85,13 @@ def format_coustom_plotly(
         showgrid=True,
         minor_ticks="inside",
         tickformat=tickformat[0],
-        range=ranges[0],
+        # range=ranges[0],
     )  # tickformat=",.1s" for scientific notation
+
+    if ranges[0] != None:
+        fig.update_xaxes(range=ranges[0])
+    if ranges[1] != None:
+        fig.update_yaxes(range=ranges[1])
 
     fig.update_yaxes(
         matches=matches[1],
@@ -83,7 +100,7 @@ def format_coustom_plotly(
         showgrid=True,
         minor_ticks="inside",
         tickformat=tickformat[1],
-        range=ranges[1],
+        # range=ranges[1],
     )  # tickformat=",.1s" for scientific notation
 
     if figsize != None:
@@ -120,7 +137,7 @@ def format_coustom_plotly(
     return fig
 
 
-def get_units(var, debug=True):
+def get_units(var, debug=False):
     """
     Returns the units of a variable based on the variable name
 
@@ -134,9 +151,12 @@ def get_units(var, debug=True):
         "Z": " [cm] ",
         "E": " [MeV] ",
         "P": " [MeV] ",
+        "PE": " [counts] ",
         "Time": " [tick] ",
+        "Energy": " [MeV] ",
         "Charge": " [ADC x tick] ",
     }
+    unit = ""
     for unit_key in list(units.keys()):
         if debug:
             print("Checking for " + unit_key + " in " + var)
@@ -144,11 +164,6 @@ def get_units(var, debug=True):
             unit = units[unit_key]
             if debug:
                 print("Unit found for " + var)
-            break
-        else:
-            if debug:
-                print("No unit found for " + var)
-            unit = ""
     return unit
 
 
@@ -363,6 +378,51 @@ def get_common_colorbar(data_list, bins):
                 min_hist = np.min(hist)
 
     return max_hist, min_hist
+
+
+def plot_nhit_energy_scan(df, variable, bins=100, density=False):
+    plot_list = []
+    # Get energy bins from config file
+    analysis_info = json.load(open("../import/analysis.json", "r"))
+    energy_edges = np.linspace(
+        analysis_info["REDUCED_RECO_ENERGY_RANGE"][0],
+        analysis_info["REDUCED_RECO_ENERGY_RANGE"][1],
+        analysis_info["REDUCED_RECO_ENERGY_BINS"] + 1,
+    )
+    energy_centers = (energy_edges[1:] + energy_edges[:-1]) / 2
+    ebin = energy_edges[1] - energy_edges[0]
+    for nhits in analysis_info["NHITS"]:
+        for energy in energy_centers:
+            this_df = df[
+                (df["TNuE"] > energy - ebin / 2)
+                & (df["TNuE"] < energy + ebin / 2)
+                & (df["NHits"] >= nhits)
+            ]
+
+            hist, edges = np.histogram(this_df[variable], bins=bins, density=density)
+            edge_centers = (edges[1:] + edges[:-1]) / 2
+            plot_list.append(
+                {
+                    "Energy": energy,
+                    "NHits": nhits,
+                    variable + "Count": hist,
+                    variable: edge_centers,
+                }
+            )
+    plot_df = pd.DataFrame(plot_list)
+    plot_df = plot_df.explode([variable + "Count", variable])
+    fig = px.line(
+        plot_df,
+        x=variable,
+        y=variable + "Count",
+        facet_col="Energy",
+        facet_col_wrap=4,
+        line_shape="hvh",
+        color="NHits",
+        color_discrete_sequence=px.colors.qualitative.Prism,
+    )
+
+    return fig
 
 
 def histogram_comparison(
