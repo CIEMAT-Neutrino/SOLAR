@@ -20,4 +20,5 @@ plotly
 plotly_express
 rich
 scipy
+scikit-learn
 uproot
