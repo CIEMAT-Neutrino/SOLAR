@@ -145,16 +145,16 @@ def get_units(var, debug=False):
         var (str): variable name
     """
     units = {
-        "R": " [cm] ",
-        "X": " [cm] ",
-        "Y": " [cm] ",
-        "Z": " [cm] ",
-        "E": " [MeV] ",
-        "P": " [MeV] ",
-        "PE": " [counts] ",
-        "Time": " [tick] ",
-        "Energy": " [MeV] ",
-        "Charge": " [ADC x tick] ",
+        "R": " (cm) ",
+        "X": " (cm) ",
+        "Y": " (cm) ",
+        "Z": " (cm) ",
+        "E": " (MeV) ",
+        "P": " (MeV) ",
+        "PE": " (counts) ",
+        "Time": " (tick) ",
+        "Energy": " (MeV) ",
+        "Charge": " (ADC x tick) ",
     }
     unit = ""
     for unit_key in list(units.keys()):
