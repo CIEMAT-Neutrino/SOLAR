@@ -153,11 +153,11 @@ def resize_subarrays(array, value, trim=False, debug=False):
         np.asarray(array, dtype=float)
         check_expand = False
         if debug:
-            print_colored("-> Array can be converted to numpy array!", "SUCCESS")
+            rprint(f"[green]-> Array can be converted to numpy array![/green]")
     except ValueError:
         check_expand = True
         if debug:
-            print_colored("-> Array needs resizing for numpy conversion!", "WARNING")
+            rprint(f"[yellow]-> Array needs resizing for numpy conversion![/yellow]")
 
     if check_expand:
         expand = False
@@ -214,7 +214,8 @@ def resize_subarrays_fixed(array, value, max_len, debug=False):
             else this_array.tolist() + [value] * (max_len - len(this_array))
             for this_array in array
         ]
-        print_colored("-> Successfully resized array to %i" % max_len, "SUCCESS")
+        if debug:
+            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
     except AttributeError:
         tot_array = [
             this_array[:max_len]
@@ -222,10 +223,12 @@ def resize_subarrays_fixed(array, value, max_len, debug=False):
             else this_array + [value] * (max_len - len(this_array))
             for this_array in array
         ]
-        print_colored("-> Successfully resized array to %i" % max_len, "SUCCESS")
+        if debug:
+            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
     except TypeError:
         tot_array = array
-        print_colored("-> Array is not a list of lists", "WARNING")
+        if debug:
+            rprint(f"[yellow]-> Array is not a list of lists[/yellow]")
 
     return_array = np.asarray(tot_array)
     return return_array
@@ -319,8 +322,8 @@ def get_root_info(name: str, path: str, debug=False):
 
     input_loop = True
     while input_loop:
-        rename = input("Rename the TTrees? (y/n): ")
-        if rename.lower() in ["y", "yes"]:
+        default = input("Continue with default processing? (y/n): ")
+        if default.lower() in ["y", "yes"]:
             if len(trees) == 2:
                 rename_default = input("Use default tree names (Truth - Reco)? (y/n): ")
                 if rename_default.lower() in ["y", "yes"]:
@@ -337,11 +340,11 @@ def get_root_info(name: str, path: str, debug=False):
 
             else:
                 print_colored(
-                    "There are more than 3 trees in the root file. Please, rename them manually",
+                    "The number of TTrees is not as expected. Please, select coustom names.",
                     "WARNING",
                 )
 
-        elif rename.lower() in ["n", "no"]:
+        elif default.lower() in ["n", "no"]:
             out_folder = input(
                 "Write the new names of the TTrees separated by commas: "
             ).split(",")
@@ -501,7 +504,6 @@ def remove_processed_branches(root_info, debug=False):
 
 
 def load_multi(
-    names: dict,
     configs: dict,
     tree_labels: list = ["Config", "Truth", "Reco"],
     load_all: bool = False,
@@ -528,16 +530,14 @@ def load_multi(
     out = ""
     run = dict()
     for idx, config in enumerate(configs):
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         path = info["PATH"] + info["NAME"]
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
-        for jdx, name in enumerate(names[config]):
+        for jdx, name in enumerate(configs[config]):
             if load_all == True:
                 branches_dict = get_branches(
                     name, path=path, debug=debug
@@ -614,7 +614,7 @@ def load_multi(
                                 [vers]
                                 * len(
                                     np.load(
-                                        path + name + "/" + tree + "/Event.npy",
+                                        f"{path}{name}/{tree}/Event.npy",
                                         allow_pickle=True,
                                     )
                                 ),
@@ -775,9 +775,7 @@ def get_gen_label(configs, debug=False):
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
@@ -867,7 +865,7 @@ def get_bkg_weights(info, names, debug=False):
                 "APA": 1e4,
                 "CPA": 1e2,
                 "Ar42": 1e4,
-                "Neutron": 1e2,
+                "Neutron": 1e3,
                 "Rn222": 1e4,
             }
         if info["GEOMETRY"] == "vd" and info["VERSION"] == "vd_1x8x14_3view_30deg":
@@ -881,9 +879,7 @@ def get_bkg_weights(info, names, debug=False):
 def get_gen_weights(configs, names, debug=False):
     weights_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"]
         name_list = names[config]
