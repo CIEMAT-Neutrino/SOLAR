@@ -10,60 +10,132 @@ from lib.geo_functions import add_geometry_planes
 from lib.io_functions import get_bkg_config
 from lib.solar_functions import get_pdg_color
 
+def get_ophit_positions(run, tree, idx):
+    ophits = [[],[],[]]
+    ophits[0] = run[tree]["OpHitX"][idx]
+    ophits[1] = run[tree]["OpHitY"][idx]
+    ophits[2] = run[tree]["OpHitZ"][idx]
+    return ophits
 
-def get_neutrino_positions(run, jdx):
-    neut_x = [run["Reco"]["TNuX"][jdx]]
-    neut_y = [run["Reco"]["TNuY"][jdx]]
-    neut_z = [run["Reco"]["TNuZ"][jdx]]
-    return neut_x, neut_y, neut_z
+
+def get_neutrino_positions(run, tree, idx):
+    neut = [[],[],[]]
+    neut[0] = [run[tree]["TNuX"][idx]]
+    neut[1] = [run[tree]["TNuY"][idx]]
+    neut[2] = [run[tree]["TNuZ"][idx]]
+    neut_name = [Particle.from_pdgid(12).name]
+    neut_color = get_pdg_color(12)
+    return neut, neut_name, neut_color
 
 
-def get_marley_positions(run, jdx):
-    ccint_x = [x for x in run["Reco"]["TMarleyX"][jdx] if x != 0]
-    ccint_y = [x for x in run["Reco"]["TMarleyY"][jdx] if x != 0]
-    ccint_z = [x for x in run["Reco"]["TMarleyZ"][jdx] if x != 0]
+def get_marley_positions(run, tree, idx):
+    ccint = [[],[],[]]
+    ccint[0] = [x for x in run[tree]["TMarleyX"][idx] if x != 0]
+    ccint[1] = [x for x in run[tree]["TMarleyY"][idx] if x != 0]
+    ccint[2] = [x for x in run[tree]["TMarleyZ"][idx] if x != 0]
     true_name = [
-        Particle.from_pdgid(x).name for x in run["Reco"]["TMarleyPDG"][jdx] if x != 0
+        Particle.from_pdgid(x).name for x in run[tree]["TMarleyPDG"][idx] if x != 0
     ]
     true_color = [
-        get_pdg_color(int(x)) for x in run["Reco"]["TMarleyPDG"][jdx] if x != 0
+        get_pdg_color(int(x)) for x in run[tree]["TMarleyPDG"][idx] if x != 0
     ]
-    return ccint_x, ccint_y, ccint_z, true_name, true_color
+    return ccint, true_name, true_color
 
 
-def get_reco_positions(run, jdx, reco, color_dict):
-    main_x = [run["Reco"][f"{reco}X"][jdx]]
-    main_y = [run["Reco"][f"{reco}Y"][jdx]]
-    main_z = [run["Reco"][f"{reco}Z"][jdx]]
-    main_pdg = [Particle.from_pdgid(run["Reco"]["MainPDG"][jdx]).name]
-    adj_x = [x for x in run["Reco"][f"AdjCl{reco}X"][jdx] if x != 0 and x > -1e6]
-    adj_y = [x for x in run["Reco"][f"AdjCl{reco}Y"][jdx] if x != 0 and x > -1e6]
-    adj_z = [x for x in run["Reco"][f"AdjCl{reco}Z"][jdx] if x != 0 and x > -1e6]
-    reco_gen = [x for x in run["Reco"]["AdjClGen"][jdx] if x != 0]
+def get_main_positions(run, tree, idx, reco, color_dict):
+    main_vertex = [[],[],[]]
+    main_vertex[0] = [run[tree][f"{reco}X"][idx]]
+    main_vertex[1] = [run[tree][f"{reco}Y"][idx]]
+    main_vertex[2] = [run[tree][f"{reco}Z"][idx]]
+    main_name = [Particle.from_pdgid(run[tree]["MainPDG"][idx]).name]
+    main_color = get_pdg_color(int(run[tree]["MainPDG"][idx]))
+    return main_vertex,main_name,main_color
+
+
+def get_adjcl_positions(run, tree, idx, reco, color_dict):
+    adj_vertex = [[],[],[]]
+    adj_vertex[0] = [x for x in run[tree][f"AdjCl{reco}X"][idx] if x != 0 and x > -1e6]
+    adj_vertex[1] = [x for x in run[tree][f"AdjCl{reco}Y"][idx] if x != 0 and x > -1e6]
+    adj_vertex[2] = [x for x in run[tree][f"AdjCl{reco}Z"][idx] if x != 0 and x > -1e6]
+    reco_gen = [x for x in run[tree]["AdjClGen"][idx] if x != 0]
     reco_name = [
-        Particle.from_pdgid(x).name for x in run["Reco"]["AdjClMainPDG"][jdx] if x != 0
+        Particle.from_pdgid(x).name for x in run[tree]["AdjClMainPDG"][idx] if x != 0
     ]
     reco_color = [
-        get_pdg_color(int(run["Reco"]["AdjClMainPDG"][jdx][x]))
+        get_pdg_color(int(run[tree]["AdjClMainPDG"][idx][x]))
         if reco_gen[x] == 1
         else color_dict[reco_gen[x]]
         for x in range(len(reco_gen))
     ]
-    return (
-        main_x,
-        main_y,
-        main_z,
-        main_pdg,
-        adj_x,
-        adj_y,
-        adj_z,
-        reco_gen,
-        reco_name,
-        reco_color,
+    return adj_vertex,reco_name,reco_color
+
+
+def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color, options:dict = {}, debug:bool = False):
+    default_options = {"lw":0, "marker":None}
+    for key in options:
+        try:
+            default_options[key] = options[key]
+        except KeyError:
+            print(f"Key {key} not found in options")
+        
+    fig.add_trace(
+        go.Scatter3d(
+            text=name,
+            name=subtitle,
+            legendgrouptitle_text=title,
+            legendgroup=idx,
+            marker_symbol=symbol,
+            x=data[0],
+            y=data[1],
+            z=data[2],
+            mode="markers",
+            marker=dict(size=np.asarray(size), 
+                color=color, 
+                colorscale="Turbo",
+                line_width=default_options["lw"]
+            ),
+        ),
+        row=1,
+        col=3,
     )
+    fig.add_trace(
+        go.Scatter(
+            text=name,
+            legendgroup=idx,
+            marker_symbol=symbol,
+            x=data[0],
+            y=data[1],
+            mode="markers",
+            marker=dict(size=np.asarray(size)+5,
+                color=color,
+                colorscale="Turbo",
+                line_width=default_options["lw"]
+            ),
+            showlegend=False,
+        ),
+        row=1,
+        col=2,
+    )
+    fig.add_trace(
+        go.Scatter(
+            text=name,
+            legendgroup=idx,
+            marker_symbol=symbol,
+            x=data[2],
+            y=data[1],
+            mode="markers",
+            marker=dict(size=np.asarray(size)+5,
+                color=color,
+                colorscale="Turbo",
+                line_width=default_options["lw"]),
+            showlegend=False,
+        ),
+        row=1,
+        col=1,
+    )
+    return fig
 
-
-def plot_event(run, configs, jdx=None, tracked="Reco", debug=False):
+def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=False):
     specs = [
         [
             {"type": "scatter"},
@@ -74,225 +146,86 @@ def plot_event(run, configs, jdx=None, tracked="Reco", debug=False):
     ]
     fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
 
-    for idx, config in enumerate(configs):
+    for i, config in enumerate(configs):
         info = json.load(open(f"../config/{config}/{config}_config.json"))
         bkg_dict, color_dict = get_bkg_config(info)
-        if jdx is None:
-            jdx = np.random.randint(len(run["Reco"]["Event"]))
+        if idx is None:
+            idx = np.random.randint(len(run["Reco"]["Event"]))
             while (
-                run["Reco"]["TNuE"][jdx] > 20
-                or run["Reco"]["Primary"][jdx] != True
-                or run["Reco"]["Generator"][jdx] != 1
+                run["Reco"]["TNuE"][idx] > 30
+                or run["Reco"]["Primary"][idx] != True
+                or run["Reco"]["Generator"][idx] != 1
             ):
-                jdx = np.random.randint(len(run["Reco"]["Event"]))
+                idx = np.random.randint(len(run["Reco"]["Event"]))
 
-        neut_x, neut_y, neut_z = get_neutrino_positions(run, jdx)
-        ccint_x, ccint_y, ccint_z, true_name, true_color = get_marley_positions(
-            run, jdx
-        )
-        (
-            main_x,
-            main_y,
-            main_z,
-            main_pdg,
-            adj_x,
-            adj_y,
-            adj_z,
-            reco_gen,
-            reco_name,
-            reco_color,
-        ) = get_reco_positions(run, jdx, tracked, color_dict)
+        neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
+        ccint, true_name, true_color = get_marley_positions(run, tracked, idx)
+        main, main_name, main_color = get_main_positions(run, tracked, idx, tracked, color_dict)
+        adj, adjcl_name, adjcl_color = get_adjcl_positions(run, tracked, idx, tracked, color_dict)
 
-        fig.add_trace(
-            go.Scatter3d(
-                text="Neutrino",
-                legendgrouptitle_text="Truth",
-                legendgroup="0",
-                marker_symbol="circle-open",
-                x=neut_x,
-                y=neut_y,
-                z=neut_z,
-                mode="markers",
-                marker=dict(size=15, color="red"),
-                name="Neutrino",
-            ),
-            row=1,
-            col=3,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text="Neutrino",
-                legendgroup="0",
-                marker_symbol="circle-open",
-                x=neut_x,
-                y=neut_y,
-                mode="markers",
-                marker=dict(size=20, color="red"),
-                showlegend=False,
-            ),
-            row=1,
-            col=2,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text="Neutrino",
-                legendgroup="0",
-                marker_symbol="circle-open",
-                x=neut_z,
-                y=neut_y,
-                mode="markers",
-                marker=dict(size=20, color="red"),
-                showlegend=False,
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter3d(
-                text=main_pdg,
-                legendgrouptitle_text="Reco",
-                legendgroup="1",
-                marker_symbol="circle",
-                x=main_x,
-                y=main_y,
-                z=main_z,
-                mode="markers",
-                marker=dict(color="red"),
-                name="Main",
-            ),
-            row=1,
-            col=3,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=main_pdg,
-                legendgroup="1",
-                x=main_x,
-                y=main_y,
-                mode="markers",
-                marker=dict(color="red"),
-                showlegend=False,
-            ),
-            row=1,
-            col=2,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=main_pdg,
-                legendgroup="1",
-                x=main_z,
-                y=main_y,
-                mode="markers",
-                marker=dict(color="red"),
-                showlegend=False,
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter3d(
-                text=true_name,
-                legendgroup="0",
-                marker_symbol="square-open",
-                x=ccint_x,
-                y=ccint_y,
-                z=ccint_z,
-                mode="markers",
-                marker=dict(color=true_color, size=10),
-                name="Gamma",
-            ),
-            row=1,
-            col=3,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=true_name,
-                legendgroup="0",
-                marker_symbol="square-open",
-                x=ccint_x,
-                y=ccint_y,
-                mode="markers",
-                marker=dict(color=true_color, size=15),
-                showlegend=False,
-            ),
-            row=1,
-            col=2,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=true_name,
-                legendgroup="0",
-                marker_symbol="square-open",
-                x=ccint_z,
-                y=ccint_y,
-                mode="markers",
-                marker=dict(color=true_color, size=15),
-                showlegend=False,
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter3d(
-                text=reco_name,
-                legendgroup="1",
-                marker_symbol="square",
-                x=adj_x,
-                y=adj_y,
-                z=adj_z,
-                mode="markers",
-                marker=dict(color=reco_color),
-                name="Adjacent",
-            ),
-            row=1,
-            col=3,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=reco_name,
-                legendgroup="1",
-                marker_symbol="square",
-                x=adj_x,
-                y=adj_y,
-                mode="markers",
-                marker=dict(color=reco_color),
-                showlegend=False,
-            ),
-            row=1,
-            col=2,
-        )
-        fig.add_trace(
-            go.Scatter(
-                text=reco_name,
-                legendgroup="1",
-                marker_symbol="square",
-                x=adj_z,
-                y=adj_y,
-                mode="markers",
-                marker=dict(color=reco_color),
-                showlegend=False,
-            ),
-            row=1,
-            col=1,
-        )
+        fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 15, neut_color, {"lw":1})
+        fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 15, true_color,{"lw":1})
+        fig = add_data_to_event(fig, main, "1", "Reco", "Main", main_name,"circle", 10, main_color, {"lw":1})
+        fig = add_data_to_event(fig, adj, "1", "Reco", "Adjacent", adjcl_name,"square", 10, adjcl_color)
 
         fig = format_coustom_plotly(fig, figsize=(None, 600))
         fig.update_layout(
             title_text="TNuE: <b>%.2fMeV</b> Cluster: %i"
-            % (run["Reco"]["TNuE"][jdx], jdx),
+            % (run["Reco"]["TNuE"][idx], idx),
             title_x=0.5,
         )
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
         fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
         fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
         fig = add_geometry_planes(fig, info["GEOMETRY"], row=1, col=3)
+        
+        if zoom:
+            fig.update_xaxes(row=1, col=2, range=[neut[0][0] - 100, neut[0][0] + 100])
+            fig.update_yaxes(row=1, col=2, range=[neut[1][0] - 100, neut[1][0] + 100])
+            fig.update_xaxes(row=1, col=1, range=[neut[2][0] - 100, neut[2][0] + 100])
 
-        fig.update_yaxes(row=1, col=2, range=[neut_y[0] - 100, neut_y[0] + 100])
-        fig.update_xaxes(row=1, col=1, range=[neut_z[0] - 100, neut_z[0] + 100])
-        fig.update_xaxes(row=1, col=2, range=[neut_x[0] - 100, neut_x[0] + 100])
-
-        fig.update_traces(hovertemplate="X: %{x} <br>Y: %{y} <br>PDG: %{text}")
+        fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
         return fig
+    
+
+def plot_pds_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=False):
+    specs = [
+        [
+            {"type": "scatter"},
+            {"type": "scatter"},
+            {"type": "scatter3d", "colspan": 2},
+            None,
+        ]
+    ]
+    fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
+
+    for i, config in enumerate(configs):
+        info = json.load(open(f"../config/{config}/{config}_config.json"))
+        if idx is None:
+            idx = np.random.randint(len(run[tracked]["Event"]))
+            while (run[tracked]["TNuE"][idx] > 30):
+                idx = np.random.randint(len(run[tracked]["Event"]))
+
+        neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
+        ccint, true_name, true_color = get_marley_positions(run, tracked, idx)
+        ophits = get_ophit_positions(run, tracked, idx)
+        fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 20, neut_color)
+        fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 20, true_color)
+        # Make a ophit_size array from the ophitPE branch of run substituting the numbers < 0 with 0
+        ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx]]
+        ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx]]
+        fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color)
+
+        fig = format_coustom_plotly(fig, figsize=(None, 600))
+        fig.update_layout(
+            title_text="TNuE: <b>%.2fMeV</b> Cluster: %i"
+            % (run["Reco"]["TNuE"][idx], idx),
+            title_x=0.5,
+        )
+        fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
+        fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
+        fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
+        fig = add_geometry_planes(fig, info["GEOMETRY"], row=1, col=3)
+        fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f}")
+
+    return fig
