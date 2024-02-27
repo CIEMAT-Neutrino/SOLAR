@@ -253,9 +253,7 @@ def calculate_pileup_df_dict(run, configs, factor=1, debug=False):
     pileup_df_dict = {}
     color_dict = {}
     for idx, config in enumerate(configs):
-        info = json.load(
-            open("../config/" + config + "/" + config + "_config.json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info, debug=debug)
         truth_gen_df = generate_truth_dataframe(run, info, debug=debug)
         df = calculate_mean_truth_df(truth_gen_df, debug=debug)
@@ -287,7 +285,7 @@ def generate_pileup_matrix(run, configs, factor, save=False, show=False, debug=F
         )
 
         if save:
-            fig.write_image("../images/bkg/%s_pileup_area.png" % config, scale=1.5)
+            fig.write_image(f"../images/bkg/{config}_PileUp_Area.png", scale=1.5)
         if show:
             fig.show()
     return fig
@@ -300,9 +298,7 @@ def generate_background_distribution(
         rows=len(configs), cols=1, shared_yaxes=False, shared_xaxes=False
     )
     for idx, config in enumerate(configs):
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info)
         truth_gen_df = generate_truth_dataframe(run, info, fullname=fullname)
         mean_truth_df = calculate_mean_truth_df(truth_gen_df)
