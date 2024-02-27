@@ -20,7 +20,7 @@
     "MAX_ADJCL_TIME": 1200,
     "MAX_FLASH_R": 100,
     "MIN_FLASH_PE": 20,
-    "RATIO_FLASH_PEvsR": 0.02,
+    "MAX_FLASH_PE_RATIO": 0.3,
     "MIN_BKG_R": 20,
     "MAX_BKG_CHARGE": 75,
     "COMPUTE_MATCHING": true,

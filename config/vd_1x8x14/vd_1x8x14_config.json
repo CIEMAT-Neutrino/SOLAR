@@ -14,7 +14,7 @@
     "MAX_ADJCL_TIME": 1200,
     "MAX_FLASH_R": 50,
     "MIN_FLASH_PE": 100,
-    "RATIO_FLASH_PEvsR": 0.1,
+    "MAX_FLASH_PE_RATIO": 0.3,
     "DEFAULT_RECOX_TIME": "Time",
     "DEFAULT_ENERGY_TIME": "Time",
     "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",

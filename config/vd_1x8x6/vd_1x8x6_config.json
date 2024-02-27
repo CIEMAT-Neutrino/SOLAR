@@ -21,7 +21,7 @@
     "MAX_FLASH_R": 50,
     "MIN_FLASH_PE": 100,
     "RATIO_FLASH_PE": 0.5,
-    "RATIO_FLASH_PEvsR": 0.1,
+    "MAX_FLASH_PE_RATIO": 0.3,
     "MIN_BKG_R": 20,
     "MAX_BKG_CHARGE": 75,
     "COMPUTE_MATCHING": true,
