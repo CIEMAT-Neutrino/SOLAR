@@ -296,7 +296,10 @@ def get_pdg_name(unique_value_list, debug=False):
     """
     pdg_dict = dict()
     for pdg in unique_value_list:
-        pdg_dict[pdg] = Particle.from_pdgid(pdg).name
+        try:
+            pdg_dict[pdg] = Particle.from_pdgid(pdg).name
+        except:
+            pdg_dict[pdg] = -1
     return pdg_dict
 
 
@@ -304,7 +307,7 @@ def get_pdg_color(pdg_list, debug=False):
     """
     Get the color for each pdg.
     """
-    default_color_dict = {11: "orange", 22: "blue", 2112: "green", 2212: "gray"}
+    default_color_dict = {12: "red", 11: "orange", 22: "blue", 2112: "green", 2212: "purple", -12: "cyan",}
     if type(pdg_list) == int:
         try:
             return default_color_dict[pdg_list]
@@ -314,17 +317,9 @@ def get_pdg_color(pdg_list, debug=False):
     else:
         color_dict = dict()
         for pdg in pdg_list:
-            if pdg == 11:
-                color_dict[pdg] = "blue"
-            elif pdg == 12:
-                color_dict[pdg] = "red"
-            elif pdg == 22:
-                color_dict[pdg] = "purple"
-            elif pdg == 2112:
-                color_dict[pdg] = "green"
-            elif pdg == 2212:
-                color_dict[pdg] = "orange"
-            else:
+            try:
+                color_dict[pdg] = default_color_dict[pdg]
+            except:
                 color_dict[pdg] = "grey"
         return color_dict
 
