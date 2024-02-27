@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.colors as colors
@@ -13,18 +14,18 @@ from plotly.subplots import make_subplots
 
 
 def format_coustom_plotly(
-    fig,
-    title=None,
-    legend=dict(),
-    fontsize=16,
-    figsize=None,
-    ranges=(None, None),
-    matches=("x", "y"),
-    tickformat=(".s", ".s"),
-    log=(False, False),
-    margin={"auto": True},
-    add_units=False,
-    debug=False,
+    fig:go.Figure,
+    title:str=None,
+    legend:dict=dict(),
+    fontsize:int=16,
+    figsize:int=None,
+    ranges:tuple=(None, None),
+    matches:tuple=("x", "y"),
+    tickformat:tuple=(".s", ".s"),
+    log:tuple=(False, False),
+    margin:dict={"auto": True},
+    add_units:bool=True,
+    debug:bool=False,
 ):
     """
     Format a plotly figure
@@ -76,6 +77,7 @@ def format_coustom_plotly(
         template="presentation",
         font=dict(size=fontsize),
         paper_bgcolor=margin["color"],
+        bargap=0,
     )  # font size and template
 
     fig.update_xaxes(
