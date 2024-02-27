@@ -1,15 +1,12 @@
 {   
-    "CONFIG": {
-        "INTEGERS": {
-            "Event": 1,
-            "Flag": 1
-        },
+    "Config": {
+        "INTEGERS": {},
         "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {}
     },
 
-    "TRUE": {
+    "Truth": {
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
@@ -21,7 +18,7 @@
         "BOOLS": {}
     },
     
-    "RECO": {
+    "Reco": {
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,

@@ -24,6 +24,8 @@
             "NHits": 1,
             "Ind0NHits": 1,
             "Ind1NHits": 1,
+            "Ind0Charge": 1,
+            "Ind1Charge": 1,
             "Ind0dT": 1,
             "Ind1dT": 1,
             "AdjClNum": 0,

@@ -5,22 +5,35 @@
         "STRINGS": {},
         "BOOLS": {}
     },
-
     "Truth": {
         "VECTORS": {
-            "TruthPart": 0,
-            "TMarleyE": 0,
-            "TMarleyP": 0,
-            "TMarleyPDG": 0,
-            "TMarleyX": 0,
-            "TMarleyY": 0,
-            "TMarleyZ": 0,
-            "HitNum": 0,
-            "ClusterNum": 0
+            "TruthPart": 1,
+            "TMarleyPDG": 1,
+            "TMarleyE": 1,
+            "TMarleyP": 1,
+            "TMarleyX": 1,
+            "TMarleyY": 1,
+            "TMarleyZ": 1,
+            "HitNum": 1,
+            "ClusterNum": 1,
+            "TMarleyPDGDepList": 1,
+            "TMarleyElectronDepList": 1,
+            "TMarleyXDepList": 1,
+            "TMarleyYDepList": 1,
+            "TMarleyZDepList": 1,
+            "TMarleyEDepList": 1,
+            "TMarleyMaxEDep": 1,
+            "OpHitX": 1,
+            "OpHitY": 1,
+            "OpHitZ": 1,
+            "OpHitPE": 1,
+            "OpHitPur": 1
         },
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1
+            "Flag": 1,
+            "TrackNum": 1,
+            "OpFlashNum": 1
         },
         "DOUBLES": {
             "TNuE": 0,
@@ -32,7 +45,6 @@
         "STRINGS": {},
         "BOOLS": {}
     },
-
     "Reco": {
         "VECTORS": {
             "TruthPart": 0,
@@ -47,9 +59,10 @@
             "AdjClCharge": 0,
             "AdjClTime": -1e6,
             "AdjClR": -1e6,
-            "AdjClGen": 0
+            "AdjClGen": 0,
+            "MTrackStart": 1,
+            "MTrackEnd": 1
         },
-
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
@@ -58,23 +71,18 @@
             "AdjClNum": 0,
             "AdjOpFlashNum": 0
         },
-
         "DOUBLES": {
             "Purity": 0,
-            "TNuE":  0,
-            "TNuX":  -1e6,
-            "TNuY":  -1e6,
-            "TNuZ":  -1e6,
+            "TNuE": 0,
+            "TNuX": -1e6,
+            "TNuY": -1e6,
+            "TNuZ": -1e6,
             "Time": -1e6,
             "Charge": 0,
             "MainE": 0,
             "MainParentE": 0
         },
-
-        "STRINGS": {
-
-        },
-
+        "STRINGS": {},
         "BOOLS": {
             "Primary": 1
         }
