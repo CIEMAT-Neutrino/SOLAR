@@ -24,7 +24,7 @@ def compute_root_workflow(
         reco_tree = input_file.Get(folder_name + "/" + "SolarNuAnaTree")
 
         params = get_param_dict(
-            user_input["config_file"], in_params={}, debug=user_input["debug"]
+            f"../config/{config}/{config}_config.json", in_params={}, debug=user_input["debug"]
         )
 
         conf, true, reco = {}, {}, {}
@@ -51,16 +51,16 @@ def compute_root_workflow(
             "BOOLS": bool,
         }
 
-        data_config = json.load(open("../lib/workflow/" + workflow + ".json", "r"))
+        data_config = json.load(open(f"../config/workflow/{workflow}.json", "r"))
         for object_type in object_types.keys():
             new_conf_branches = new_conf_branches + list(
-                data_config["CONFIG"][object_type].keys()
+                data_config["Config"][object_type].keys()
             )
             new_true_branches = new_true_branches + list(
-                data_config["TRUE"][object_type].keys()
+                data_config["Truth"][object_type].keys()
             )
             new_reco_branches = new_reco_branches + list(
-                data_config["RECO"][object_type].keys()
+                data_config["Reco"][object_type].keys()
             )
 
         for branch in new_conf_branches:
@@ -96,36 +96,36 @@ def compute_root_workflow(
         # except ValueError:
         #     pass
 
-        debug_str.append("\nTRUTH:")
+        debug_str.append("\nTruth:")
         for object_type in object_types.keys():
-            for key in data_config["TRUE"][object_type]:
+            for key in data_config["Truth"][object_type]:
                 try:
-                    true[key] = data_config["TRUE"][object_type][key] * root[key]
+                    true[key] = data_config["Truth"][object_type][key] * root[key]
                     if type(true[key][0]) == np.ndarray:
                         true[key] = np.vstack(true[key])
                     debug_str.append(
                         "\n\t-> Found %s \t %s" % (key, object_types[object_type])
                     )
                 except ValueError:
-                    true[key] = data_config["TRUE"][object_type][key] * np.ones(
+                    true[key] = data_config["Truth"][object_type][key] * np.ones(
                         true_tree.GetEntries(), dtype=object_types[object_type]
                     )
                     branch_info = (
                         key,
                         object_types[object_type],
-                        data_config["TRUE"][object_type][key],
+                        data_config["Truth"][object_type][key],
                     )
                     debug_str.append(
                         "\n\t-> Created %s \t %s with factor %.2e" % branch_info
                     )
                 except UnboundLocalError:
-                    true[key] = data_config["TRUE"][object_type][key] * np.ones(
+                    true[key] = data_config["Truth"][object_type][key] * np.ones(
                         true_tree.GetEntries(), dtype=object_types[object_type]
                     )
                     branch_info = (
                         key,
                         object_types[object_type],
-                        data_config["TRUE"][object_type][key],
+                        data_config["Truth"][object_type][key],
                     )
                     debug_str.append(
                         "\n\t-> WARNING: Key %s not found in true tree!" % key
@@ -137,36 +137,36 @@ def compute_root_workflow(
         except ValueError:
             pass
 
-        debug_str.append("\nRECO:")
+        debug_str.append("\nReco:")
         for object_type in object_types.keys():
-            for key in data_config["RECO"][object_type]:
+            for key in data_config["Reco"][object_type]:
                 try:
-                    reco[key] = data_config["RECO"][object_type][key] * np.asarray(
+                    reco[key] = data_config["Reco"][object_type][key] * np.asarray(
                         root[key], dtype=object_types[object_type]
                     )
                     debug_str.append(
                         "\n\t-> Found %s \t %s" % (key, object_types[object_type])
                     )
                 except ValueError:
-                    reco[key] = data_config["RECO"][object_type][key] * np.ones(
+                    reco[key] = data_config["Reco"][object_type][key] * np.ones(
                         reco_tree.GetEntries(), dtype=object_types[object_type]
                     )
                     branch_info = (
                         key,
                         object_types[object_type],
-                        data_config["RECO"][object_type][key],
+                        data_config["Reco"][object_type][key],
                     )
                     debug_str.append(
                         "\n\t-> Created %s \t %s with factor %.2e" % branch_info
                     )
                 except KeyError:
-                    reco[key] = data_config["RECO"][object_type][key] * np.ones(
+                    reco[key] = data_config["Reco"][object_type][key] * np.ones(
                         reco_tree.GetEntries(), dtype=object_types[object_type]
                     )
                     branch_info = (
                         key,
                         object_types[object_type],
-                        data_config["RECO"][object_type][key],
+                        data_config["Reco"][object_type][key],
                     )
                     debug_str.append(
                         "\n\t-> WARNING: Key %s not found in reco tree!" % key
