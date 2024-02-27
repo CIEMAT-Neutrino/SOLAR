@@ -34,6 +34,9 @@ def compute_reco_workflow(
         run = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
+        run = compute_marley_energies(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
         run = compute_particle_energies(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
@@ -59,9 +62,15 @@ def compute_reco_workflow(
         run = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
+        run = compute_main_variables(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
 
     if workflow == "VERTEXING":
         run = compute_true_efficiency(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
+        run = compute_main_variables(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
         run = compute_opflash_matching(
@@ -107,9 +116,22 @@ def compute_main_variables(run, configs, params={}, rm_branches=False, debug=Fal
     """
     Compute the main (backtracked) variables of main particle correspondong to the cluster in the run.
     """
-    run["Reco"]["MainX"] = run["Reco"]["MainVertex"][:, 0]
-    run["Reco"]["MainY"] = run["Reco"]["MainVertex"][:, 1]
-    run["Reco"]["MainZ"] = run["Reco"]["MainVertex"][:, 2]
+    run["Reco"]["MainX"]  = run["Reco"]["MainVertex"][:,0]
+    run["Reco"]["MainY"]  = run["Reco"]["MainVertex"][:,1]
+    run["Reco"]["MainZ"]  = run["Reco"]["MainVertex"][:,2]
+
+    run["Reco"]["ParentX"]  = run["Reco"]["MainParentVertex"][:,0]
+    run["Reco"]["ParentY"]  = run["Reco"]["MainParentVertex"][:,1]
+    run["Reco"]["ParentZ"]  = run["Reco"]["MainParentVertex"][:,2]
+
+    run["Reco"]["ErrorY"]    = abs(run["Reco"]["MainY"] - run["Reco"]["RecoY"]) 
+    run["Reco"]["ErrorZ"]    = abs(run["Reco"]["MainZ"] - run["Reco"]["RecoZ"])
+    run["Reco"]["ErrorTot"]  = np.sqrt(np.power(run["Reco"]["ErrorZ"],2) + np.power(run["Reco"]["ErrorY"],2))
+
+    run["Reco"]["Neutrino"] = run["Reco"]["Generator"] == 1
+    run["Reco"]["Electron"] = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,0] > 0.9)
+    run["Reco"]["Gamma"]    = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,1] > 0.9)
+    run["Reco"]["Neutron"]  = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,2] > 0.9)
     return run
 
 
@@ -124,9 +146,7 @@ def compute_primary_cluster(run, configs, params={}, rm_branches=False, debug=Fa
     run["Reco"][new_branches[1]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
@@ -156,9 +176,7 @@ def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=Fa
     run["Reco"][new_branches[4]] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
@@ -191,6 +209,24 @@ def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=Fa
     return run
 
 
+def compute_marley_energies(run, configs, params={}, rm_branches=False, debug=False):
+
+    pdg_list = np.unique(run["Truth"]["TMarleyPDG"])
+    pdg_list = pdg_list[pdg_list != 0]
+    new_branches = ["TMarleySumE","TMarleySumP"]
+    run["Truth"][new_branches[0]] = np.zeros((len(run["Truth"]["Event"]),len(pdg_list)),dtype=float)
+    run["Truth"][new_branches[1]] = np.zeros((len(run["Truth"]["Event"]),len(pdg_list)),dtype=float)
+    for idx,pdg in enumerate(pdg_list):
+        run["Truth"][new_branches[0]][:,idx] = np.sum(run["Truth"]["TMarleyE"]*(run["Truth"]["TMarleyPDG"] == pdg),axis=1)
+        run["Truth"][new_branches[1]][:,idx] = np.sum(run["Truth"]["TMarleyP"]*(run["Truth"]["TMarleyPDG"] == pdg),axis=1)
+    pdg_list = np.repeat(pdg_list, len(run["Truth"]["Event"])).reshape(len(pdg_list),len(run["Truth"]["Event"])).T
+    run["Truth"]["TMarleySumPDG"] = pdg_list
+    print_colored(
+        "Marley energy computation \t-> Done! (%s)" % new_branches, "SUCCESS"
+    )
+    run = remove_branches(run, rm_branches, [], debug=debug)
+    return run
+
 def compute_particle_energies(run, configs, params={}, rm_branches=False, debug=False):
     """
     This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
@@ -206,9 +242,7 @@ def compute_particle_energies(run, configs, params={}, rm_branches=False, debug=
     run["Reco"][new_branches[3]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
@@ -283,10 +317,8 @@ def compute_recoy(
     run["Reco"][new_branches[1]] = -np.ones(len(run["Reco"]["Event"]), dtype=int)
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
         nhit = params["PRESELECTION_NHITS"]
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
@@ -391,9 +423,7 @@ def compute_opflash_matching(
         (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float
     )
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
@@ -403,14 +433,12 @@ def compute_opflash_matching(
             continue
 
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
 
         # Select all FlashMatch candidates
         max_r_filter = run["Reco"]["AdjOpFlashR"][idx] < params["MAX_FLASH_R"]
         min_pe_filter = run["Reco"]["AdjOpFlashPE"][idx] > params["MIN_FLASH_PE"]
-        max_ratio_filter = (
-            run["Reco"]["AdjOpFlashPE"][idx] / run["Reco"]["AdjOpFlashMaxPE"][idx]
-        ) > run["Reco"]["AdjOpFlashR"][idx] * params["RATIO_FLASH_PEvsR"]
+        # max_ratio_filter = run["Reco"]["AdjOpFlashPE"][idx] > 3000 * run["Reco"]["AdjOpFlashMaxPE"][idx] / run["Reco"]["AdjOpFlashPE"][idx]
 
         repeated_array = np.repeat(
             run["Reco"]["Time"][idx], len(run["Reco"]["AdjOpFlashTime"][idx][0])
@@ -423,7 +451,8 @@ def compute_opflash_matching(
             < params["MAX_DRIFT_FACTOR"] * info["EVENT_TICKS"]
         )
         run["Reco"]["FlashMathedIdx"][idx] = (
-            (max_r_filter) * (min_pe_filter) * (max_ratio_filter) * (max_drift_filter)
+            # (max_r_filter) * (min_pe_filter) * (max_ratio_filter) * (max_drift_filter)
+            (max_r_filter) * (min_pe_filter) * (max_drift_filter)
         )
 
         # If at least one candidate is found, mark the event as matched and select the best candidate
@@ -476,15 +505,13 @@ def compute_recox(
     )
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
 
         repeated_array = np.repeat(
             run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
@@ -494,7 +521,7 @@ def compute_recox(
         )
         run["Reco"]["AdjCldT"][idx] = run["Reco"]["AdjClTime"][idx] - converted_array
 
-        if info["GEOMETRY"][0] == "hd":
+        if info["GEOMETRY"] == "hd":
             tpc_filter = (run["Reco"]["TPC"]) % 2 == 0
             plus_idx = np.where(
                 (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
@@ -545,13 +572,14 @@ def compute_recox(
                 / info["EVENT_TICKS"]
                 + info["DETECTOR_SIZE_X"] / 2
             )
-
-            repeated_array = np.repeat(
-                run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0])
-            )
-            converted_array = np.reshape(
-                repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
-            )
+                        
+            converted_array = reshape_array(run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+            # repeated_array = np.repeat(
+            #     run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0])
+            # )
+            # converted_array = np.reshape(
+            #     repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
+            # )
             run["Reco"]["AdjClRecoX"][idx] = (
                 run["Reco"]["AdjCldT"][idx]
                 * info["DETECTOR_SIZE_X"]
@@ -585,27 +613,14 @@ def compute_cluster_energy(
     )
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
 
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
-        corr_info = json.load(
-            open(
-                "../config/"
-                + config
-                + "/"
-                + config
-                + "_calib/"
-                + config
-                + "_charge_correction.json",
-                "r",
-            )
-        )
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
+        corr_info = json.load(open(f"../config/{config}/{config}_calib/{config}_charge_correction.json","r"))
         corr_popt = [corr_info["CHARGE_AMP"], corr_info["ELECTRON_TAU"]]
 
         run["Reco"]["Correction"][idx] = np.exp(
@@ -638,23 +653,14 @@ def compute_reco_energy(run, configs, params={}, rm_branches=False, debug=False)
     run["Reco"]["TotalEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     run["Reco"]["TotalAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
         calib_info = json.load(
             open(
-                "../config/"
-                + config
-                + "/"
-                + config
-                + "_calib/"
-                + config
-                + "_energy_calibration.json",
+                f"../config/{config}/{config}_calib/{config}_energy_calibration.json",
                 "r",
             )
         )
@@ -697,6 +703,11 @@ def compute_opflash_advanced(run, configs, params={}, rm_branches=False, debug=F
     """
     # New branches
     run["Reco"]["AdjOpFlashNum"] = np.sum(run["Reco"]["AdjOpFlashR"] != 0, axis=1)
+    run["Reco"]["AdjOpFlashRatio"] = run["Reco"]["AdjOpFlashMaxPE"]/run["Reco"]["AdjOpFlashPE"]
+    run["Reco"]["AdjOpFlashErrorY"] = run["Reco"]["AdjOpFlashRecoY"] - reshape_array(run["Reco"]["TNuY"], len(run["Reco"]["AdjOpFlashRecoY"][0]))
+    run["Reco"]["AdjOpFlashErrorZ"] = run["Reco"]["AdjOpFlashRecoZ"] - reshape_array(run["Reco"]["TNuZ"], len(run["Reco"]["AdjOpFlashRecoZ"][0]))
+    run["Reco"]["TrueDriftTime"] = abs(run["Reco"]["MainVertex"][:,0])*6.4*2
+    run["Reco"]["AdjClTrueDriftTime"] = abs(run["Reco"]["AdjClMainX"])*6.4*2
 
     rprint("[green]OpFlash variables computation \t-> Done![/green]")
     return run
@@ -736,14 +747,12 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
     )
 
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
         run["Reco"]["TotalAdjClCharge"][idx] = np.sum(
             run["Reco"]["AdjClCharge"][idx], axis=1
         )
@@ -757,12 +766,13 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
         run["Reco"]["MeanAdjClTime"][idx] = np.mean(
             run["Reco"]["AdjClTime"][idx], axis=1
         )
-        run["Reco"]["AdjClGenNum"][idx] = np.apply_along_axis(
-            count_occurrences,
-            arr=run["Reco"]["AdjClGen"][idx],
-            length=len(run["Reco"]["TruthPart"][idx][0]) + 1,
-            axis=1,
-        )
+        # run["Reco"]["AdjClGenNum"][idx] = np.apply_along_axis(
+        #     count_occurrences,
+        #     arr=run["Reco"]["AdjClGen"][idx],
+        #     length=len(run["Reco"]["TruthPart"][idx][0]) + 1,
+        #     axis=1,
+        # )
+        # converted_array = reshape_array(run["Reco"]["AdjClGen"][idx], len(run["Reco"]["AdjClGen"][idx][0]))
         repeated_array = np.repeat(
             run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0])
         )
@@ -800,14 +810,12 @@ def compute_adjcl_advanced(run, configs, params={}, rm_branches=False, debug=Fal
     run["Reco"]["TotalAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
     run["Reco"]["MaxAdjClEnergy"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
     for config in configs:
-        info = json.load(
-            open("../config/" + config + "/" + configs[config] + ".json", "r")
-        )
+        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+        params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
@@ -884,16 +892,22 @@ def get_param_dict(config_file, in_params, debug=False):
     """
     Get the parameters for the reco workflow from the input files.
     """
-    params = json.load(open("../config/" + config_file + ".json", "r"))
+    params = json.load(open(config_file, "r"))
     terminal_print = ""
     for param in params.keys():
         try:
-            params[param] = in_params[param]
-            terminal_print = (
-                terminal_print
-                + "-> Using %s: %s from the input dictionary\n"
-                % (param, in_params[param])
-            )
+            if in_params[param] != None:
+                params[param] = in_params[param]
+                terminal_print = (
+                    terminal_print
+                    + "-> Using %s: %s from the input dictionary\n"
+                    % (param, in_params[param])
+                )
+            else:
+                terminal_print = (
+                    terminal_print
+                    + "-> Using %s: %s from the config file\n" % (param, params[param])
+                )
         except KeyError:
             pass
     if debug:
@@ -945,7 +959,7 @@ def compute_solarnuana_filters(
     """
     filters = []
     labels = []
-    info = json.load(open("../config/" + config + "/" + configs[config] + ".json", "r"))
+    info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
 
     # Select filters to be applied to the data
     geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"]
@@ -957,7 +971,7 @@ def compute_solarnuana_filters(
     labels.append("All")
     filters.append(base_filter)
 
-    params = get_param_dict(config + "/" + configs[config], params, debug=debug)
+    params = get_param_dict(f"../config/{config}/{config}_config.json", params, debug=debug)
     for this_filter in filter_list:
         if this_filter == "Primary":
             primary_filter = run["Reco"]["Primary"] == True
@@ -1160,10 +1174,6 @@ def generate_index(
     return true_result, true_match, true_counts, true_nhits, reco_result
 
 
-@numba.njit
-def count_occurrences(row, length, debug=False):
-    return np.bincount(row, minlength=length)
-
-
-def filter_nb(arr, cond):
-    return np.fromiter((arr[i] for i in range(len(arr)) if cond[i]), dtype=arr.dtype)
+def reshape_array(array, length):
+    repeated_array = np.repeat(array, length)
+    return np.reshape(repeated_array, (-1, length))
