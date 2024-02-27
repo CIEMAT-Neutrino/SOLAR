@@ -1,3 +1,5 @@
+from src.utils import get_project_root
+
 from .df_functions import *
 from .fit_functions import *
 from .geo_functions import *
