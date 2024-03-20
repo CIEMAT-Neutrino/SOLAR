@@ -5,7 +5,6 @@
         "STRINGS": {},
         "BOOLS": {}
     },
-
     "Truth": {
         "INTEGERS": {
             "Event": 1,
@@ -15,7 +14,6 @@
         "STRINGS": {},
         "BOOLS": {}
     },
-
     "Reco": {
         "INTEGERS": {
             "Event": 1,
@@ -31,21 +29,18 @@
             "AdjClNum": 0,
             "AdjOpFlashNum": 0
         },
-
         "DOUBLES": {
-            "TNuE":  1,
+            "TNuE": 1,
             "ElectronE": 0,
             "GammaE": 0,
-            "NeutronP": 0,
+            "ElectronK": 0,
+            "GammaK": 0,
+            "NeutronK": 0,
             "VisEnergy": 0,
             "Time": 1,
             "Charge": 1
         },
-
-        "STRINGS": {
-
-        },
-
+        "STRINGS": {},
         "BOOLS": {
             "Primary": 1
         }

@@ -7,7 +7,6 @@
     },
     "Truth": {
         "VECTORS": {
-            "TruthPart": 1,
             "TMarleyPDG": 1,
             "TMarleyE": 1,
             "TMarleyP": 1,
@@ -18,20 +17,11 @@
             "TMarleyEndY": 1,
             "TMarleyEndZ": 1,
             "TMarleyMother": 1,
-            "HitNum": 1,
-            "ClusterNum": 1,
-            "TMarleyMaxEDep": 1,
-            "OpHitX": 1,
-            "OpHitY": 1,
-            "OpHitZ": 1,
-            "OpHitPE": 1,
-            "OpHitPur": 1
+            "TMarleyMaxEDep": 1
         },
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1,
-            "TrackNum": 1,
-            "OpFlashNum": 1
+            "Flag": 1
         },
         "DOUBLES": {
             "TNuE": 0,
@@ -44,13 +34,7 @@
     },
     "Reco": {
         "VECTORS": {},
-        "INTEGERS": {
-            "Event": 1,
-            "Flag": 1,
-            "Generator": 1,
-            "NHits": 1,
-            "Charge": 1
-        },
+        "INTEGERS": {},
         "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {}

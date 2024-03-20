@@ -1,23 +1,21 @@
-{   
+{
     "Config": {
         "INTEGERS": {},
         "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {}
     },
-
     "Truth": {
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE":  1
+            "TNuE": 1
         },
         "STRINGS": {},
         "BOOLS": {}
     },
-    
     "Reco": {
         "INTEGERS": {
             "Event": 1,
@@ -27,12 +25,11 @@
             "AdjClNum": 0,
             "AdjOpFlashNum": 0
         },
-
         "DOUBLES": {
-            "TNuE":  1,
+            "TNuE": 1,
             "ElectronE": 1,
             "GammaE": 1,
-            "NeutronP": 0,  
+            "NeutronP": 0,
             "VisEnergy": 1,
             "Time": 1,
             "Charge": 1,
@@ -40,17 +37,15 @@
             "Energy": 0,
             "TotalEnergy": 0,
             "RecoEnergy": 0,
+            "SelectedAdjClEnergy": 0,
             "TotalAdjClEnergy": 0,
             "MaxAdjClEnergy": 0,
-            "MaxAdjClR": 0,
+            "SelectedAdjClR": 0,
             "TotalAdjClR": 0,
+            "MaxAdjClR": 0,
             "Discriminant": 0
         },
-
-        "STRINGS": {
-
-        },
-
+        "STRINGS": {},
         "BOOLS": {
             "Primary": 1
         }
