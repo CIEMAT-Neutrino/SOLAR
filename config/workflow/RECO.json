@@ -1,0 +1,57 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {
+            "TruthPart": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {
+            "MainVertex": 0,
+            "MainParentVertex": 0,
+            "AdjClR": 0,
+            "AdjClCharge": 0,
+            "AdjClGen": 0,
+            "AdjClTime": 0,
+            "AdjClRecoY": 0,
+            "AdjClRecoZ": 0,
+            "AdjClMainPDG": 0,
+            "AdjClMainX": 1,
+            "AdjClMainY": 1,
+            "AdjClMainZ": 1,
+            "MarleyFrac": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "TPC": 1,
+            "MainPDG": 1,
+            "Generator": 1,
+            "NHits": 1,
+            "AdjClNum": 0
+        },
+        "DOUBLES": {
+            "MainE": 1,
+            "RecoY": 1,
+            "Time": 1,
+            "RecoZ": 1,
+            "Charge": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {
+            "Primary": 1
+        }
+    }
+}

@@ -1,0 +1,100 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {
+            "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyP": 1,
+            "TMarleyX": 1,
+            "TMarleyY": 1,
+            "TMarleyZ": 1,
+            "TMarleyPDG": 1,
+            "OpHitX": 1,
+            "OpHitY": 1,
+            "OpHitZ": 1,
+            "OpHitPE": 1,
+            "OpHitPur": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {
+            "TMarleyE": 1,
+            "TMarleyP": 1,
+            "TMarleyX": 1,
+            "TMarleyY": 1,
+            "TMarleyZ": 1,
+            "TMarleyPDG": 1,
+            "MainVertex": 0,
+            "MainParentVertex": 0,
+            "AdjClR": 0,
+            "AdjClCharge": 0,
+            "AdjClGen": 0,
+            "AdjClTime": 0,
+            "AdjClRecoY": 0,
+            "AdjClRecoZ": 0,
+            "AdjClMainPDG": 0,
+            "AdjClMainX": 1,
+            "AdjClMainY": 1,
+            "AdjClMainZ": 1,
+            "AdjOpFlashR": 0,
+            "AdjOpFlashPE": 0,
+            "AdjOpFlashTime": 0,
+            "AdjOpFlashRecoY": 0,
+            "AdjOpFlashRecoZ": 0,
+            "AdjOpFlashMaxPE": 0,
+            "MarleyFrac": 0
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "TPC": 1,
+            "MainPDG": 1,
+            "Generator": 1,
+            "NHits": 1,
+            "Ind0NHits": 1,
+            "Ind1NHits": 1,
+            "AdjClNum": 0,
+            "AdjOpFlashNum": 0
+        },
+        "DOUBLES": {
+            "MainE": 1,
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1,
+            "ElectronE": 0,
+            "GammaE": 0,
+            "NeutronP": 0,
+            "VisEnergy": 0,
+            "RecoY": 1,
+            "Ind0RecoY": 1,
+            "Ind1RecoY": 1,
+            "Time": 1,
+            "Ind0dT": 1,
+            "Ind1dT": 1,
+            "RecoZ": 1,
+            "Charge": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {
+            "Primary": 1
+        }
+    }
+}

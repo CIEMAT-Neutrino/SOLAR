@@ -36,6 +36,7 @@
             "Correction": 1,
             "Energy": 0,
             "TotalEnergy": 0,
+            "SelectedEnergy": 0,
             "RecoEnergy": 0,
             "SelectedAdjClEnergy": 0,
             "TotalAdjClEnergy": 0,
