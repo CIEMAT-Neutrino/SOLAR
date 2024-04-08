@@ -25,6 +25,7 @@ def format_coustom_plotly(
     log:tuple=(False, False),
     margin:dict={"auto": True},
     add_units:bool=True,
+    bargap:int=0,
     debug:bool=False,
 ):
     """
@@ -77,7 +78,7 @@ def format_coustom_plotly(
         template="presentation",
         font=dict(size=fontsize),
         paper_bgcolor=margin["color"],
-        bargap=0,
+        bargap=bargap,
     )  # font size and template
 
     fig.update_xaxes(
@@ -120,6 +121,12 @@ def format_coustom_plotly(
                 b=margin["margin"][3],
             )
         )
+    # Update colorscale to viridis but with white at the bottom
+    colorscale = px.colors.sequential.Turbo[::-1]
+    # colorscale.append("white")
+    colorscale = colorscale[::-1]
+    fig.update_layout(coloraxis = {'colorscale': colorscale})
+    
     # Update axis labels to include units
     if add_units:
         try:
@@ -153,6 +160,7 @@ def get_units(var, debug=False):
         "Z": " (cm) ",
         "E": " (MeV) ",
         "P": " (MeV) ",
+        "K": " (MeV) ",
         "PE": " (counts) ",
         "Time": " (tick) ",
         "Energy": " (MeV) ",

@@ -1,6 +1,6 @@
 {
     "NAME": "SolarNuAna_",
-    "PATH": "../data/HD/1x2x6_legacy/",
+    "PATH": "/data/HD/1x2x6_legacy/",
     "GEOMETRY": "hd",
     "VERSION": "hd_1x2x6_legacy",
     "DEFAULT_ANALYSIS_ENERGY": "TotalEnergy",
@@ -21,8 +21,9 @@
     "MAX_FLASH_R": 100,
     "MIN_FLASH_PE": 20,
     "MAX_FLASH_PE_RATIO": 0.3,
-    "MIN_BKG_R": 20,
+    "MIN_BKG_R": 10,
     "MAX_BKG_CHARGE": 75,
+    "MAX_BKG_ENERGY": 0,
     "COMPUTE_MATCHING": true,
     "MAIN_PDG": 22,
     "MAX_CL_E": 30,

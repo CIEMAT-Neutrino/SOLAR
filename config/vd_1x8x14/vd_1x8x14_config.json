@@ -1,6 +1,6 @@
 {
     "NAME": "SolarNuAna_",
-    "PATH": "../data/VD/1x8x14_3view_30deg/",
+    "PATH": "/data/VD/1x8x14_3view_30deg/",
     "GEOMETRY": "vd",
     "VERSION": "vd_1x8x14_3view_30deg",
     "FULL_DETECTOR_FACTOR": 8,
@@ -19,8 +19,9 @@
     "DEFAULT_ENERGY_TIME": "Time",
     "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
     "DEFAULT_ADJCLCHARGE_VARIABLE": "AdjCharge",
-    "MIN_BKG_R": 20,
+    "MIN_BKG_R": 10,
     "MAX_BKG_CHARGE": 75,
+    "MAX_BKG_ENERGY": 0,
     "DEFAULT_ANALYSIS_ENERGY": "TotalEnergy",
     "COMPUTE_MATCHING": true,
     "MAIN_PDG": 22,

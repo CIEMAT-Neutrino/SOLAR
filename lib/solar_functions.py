@@ -1,3 +1,5 @@
+from src.utils import get_project_root
+
 import os
 import plotly
 import numba
@@ -27,6 +29,7 @@ from lib.osc_functions import (
 )
 from lib.plt_functions import format_coustom_plotly, unicode
 
+root = get_project_root()
 
 def compute_solar_spectrum(
     run,
@@ -416,7 +419,7 @@ def get_solar_spectrum(
     components: list,
     bins,
     weigths="B16-GS98",
-    in_path="../data/SOLAR/",
+    in_path=f"{root}/data/SOLAR/",
     debug=False,
 ):
     """
@@ -512,7 +515,7 @@ def plot_solar_spectrum(
     return fig
 
 
-def get_neutrino_cs(bins, interpolation, path="../data/SOLAR", debug=False):
+def get_neutrino_cs(bins, interpolation, path=f"{root}/data/SOLAR", debug=False):
     """
     Read in marley data and return the neutrino cc spectrum.
     """

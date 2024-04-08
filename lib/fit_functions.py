@@ -1,9 +1,31 @@
+from src.utils import get_project_root
+
+from .ana_functions import get_default_energies
+
 import numpy as np
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
 from rich import print as rprint
 from scipy.optimize import curve_fit
 np.seterr(divide='ignore', invalid='ignore')
+
+root = get_project_root()
+energy_edges, energy_centers, ebin = get_default_energies(root)
+
+def peak(x, coefficients, debug=False):
+    """
+    Peak finder function.
+    """
+    # Use the scypy find_peaks function to find the peaks
+    from scipy.signal import find_peaks
+    height = coefficients[0]
+    threshold = coefficients[1]
+    distance = coefficients[2]
+    width = coefficients[3]
+    # Find the peaks
+    peaks, _ = find_peaks(x, height=height, threshold=threshold, distance=distance, width=width)
+    return peaks
 
 def exp(x, coefficients, debug=False):
     """
@@ -217,7 +239,22 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         return x, y_top, y_bottom
 
 
-def get_hist1d(x, per=[1, 99], acc=50, norm=True, density=False, debug=False):
+def generate_bins(acc, x, debug=False):
+    if type(acc) == int:
+        x_array = np.linspace(np.min(x), np.max(x), acc + 1)
+    elif type(acc) == list or type(acc) == np.ndarray:
+        x_array = acc
+    elif acc == None:
+        x_array = "auto"
+    elif type(acc) == str:
+        pass
+    else:
+        rprint("[red]ERROR: acc must be an integer, list, or numpy array![/red]")
+        raise ValueError
+    
+    return x_array
+
+def get_hist1d(x, per:tuple = (1, 99), acc = None, norm = True, density = False, debug = False):
     """
     Given an x array, generate a 1D histogram.
 
@@ -238,14 +275,8 @@ def get_hist1d(x, per=[1, 99], acc=50, norm=True, density=False, debug=False):
 
     if debug:
         rprint(type(x), x, "\n[cyan]INFO: Percentile limits: " + str(lims) + "[/cyan]")
-    if type(acc) == int:
-        x_array = np.linspace(np.min(x), np.max(x), acc + 1)
-    elif type(acc) == list or type(acc) == np.ndarray:
-        x_array = acc
-    else:
-        rprint("[red]ERROR: acc must be an integer, list, or numpy array![/red]")
-        raise ValueError
 
+    x_array = generate_bins(acc, x, debug=debug)
     h, x = np.histogram(x, bins=x_array, density=density)
 
     if norm:
@@ -253,6 +284,53 @@ def get_hist1d(x, per=[1, 99], acc=50, norm=True, density=False, debug=False):
     x = (x[1:] + x[:-1]) / 2
 
     return x, h
+
+
+def get_energy_scann(x, y, per:tuple = (1, 99), norm = True, debug = False):
+    """
+    Given an x array, generate a 1D histogram.
+
+    Args:
+        x (array): energy array.
+        y (array): variable array.
+        acc (int): number of bins.
+
+    Returns:
+        x (array): x-axis array.
+        y (array): y-axis array.
+    """
+    mean_variable_array = []
+    std_variable_array = []
+    try:
+        lims = np.percentile(y, per, axis=0, keepdims=False)
+        x = [x[i] for i in range(len(x)) if lims[0] < y[i] < lims[1]]
+        y = [i for i in y if lims[0] < i < lims[1]]
+    except IndexError:
+        pass
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    
+    if debug:
+        rprint(type(x), x, "\n[cyan]INFO: Percentile limits: " + str(lims) + "[/cyan]")
+
+    for energy in energy_centers:
+        energy_filter = np.where((x > (energy-ebin/2)) & (x < (energy+ebin/2)))
+        if energy_filter[0].size == 0:
+            continue
+        mean = np.mean(y[energy_filter])
+        std = np.std(y[energy_filter])
+        mean_variable_array.append(mean)
+        std_variable_array.append(std)
+    
+    array = np.array(mean_variable_array)
+    array_error = np.array(std_variable_array)
+    
+    if norm:
+        array_error = array_error / np.max(array)
+        array = array / np.max(array)
+
+    return energy_centers, array, array_error
 
 
 def fit_hist1d(
@@ -390,22 +468,23 @@ def get_hist2d(x, y, per=[1, 99], acc=50, norm=True, density=False, debug=False)
 def get_hist2d_fit(
     x,
     y,
-    fig,
-    idx,
-    per=[1, 99],
-    acc=50,
-    fit={
+    fig:go.Figure,
+    idx:tuple,
+    per:tuple = (1, 99),
+    acc:float = 50,
+    fit:dict = {
         "color": "grey",
         "opacity": 1,
         "trimm": 5,
         "spec_type": "max",
         "func": "linear",
         "threshold": 0.4,
+        "range":(0,10),
         "print": True,
     },
-    density=None,
-    zoom=False,
-    debug=False,
+    density = None,
+    zoom:bool = False,
+    debug:bool = False,
 ):
     """
     Given x and y arrays, generate a 2D histogram and fit a function to the histogram.
@@ -413,71 +492,37 @@ def get_hist2d_fit(
     Args:
         x (array): x-axis array.
         y (array): y-axis array.
-        acc (int): number of bins.
         fig (plotly figure): plotly figure.
         idx (tuple(int)): (row, col) index of subplot.
-            row (int): row of subplot.
-            col (int): column of subplot.
-        func (str): function to fit to histogram (exponential, polynomial, etc.).
-        trimm (int): number of bins to remove from the beginning and end of the histogram.
+        per (tuple): percentile range.
+        acc (int): number of bins.
+        fit (dict): dictionary with the fit parameters.
+        density (bool): If True, the histogram is normalized.
+        zoom (bool): If True, the histogram is zoomed in.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         fig (plotly figure): plotly figure.
+        popt (array): array with the fit parameters.
+        perr (array): array with the fit errors.
     """
-    x, y, h = get_hist2d(x, y, per=per, acc=acc, density=density, debug=debug)
+    hx, hy, hz = get_hist2d(x, y, per=per, acc=acc, density=density, debug=debug)
 
     fig.add_trace(
-        go.Heatmap(z=h.T, x=x, y=y, coloraxis="coloraxis"), row=idx[0], col=idx[1]
+        go.Heatmap(z=hz.T, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
     )
-    if fit["spec_type"] == "top+bottom":
-        popt, perr = [], []
-        x_spec, y_top, y_bottom = spectrum_hist2d(x, y, h, fit=fit, debug=debug)
-        for spectrum, spectrum_name in zip([y_top, y_bottom], ["top", "bottom"]):
-            func, labels, this_popt, this_perr = fit_hist1d(
-                x_spec, spectrum, fit=fit, debug=debug
-            )
-
-            if debug:
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_spec,
-                        y=spectrum,
-                        mode="markers",
-                        marker=dict(color=fit["color"], opacity=fit["opacity"]),
-                        name=f"{spectrum_name} Spectrum",
-                    ),
-                    row=idx[0],
-                    col=idx[1],
-                )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x_spec,
-                    y=func(x_spec, *this_popt),
-                    mode="lines",
-                    marker=dict(color=fit["color"], opacity=fit["opacity"]),
-                    name=f"{spectrum_name} Fit",
-                    error_y=dict(type="data", array=func(x_spec, *this_perr), visible=True),
-                ),
-                row=idx[0],
-                col=idx[1],
-            )
-            popt = np.concatenate((popt,this_popt))
-            perr = np.concatenate((perr,this_perr))
-
-        if zoom:
-            fig.update_xaxes(range=[np.min(x), np.max(x)], row=idx[0], col=idx[1])
-            fig.update_yaxes(range=[np.min(y), np.max(y)], row=idx[0], col=idx[1])
-
-        labels = [
-            f"{spectrum_name}{label}"
-            for spectrum_name in ["Top", "Bottom"]
-            for label in labels
-        ]
+    if fit["spec_type"] == "intercept":
+        popt, perr, labels = [], [], []
+        intercepts = find_hist2d_intercept(x, y, acc, irange=fit["range"], threshold=fit["threshold"], show=False, debug=debug)
+        array = np.arange(np.min(hx), np.max(hx))
+        for b in intercepts:
+            fig.add_trace(go.Scatter(x=array,y=array-b, mode="lines", marker=dict(color=fit["color"], opacity=fit["opacity"])), row=idx[0], col=idx[1])
+            popt = np.concatenate((popt,[-b]))
+            perr = np.concatenate((perr,[10/acc]))
+            labels = np.concatenate((labels,["Intercept"]))
 
     else:
-        x_spec, y_spec = spectrum_hist2d(x, y, h, fit=fit, debug=debug)
+        x_spec, y_spec = spectrum_hist2d(hx, hy, hz, fit=fit, debug=debug)
         func, labels, popt, perr = fit_hist1d(x_spec, y_spec, fit=fit, debug=debug)
 
         fig = plot_hist2d_fit(
@@ -492,9 +537,9 @@ def get_hist2d_fit(
             debug=debug,
         )
 
-        if zoom:
-            fig.update_xaxes(range=[np.min(x), np.max(x)], row=idx[0], col=idx[1])
-            fig.update_yaxes(range=[np.min(y), np.max(y)], row=idx[0], col=idx[1])
+    if zoom:
+        fig.update_xaxes(range=[np.min(hx), np.max(hx)], row=idx[0], col=idx[1])
+        fig.update_yaxes(range=[np.min(hy), np.max(hy)], row=idx[0], col=idx[1])
 
     if fit["print"]:
         debug_text = [
@@ -515,7 +560,6 @@ def plot_hist2d_fit(
             mode="lines",
             marker=dict(color=fit["color"], opacity=fit["opacity"]),
             name="Fit",
-            error_y=dict(type="data", array=func(x, *perr), visible=True),
         ),
         row=idx[0],
         col=idx[1],
@@ -528,6 +572,7 @@ def plot_hist2d_fit(
                 mode="markers",
                 marker=dict(color=fit["color"], opacity=fit["opacity"]),
                 name="Spectrum",
+                error_y=dict(type="data", array=func(x, *perr), visible=True),
             ),
             row=idx[0],
             col=idx[1],
@@ -603,3 +648,56 @@ def get_hist1d_fit(
         ]
         rprint("[cyan]INFO: " + "".join(debug_text) + "[/cyan]")
     return fig, popt, perr
+
+
+def find_hist2d_intercept(x, y, acc:int, irange:tuple=(0,10), threshold:float=.6, slope:float=1, show=False, debug=False)-> list:
+    """
+    Given x and y arrays, find the intercepts of all crests in the heatmap.
+
+    Args:
+        x (array): x-axis array.
+        y (array): y-axis array.
+        acc (int): number of bins.
+        irange (tuple): range of intercepts.
+        threshold (float): threshold for intercepts.
+        slope (float): slope of the line.
+        show (bool): If True, the debug mode is activated.
+        debug (bool): If True, the debug mode is activated.
+
+    Returns:
+        intercepts (list): list of intercepts.
+    """
+    intercepts, counts = [], []
+    for idx,b in enumerate(np.linspace(irange[0], irange[1], acc)):
+        bins, bar = np.histogram((y+b)/(slope*x), bins=acc)
+        if 1-1/acc < bar[np.argmax(bins)] < 1+1/acc:
+            if len(intercepts) == 0:
+                intercepts.append(b)
+                counts.append(bins[np.argmax(bins)])
+                if show: plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
+            else:
+                if b - intercepts[-1] < threshold:
+                    if bins[np.argmax(bins)] > counts[-1]:
+                        intercepts[-1] = b
+                        counts[-1] = bins[np.argmax(bins)]
+                        if show: plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
+                    else:
+                        if debug: print("Skipping", b, intercepts[-1])
+                else:
+                    intercepts.append(b)
+                    counts.append(bins[np.argmax(bins)])
+                    if show: plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
+    
+    if show:
+        plt.xlabel(r"($E_{e}$+const) / $E_{\nu}$")
+        plt.ylabel("Counts")
+        plt.legend()
+        plt.show()
+    
+    # if debug:
+    #     debug_text = [
+    #         "\nFit parameter Intercept: %f +/- %f" % (intercepts[i],10/acc)
+    #         for i in range(len(intercepts))
+    #     ]
+    #     rprint("[cyan]INFO: " + "".join(debug_text) + "[/cyan]")
+    return intercepts

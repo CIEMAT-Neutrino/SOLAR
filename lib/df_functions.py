@@ -1,3 +1,5 @@
+from src.utils import get_project_root
+
 import json
 import pandas as pd
 import numpy as np
@@ -13,12 +15,14 @@ from .io_functions import (
     get_branches2use,
     get_bkg_config,
     get_simple_name,
+    save_figure,
 )
 from plotly.subplots import make_subplots
 from .plt_functions import format_coustom_plotly
 
+root = get_project_root()
 
-def explode(df, columns_to_explode, debug=False):
+def explode(df, explode, keep=None, debug=False):
     """
     Function to explode a list of columns of a dataframe.
 
@@ -30,27 +34,37 @@ def explode(df, columns_to_explode, debug=False):
     Returns:
         result_df (pandas.DataFrame): Dataframe exploded.
     """
-    # Convert Pandas DataFrame to Dask DataFrame
-    ddf = dd.from_pandas(df, npartitions=2)  # Adjust the number of partitions as needed
-
-    # Define a function to explode a column
-    @delayed
-    def explode_column(column):
-        return column.explode()
-
-    # Explode each column in parallel
-    exploded_columns = [explode_column(ddf[col]) for col in columns_to_explode]
-
-    # Compute the results
     try:
-        result_columns = dd.compute(*exploded_columns)
-    # If TypeError: 'dict_values' object does not support indexing, try:
-    except TypeError:
-        result_columns = dd.compute(*list(exploded_columns))
-    # Combine the results with regular columns
-    result_df = pd.concat(
-        [df.drop(columns=columns_to_explode)] + list(result_columns), axis=1
-    )
+        # Explode the columns
+        if keep is not None:
+            # Make a copy of the dataframe but only with the columns to keep + the columns to explode
+            result_df = df[keep + explode].explode(explode)
+        else:
+            result_df = df.explode(explode)
+    
+    except ValueError:
+        # Convert Pandas DataFrame to Dask DataFrame but keep the columns in keep + explode
+        ddf = dd.from_pandas(df[keep + explode], npartitions=2)
+        # ddf = dd.from_pandas(df, npartitions=2)  # Adjust the number of partitions as needed
+
+        # Define a function to explode a column
+        @delayed
+        def explode_column(column):
+            return column.explode()
+
+        # Explode each column in parallel
+        exploded_columns = [explode_column(ddf[col]) for col in explode]
+
+        # Compute the results
+        try:
+            result_columns = dd.compute(*exploded_columns)
+        # If TypeError: 'dict_values' object does not support indexing, try:
+        except TypeError:
+            result_columns = dd.compute(*list(exploded_columns))
+        # Combine the results with regular columns
+        result_df = pd.concat(
+            [df.drop(columns=columns_to_explode)] + list(result_columns), axis=1
+        )
 
     if debug:
         print_colored("Dataframe exploded!", "SUCCESS")
@@ -169,7 +183,7 @@ def reorder_df(df, info, bkg_dict, color_dict, debug=False):
         color_list (list): list of the colors of the backgrounds
     """
 
-    f = json.load(open("../import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
     bkg_order = f[info["GEOMETRY"]][info["VERSION"]].values()
 
@@ -253,7 +267,7 @@ def calculate_pileup_df_dict(run, configs, factor=1, debug=False):
     pileup_df_dict = {}
     color_dict = {}
     for idx, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info, debug=debug)
         truth_gen_df = generate_truth_dataframe(run, info, debug=debug)
         df = calculate_mean_truth_df(truth_gen_df, debug=debug)
@@ -285,7 +299,7 @@ def generate_pileup_matrix(run, configs, factor, save=False, show=False, debug=F
         )
 
         if save:
-            fig.write_image(f"../images/bkg/{config}_PileUp_Area.png", scale=1.5)
+            fig.write_image(f"{root}/images/bkg/{config}_PileUp_Area.png", scale=1.5)
         if show:
             fig.show()
     return fig
@@ -298,7 +312,7 @@ def generate_background_distribution(
         rows=len(configs), cols=1, shared_yaxes=False, shared_xaxes=False
     )
     for idx, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info)
         truth_gen_df = generate_truth_dataframe(run, info, fullname=fullname)
         mean_truth_df = calculate_mean_truth_df(truth_gen_df)
@@ -312,9 +326,9 @@ def generate_background_distribution(
 
     fig = format_generator_distribution(fig, info, debug=debug)
     if save:
-        fig.write_image(
-            "../images/bkg/%s_generator_distribution.png" % (info["VERSION"])
-        )
+        name = truth_gen_df["Name"].values[0]
+        version = info["VERSION"]
+        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution.png")
     if show:
         fig.show()
     return fig
@@ -323,7 +337,7 @@ def generate_background_distribution(
 def generate_pileup_distribution(fig, pileup_df_dict, color_dict, debug=False):
     for idx, config in enumerate(pileup_df_dict):
         info = json.load(
-            open("../config/" + config + "/" + config + "_config.json", "r")
+            open(f"{root}/config/{config}/{config}_config.json", "r")
         )
         pileup_df = pileup_df_dict[config]
         color_list = color_dict[config]
@@ -375,5 +389,6 @@ def format_generator_distribution(fig, info, debug=False):
         tickformat=("", ""),
         margin={"auto": False, "margin": (100, 100, 100, 200)},
     )
+    fig.update_layout(bargap=0.1)
     fig.update_yaxes(title="Frequency [Hz]")
     return fig

@@ -3,7 +3,37 @@ import numpy as np
 import pandas as pd
 import awkward as ak
 import plotly.express as px
+import plotly.graph_objs as go
 from rich import print as rprint
+from src.utils import get_project_root
+
+root = get_project_root()
+
+def save_figure(fig,path,debug=False)->None:
+    """
+    Save the figure in the path
+
+    Args:
+        fig (plotly.graph_objs._figure.Figure): figure to save
+        path (str): path to save the figure
+        debug (bool): if True, the debug mode is activated (default: False)
+    """
+    folder_path = "/".join(path.split("/")[:-1])
+    try:
+        #Make the directory recursively
+        os.makedirs(folder_path)
+    except FileExistsError:
+        if debug:
+            print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
+    
+    # Check type of figure to select the correct saving method
+    if type(fig) == go._figure.Figure:
+        fig.write_image(path + ".png")
+        if debug:
+            rprint("Saved figure in: " + path + ".png")
+    else:
+        rprint("The input figure is not a plotly.graph_objs._figure.Figure object")
+        # fig.savefig(path + ".png")
 
 
 def print_colored(string, color, bold=False, italic=False, debug=False):
@@ -72,7 +102,7 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
     return 0
 
 
-def root2npy(root_info, trim=False, debug=False):
+def root2npy(root_info, user_input, trim=False, debug=False):
     """
     Dumper from .root format to npy files. Input are root input file, path and npy outputfile as strings
 
@@ -86,10 +116,22 @@ def root2npy(root_info, trim=False, debug=False):
     """
     path = root_info["Path"]
     name = root_info["Name"]
-    if debug:
-        rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
+    rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
-        for tree in root_info["TreeNames"].keys():
+        for tree in root_info["TreeNames"]:
+            if root_info["TreeNames"][tree] == "Test":
+                if debug:
+                    # Ask if this tree should be processed
+                    process = input(
+                        "Do you want to process the Test tree? (y/n): "
+                    ).lower()
+                    
+                    if process not in ["y", "yes","t","true"]:
+                        continue
+                else:
+                    rprint("Skipping Test tree")
+                    continue
+
             done_root_info = []
             out_folder = root_info["TreeNames"][tree]
 
@@ -100,35 +142,35 @@ def root2npy(root_info, trim=False, debug=False):
             for branch in root_info[tree]:
                 if branch not in done_root_info:
                     done_root_info.append(branch)  # To avoid repeating branches
-                if debug:
-                    print_colored(
-                        "\n" + tree + " ---> " + out_folder + ": " + str(branch),
-                        "SUCCESS",
-                    )
+                print_colored(
+                    "\n" + tree + " ---> " + out_folder + ": " + str(branch),
+                    "SUCCESS",
+                )
 
                 # if "Map" not in branch:
                 this_array = f[root_info["Folder"] + "/" + tree][branch].array()
                 if trim != False and debug:
                     print("Selected trimming value: ", trim)
                 resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
-                np.save(
+                save2pnfs(
                     path + name + "/" + out_folder + "/" + branch + ".npy",
+                    user_input,
                     resized_array,
+                    debug
                 )
                 if debug:
                     print(resized_array)
                 del resized_array
                 del this_array
 
-                if debug:
-                    print_colored(
-                        "\nSaved data in:" + str(path + name + "/" + out_folder),
-                        "SUCCESS",
-                    )
-                    print_colored("----------------------\n", "SUCCESS")
+                print_colored(
+                    "\nSaved data in:" + str(path + name + "/" + out_folder),
+                    "SUCCESS",
+                )
+                rprint(f"[green]----------------------\n[/green]")
 
     if debug:
-        print_colored("-> Finished dumping root file to npy files!", "SUCCESS")
+        rprint(f"[green]-> Finished dumping root file to npy files![/green]")
     return 0
 
 
@@ -165,11 +207,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
             max_len = max(map(len, array))
             mean_len = sum(map(len, array)) / len(array)
             if debug:
-                print_colored(
-                    "-> Max/Mean length of subarrays are %i/%.1f: "
-                    % (max_len, mean_len),
-                    "DEBUG",
-                )
+                rprint(f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]")
 
             if max_len != mean_len:
                 expand = True
@@ -188,8 +226,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
     else:
         tot_array = np.asarray(array)
 
-    if debug:
-        print_colored("-> Returning array as type: %s" % (type(tot_array)), "SUCCESS")
+    if debug: rprint(f"[green]-> Returning array as type: {type(tot_array)}[/green]")
     return np.asarray(tot_array)
 
 
@@ -247,28 +284,22 @@ def array2list(array, debug=False):
     """
     if type(array) == np.ndarray:
         array = array.tolist()
-        if debug:
-            print_colored("Array type is a numpy array", "INFO")
-        return array
 
     elif type(array) == list:
         array = array
-        if debug:
-            print_colored("Array type is a list", "INFO")
-        return array
 
     elif type(array) == ak.highlevel.Array:
         array = array.to_list()
-        if debug:
-            print_colored("Array type is a awkward array", "INFO")
-        return array
 
     else:
         print("Array type: ", type(array))
         if debug:
-            print_colored("Array type not recognized", "ERROR")
+            rprint("[red]ERROR: Array type not recognized[/red]")
         raise TypeError
 
+    if debug:
+        rprint(f"--- Array lenght is {len(array)} ---")
+    return array
 
 def get_tree_info(root_file, debug=False):
     """
@@ -292,18 +323,17 @@ def get_tree_info(root_file, debug=False):
         for i in root_file.classnames()
         if root_file.classnames()[i] == "TTree"
     ]
-    if debug:
-        print_colored(
-            "The input root file has a TDirectory: " + str(directory), color="DEBUG"
-        )
-        print_colored(
-            "The input root file has %i TTrees: " % len(tree) + str(tree), color="DEBUG"
-        )
+    print_colored(
+        "The input root file has a TDirectory: " + str(directory), color="DEBUG"
+    )
+    print_colored(
+        "The input root file has %i TTrees: " % len(tree) + str(tree), color="DEBUG"
+    )
 
     return directory, tree
 
 
-def get_root_info(name: str, path: str, debug=False):
+def get_root_info(name: str, path: str, user_input: dict, debug=False):
     """
     Function which returns a dictionary with the following structure:
     \n {"Path": path, "Name": name, "Folder": folder (from get_tree_info), "TreeNames": {"RootName_Tree1":YourName_Tree1, "RootName_Tree2":YourName_Tree2}, "RootName_Tree1":[BRANCH_LIST], "RootName_Tree2":[BRANCH_LIST]}
@@ -394,16 +424,41 @@ def get_root_info(name: str, path: str, debug=False):
             if branch not in branches:
                 branches.append(branch)  # save the branch name in a list
 
-        np.save(
-            path + name + "/" + out_folder[i] + "/Branches.npy", np.asarray(branches)
-        )  # save the branches of each tree in a .npy file
+        # Check if file already exists
+        save2pnfs(f"{path}{name}/{out_folder[i]}/Branches.npy", user_input, branches, user_input["debug"])        
         output[tree] = np.asarray(branches, dtype=object)
         output["TreeNames"][tree] = out_folder[i]
-        np.save(path + name + "/" + "TTrees.npy", output)
+        save2pnfs(f"{path}{name}/TTrees.npy", user_input, output, user_input["debug"])
 
     if debug:
         rprint(output)
     return output
+
+
+def save2pnfs(filename:str, user_input:dict, data, debug:bool) -> None:
+    """
+    Save the data in a .npy file to pnfs (dCache) storage.
+
+    Args:
+        filename (str): name of the file to save
+        user_input (dict): dictionary with the user input
+        data (np.array): data to save
+        debug (bool): if True, the debug mode is activated (default: False)
+    """
+    # Check data filetype
+    if debug: rprint(type(data))
+    if type(data) != np.ndarray:
+        data = np.asarray(data)
+
+    if os.path.isfile(filename):
+        if user_input["rewrite"]:
+            # Delete the file
+            os.remove(filename)                
+            np.save(filename, data)  # save the branches of each tree in a .npy file
+        else:
+            rprint("File already exists. Skipping...")
+    else:
+        np.save(filename, data)  # save the branches of each tree in a .npy file
 
 
 def get_branches(name: str, path: str, debug=False):
@@ -530,17 +585,19 @@ def load_multi(
     out = ""
     run = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
-        path = info["PATH"] + info["NAME"]
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        path = info["PATH"]
+        name = info["NAME"]
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
+        filepath = f"{root}{path}{name}"
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
         for jdx, name in enumerate(configs[config]):
             if load_all == True:
                 branches_dict = get_branches(
-                    name, path=path, debug=debug
+                    name, path=filepath, debug=debug
                 )  # Get ALL the branches
             elif preset != None:
                 tree_branches = get_workflow_branches(
@@ -563,24 +620,16 @@ def load_multi(
                         idx == 0 and jdx == 0
                     ):  # If it is the first file, create the dictionary
                         run[tree] = dict()
-                        run[tree]["Name"] = [name] * len(
-                            np.load(
-                                path + name + "/" + tree + "/Event.npy",
-                                allow_pickle=True,
+                        for identifiyer_label, identifiyer in zip(
+                            ["Name", "Geometry", "Version"], [name, geo, vers]
+                        ):
+                            run[tree][identifiyer_label] = [identifiyer] * len(
+                                np.load(
+                                    filepath + name + "/" + tree + "/Event.npy",
+                                    allow_pickle=True,
+                                )
                             )
-                        )
-                        run[tree]["Geometry"] = [geo] * len(
-                            np.load(
-                                path + name + "/" + tree + "/Event.npy",
-                                allow_pickle=True,
-                            )
-                        )
-                        run[tree]["Version"] = [vers] * len(
-                            np.load(
-                                path + name + "/" + tree + "/Event.npy",
-                                allow_pickle=True,
-                            )
-                        )
+                            run[tree][identifiyer_label] = np.asarray(run[tree][identifiyer_label], dtype=str)
                     else:
                         run[tree]["Name"] = np.concatenate(
                             (
@@ -588,7 +637,7 @@ def load_multi(
                                 [name]
                                 * len(
                                     np.load(
-                                        path + name + "/" + tree + "/Event.npy",
+                                        filepath + name + "/" + tree + "/Event.npy",
                                         allow_pickle=True,
                                     )
                                 ),
@@ -601,7 +650,7 @@ def load_multi(
                                 [geo]
                                 * len(
                                     np.load(
-                                        path + name + "/" + tree + "/Event.npy",
+                                        filepath + name + "/" + tree + "/Event.npy",
                                         allow_pickle=True,
                                     )
                                 ),
@@ -614,7 +663,7 @@ def load_multi(
                                 [vers]
                                 * len(
                                     np.load(
-                                        f"{path}{name}/{tree}/Event.npy",
+                                        f"{filepath}{name}/{tree}/Event.npy",
                                         allow_pickle=True,
                                     )
                                 ),
@@ -625,7 +674,7 @@ def load_multi(
                     for key in branches_dict[tree]:
                         try:
                             branch = np.load(
-                                path + name + "/" + tree + "/" + key + ".npy",
+                                filepath + name + "/" + tree + "/" + key + ".npy",
                                 allow_pickle=True,
                             )
                             if generator_swap == True:
@@ -756,7 +805,7 @@ def get_bkg_config(info, debug=False):
     """
     bkg_dict = {}
     color_dict = {}
-    f = json.load(open("../import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
 
     color_ass = get_bkg_color(bkg_list)
@@ -775,7 +824,7 @@ def get_gen_label(configs, debug=False):
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
@@ -785,7 +834,7 @@ def get_gen_label(configs, debug=False):
 
 def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
     """ """
-    info = json.load(open("../config/" + config + "/" + config + "_config.json", "r"))
+    info = json.load(open("{root}/config/" + config + "/" + config + "_config.json", "r"))
     weight_list = get_bkg_weights(info)
     truth_values = []
     reco_values = []
@@ -879,7 +928,7 @@ def get_bkg_weights(info, names, debug=False):
 def get_gen_weights(configs, names, debug=False):
     weights_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"]
         name_list = names[config]
@@ -933,7 +982,7 @@ def get_workflow_branches(tree_list, workflow: str = "BASIC", debug=False):
     Returns:
         truth_list (list): list of truth variables
     """
-    f = json.load(open(f"../config/workflow/{workflow}.json", "r"))
+    f = json.load(open(f"{root}/config/workflow/{workflow}.json", "r"))
     branch_lists = []
     for tree in tree_list:
         tree_branch_list = []

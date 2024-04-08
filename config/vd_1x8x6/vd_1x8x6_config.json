@@ -1,6 +1,6 @@
 {
     "NAME": "SolarNuAna_",
-    "PATH": "../data/VD/1x8x6_3view_30deg/",
+    "PATH": "/data/VD/1x8x6_3view_30deg/",
     "GEOMETRY": "vd",
     "VERSION": "vd_1x8x6_3view_30deg",
     "DEFAULT_ANALYSIS_ENERGY": "TotalEnergy",
@@ -22,8 +22,9 @@
     "MIN_FLASH_PE": 100,
     "RATIO_FLASH_PE": 0.5,
     "MAX_FLASH_PE_RATIO": 0.3,
-    "MIN_BKG_R": 20,
+    "MIN_BKG_R": 10,
     "MAX_BKG_CHARGE": 75,
+    "MAX_BKG_ENERGY": 0,
     "COMPUTE_MATCHING": true,
     "MAIN_PDG": 22,
     "MAX_ADJCL_E": 30,
