@@ -1,6 +1,6 @@
 import sys, json
 
-sys.path.insert(0, "../")
+sys.path.insert(0, "../../")
 from lib import (
     initialize_macro,
     check_macro_config,
