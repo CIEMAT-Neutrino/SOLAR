@@ -160,7 +160,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
     fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
 
     for i, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{name}/{config}_config.json"))
+        info = json.load(open(f"../config/{config}/{config}_config.json"))
         bkg_dict, color_dict = get_bkg_config(info)
         if idx is None:
             idx = np.random.randint(len(run["Reco"]["Event"]))
