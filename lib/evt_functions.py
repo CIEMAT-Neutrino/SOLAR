@@ -1,3 +1,5 @@
+from src.utils import get_project_root
+
 import json
 
 import numpy as np
@@ -10,8 +12,19 @@ from lib.geo_functions import add_geometry_planes
 from lib.io_functions import get_bkg_config
 from lib.solar_functions import get_pdg_color
 
-def get_ophit_positions(run, tree, idx):
+root = get_project_root()
+
+def get_ophit_positions(run, tree, idx, filter=None, debug=False):
     ophits = [[],[],[]]
+    # If filter is not None, then we filter the ophits by the filter array
+    if filter is not None:
+        ophits[0] = [run[tree]["OpHitX"][idx][x] for x in filter]
+        ophits[1] = [run[tree]["OpHitY"][idx][x] for x in filter]
+        ophits[2] = [run[tree]["OpHitZ"][idx][x] for x in filter]
+        ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]
+        if debug: print(f"Flash Width: {2*abs(np.min(ophit_times)-np.max(ophit_times)):.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
+        return ophits
+    # If filter is None, then we take all the ophits
     ophits[0] = run[tree]["OpHitX"][idx]
     ophits[1] = run[tree]["OpHitY"][idx]
     ophits[2] = run[tree]["OpHitZ"][idx]
@@ -147,7 +160,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
     fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
 
     for i, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json"))
+        info = json.load(open(f"../config/{config}/{name}/{config}_config.json"))
         bkg_dict, color_dict = get_bkg_config(info)
         if idx is None:
             idx = np.random.randint(len(run["Reco"]["Event"]))
@@ -188,7 +201,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
         return fig
     
 
-def plot_pds_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=False):
+def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashid=None, zoom = True, debug=False):
     specs = [
         [
             {"type": "scatter"},
@@ -200,7 +213,7 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=F
     fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
 
     for i, config in enumerate(configs):
-        info = json.load(open(f"../config/{config}/{config}_config.json"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
         if idx is None:
             idx = np.random.randint(len(run[tracked]["Event"]))
             while (run[tracked]["TNuE"][idx] > 30):
@@ -208,13 +221,38 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=F
 
         neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
         ccint, true_name, true_color = get_marley_positions(run, tracked, idx)
-        ophits = get_ophit_positions(run, tracked, idx)
+        # If flashid is not None, then we filter the ophits by the flashid
+        if flashid == "All":
+            ophits = get_ophit_positions(run, tracked, idx)
+            ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx]]
+            ophit_size = [x if x < maxophit else maxophit for x in ophit_size]
+            ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx]]
+
+        else:
+            if flashid is not None:
+                flash_filter = np.where(np.array(run[tracked]["OpHitFlashID"][idx]) == flashid)[0]
+            if flashid is None:
+                flash_filter = np.random.randint(0, len(run[tracked]["OpHitFlashID"][idx]))
+            if debug: print(f"FlashID: {flashid}")
+            
+            ophits = get_ophit_positions(run, tracked, idx, flash_filter, debug=debug)
+            ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx][flash_filter]]
+            ophit_size = [x if x < maxophit else maxophit for x in ophit_size]
+            ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx][flash_filter]]
+            if debug:
+                print(f"Flash Purity: {np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size):.2f}")
+                print(f"Flash Size: {np.sum(ophit_size)} PE")
+                print(f"Flash Vertex (Y,Z): {np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size):.2f}, {np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size):.2f}")
+        
+
+        flash = [[],[],[]]
+        flash[0] = [np.sum(np.multiply(ophits[0],ophit_size))/np.sum(ophit_size)]
+        flash[1] = [np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size)]
+        flash[2] = [np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size)]
         fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 20, neut_color)
         fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 20, true_color)
-        # Make a ophit_size array from the ophitPE branch of run substituting the numbers < 0 with 0
-        ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx]]
-        ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx]]
         fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color)
+        fig = add_data_to_event(fig, flash, "1", "Reco", "Flash", "Flash","circle", 10, "red")
 
         fig = format_coustom_plotly(fig, figsize=(None, 600))
         fig.update_layout(
