@@ -1,3 +1,5 @@
+from src.utils import get_project_root
+
 import os, glob, uproot, json
 import numpy as np
 import pandas as pd
@@ -14,15 +16,16 @@ from plotly.subplots import make_subplots
 from lib.io_functions import print_colored
 from lib.plt_functions import format_coustom_plotly, unicode
 
+root = get_project_root()
 
 def get_nadir_angle(
-    path: str = "../data/OSCILLATION/", show: bool = False, debug: bool = False
+    path: str = f"{root}/data/OSCILLATION/", show: bool = False, debug: bool = False
 ):
     """
     This function can be used to obtain the nadir angle distribution for DUNE.
 
     Args:
-        path (str): Path to the nadir angle data file (default: "../data/OSCILLATION/")
+        path (str): Path to the nadir angle data file (default: f"{root}/data/OSCILLATION/")
         show (bool): If True, show the plot (default: False)
         debug (bool): If True, the debug mode is activated.
 
@@ -52,7 +55,7 @@ def plot_nadir_angle(fig, idx, debug: bool = False):
     Returns:
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
     nadir_data = get_nadir_angle(show=False, debug=debug)
     fig.add_trace(
         px.scatter(
@@ -80,7 +83,7 @@ def get_oscillation_datafiles(
     dm2=None,
     sin13=None,
     sin12=None,
-    path: str = "../data/OSCILLATION/",
+    path: str = f"{root}/data/OSCILLATION/",
     ext: str = "root",
     auto: bool = False,
     debug: bool = False,
@@ -92,7 +95,7 @@ def get_oscillation_datafiles(
         dm2 (float/list):   Solar mass squared difference (default: analysis["DM2"])
         sin13 (float/list): Solar mixing angle (default: analysis["SIN13"])
         sin12 (float/list): Solar mixing angle (default: analysis["SIN12"])
-        path (str):   Path to the oscillation data files (default: "../data/OSCILLATION/")
+        path (str):   Path to the oscillation data files (default: f"{root}/data/OSCILLATION/")
         ext (str):    Extension of the oscillation data files (default: "root")
         auto (bool):  If True, the function will look for all the oscillation data files in the path (default: False)
         debug (bool): If True, the debug mode is activated.
@@ -163,7 +166,7 @@ def get_oscillation_datafiles(
                 dm2, sin13, sin12 = None, None, None
 
         elif dm2 == None and sin13 == None and sin12 == None:
-            analysis_info = json.load(open("../import/analysis.json", "r"))
+            analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
             found_dm2, found_sin13, found_sin12 = (
                 analysis_info["REACT_DM2"],
                 analysis_info["SIN13"],
@@ -192,7 +195,7 @@ def get_oscillation_datafiles(
 
 
 def get_oscillation_map(
-    path="../data/OSCILLATION/",
+    path=f"{root}/data/OSCILLATION/",
     dm2=None,
     sin13=None,
     sin12=None,
@@ -207,7 +210,7 @@ def get_oscillation_map(
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
 
     Args:
-        path (str): Path to the oscillation data files (default: "../data/OSCILLATION/")
+        path (str): Path to the oscillation data files (default: f"{root}/data/OSCILLATION/")
         dm2 (float): Solar mass squared difference (default: "DEFAULT")
         sin13 (float): Solar mixing angle (default: "DEFAULT")
         sin12 (float): Solar mixing angle (default: "DEFAULT")
@@ -242,7 +245,7 @@ def get_oscillation_map(
         auto=auto,
         debug=debug,
     )
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
 
     if type(dm2) == float and type(sin13) == float and type(sin12) == float:
         dm2, sin13, sin12 = [dm2], [sin13], [sin12]
@@ -403,7 +406,7 @@ def get_oscillation_map(
 
 
 def process_oscillation_map(
-    path="../data/OSCILLATION/",
+    path=f"{root}/data/OSCILLATION/",
     dm2_value=None,
     sin13_value=None,
     sin12_value=None,
@@ -412,7 +415,7 @@ def process_oscillation_map(
     debug=False,
 ):
     nadir_data = get_nadir_angle(path=path, debug=debug)
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
     root_nadir_edges = np.linspace(
         analysis_info["ROOT_NADIR_RANGE"][0],
         analysis_info["ROOT_NADIR_RANGE"][1],
@@ -479,7 +482,7 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, debug=False
     Returns:
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
     oscillation_map = get_oscillation_map(
         dm2=dm2, sin13=sin13, sin12=sin12, debug=debug
     )
@@ -506,7 +509,7 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, debug=False
 
 def rebin_df(
     df,
-    save_path="../data/pkl/rebin/df.pkl",
+    save_path=f"{root}/data/pkl/rebin/df.pkl",
     xarray=[],
     yarray=[],
     show=False,
@@ -522,13 +525,13 @@ def rebin_df(
         yarray (list): List of ybins to use for the rebinning.
         show (bool): If True, show the rebinning result (default: False)
         save (bool): If True, save the rebinning result (default: True)
-        save_path (str): Path to save the rebinning result (default: "../data/pkl/rebin/df.pkl")
+        save_path (str): Path to save the rebinning result (default: f"{root}/data/pkl/rebin/df.pkl")
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         small_df (pandas.DataFrame): Rebinning result.
     """
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
     energy_edges = np.linspace(
         analysis_info["RECO_ENERGY_RANGE"][0],
         analysis_info["RECO_ENERGY_RANGE"][1],
