@@ -12,16 +12,11 @@
             "TMarleyX": 1,
             "TMarleyY": 1,
             "TMarleyZ": 1,
-            "TMarleyMother": 1,
-            "TMarleyEndX": 1,
-            "TMarleyEndY": 1,
-            "TMarleyEndZ": 1,
             "TMarleyPDG": 1
         },
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1,
-            "TrackNum": 1
+            "Flag": 1
         },
         "DOUBLES": {
             "TNuE": 1,
@@ -39,21 +34,36 @@
             "TMarleyX": 1,
             "TMarleyY": 1,
             "TMarleyZ": 1,
-            "TMarleyMother": 1,
-            "TMarleyEndX": 1,
-            "TMarleyEndY": 1,
-            "TMarleyEndZ": 1,
             "TMarleyPDG": 1,
             "MainVertex": 0,
             "MainParentVertex": 0,
-            "MTrackStart": 0,
-            "MTrackEnd": 0
+            "AdjClR": 0,
+            "AdjClCharge": 0,
+            "AdjClGen": 0,
+            "AdjClTime": 0,
+            "AdjClRecoY": 0,
+            "AdjClRecoZ": 0,
+            "AdjClMainPDG": 0,
+            "AdjClMainX": 1,
+            "AdjClMainY": 1,
+            "AdjClMainZ": 1,
+            "AdjOpFlashR": 0,
+            "AdjOpFlashPE": 0,
+            "AdjOpFlashTime": 0,
+            "AdjOpFlashRecoY": 0,
+            "AdjOpFlashRecoZ": 0,
+            "AdjOpFlashMaxPE": 0,
+            "MarleyFrac": 0
         },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
+            "TPC": 1,
             "MainPDG": 1,
-            "NHits": 1
+            "Generator": 1,
+            "NHits": 1,
+            "Ind0NHits": 1,
+            "Ind1NHits": 1
         },
         "DOUBLES": {
             "MainE": 1,
@@ -61,8 +71,12 @@
             "TNuX": 1,
             "TNuY": 1,
             "TNuZ": 1,
-            "Purity": 1,
             "RecoY": 1,
+            "Ind0RecoY": 1,
+            "Ind1RecoY": 1,
+            "Time": 1,
+            "Ind0dT": 1,
+            "Ind1dT": 1,
             "RecoZ": 1,
             "Charge": 1
         },

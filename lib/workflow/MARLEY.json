@@ -24,19 +24,29 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 0,
-            "TNuX": 0,
-            "TNuY": 0,
-            "TNuZ": 0
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
     },
     "Reco": {
         "VECTORS": {},
-        "INTEGERS": {},
-        "DOUBLES": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "Generator": 1,
+            "NHits": 1
+        },
+        "DOUBLES": {
+            "Charge": 1,
+            "TNuE": 1
+        },
         "STRINGS": {},
-        "BOOLS": {}
+        "BOOLS": {
+            "Primary": 1
+        }
     }
 }

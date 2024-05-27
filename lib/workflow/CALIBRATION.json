@@ -31,6 +31,9 @@
         },
         "DOUBLES": {
             "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1,
             "ElectronE": 0,
             "GammaE": 0,
             "ElectronK": 0,
@@ -38,7 +41,8 @@
             "NeutronK": 0,
             "VisEnergy": 0,
             "Time": 1,
-            "Charge": 1
+            "Charge": 1,
+            "ElectronCharge": 0
         },
         "STRINGS": {},
         "BOOLS": {

@@ -10,7 +10,9 @@
             "Event": 1,
             "Flag": 1
         },
-        "DOUBLES": {},
+        "DOUBLES": {
+            "TNuE": 1
+        },
         "STRINGS": {},
         "BOOLS": {}
     },
@@ -21,7 +23,10 @@
             "Generator": 1,
             "NHits": 1,
             "AdjClNum": 0,
-            "AdjOpFlashNum": 0
+            "SelectedAdjClNum": 0,
+            "AdjOpFlashNum": 0,
+            "AssFlashIdx": 0,
+            "Matching": -1
         },
         "DOUBLES": {
             "TNuE": 1,
@@ -39,16 +44,24 @@
             "SelectedEnergy": 0,
             "RecoEnergy": 0,
             "SelectedAdjClEnergy": 0,
+            "SelectedMaxAdjClEnergy": 0,
             "TotalAdjClEnergy": 0,
             "MaxAdjClEnergy": 0,
             "SelectedAdjClR": 0,
+            "SelectedMaxAdjClR": 0,
             "TotalAdjClR": 0,
             "MaxAdjClR": 0,
-            "Discriminant": 0
+            "Discriminant": 0,
+            "MatchedOpFlashTime": 0,
+            "MatchedOpFlashPE": 0,
+            "MatchedOpFlashR": 0,
+            "DriftTime": 0,
+            "RecoX": 0
         },
         "STRINGS": {},
         "BOOLS": {
-            "Primary": 1
+            "Primary": 1,
+            "FlashMatched": 0
         }
     }
 }

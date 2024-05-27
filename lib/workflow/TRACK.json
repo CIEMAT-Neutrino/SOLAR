@@ -1,0 +1,77 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {
+            "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyX": 1,
+            "TMarleyY": 1,
+            "TMarleyZ": 1,
+            "TMarleyMother": 1,
+            "TMarleyEndX": 1,
+            "TMarleyEndY": 1,
+            "TMarleyEndZ": 1,
+            "TMarleyPDG": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "TrackNum": 1
+        },
+        "DOUBLES": {
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {
+            "MainParentVertex": 1,
+            "TMarleyMother": 1,
+            "TMarleyEndX": 1,
+            "TMarleyEndY": 1,
+            "TMarleyEndZ": 1,
+            "TMarleyPDG": 1,
+            "MainVertex": 1,
+            "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyX": 1,
+            "TMarleyY": 1,
+            "TMarleyZ": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "MainPDG": 1,
+            "NHits": 1,
+            "Generator": 1,
+            "MTrackNPoints": 1
+        },
+        "DOUBLES": {
+            "MainE": 1,
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1,
+            "Purity": 1,
+            "RecoY": 1,
+            "RecoZ": 1,
+            "Charge": 1,
+            "MTrackEnd": 1,
+            "MTrackStart": 1,
+            "MTrackChi2": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {
+            "Primary": 1
+        }
+    }
+}

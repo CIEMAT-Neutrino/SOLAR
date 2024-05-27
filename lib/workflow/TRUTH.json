@@ -20,12 +20,7 @@
             "TMarleyMother": 1,
             "HitNum": 1,
             "ClusterNum": 1,
-            "TMarleyMaxEDep": 1,
-            "OpHitX": 1,
-            "OpHitY": 1,
-            "OpHitZ": 1,
-            "OpHitPE": 1,
-            "OpHitPur": 1
+            "TMarleyMaxEDep": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -34,10 +29,10 @@
             "OpFlashNum": 1
         },
         "DOUBLES": {
-            "TNuE": 0,
-            "TNuX": 0,
-            "TNuY": 0,
-            "TNuZ": 0
+            "TNuE": 1,
+            "TNuX": 1,
+            "TNuY": 1,
+            "TNuZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -47,11 +42,14 @@
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
+            "NHits": 1
+        },
+        "DOUBLES": {
+            "TNuE": 1,
+            "Purity": 1,
             "Generator": 1,
-            "NHits": 1,
             "Charge": 1
         },
-        "DOUBLES": {},
         "STRINGS": {},
         "BOOLS": {
             "Primary": 0

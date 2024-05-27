@@ -45,6 +45,8 @@
             "AdjOpFlashPE": 0,
             "AdjOpFlashTime": 0,
             "AdjOpFlashMaxPE": 0,
+            "AdjOpFlashSTD": 0,
+            "AdjOpFlashFast": 0,
             "AdjOpFlashPur": 0,
             "AdjOpFlashNHit": 1
         },
