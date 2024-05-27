@@ -28,12 +28,27 @@ def explode(df, explode, keep=None, debug=False):
 
     Args:
         df (pandas.DataFrame): Dataframe to explode.
-        columns_to_explode (list(str)): List of columns to explode.
+        explode (list(str)): List of columns to explode.
+        keep (list(str)): List of columns to keep.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         result_df (pandas.DataFrame): Dataframe exploded.
     """
+    # Check that entries in explode and keep are colums of the dataframe. If not, remove and print a warning
+    if keep is not None:
+        old_keep = keep.copy()
+        for col in old_keep:
+            if col not in df.columns:
+                print_colored(f"Column {col} not found in the dataframe", "WARNING")
+                keep.remove(col)
+    # make a copy of explode to avoid modifying the original list
+    old_explode = explode.copy()
+    for col in old_explode:
+        if col not in df.columns:
+            print_colored(f"Column {col} not found in the dataframe", "WARNING")
+            explode.remove(col)
+
     try:
         # Explode the columns
         if keep is not None:
@@ -63,7 +78,7 @@ def explode(df, explode, keep=None, debug=False):
             result_columns = dd.compute(*list(exploded_columns))
         # Combine the results with regular columns
         result_df = pd.concat(
-            [df.drop(columns=columns_to_explode)] + list(result_columns), axis=1
+            [df.drop(columns=explode)] + list(result_columns), axis=1
         )
 
     if debug:
@@ -183,7 +198,7 @@ def reorder_df(df, info, bkg_dict, color_dict, debug=False):
         color_list (list): list of the colors of the backgrounds
     """
 
-    f = json.load(open(f"{root}/import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/lib/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
     bkg_order = f[info["GEOMETRY"]][info["VERSION"]].values()
 
@@ -328,7 +343,7 @@ def generate_background_distribution(
     if save:
         name = truth_gen_df["Name"].values[0]
         version = info["VERSION"]
-        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution.png")
+        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution")
     if show:
         fig.show()
     return fig
