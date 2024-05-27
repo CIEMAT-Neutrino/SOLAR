@@ -1,8 +1,12 @@
+from src.utils import get_project_root
+
 import sys, inquirer, os, json
 import numpy as np
 from rich import print as rprint
 
 from .io_functions import print_colored
+
+root = get_project_root()
 
 def get_flag_dict(debug = False):
     '''
@@ -112,13 +116,13 @@ def select_input_file(user_input, debug=False):
     
     new_user_input = user_input.copy()
     if check_key(user_input, "config_file") == False:
-        folder_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/')]
+        folder_names = [file_name.replace(".txt", "") for file_name in os.listdir(f'{root}/config/')]
         q1 = [ inquirer.List("config_file", message="Please select input file", choices=folder_names, default="hd") ]
         input_folder = inquirer.prompt(q1)["config_file"]
         # Check if config file exists in the selected folder
-        if not os.path.exists('../config/'+input_folder+'/'+input_folder+'_config.json'):
+        if not os.path.exists(f'{root}/config/'+input_folder+'/'+input_folder+'_config.json'):
             print_colored("WARNING: No config file found in folder %s"%input_folder,"WARNING")
-            file_names = [file_name.replace(".txt", "") for file_name in os.listdir('../config/'+input_folder+'/')]
+            file_names = [file_name.replace(".txt", "") for file_name in os.listdir(f'{root}/config/'+input_folder+'/')]
             q2 = [ inquirer.List("config_file", message="Please select input file", choices=file_names, default="hd") ]
             new_user_input["config_file"] = [input_folder+"/"+inquirer.prompt(q2)["config_file"]]
         else:
@@ -141,7 +145,7 @@ def use_default_input(user_input, default_dict, debug=False):
     '''
     from .io_functions import check_key, print_colored
     
-    info = json.open(open('../config/'+user_input["config_file"]))
+    info = json.open(open(f'{root}/config/'+user_input["config_file"]))
     new_user_input = user_input.copy()
     return new_user_input
 
@@ -174,7 +178,7 @@ def print_macro_info(macro, debug=False):
         macro (str): Name of the macro to be executed.
         debug (bool): If True, the debug mode is activated.
     '''
-    f = open('../info/'+macro+'.txt', 'r')
+    f = open(f'{root}/lib/docs/{macro}.txt', 'r')
     file_contents = f.read()
     rprint (file_contents+"\n")
     f.close
@@ -184,7 +188,7 @@ def print_header(debug = False):
     '''
     This function prints the header of the macro.
     '''
-    f = open('../info/header.txt', 'r')
+    f = open(f'{root}/lib/docs/header.txt', 'r')
     file_contents = f.read()
     rprint (file_contents)
     f.close
