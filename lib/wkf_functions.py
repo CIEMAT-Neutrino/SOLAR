@@ -54,7 +54,7 @@ def compute_root_workflow(
             "BOOLS": bool,
         }
 
-        data_config = json.load(open(f"{root}/config/workflow/{workflow}.json", "r"))
+        data_config = json.load(open(f"{root}/lib/workflow/{workflow}.json", "r"))
         for object_type in object_types.keys():
             new_conf_branches = new_conf_branches + list(
                 data_config["Config"][object_type].keys()
@@ -156,10 +156,10 @@ def compute_root_workflow(
         if debug:
             rprint("[magenta]" + "".join(debug_str) + "[/magenta]")
 
-        if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "VERTEXING", "ANALYSIS", "FULL"]:
+        if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
             calibration_info = json.load(
                 open(
-                    f"{root}/config/{config}/{config}_calib/{config}_charge_correction.json",
+                    f"{root}/config/{config}/{name}/{config}_calib/{config}_charge_correction.json",
                     "r",
                 )
             )
@@ -172,16 +172,16 @@ def compute_root_workflow(
                 calibration_info["INTERCEPT"]
             ]
         
-        if workflow in ["RECONSTRUCTION", "SMEARING", "VERTEXING", "ANALYSIS", "FULL"]:
+        if workflow in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
             discriminant_info = json.load(
                 open(
-                    f"{root}/config/{config}/{config}_calib/{config}_discriminant_calibration.json",
+                    f"{root}/config/{config}/{name}/{config}_calib/{config}_discriminant_calibration.json",
                     "r",
                 )
             )
 
-        if workflow in ["SMEARING", "VERTEXING", "ANALYSIS", "FULL"]:
-            calib_info = json.load(open(f"{root}/config/{config}/{config}_calib/{config}_energy_calibration.json","r"))
+        if workflow in ["SMEARING", "VERTEXING", "ANALYSIS"]:
+            calib_info = json.load(open(f"{root}/config/{config}/{name}/{config}_calib/{config}_energy_calibration.json","r"))
 
         # debug_str.append("\n--> Computing reco efficiency...")
         # true, reco = compute_event_matching(true, reco, debug=debug)
@@ -204,15 +204,8 @@ def compute_root_workflow(
                 reco["Primary"][i] = reco_tree.Charge > max(reco_tree.AdjClCharge)
             except ValueError:
                 reco["Primary"][i] = False
-            if workflow in [
-                "CALIBRATION",
-                "DISCRIMINATION",
-                "RECONSTRUCTION",
-                "SMEARING",
-                "VERTEXING",
-                "ANALYSIS",
-                "FULL",
-            ]:
+
+            if workflow in ["CALIBRATION","DISCRIMINATION","RECONSTRUCTION","SMEARING","ANALYSIS"]:
                 ############################
                 # Primary Computation
                 ############################
@@ -244,30 +237,34 @@ def compute_root_workflow(
                                 pass
                 
                 reco["VisEnergy"][i] = reco["ElectronK"][i] + reco["GammaK"][i]
+                reco["ElectronCharge"][i] = reco_tree.Charge
+                for z in range(len(reco_tree.AdjClR)):
+                    if reco_tree.AdjClGen.at(z) == 1 and reco_tree.AdjClMainPDG.at(z) == 11:
+                        reco["ElectronCharge"][i] += reco_tree.AdjClCharge.at(z)
 
-            if workflow in ["ANALYSIS", "FULL"]:
+            if workflow in ["ANALYSIS"]:
                 ############################
                 # Flash Matching Computation
                 ############################
-                for j in range(len(reco_tree.AdjOpFlashR)):
-                    if reco_tree.AdjOpFlashR.at(j) > params["MAX_FLASH_R"]:
-                        continue
-                    if reco_tree.AdjOpFlashPE.at(j) < params["MIN_FLASH_PE"]:
-                        continue
-                    if (
-                        reco_tree.AdjOpFlashPE.at(j) / reco_tree.AdjOpFlashMaxPE.at(j)
-                        < reco_tree.AdjOpFlashR.at(j) * params["RATIO_FLASH_PEvsR"]
-                    ):
-                        continue
-                    reco["FlashMatched"][i] = True
-                    if reco["MatchedOpFlashPE"][i] < reco_tree.AdjOpFlashPE.at(j):
-                        reco["AssFlashIdx"][i] = j
-                        reco["MatchedOpFlashR"][i] = reco_tree.AdjOpFlashR.at(j)
-                        reco["MatchedOpFlashPE"][i] = reco_tree.AdjOpFlashPE.at(j)
-                        reco["MatchedOpFlashTime"][i] = reco_tree.AdjOpFlashTime.at(j)
-                reco["DriftTime"][i] = (
-                    reco_tree.Time - 2 * reco["MatchedOpFlashTime"][i]
-                )
+                if info["GEOMETRY"] == "hd":
+                    for j in range(len(reco_tree.AdjOpFlashR)):
+                        if reco_tree.AdjOpFlashR.at(j) > params["MAX_FLASH_R"]:
+                            continue
+                        if reco_tree.AdjOpFlashPE.at(j) < params["MIN_FLASH_PE"]:
+                            continue
+                        if reco_tree.AdjOpFlashPE.at(j) < 3000 * reco_tree.AdjOpFlashMaxPE.at(j) / reco_tree.AdjOpFlashPE.at(j):
+                            continue
+                        # max_ratio_filter = run["Reco"]["AdjOpFlashPE"][idx] > 3000 * run["Reco"]["AdjOpFlashMaxPE"][idx] / run["Reco"]["AdjOpFlashPE"][idx]
+
+                        reco["FlashMatched"][i] = True
+                        if reco["MatchedOpFlashPE"][i] < reco_tree.AdjOpFlashPE.at(j):
+                            reco["AssFlashIdx"][i] = j
+                            reco["MatchedOpFlashR"][i] = reco_tree.AdjOpFlashR.at(j)
+                            reco["MatchedOpFlashPE"][i] = reco_tree.AdjOpFlashPE.at(j)
+                            reco["MatchedOpFlashTime"][i] = reco_tree.AdjOpFlashTime.at(j)
+                    reco["DriftTime"][i] = (
+                        reco_tree.Time - 2 * reco["MatchedOpFlashTime"][i]
+                    )
 
                 ############################
                 # RecoX Computation
@@ -316,7 +313,7 @@ def compute_root_workflow(
                             + info["DETECTOR_SIZE_X"] / 2
                         )
 
-            if workflow in ["DISCRIMINATION","RECONSTRUCTION", "SMEARING", "FULL"]:
+            if workflow in ["DISCRIMINATION","RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
                 ############################
                 # Energy Computation
                 ############################
@@ -346,7 +343,10 @@ def compute_root_workflow(
                     adj_cl_energy = (
                         reco_tree.AdjClCharge.at(z) * adj_cl_correction / corr_popt[0]
                     )
+
                     adj_cl_r = reco_tree.AdjClR.at(z)
+                    adj_cl_charge = reco_tree.AdjClCharge.at(z)
+                    adj_cl_dt = abs(reco_tree.Time - reco_tree.AdjClTime.at(z))
 
                     if adj_cl_energy > reco["MaxAdjClEnergy"][i]:
                         reco["MaxAdjClEnergy"][i] = adj_cl_energy
@@ -355,19 +355,26 @@ def compute_root_workflow(
                     reco["TotalAdjClEnergy"][i] += adj_cl_energy
                     reco["TotalAdjClR"][i] += adj_cl_r
 
-                    if adj_cl_r < info["MIN_BKG_R"] and adj_cl_energy > info["MAX_BKG_ENERGY"]:
+                    if adj_cl_r > info["MIN_BKG_R"] and adj_cl_dt > info["MIN_BKG_DT"] and adj_cl_charge < info["MAX_BKG_CHARGE"]:
+                        continue
+                    else:
+                        reco["SelectedAdjClNum"][i] += 1
                         reco["SelectedAdjClEnergy"][i] += adj_cl_energy
                         reco["SelectedAdjClR"][i] += adj_cl_r
+
+                        if adj_cl_energy > reco["SelectedMaxAdjClEnergy"][i]:
+                            reco["SelectedMaxAdjClEnergy"][i] = adj_cl_energy
+                            reco["SelectedMaxAdjClR"][i] = adj_cl_r
 
                 reco["TotalEnergy"][i] = (reco["TotalAdjClEnergy"][i] + reco["Energy"][i])
                 reco["SelectedEnergy"][i] = (reco["SelectedAdjClEnergy"][i] + reco["Energy"][i])
 
-            if workflow in ["RECONSTRUCTION", "SMEARING", "FULL"]:
+            if workflow in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
                 ############################
                 # Reco Energy Computation
                 ############################
                 reco["Discriminant"][i] = (
-                    reco["MaxAdjClEnergy"][i] + reco["AdjClNum"][i]
+                    reco["SelectedAdjClEnergy"][i] + reco["SelectedAdjClNum"][i]
                 )
 
                 if reco["Discriminant"][i] >= discriminant_info["DISCRIMINANT_THRESHOLD"]:
@@ -382,10 +389,10 @@ def compute_root_workflow(
                         - discriminant_info["UPPER"]["INTERSECTION"]
                     )
 
-            if workflow in ["SMEARING", "FULL"]:
-                ############################
+            if workflow in ["SMEARING", "ANALYSIS"]:
+                ###########################
                 # Reco Energy Computation
-                ############################
+                ###########################
                 for energy_label, energy_key in zip(["TotalEnergy","RecoEnergy","SelectedEnergy"], ["TOTAL","RECO","SELECTED"]):
                     reco[energy_label][i] = (
                         (reco[energy_label][i] - calib_info[energy_key]["INTERSECTION"]) / calib_info[energy_key]["ENERGY_AMP"]
@@ -395,7 +402,7 @@ def compute_root_workflow(
             # Reco Filter Computation
             ############################
             try:
-                if reco["Generator"][i] > data_filter["generator"]:
+                if reco["Generator"][i] != data_filter["generator"]:
                     continue
             except KeyError:
                 pass
@@ -423,7 +430,11 @@ def compute_root_workflow(
                     continue
             except KeyError:
                 pass
-
+            try:
+                if reco["FlashMatched"][i] == False and data_filter["flash-matched"]:
+                    continue
+            except KeyError:
+                pass
             try:
                 if data_filter["neutron"]:
                     for j in range(len(reco_tree.TMarleyPDG)):
@@ -446,9 +457,11 @@ def compute_root_workflow(
             )
 
         if name_idx == 0:
+            print(f"First data file {name} computed!")
             all_conf, all_true, all_reco = conf, true, reco
 
         else:
+            print(f"Additional data file {name} computed!")
             for key in conf.keys():
                 all_conf[key] = np.append(all_conf[key], conf[key])
             for key in true.keys():
@@ -481,20 +494,3 @@ def compute_event_matching(true, reco, debug=False):
         debug=debug,
     )
     return true, reco
-
-
-# if workflow in ["VERTEXING", "ANALYSIS", "FULL"]:
-#     ############################
-#     # RecoY Computation
-#     ############################
-#     if reco_tree.Ind0NHits > 2 and reco_tree.Ind1NHits > 2:
-#         reco["RecoY"][i] = (reco_tree.Ind0RecoY + reco_tree.Ind1RecoY) / 2
-#         reco["Matching"][i] = 2
-#     elif reco_tree.Ind0NHits > 2 and reco_tree.Ind1NHits <= 2:
-#         reco["RecoY"][i] = reco_tree.Ind0RecoY
-#         reco["Matching"][i] = 0
-#     elif reco_tree.Ind0NHits <= 2 and reco_tree.Ind1NHits > 2:
-#         reco["RecoY"][i] = reco_tree.Ind1RecoY
-#         reco["Matching"][i] = 1
-#     else:
-#         reco["RecoY"][i] = (reco_tree.Ind0RecoY + reco_tree.Ind1RecoY) / 2
