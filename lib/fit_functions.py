@@ -1,6 +1,6 @@
 from src.utils import get_project_root
 
-from .ana_functions import get_default_energies
+from .ana_functions import get_default_energies, get_default_nhits
 
 import numpy as np
 import plotly.graph_objects as go
@@ -12,6 +12,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 root = get_project_root()
 energy_edges, energy_centers, ebin = get_default_energies(root)
+nhits = get_default_nhits(root)
 
 def peak(x, coefficients, debug=False):
     """
@@ -242,6 +243,8 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
 def generate_bins(acc, x, debug=False):
     if type(acc) == int:
         x_array = np.linspace(np.min(x), np.max(x), acc + 1)
+    elif type(acc) == tuple:
+        x_array = np.linspace(np.min(x), np.max(x), acc[0] + 1)
     elif type(acc) == list or type(acc) == np.ndarray:
         x_array = acc
     elif acc == None:
@@ -260,7 +263,11 @@ def get_hist1d(x, per:tuple = (1, 99), acc = None, norm = True, density = False,
 
     Args:
         x (array): x-axis array.
-        acc (int): number of bins.
+        per (tuple): percentile range.
+        acc (None): define binning according to type in generate_bins.
+        norm (bool): If True, the histogram is normalized.
+        density (bool): If True, the histogram is normalized.
+        debug (bool): If True, the debug mode is activated.
 
     Returns:
         x (array): x-axis array.
@@ -286,14 +293,17 @@ def get_hist1d(x, per:tuple = (1, 99), acc = None, norm = True, density = False,
     return x, h
 
 
-def get_energy_scann(x, y, per:tuple = (1, 99), norm = True, debug = False):
+def get_variable_scann(x, y, variable="energy", per:tuple = (1, 99), norm = True, acc = 100, debug = False):
     """
     Given an x array, generate a 1D histogram.
 
     Args:
-        x (array): energy array.
-        y (array): variable array.
-        acc (int): number of bins.
+        x (array): variable array.
+        y (array): value array.
+        variable (str): variable to scan (energy, nhits, etc.).
+        per (tuple): percentile range.
+        norm (bool): If True, the histogram is normalized.
+        acc (int)/(tuple): number of bins/(x,y) bins.
 
     Returns:
         x (array): x-axis array.
@@ -314,14 +324,27 @@ def get_energy_scann(x, y, per:tuple = (1, 99), norm = True, debug = False):
     if debug:
         rprint(type(x), x, "\n[cyan]INFO: Percentile limits: " + str(lims) + "[/cyan]")
 
-    for energy in energy_centers:
-        energy_filter = np.where((x > (energy-ebin/2)) & (x < (energy+ebin/2)))
-        if energy_filter[0].size == 0:
-            continue
-        mean = np.mean(y[energy_filter])
-        std = np.std(y[energy_filter])
-        mean_variable_array.append(mean)
-        std_variable_array.append(std)
+    if variable == "energy":
+        for energy in energy_centers:
+            energy_filter = np.where((x > (energy-ebin/2)) & (x < (energy+ebin/2)))
+            mean_variable_array.append(np.mean(y[energy_filter]))
+            std_variable_array.append(np.std(y[energy_filter]))
+        values = energy_centers
+
+    elif variable == "nhits":
+        for nhit in nhits:
+            nhit_filter = np.where(x == nhit)
+            mean_variable_array.append(np.mean(y[nhit_filter]))
+            std_variable_array.append(np.std(y[nhit_filter]))
+        values = nhits
+
+    else:
+        values = generate_bins(acc, x, debug=debug)
+        bin_width = values[1] - values[0]
+        for value in values:
+            value_filter = np.where((x > (value-bin_width/2)) & (x < (value+bin_width/2)))
+            mean_variable_array.append(np.mean(y[value_filter]))
+            std_variable_array.append(np.std(y[value_filter]))
     
     array = np.array(mean_variable_array)
     array_error = np.array(std_variable_array)
@@ -330,7 +353,7 @@ def get_energy_scann(x, y, per:tuple = (1, 99), norm = True, debug = False):
         array_error = array_error / np.max(array)
         array = array / np.max(array)
 
-    return energy_centers, array, array_error
+    return values, array, array_error
 
 
 def fit_hist1d(
@@ -412,7 +435,7 @@ def fit_hist1d(
     return func, labels, popt, perr
 
 
-def get_hist2d(x, y, per=[1, 99], acc=50, norm=True, density=False, debug=False):
+def get_hist2d(x, y, per:tuple=(1, 99), acc=50, norm=True, density=False, logz:bool=False, debug:bool=False):
     """
     Given x and y arrays, generate a 2D histogram.
 
@@ -453,9 +476,16 @@ def get_hist2d(x, y, per=[1, 99], acc=50, norm=True, density=False, debug=False)
     # Compute the number of bins using the Freedman-Diaconis rule
     # https://en.wikipedia.org/wiki/Freedman%E2%80%93Diaconis_rule
     # acc = 2 * IQR(x) / (n^(1/3))
-    x_array = np.linspace(np.min(reduced_x), np.max(reduced_x), acc + 1)
-    y_array = np.linspace(np.min(reduced_y), np.max(reduced_y), acc + 1)
+    if type(acc) == int:
+        x_array = np.linspace(np.min(reduced_x), np.max(reduced_x), acc + 1)
+        y_array = np.linspace(np.min(reduced_y), np.max(reduced_y), acc + 1)
+    if type(acc) == tuple:
+        x_array = np.linspace(np.min(reduced_x), np.max(reduced_x), acc[0] + 1)
+        y_array = np.linspace(np.min(reduced_y), np.max(reduced_y), acc[1] + 1)
+    
     h, x_edges, y_edges = np.histogram2d(x, y, bins=[x_array, y_array], density=density)
+    if logz:
+        h = np.log(h)
     if norm:
         h = h / (np.sum(h))
     # x, y = (x[1:] + x[:-1]) / 2, (y[1:] + y[:-1]) / 2
@@ -483,6 +513,7 @@ def get_hist2d_fit(
         "print": True,
     },
     density = None,
+    logz:bool = False,
     zoom:bool = False,
     debug:bool = False,
 ):
@@ -506,7 +537,7 @@ def get_hist2d_fit(
         popt (array): array with the fit parameters.
         perr (array): array with the fit errors.
     """
-    hx, hy, hz = get_hist2d(x, y, per=per, acc=acc, density=density, debug=debug)
+    hx, hy, hz = get_hist2d(x, y, per=per, acc=acc, density=density, logz=logz, debug=debug)
 
     fig.add_trace(
         go.Heatmap(z=hz.T, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
