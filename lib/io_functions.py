@@ -9,7 +9,7 @@ from src.utils import get_project_root
 
 root = get_project_root()
 
-def save_figure(fig,path,debug=False)->None:
+def save_figure(fig,path,rm=False,debug=False)->None:
     """
     Save the figure in the path
 
@@ -25,6 +25,12 @@ def save_figure(fig,path,debug=False)->None:
     except FileExistsError:
         if debug:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
+    
+    # Check if figure already exists
+    if os.path.isfile(path + ".png") and rm:
+        os.remove(path + ".png")
+        if debug:
+            rprint("Removed existing figure in: " + path + ".png")
     
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure:
@@ -677,17 +683,29 @@ def load_multi(
                                 filepath + name + "/" + tree + "/" + key + ".npy",
                                 allow_pickle=True,
                             )
-                            if generator_swap == True:
-                                if key == "Generator" and name in bkg_dict.values():
-                                    out = (
-                                        out
-                                        + f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
+                            if key == "Generator":
+                                # Create a new branch with the background names according to the bkg_dict
+                                label_branch = np.asarray(
+                                    [bkg_dict[gen] for gen in branch], dtype=str
+                                )
+                                if idx == 0 and jdx == 0:
+                                    run[tree]["GeneratorLabel"] = label_branch
+                                else:
+                                    run[tree]["GeneratorLabel"] = np.concatenate(
+                                        (run[tree]["GeneratorLabel"], label_branch), axis=0
                                     )
-                                    mapped_gen = inv_bkg_dict[name]
-                                    # branch[branch == 2] = mapped_gen # Map the generator to the correct background
-                                    branch[
-                                        :
-                                    ] = mapped_gen  # Map the generator to the correct background
+                            if generator_swap == True:
+                                if key == "Generator":
+                                    if name in bkg_dict.values():
+                                        out = (
+                                            out
+                                            + f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
+                                        )
+                                        mapped_gen = inv_bkg_dict[name]
+                                        # branch[branch == 2] = mapped_gen # Map the generator to the correct background
+                                        branch[
+                                            :
+                                        ] = mapped_gen  # Map the generator to the correct background
 
                                 if key == "TruthPart" and name in bkg_dict.values():
                                     mapped_gen = inv_bkg_dict[name]
@@ -805,7 +823,7 @@ def get_bkg_config(info, debug=False):
     """
     bkg_dict = {}
     color_dict = {}
-    f = json.load(open(f"{root}/import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/lib/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
 
     color_ass = get_bkg_color(bkg_list)
@@ -824,7 +842,7 @@ def get_gen_label(configs, debug=False):
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
@@ -834,7 +852,7 @@ def get_gen_label(configs, debug=False):
 
 def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
     """ """
-    info = json.load(open("{root}/config/" + config + "/" + config + "_config.json", "r"))
+    info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
     weight_list = get_bkg_weights(info)
     truth_values = []
     reco_values = []
@@ -928,7 +946,7 @@ def get_bkg_weights(info, names, debug=False):
 def get_gen_weights(configs, names, debug=False):
     weights_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"]
         name_list = names[config]
@@ -982,7 +1000,7 @@ def get_workflow_branches(tree_list, workflow: str = "BASIC", debug=False):
     Returns:
         truth_list (list): list of truth variables
     """
-    f = json.load(open(f"{root}/config/workflow/{workflow}.json", "r"))
+    f = json.load(open(f"{root}/lib/workflow/{workflow}.json", "r"))
     branch_lists = []
     for tree in tree_list:
         tree_branch_list = []
