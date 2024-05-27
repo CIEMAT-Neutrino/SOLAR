@@ -93,9 +93,7 @@ def compute_solar_spectrum(
     else:
         factor = 1
 
-    smearing_df = pd.read_pickle(
-        "../config/" + config + "/" + config + "_calib/" + config + "_smearing.pkl"
-    )
+    smearing_df = pd.read_pickle(f"{root}/config/{config}/{name}/{config}_calib/{config}_smearing.pkl")
     for ldx, this_filter in enumerate(filters[0]):
         if debug:
             rprint("Filtering: %s" % (filters[1][ldx]))
@@ -113,10 +111,10 @@ def compute_solar_spectrum(
             eff_smearing_df = smearing_df.mul(efficient_flux) * factor
             eff_smearing_df = eff_smearing_df.replace(np.nan, 0)
 
-            if not os.path.exists("../sensitivity/" + config + "/" + name + "/"):
-                os.makedirs("../sensitivity/" + config + "/" + name + "/")
+            if not os.path.exists(f"{root}/SENSITIVITY/{config}/{name}/"):
+                os.makedirs(f"{root}/SENSITIVITY/{config}/{name}/")
             eff_smearing_df.to_pickle(
-                "../sensitivity/" + config + "/" + name + "/eff_smearing.pkl"
+                f"{root}/SENSITIVITY/{config}/{name}/eff_smearing.pkl"
             )
 
             this_dm2, this_sin13, this_sin12 = None, None, None
@@ -131,7 +129,7 @@ def compute_solar_spectrum(
                 dm2=this_dm2,
                 sin13=this_sin13,
                 sin12=this_sin12,
-                path="../data/OSCILLATION/pkl/rebin/",
+                path=f"{root}/data/OSCILLATION/pkl/rebin/",
                 ext="pkl",
                 auto=this_auto,
                 debug=debug,
@@ -144,7 +142,7 @@ def compute_solar_spectrum(
                 sin13 = sin13_list[i]
                 sin12 = sin12_list[i]
                 oscillation_df = pd.read_pickle(
-                    "../data/OSCILLATION/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
+                    f"{root}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
                     % (dm2, sin13, sin12)
                 )
 
@@ -170,10 +168,10 @@ def compute_solar_spectrum(
 
                 if save and ldx == len(filters[0]) - 1:
                     if not os.path.exists(
-                        "../sensitivity/" + config + "/" + name + "/" + gen_label + "/"
+                        f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                     ):
                         os.makedirs(
-                            "../sensitivity/"
+                            f"{root}/data/SENSITIVITY/"
                             + config
                             + "/"
                             + name
@@ -182,7 +180,7 @@ def compute_solar_spectrum(
                             + "/"
                         )
                     weighted_df.to_pickle(
-                        "../sensitivity/"
+                        f"{root}/data/SENSITIVITY/"
                         + config
                         + "/"
                         + name
@@ -231,14 +229,14 @@ def compute_solar_spectrum(
                 ).mul(nadir_y, axis=0)
                 # If output folder does not exist, create it
                 if not os.path.exists(
-                    "../sensitivity/" + config + "/" + name + "/" + gen_label + "/"
+                    f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                 ):
                     os.makedirs(
-                        "../sensitivity/" + config + "/" + name + "/" + gen_label + "/"
+                        f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                     )
                 if save:
                     weighted_df.to_pickle(
-                        "../sensitivity/"
+                        f"{root}/data/SENSITIVITY/"
                         + config
                         + "/"
                         + name
@@ -456,7 +454,7 @@ def plot_solar_spectrum(
     idx,
     components: list = ["pp", "pep", "b7", "f17", "o15", "n13", "b8", "hep"],
     weigths="B16-GS98",
-    in_path="../data/SOLAR/",
+    in_path=f"{root}/data/SOLAR/",
     debug=False,
 ):
     """
@@ -589,6 +587,7 @@ def plot_detected_solar_spectrum(
     Returns:
         fig (plotly.graph_objects.Figure): plotly figure
     """
+    data = {}
     info = ""
     colors = plotly.colors.qualitative.Prism
     oscillation = get_oscillation_map(output="interp1d")
@@ -596,6 +595,7 @@ def plot_detected_solar_spectrum(
     spectrum = get_detected_solar_spectrum(
         bins, mass=mass, components=components, interpolation=interpolation, debug=debug
     )
+    data["Energy"] = bins
     for source in components:
         this_spectrum = get_detected_solar_spectrum(
             bins,
@@ -608,6 +608,7 @@ def plot_detected_solar_spectrum(
         this_spectrum[this_spectrum < 1e-10] = 0
         if osc:
             this_spectrum = osc_func(bins) * this_spectrum
+        
         fig.add_trace(
             go.Scatter(
                 legendgroup=str(idx),
@@ -619,6 +620,8 @@ def plot_detected_solar_spectrum(
             col=1 + idx,
             row=1,
         )
+        # Add spectrum to data
+        data[source] = this_spectrum / (bins[1] - bins[0])
         info = info + "\nTotal counts for %s:\t%.2e [Counts/10kt·s]" % (
             source,
             np.sum(this_spectrum),
@@ -632,6 +635,7 @@ def plot_detected_solar_spectrum(
     spectrum[spectrum < 1e-10] = 0
     if osc:
         spectrum = osc_func(bins) * spectrum
+    
     fig.add_trace(
         go.Scatter(
             legendgrouptitle_text="Interacting Spectrum",
@@ -644,6 +648,8 @@ def plot_detected_solar_spectrum(
         col=1 + idx,
         row=1,
     )
+    # Add spectrum to data
+    data["Combined"] = spectrum / (bins[1] - bins[0])
     info = info + "\nTotal counts for all:\t%.2e [Counts/10kt·s]" % (np.sum(spectrum))
     info = info + "\nTotal counts for all:\t%.2e [Counts/70kt·year]" % (
         np.sum(spectrum) * 60 * 60 * 24 * 365 * 7
@@ -651,7 +657,7 @@ def plot_detected_solar_spectrum(
 
     if debug:
         rprint(info)
-    return fig
+    return fig, data
 
 
 def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
@@ -699,7 +705,7 @@ def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
     )
     fig.update_yaxes(range=[-44, -40], title_text="Cross Section [cm²]", row=1, col=2)
     # 3rd plot
-    fig = plot_detected_solar_spectrum(
+    fig, data = plot_detected_solar_spectrum(
         fig, 2, bins, components=components, osc=osc, debug=debug
     )
     fig.update_yaxes(
@@ -715,7 +721,7 @@ def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
 
     fig.update_xaxes(title_text="Energy [MeV]")
 
-    return fig
+    return fig, data
 
 
 @numba.njit
