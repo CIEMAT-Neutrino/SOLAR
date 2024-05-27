@@ -842,7 +842,7 @@ def get_gen_label(configs, debug=False):
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
@@ -852,7 +852,7 @@ def get_gen_label(configs, debug=False):
 
 def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
     """ """
-    info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
+    info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
     weight_list = get_bkg_weights(info)
     truth_values = []
     reco_values = []
