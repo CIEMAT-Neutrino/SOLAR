@@ -622,14 +622,11 @@ def plot_detected_solar_spectrum(
         )
         # Add spectrum to data
         data[source] = this_spectrum / (bins[1] - bins[0])
-        info = info + "\nTotal counts for %s:\t%.2e [Counts/10kt·s]" % (
-            source,
-            np.sum(this_spectrum),
-        )
-        info = info + "\nTotal counts for %s:\t%.2e [Counts/70kt·year]" % (
-            source,
-            np.sum(this_spectrum) * 60 * 60 * 24 * 365 * 7,
-        )
+        info = f"{info}\nTotal counts for {source}:\t{np.sum(this_spectrum):.2e} [Counts/{mass:.1e}] kg·s]"
+        # info = info + "\nTotal counts for %s:\t%.2e [Counts/70kt·year]" % (
+        #     source,
+        #     np.sum(this_spectrum) * 60 * 60 * 24 * 365 * 7,
+        # )
 
     # If value in spectrum smaller than 1e-10, set it to NaN
     spectrum[spectrum < 1e-10] = 0
@@ -650,17 +647,15 @@ def plot_detected_solar_spectrum(
     )
     # Add spectrum to data
     data["Combined"] = spectrum / (bins[1] - bins[0])
-    info = info + "\nTotal counts for all:\t%.2e [Counts/10kt·s]" % (np.sum(spectrum))
-    info = info + "\nTotal counts for all:\t%.2e [Counts/70kt·year]" % (
-        np.sum(spectrum) * 60 * 60 * 24 * 365 * 7
-    )
+    info = f"{info}\nTotal counts for all:\t{np.sum(spectrum):.2e} [Counts/{mass:.1e} kg·s]"
+    info = f"{info}\nTotal counts for all:\t{60 * 60 * 24 * 365 * np.sum(spectrum):.2e} [Counts/{mass:.1e} kg·year]"
 
     if debug:
         rprint(info)
     return fig, data
 
 
-def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
+def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, debug=False):
     """
     Plot the detected solar spectrum.
 
@@ -687,8 +682,6 @@ def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
     )
     # 1st plot
     fig = plot_solar_spectrum(fig, 0)
-    fig.update_xaxes(range=[-1, 1.4], row=1, col=1)
-    fig.update_yaxes(range=[1, 12], title_text="Flux [Hz/MeV·cm²]", row=1, col=1)
     # 2nd plot
     fig.add_trace(
         go.Scatter(
@@ -703,23 +696,23 @@ def make_true_solar_plot(bins, components=["b8", "hep"], osc=True, debug=False):
         row=1,
         col=2,
     )
-    fig.update_yaxes(range=[-44, -40], title_text="Cross Section [cm²]", row=1, col=2)
     # 3rd plot
     fig, data = plot_detected_solar_spectrum(
-        fig, 2, bins, components=components, osc=osc, debug=debug
-    )
-    fig.update_yaxes(
-        range=[-8, -3], title_text="Counts/Energy·10kt·s [Hz/MeV]", row=1, col=3
+        fig, 2, bins, mass=mass, components=components, osc=osc, debug=debug
     )
     fig = format_coustom_plotly(
         fig,
         log=(True, True),
         tickformat=(".0f", ".0e"),
         matches=(None, None),
-        figsize=(2200, 600),
+        add_units=False,
     )
 
-    fig.update_xaxes(title_text="Energy [MeV]")
+    fig.update_xaxes(range=[-1, 1.4], row=1, col=1)
+    fig.update_yaxes(range=[1, 12], title_text="Flux (Hz/MeV·cm²)", row=1, col=1)
+    fig.update_yaxes(range=[-44, -40], title_text="Cross Section (cm²)", row=1, col=2)
+    fig.update_yaxes(range=[-8, -3], title_text="Counts/Energy·10kt·s (Hz/MeV)", row=1, col=3)
+    fig.update_xaxes(title_text="Energy (MeV)")
 
     return fig, data
 
