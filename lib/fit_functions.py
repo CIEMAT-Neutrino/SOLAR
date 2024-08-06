@@ -66,6 +66,13 @@ def quadratic(x, coefficients, debug=False):
     n = coefficients[1]
     return a * np.power(x, 2) + n
 
+def slope1(x, coefficients, debug=False):
+    """
+    Linear function.
+    """
+    m = 1
+    n = coefficients[0]
+    return m * np.asarray(x) + n
 
 def linear(x, coefficients, debug=False):
     """
@@ -375,6 +382,16 @@ def fit_hist1d(
     # Remove x values at the beginning and end of the array
     x = x[fit["trimm"] : -fit["trimm"]]
     y = y[fit["trimm"] : -fit["trimm"]]
+
+    if fit["func"] == "slope1":
+        if fit["print"] and debug:
+            rprint("Fitting line...")
+
+        def func(x, *coefficients, debug=False):
+            return slope1(x, coefficients, debug=debug)
+
+        labels = ["Intercept"]
+        initial_guess = np.random.randn(1)
 
     if fit["func"] == "linear":
         if fit["print"] and debug:
