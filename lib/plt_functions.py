@@ -64,7 +64,7 @@ def format_coustom_plotly(
         rprint("[blue]Detected number of subplots: " + str(rows * cols) + "[/blue]")
 
     if figsize == None:
-        figsize = (800 + 400 * (cols - 1), 600 + 200 * (rows - 1))
+        figsize = (800 + 600 * (cols - 1), 600 + 200 * (rows - 1))
 
     default_margin = {"color": "white", "margin": (0, 0, 0, 0)}
     if margin != None:
@@ -284,6 +284,75 @@ def unicode(x):
     return unicode_dict[x]
 
 
+def superscript(x):
+    """
+    Returns the suffix for a given string
+
+    Args:
+        x (str): string to convert to suffix
+    """
+    if type(x) != str:
+        x = str(x)
+
+    suffix_dict = {
+        "1": "\u00B9",
+        "2": "\u00B2",
+        "3": "\u00B3",
+        "4": "\u2074",
+        "5": "\u2075",
+        "6": "\u2076",
+        "7": "\u2077",
+        "8": "\u2078",
+        "9": "\u2079",
+        "0": "\u2070",
+        "n": "ⁿ",
+        "i": "ⁱ",
+        "g": "ᵍ",
+        "h": "ʰ",
+        "t": "ᵗ",
+        "d": "ᵈ",
+        "a": "ᵃ",
+        "y": "ʸ"
+    }
+    suffix_string = ""
+    for i in range(len(x)):
+        suffix_string += suffix_dict[x[i]]
+    return suffix_string
+
+def subscript(x):
+    """
+    Returns the suffix for a given string
+
+    Args:
+        x (str): string to convert to suffix
+    """
+    if type(x) != str:
+        x = str(x)
+    
+    suffix_dict = {
+        "1": "₁",
+        "2": "₂",
+        "3": "₃",
+        "4": "₄",
+        "5": "₅",
+        "6": "₆",
+        "7": "₇",
+        "8": "₈",
+        "9": "₉",
+        "0": "₀",
+        "a": "ₐ",
+        "e": "ₑ",
+        "h": "ₕ",
+        "i": "ᵢ",
+        "j": "ⱼ",
+        "k": "ₖ",
+        "l": "ₗ"
+    }
+    suffix_string = ""
+    for i in range(len(x)):
+        suffix_string += suffix_dict[x[i]]
+    return suffix_string
+
 def update_legend(fig, dict, debug=False):
     """
     Update the legend of a plotly figure.
@@ -393,7 +462,7 @@ def get_common_colorbar(data_list, bins):
 def plot_nhit_energy_scan(df, variable, bins=100, density=False):
     plot_list = []
     # Get energy bins from config file
-    analysis_info = json.load(open("../import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
     energy_edges = np.linspace(
         analysis_info["REDUCED_RECO_ENERGY_RANGE"][0],
         analysis_info["REDUCED_RECO_ENERGY_RANGE"][1],
