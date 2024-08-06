@@ -27,10 +27,14 @@ def save_figure(fig,path,rm=False,debug=False)->None:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
     
     # Check if figure already exists
-    if os.path.isfile(path + ".png") and rm:
-        os.remove(path + ".png")
-        if debug:
-            rprint("Removed existing figure in: " + path + ".png")
+    if os.path.isfile(path + ".png"):
+        if rm:
+            os.remove(path + ".png")
+            if debug:
+                rprint("Removed existing figure in: " + path + ".png")
+        else:
+            print_colored("File already exists. Skipping...", "WARNING")
+            return 0
     
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure:
