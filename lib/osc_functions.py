@@ -6,10 +6,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from scipy import stats as sps
-from scipy.stats import chi2
 from scipy import interpolate
-from itertools import product
+from rich.progress import track
 from rich import print as rprint
 from plotly.subplots import make_subplots
 
@@ -19,7 +17,7 @@ from lib.plt_functions import format_coustom_plotly, unicode
 root = get_project_root()
 
 def get_nadir_angle(
-    path: str = f"{root}/data/OSCILLATION/", show: bool = False, debug: bool = False
+    path: str = f"{root}/data/OSCILLATION/", debug: bool = False
 ):
     """
     This function can be used to obtain the nadir angle distribution for DUNE.
@@ -30,7 +28,7 @@ def get_nadir_angle(
         debug (bool): If True, the debug mode is activated.
 
     Returns:
-        (xnadir_centers,ynadir_centers): tuple containing the nadir angle and the PDF.
+        [xnadir_centers,ynadir_centers]: list containing the nadir angle and the PDF.
     """
     with uproot.open(path + "nadir.root") as nadir:
         # Loas pdf histogram
@@ -40,10 +38,10 @@ def get_nadir_angle(
         xnadir_centers = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
         ynadir_centers = pdf_array[0]
 
-    return (xnadir_centers, ynadir_centers)
+    return [xnadir_centers, ynadir_centers]
 
 
-def plot_nadir_angle(fig, idx, debug: bool = False):
+def plot_nadir_angle(fig, idx, norm: bool = False, plot_type: str = "scatter", debug: bool = False):
     """
     This function can be used to plot the nadir angle distribution for DUNE.
 
@@ -56,25 +54,42 @@ def plot_nadir_angle(fig, idx, debug: bool = False):
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
     analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
-    nadir_data = get_nadir_angle(show=False, debug=debug)
-    fig.add_trace(
-        px.scatter(
+    nadir_data = get_nadir_angle(debug=debug)
+    name = "Nadir Angle PDF"
+    
+    if norm is True: 
+        nadir_data[1] = nadir_data[1] / np.max(nadir_data[1])
+        name = "DUNE Yearly Exposure (AU)"
+    
+    if isinstance(norm, float) or isinstance(norm, int): 
+        nadir_data[1] = nadir_data[1] / (norm*np.max(nadir_data[1]))
+        name = "DUNE Yearly Exposure (AU)"
+    
+    if plot_type == "scatter":
+        fig.add_scatter(
             x=nadir_data[0],
             y=nadir_data[1],
-            labels={"x": "Nadir Angle cos(" + unicode("eta") + ")", "y": "PDF"},
-        ).data[0],
-        row=idx[0],
-        col=idx[1],
-    )
+            mode='markers',
+            name=name,
+            row=idx[0],
+            col=idx[1],
+        )
+    if plot_type == "hist":
+        fig.add_trace(
+            go.Scatter(
+                x=nadir_data[0],
+                y=nadir_data[1],
+                mode="lines",
+                line_shape="hvh",
+                name=name,
+            ),
+            row=idx[0],
+            col=idx[1],
+        )
     fig.update_xaxes(
         title_text="Nadir Angle cos(" + unicode("eta") + ")", row=idx[0], col=idx[1]
     )
     fig.update_yaxes(title_text="PDF", row=idx[0], col=idx[1])
-    # fig = format_coustom_plotly(
-    #     fig,
-    #     tickformat=(".1f", ".0e"),
-    #     ranges=(None, [4e-4, 1.2e-3]),
-    # )
 
     return fig
 
@@ -103,93 +118,60 @@ def get_oscillation_datafiles(
     Returns:
         (found_dm2,found_sin13,found_sin12): tuple containing the dm2, sin13 and sin12 values of the found oscillation data files.
     """
-    if auto:
-        data_files = glob.glob(path + "*_dm2_*_sin13_*_sin12_*")
-        string_dm2, trash, string_sin13, trash, string_sin12 = zip(
-            *[
-                tuple(
-                    map(
-                        str,
-                        os.path.basename(osc_file).split("." + ext)[0].split("_")[-5:],
-                    )
+    data_files = glob.glob(path + "*_dm2_*_sin13_*_sin12_*")
+    string_dm2, trash, string_sin13, trash, string_sin12 = zip(
+        *[
+            tuple(
+                map(
+                    str,
+                    os.path.basename(osc_file).split("." + ext)[0].split("_")[-5:],
                 )
-                for osc_file in data_files
-            ]
-        )
-        found_dm2 = [float(i) for i in string_dm2]
-        found_sin13 = [float(i) for i in string_sin13]
-        found_sin12 = [float(i) for i in string_sin12]
+            )
+            for osc_file in data_files
+        ]
+    )
+    found_dm2 = [float(i) for i in string_dm2]
+    found_sin13 = [float(i) for i in string_sin13]
+    found_sin12 = [float(i) for i in string_sin12]
 
     if auto == False:
-        if type(dm2) == list and type(sin13) == list and type(sin12) == list:
-            found_dm2, found_sin13, found_sin12 = [], [], []
-            for this_dm2, this_sin13, this_sin12 in zip(dm2, sin13, sin12):
-                if os.path.isfile(
-                    path
-                    + "osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e"
-                    % (this_dm2, this_sin13, this_sin12)
-                    + "."
-                    + ext
-                ):
-                    found_dm2.append(this_dm2)
-                    found_sin13.append(this_sin13)
-                    found_sin12.append(this_sin12)
-                else:
-                    print_colored(
-                        "WARNING: file %sosc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e"
-                        % (path, this_dm2, this_sin13, this_sin12)
-                        + "."
-                        + ext
-                        + " not found!",
-                        "WARNING",
-                    )
-
-        elif type(dm2) == float and type(sin13) == float and type(sin12) == float:
-            if os.path.isfile(
-                path
-                + "osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e" % (dm2, sin13, sin12)
-                + "."
-                + ext
-            ):
-                found_dm2 = [dm2]
-                found_sin13 = [sin13]
-                found_sin12 = [sin12]
-            else:
-                print_colored(
-                    "WARNING: file %sosc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e"
-                    % (path, this_dm2, this_sin13, this_sin12)
-                    + "."
-                    + ext
-                    + " not found! Returning default.",
-                    "WARNING",
-                )
-                dm2, sin13, sin12 = None, None, None
-
-        elif dm2 == None and sin13 == None and sin12 == None:
+        if dm2 is None and sin13 is None and sin12 is None:
             analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
             found_dm2, found_sin13, found_sin12 = (
-                analysis_info["REACT_DM2"],
+                analysis_info["SOLAR_DM2"],
                 analysis_info["SIN13"],
                 analysis_info["SIN12"],
             )
+            return ([found_dm2], [found_sin13], [found_sin12])
+
+        if dm2 is None: dm2 = found_dm2
+        if sin13 is None: sin13 = found_sin13
+        if sin12 is None: sin12 = found_sin12
+
+        if isinstance(dm2, float): dm2 = [dm2]
+        if isinstance(sin13, float): sin13 = [sin13]
+        if isinstance(sin12, float): sin12 = [sin12]
+
+        if type(dm2) == list and type(sin13) == list and type(sin12) == list:
+            filtered_dm2, filtered_sin13, filtered_sin12 = [], [], []
+            for this_dm2, this_sin13, this_sin12 in zip(found_dm2, found_sin13, found_sin12):
+                if this_dm2 in dm2 and this_sin13 in sin13 and this_sin12 in sin12:
+                    filtered_dm2.append(this_dm2)
+                    filtered_sin13.append(this_sin13)
+                    filtered_sin12.append(this_sin12)
+
+            found_dm2, found_sin13, found_sin12 = filtered_dm2, filtered_sin13, filtered_sin12
 
         else:
-            print_colored(
-                "ERROR: oscillation parameters must be floats or lists!", "ERROR"
-            )
+            rprint(f"[red]ERROR: oscillation parameters must be floats or lists![/red]")
             raise TypeError
 
     if type(auto) != bool:
-        print_colored("ERROR: auto must be a boolean!", "FAIL")
+        rprint(f"[red]ERROR: auto must be a boolean![/red]")
         raise TypeError
 
     if type(found_dm2) == list:
-        if debug:
-            print_colored("Found %d oscillation files!" % len(found_dm2), "INFO")
-    if type(found_dm2) == float:
-        found_dm2, found_sin13, found_sin12 = [found_dm2], [found_sin13], [found_sin12]
-        if debug:
-            print_colored("Found 1 oscillation file!", "INFO")
+        if debug: rprint(f"[cyan]Found {len(found_dm2)} oscillation files![/cyan]")
 
     return (found_dm2, found_sin13, found_sin12)
 
@@ -203,8 +185,8 @@ def get_oscillation_map(
     auto=False,
     rebin=False,
     output="df",
-    save=False,
-    debug=False,
+    save:bool=False,
+    debug:bool=False,
 ):
     """
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
@@ -258,77 +240,26 @@ def get_oscillation_map(
         if ext == "pkl":
             if (
                 glob.glob(
-                    path
-                    + ext
-                    + "/"
-                    + subfolder
-                    + "/"
-                    + "osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                    % (dm2_value, sin13_value, sin12_value)
+                    f"{path}{ext}/{subfolder}/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl"
                 )
                 != []
             ):
-                if debug:
-                    print_colored(
-                        "Loading data from: "
-                        + path
-                        + ext
-                        + "/"
-                        + subfolder
-                        + "/"
-                        + "osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                        % (dm2_value, sin13_value, sin12_value),
-                        "DEBUG",
-                    )
-                df = pd.read_pickle(
-                    path
-                    + ext
-                    + "/"
-                    + subfolder
-                    + "/"
-                    + "osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                    % (dm2_value, sin13_value, sin12_value)
-                )
+                if debug: rprint(f"Loading data from: {path}{ext}/{subfolder}/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
+                df = pd.read_pickle(f"{path}{ext}/{subfolder}/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
 
                 if rebin:
-                    save_path = (
-                        path
-                        + ext
-                        + "/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                        % (dm2_value, sin13_value, sin12_value)
-                    )
+                    save_path = f"{path}{ext}/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl"
                     if glob.glob(save_path) != []:
-                        if debug:
-                            print_colored(
-                                "Loading rebinned data from %s" % save_path, "DEBUG"
-                            )
+                        if debug: rprint(f"Loading rebinned data from {save_path}")
                         df = pd.read_pickle(save_path)
-                    else:
-                        df = rebin_df(
-                            df, show=False, save=save, save_path=save_path, debug=debug
-                        )
+                    else: df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
 
             else:
-                print_colored(
-                    "ERROR: file %sosc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                    % (path, dm2_value, sin13_value, sin12_value)
-                    + " not found!",
-                    "FAIL",
-                )
+                rprint(f"ERROR: file {path}osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl not found!")
                 return None
-            # if rebin == False and glob.glob(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value)) != []:
-            #     if debug: print_colored("Loading rebin data from: "+path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value),"DEBUG")
-            #     df = pd.read_pickle(path+ext+'/'+subfolder+'/'+"osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"%(dm2_value,sin13_value,sin12_value))
 
         elif ext == "root":
-            if debug:
-                print_colored(
-                    "Loading raw data from: "
-                    + path
-                    + "/root/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e%s"
-                    % (dm2_value, sin13_value, sin12_value, "." + ext),
-                    "DEBUG",
-                )
+            if debug: rprint(f"Loading raw data from: {path}/root/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.{ext}")
 
             df = process_oscillation_map(
                 path,
@@ -341,21 +272,13 @@ def get_oscillation_map(
             )
 
             if rebin:
-                save_path = (
-                    path
-                    + "/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
-                    % (dm2_value, sin13_value, sin12_value)
-                )
+                save_path = (f"{path}/pkl/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
                 if glob.glob(save_path) != []:
-                    if debug:
-                        print_colored(
-                            "Loading rebinned data from %s" % save_path, "DEBUG"
-                        )
+                    if debug: rprint(f"Loading rebinned data from {save_path}")
                     df = pd.read_pickle(save_path)
                 else:
-                    df = rebin_df(
-                        df, show=False, save=save, save_path=save_path, debug=debug
-                    )
+                    rprint(f"[green]Saving rebinned oscillation data dm2 = {dm2_value:.3e}, sin13 = {sin13_value:.3e}, sin12 = {sin12_value:.3e}[/green]") 
+                    df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
 
         else:
             print_colored("ERROR: ext must be 'root' or 'pkl'!", "FAIL")
@@ -387,7 +310,7 @@ def get_oscillation_map(
         fig = px.imshow(
             df, color_continuous_scale="turbo", origin="lower", aspect="auto"
         )
-        fig = format_coustom_plotly(fig, figsize=(800, 600))
+        fig = format_coustom_plotly(fig)
         return fig
 
     elif output in ["interp1d", "interp2d"]:
@@ -467,7 +390,7 @@ def process_oscillation_map(
     return df
 
 
-def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, debug=False):
+def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, factor=1, debug=False):
     """
     This function can be used to plot the oscillation map for DUNE's solar analysis.
 
@@ -490,13 +413,14 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, debug=False
         df = oscillation_map[(this_dm2, this_sin13, this_sin12)]
         fig.add_trace(
             go.Heatmap(
-                z=df,
+                z=df*factor,
                 x=df.columns,
                 y=df.index,
                 colorscale="turbo",
                 # coloraxis="coloraxis" + str(idx[1]),
                 colorbar=dict(title="Osc. PDF"),
                 colorbar_x=1,
+                coloraxis="coloraxis",
             ),
             row=idx[0],
             col=idx[1],
@@ -512,6 +436,7 @@ def rebin_df(
     save_path=f"{root}/data/pkl/rebin/df.pkl",
     xarray=[],
     yarray=[],
+    convolve=True,
     show=False,
     save=True,
     debug=False,
@@ -566,15 +491,23 @@ def rebin_df(
             step_row = reduced_rows[1] - reduced_rows[0]
             start_row = round(float(row) - step_row / 2, 4)
             end_row = round(float(row) + step_row / 2, 4)
-
-            small_df.loc[row, col] = (
-                df.loc(axis=1)[start_col:end_col]
-                .loc(axis=0)[start_row:end_row]
-                .sum()
-                .mean()
-            )
+            
+            if convolve:
+                small_df.loc[row, col] = (
+                    df.loc(axis=1)[start_col:end_col]
+                    .loc(axis=0)[start_row:end_row]
+                    .sum()
+                    .mean()
+                )
+            else:
+                small_df.loc[row, col] = (
+                    df.loc(axis=1)[start_col:end_col]
+                    .loc(axis=0)[start_row:end_row]
+                    .mean()
+                    .mean()
+                )
     # Substitute NaN values with 0
-    small_df = small_df.fillna(0)
+    small_df = small_df.fillna(0).infer_objects(copy=False)
 
     # Print the reduced data frame
     if show:
@@ -584,9 +517,9 @@ def rebin_df(
             origin="lower",
             color_continuous_scale="turbo",
             title="Oscillation Correction Map",
-            labels=dict(y="Nadir Angle (°)", x="TrueEnergy"),
+            labels=dict(y=f"Nadir Angle {unicode('eta')}", x="TrueEnergy"),
         )
-        fig = format_coustom_plotly(fig, figsize=(800, 600))
+        fig = format_coustom_plotly(fig)
         fig.show()
 
     if save:
@@ -638,20 +571,18 @@ def compute_log_likelihood(pred_df, fake_df, method="log-likelihood", debug=Fals
     return chi_square
 
 
-def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, debug=False):
+def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, factor=1, debug=False):
     fig = make_subplots(
         rows=1,
         cols=3,
         subplot_titles=(
-            "DUNE's FD Yearly Nadir Angle",
-            "Survival Probability",
-            "Convolved Probability",
+            f"DUNE's FD Yearly Nadir Angle",
+            f"Survival Probability",
+            f"Convolved Probability * {factor}",
         ),
     )
 
-    fig = plot_nadir_angle(fig, (1, 1), debug=True)
-    fig.update_xaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=1)
-    fig.update_yaxes(range=[0.0004, 0.0013], title_text="PDF", row=1, col=1)
+    fig = plot_nadir_angle(fig, (1, 1), norm=True, debug=debug)
 
     df = process_oscillation_map(
         dm2_value=dm2, sin13_value=sin13, sin12_value=sin12, convolve=False, debug=debug
@@ -664,21 +595,27 @@ def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, debug=False):
             colorscale="turbo",
             colorbar=dict(title="Prob."),
             colorbar_x=0.645,
+            coloraxis="coloraxis",
         ),
         row=1,
         col=2,
     )
-    fig.update_xaxes(title_text="True Neutrino Energy [MeV]", row=1, col=2)
-    fig.update_yaxes(title_text="Nadir Angle con(" + unicode("eta") + ")", row=1, col=2)
 
     fig = plot_oscillation_map(
-        fig, (1, 3), dm2=dm2, sin13=sin13, sin12=sin12, debug=debug
+        fig, (1, 3), dm2=dm2, sin13=sin13, sin12=sin12, factor=factor, debug=debug
     )
-    fig.update_xaxes(title_text="True Neutrino Energy [MeV]", row=1, col=3)
     fig.update_coloraxes(colorbar=dict(title="Events"), colorbar_x=0.9, row=1, col=3)
 
     fig = format_coustom_plotly(
-        fig, figsize=(2100, 600), matches=(None, None), tickformat=(None, None)
+        fig, matches=(None, None), tickformat=(None, None), add_units=False
     )
+    fig.update_xaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=1)
+    fig.update_yaxes(range=[0.3, 1.09], title_text="Norm.", row=1, col=1)
+    
+    fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=2)
+    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=2)
+    
+    fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=3)
+    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=3)
 
     return fig
