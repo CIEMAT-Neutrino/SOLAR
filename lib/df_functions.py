@@ -343,7 +343,7 @@ def generate_background_distribution(
     if save:
         name = truth_gen_df["Name"].values[0]
         version = info["VERSION"]
-        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution")
+        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution", rm=save)
     if show:
         fig.show()
     return fig
