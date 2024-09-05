@@ -14,15 +14,21 @@ from lib.solar_functions import get_pdg_color
 
 root = get_project_root()
 
+def get_flash_time(run, tree, idx, filter, debug=False):
+    ophitPEs = [run[tree]["OpHitPE"][idx][x] for x in filter]
+    ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]
+    flash_time = np.sum(np.multiply(ophit_times,ophitPEs))/np.sum(ophitPEs)
+    if debug: print(f"Flash Time: {2*flash_time:.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
+    return flash_time
+
 def get_ophit_positions(run, tree, idx, filter=None, debug=False):
     ophits = [[],[],[]]
     # If filter is not None, then we filter the ophits by the filter array
     if filter is not None:
+        flash_time = get_flash_time(run, tree, idx, filter, debug=debug)
         ophits[0] = [run[tree]["OpHitX"][idx][x] for x in filter]
         ophits[1] = [run[tree]["OpHitY"][idx][x] for x in filter]
         ophits[2] = [run[tree]["OpHitZ"][idx][x] for x in filter]
-        ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]
-        if debug: print(f"Flash Width: {2*abs(np.min(ophit_times)-np.max(ophit_times)):.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
         return ophits
     # If filter is None, then we take all the ophits
     ophits[0] = run[tree]["OpHitX"][idx]
@@ -84,7 +90,7 @@ def get_adjcl_positions(run, tree, idx, reco, color_dict):
 
 
 def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color, options:dict = {}, debug:bool = False):
-    default_options = {"lw":0, "marker":None}
+    default_options = {"lw":0, "marker":None, "colorscale":"Turbo"}
     for key in options:
         try:
             default_options[key] = options[key]
@@ -104,7 +110,7 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             mode="markers",
             marker=dict(size=np.asarray(size), 
                 color=color, 
-                colorscale="Turbo",
+                colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]
             ),
         ),
@@ -121,7 +127,7 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             mode="markers",
             marker=dict(size=np.asarray(size)+5,
                 color=color,
-                colorscale="Turbo",
+                colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]
             ),
             showlegend=False,
@@ -139,7 +145,7 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             mode="markers",
             marker=dict(size=np.asarray(size)+5,
                 color=color,
-                colorscale="Turbo",
+                colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]),
             showlegend=False,
         ),
@@ -201,7 +207,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
         return fig
     
 
-def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashid=None, zoom = True, debug=False):
+def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashid:int=None, zoom=True, debug=False):
     specs = [
         [
             {"type": "scatter"},
@@ -212,6 +218,7 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
     ]
     fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
 
+    run[tracked]["OpHitFlashPur"] = np.copy(run[tracked]["OpHitPur"])
     for i, config in enumerate(configs):
         info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
         if idx is None:
@@ -227,21 +234,34 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
             ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx]]
             ophit_size = [x if x < maxophit else maxophit for x in ophit_size]
             ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx]]
-
         else:
+            # Set all the flash purities to 0
+            run[tracked]["OpHitFlashPur"][idx] = np.zeros(len(run[tracked]["OpHitPur"][idx]))
+            for i in range(0,int(np.max(run[tracked]["OpHitFlashID"][idx]))):
+                this_flash_filter = np.where(np.array(run[tracked]["OpHitFlashID"][idx]) == i)[0]
+                this_flash_pur = np.sum( np.multiply(run[tracked]["OpHitPur"][idx][this_flash_filter], run[tracked]["OpHitPE"][idx][this_flash_filter])) / np.sum(run[tracked]["OpHitPE"][idx][this_flash_filter])
+                run[tracked]["OpHitFlashPur"][idx][this_flash_filter] = this_flash_pur
+
             if flashid is not None:
                 flash_filter = np.where(np.array(run[tracked]["OpHitFlashID"][idx]) == flashid)[0]
             if flashid is None:
-                flash_filter = np.random.randint(0, len(run[tracked]["OpHitFlashID"][idx]))
-            if debug: print(f"FlashID: {flashid}")
+                flash_max_pur = np.max(run[tracked]["OpHitFlashPur"][idx], initial=0, where=run[tracked]["OpHitFlashPur"][idx] > 0)
+                flash_filter = np.where(np.array(run[tracked]["OpHitFlashPur"][idx]) == flash_max_pur)[0]
+                flashid = run[tracked]["OpHitFlashID"][idx][flash_filter][0]
             
-            ophits = get_ophit_positions(run, tracked, idx, flash_filter, debug=debug)
             ophit_size = [int(x) if x > 0 else 0 for x in run[tracked]["OpHitPE"][idx][flash_filter]]
             ophit_size = [x if x < maxophit else maxophit for x in ophit_size]
             ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx][flash_filter]]
+
             if debug:
-                print(f"Flash Purity: {np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size):.2f}")
+                print(f"FlashID: {int(flashid)}")
                 print(f"Flash Size: {np.sum(ophit_size)} PE")
+                print(f"Flash Purity: {run[tracked]['OpHitFlashPur'][idx][flash_filter][0]:.2f}")
+            
+            ophits = get_ophit_positions(run, tracked, idx, flash_filter, debug=debug)
+            
+            if debug:
+                # print(f"Flash Purity: {np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size):.2f}")
                 print(f"Flash Vertex (Y,Z): {np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size):.2f}, {np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size):.2f}")
         
 
@@ -251,7 +271,7 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
         flash[2] = [np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size)]
         fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 20, neut_color)
         fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 20, true_color)
-        fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color)
+        fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color, {"colorscale":"viridis"})
         fig = add_data_to_event(fig, flash, "1", "Reco", "Flash", "Flash","circle", 10, "red")
 
         fig = format_coustom_plotly(fig, figsize=(None, 600))
