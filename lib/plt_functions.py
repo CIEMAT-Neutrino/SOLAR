@@ -11,22 +11,85 @@ import plotly.graph_objects as go
 from rich import print as rprint
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
+from matplotlib.collections import LineCollection
+
+
+def colored_line(x, y, c, ax, **lc_kwargs):
+    """
+    Plot a line with a color specified along the line by a third value.
+
+    It does this by creating a collection of line segments. Each line segment is
+    made up of two straight lines each connecting the current (x, y) point to the
+    midpoints of the lines connecting the current point with its two neighbors.
+    This creates a smooth line with no gaps between the line segments.
+
+    Parameters
+    ----------
+    x, y : array-like
+        The horizontal and vertical coordinates of the data points.
+    c : array-like
+        The color values, which should be the same size as x and y.
+    ax : Axes
+        Axis object on which to plot the colored line.
+    **lc_kwargs
+        Any additional arguments to pass to matplotlib.collections.LineCollection
+        constructor. This should not include the array keyword argument because
+        that is set to the color argument. If provided, it will be overridden.
+
+    Returns
+    -------
+    matplotlib.collections.LineCollection
+        The generated line collection representing the colored line.
+    """
+
+    # Default the capstyle to butt so that the line segments smoothly line up
+    default_kwargs = {"capstyle": "butt"}
+    default_kwargs.update(lc_kwargs)
+
+    # Compute the midpoints of the line segments. Include the first and last points
+    # twice so we don't need any special syntax later to handle them.
+    x = np.asarray(x)
+    y = np.asarray(y)
+    x_midpts = np.hstack((x[0], 0.5 * (x[1:] + x[:-1]), x[-1]))
+    y_midpts = np.hstack((y[0], 0.5 * (y[1:] + y[:-1]), y[-1]))
+
+    # Determine the start, middle, and end coordinate pair of each line segment.
+    # Use the reshape to add an extra dimension so each pair of points is in its
+    # own list. Then concatenate them to create:
+    # [
+    #   [(x1_start, y1_start), (x1_mid, y1_mid), (x1_end, y1_end)],
+    #   [(x2_start, y2_start), (x2_mid, y2_mid), (x2_end, y2_end)],
+    #   ...
+    # ]
+    coord_start = np.column_stack(
+        (x_midpts[:-1], y_midpts[:-1]))[:, np.newaxis, :]
+    coord_mid = np.column_stack((x, y))[:, np.newaxis, :]
+    coord_end = np.column_stack((x_midpts[1:], y_midpts[1:]))[:, np.newaxis, :]
+    segments = np.concatenate((coord_start, coord_mid, coord_end), axis=1)
+
+    lc = LineCollection(segments, **default_kwargs)
+    lc.set_array(c)  # set the colors of each segment
+    # Add colorbar to the plot
+    cbar = plt.colorbar(lc, ax=ax)
+    cbar.set_label("Threshold")
+
+    return ax.add_collection(lc)
 
 
 def format_coustom_plotly(
-    fig:go.Figure,
-    title:str=None,
-    legend:dict=dict(),
-    fontsize:int=16,
-    figsize:int=None,
-    ranges:tuple=(None, None),
-    matches:tuple=("x", "y"),
-    tickformat:tuple=(".s", ".s"),
-    log:tuple=(False, False),
-    margin:dict={"auto": True},
-    add_units:bool=True,
-    bargap:int=0,
-    debug:bool=False,
+    fig: go.Figure,
+    title: str = None,
+    legend: dict = dict(),
+    fontsize: int = 16,
+    figsize: int = None,
+    ranges: tuple = (None, None),
+    matches: tuple = ("x", "y"),
+    tickformat: tuple = (".s", ".s"),
+    log: tuple = (False, False),
+    margin: dict = {"auto": True},
+    add_units: bool = True,
+    bargap: int = 0,
+    debug: bool = False,
 ):
     """
     Format a plotly figure
@@ -61,7 +124,8 @@ def format_coustom_plotly(
         rprint("[red]Error: unknown figure type[/red]")
 
     if debug:
-        rprint("[blue]Detected number of subplots: " + str(rows * cols) + "[/blue]")
+        rprint("[blue]Detected number of subplots: " +
+               str(rows * cols) + "[/blue]")
 
     if figsize == None:
         figsize = (800 + 600 * (cols - 1), 600 + 200 * (rows - 1))
@@ -125,8 +189,8 @@ def format_coustom_plotly(
     colorscale = px.colors.sequential.Turbo[::-1]
     # colorscale.append("white")
     colorscale = colorscale[::-1]
-    fig.update_layout(coloraxis = {'colorscale': colorscale})
-    
+    fig.update_layout(coloraxis={'colorscale': colorscale})
+
     # Update axis labels to include units
     if add_units:
         try:
@@ -319,6 +383,7 @@ def superscript(x):
         suffix_string += suffix_dict[x[i]]
     return suffix_string
 
+
 def subscript(x):
     """
     Returns the suffix for a given string
@@ -328,7 +393,7 @@ def subscript(x):
     """
     if type(x) != str:
         x = str(x)
-    
+
     suffix_dict = {
         "1": "₁",
         "2": "₂",
@@ -352,6 +417,7 @@ def subscript(x):
     for i in range(len(x)):
         suffix_string += suffix_dict[x[i]]
     return suffix_string
+
 
 def update_legend(fig, dict, debug=False):
     """
@@ -385,7 +451,8 @@ def change_hist_color(n, patches, logy=False):
                 "int"
             )  # it MUST be integer# Good old loop. Choose colormap of your taste
             for j in range(len(patches[i])):
-                patches[i][j].set_facecolor(plt.cm.viridis(n[i][j] / np.max(n)))
+                patches[i][j].set_facecolor(
+                    plt.cm.viridis(n[i][j] / np.max(n)))
                 patches[i][j].set_edgecolor("k")
         return patches
 
@@ -478,7 +545,8 @@ def plot_nhit_energy_scan(df, variable, bins=100, density=False):
                 & (df["NHits"] >= nhits)
             ]
 
-            hist, edges = np.histogram(this_df[variable], bins=bins, density=density)
+            hist, edges = np.histogram(
+                this_df[variable], bins=bins, density=density)
             edge_centers = (edges[1:] + edges[:-1]) / 2
             plot_list.append(
                 {
@@ -546,7 +614,8 @@ def histogram_comparison(
     if binning == "sturges":
         if debug:
             print("Using Sturges' formula for binning")
-        nbins = int(np.ceil(np.log2(len(df[variable])) + 1))  # Sturges' formula
+        # Sturges' formula
+        nbins = int(np.ceil(np.log2(len(df[variable])) + 1))
     if binning == "sqrt":
         if debug:
             print("Using square root rule for binning")
@@ -633,12 +702,14 @@ def histogram_comparison(
     # Calculate the residual between the two histograms & the error
     residual = (bins[0] - bins[1]) / bins[0]
     residual_error = (
-        np.sqrt((bins_error[0] / bins[0]) ** 2 + (bins_error[1] / bins[1]) ** 2)
+        np.sqrt((bins_error[0] / bins[0]) ** 2 +
+                (bins_error[1] / bins[1]) ** 2)
         * residual
     )
     # Calculate the chi2 between the two histograms but only if the bin content is > 0
     chi2 = np.sum(
-        (bins[0][bins[0] != 0] - bins[1][bins[0] != 0]) ** 2 / bins[0][bins[0] != 0]
+        (bins[0][bins[0] != 0] - bins[1]
+         [bins[0] != 0]) ** 2 / bins[0][bins[0] != 0]
     )
 
     # Plot the histograms & the residual
