@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objs as go
 from rich import print as rprint
 from src.utils import get_project_root
+from matplotlib import pyplot as plt
 
 root = get_project_root()
 
@@ -27,20 +28,24 @@ def save_figure(fig,path,rm=False,debug=False)->None:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
     
     # Check if figure already exists
-    if os.path.isfile(path + ".png"):
+    if os.path.isfile(f"{path}.png"):
         if rm:
-            os.remove(path + ".png")
+            os.remove(f"{path}.png")
             if debug:
-                rprint("Removed existing figure in: " + path + ".png")
+                rprint(f"Removed existing figure in: {path}.png")
         else:
             print_colored("File already exists. Skipping...", "WARNING")
             return 0
     
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure:
-        fig.write_image(path + ".png")
+        fig.write_image(f"{path}.png")
         if debug:
-            rprint("Saved figure in: " + path + ".png")
+            rprint(f"Saved figure in: {path}.png")
+    if type(fig) == plt.Figure:
+        fig.savefig(f"{path}.png")
+        if debug:
+            rprint(f"Saved figure in: {path}.png")
     else:
         rprint("The input figure is not a plotly.graph_objs._figure.Figure object")
         # fig.savefig(path + ".png")
@@ -55,8 +60,6 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
         color (str): color to be used
         bold (bool): if True, the bold mode is activated (default: False)
     """
-    from rich import print as rprint
-
     colors = {
         "DEBUG": "purple",
         "ERROR": "red",
@@ -68,19 +71,9 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
         color = colors[color]
 
     if bold == False and italic == False:
-        output = "[" + colors[color] + "]" + string + "[" + colors[color] + "]"
+        output = f"[{colors[color]}]{string}[/{colors[color]}]"
     elif bold == True and italic == False:
-        output = (
-            "["
-            + "bold "
-            + colors[color]
-            + "]"
-            + string
-            + "["
-            + "/bold "
-            + colors[color]
-            + "]"
-        )
+        output = f"[bold {colors[color]}]{string}[/bold {colors[color]}]"
     elif bold == False and italic == True:
         output = (
             "["
@@ -129,18 +122,9 @@ def root2npy(root_info, user_input, trim=False, debug=False):
     rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"]:
-            if root_info["TreeNames"][tree] == "Test":
-                if debug:
-                    # Ask if this tree should be processed
-                    process = input(
-                        "Do you want to process the Test tree? (y/n): "
-                    ).lower()
-                    
-                    if process not in ["y", "yes","t","true"]:
-                        continue
-                else:
-                    rprint("Skipping Test tree")
-                    continue
+            if root_info["TreeNames"][tree].lower() == "test":
+                rprint(f"[red]Skipping Test tree[/red]")
+                continue
 
             done_root_info = []
             out_folder = root_info["TreeNames"][tree]
@@ -385,6 +369,7 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
                 )
 
         elif default.lower() in ["n", "no"]:
+            print("Select custom names for the TTrees (name 'Test' will be skipped)")
             out_folder = input(
                 "Write the new names of the TTrees separated by commas: "
             ).split(",")
