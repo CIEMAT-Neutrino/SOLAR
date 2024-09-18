@@ -1,23 +1,29 @@
 import json
 import numpy as np
 
-def get_default_nhits(root, variable:str = "NHITS"):
+
+def get_default_info(root: str, variable: str):
+    '''
+    This function returns the default analysis information.
+    '''
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", 'r'))
+    return analysis_info[variable]
+
+
+def get_default_nhits(root: str, variable: str = "NHITS"):
     '''
     This function returns the default energy binning used in the analysis.
     '''
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json",'r'))
-    nhits = analysis_info[f"{variable}"]
-    return nhits
+    return get_default_info(root, variable)
 
 
-def get_default_energies(root, variable:str = "RECO_ENERGY"):
+def get_default_energies(root: str, variable: str = "RECO_ENERGY"):
     '''
     This function returns the default energy binning used in the analysis.
     '''
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json",'r'))
+    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", 'r'))
     e_range = analysis_info[f"{variable}_RANGE"]
     e_bins = analysis_info[f"{variable}_BINS"]
-    energy_edges = np.linspace(e_range[0],e_range[-1],e_bins+1)
+    energy_edges = np.linspace(e_range[0], e_range[-1], e_bins+1)
     energy_centers = (energy_edges[1:]+energy_edges[:-1])/2
-    ebin = energy_edges[1]-energy_edges[0]
-    return energy_edges, energy_centers, ebin
+    return energy_edges, energy_centers, energy_edges[1]-energy_edges[0]
