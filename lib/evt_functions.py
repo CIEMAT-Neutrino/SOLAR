@@ -18,7 +18,7 @@ def get_flash_time(run, tree, idx, filter, debug=False):
     ophitPEs = [run[tree]["OpHitPE"][idx][x] for x in filter]
     ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]
     flash_time = np.sum(np.multiply(ophit_times,ophitPEs))/np.sum(ophitPEs)
-    if debug: print(f"Flash Time: {2*flash_time:.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
+    if debug: print(f"  Time: {2*flash_time:.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
     return flash_time
 
 def get_ophit_positions(run, tree, idx, filter=None, debug=False):
@@ -53,7 +53,7 @@ def get_marley_positions(run, tree, idx):
     ccint[1] = [x for x in run[tree]["TMarleyY"][idx] if x != 0]
     ccint[2] = [x for x in run[tree]["TMarleyZ"][idx] if x != 0]
     true_name = [
-        Particle.from_pdgid(x).name for x in run[tree]["TMarleyPDG"][idx] if x != 0
+        Particle.from_pdgid(x).name for x in run[tree]["TMarleyPDG"][idx] if x not in [0, 1000190419] 
     ]
     true_color = [
         get_pdg_color(int(x)) for x in run[tree]["TMarleyPDG"][idx] if x != 0
@@ -109,7 +109,9 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             z=data[2],
             mode="markers",
             marker=dict(size=np.asarray(size), 
-                color=color, 
+                color=color,
+                cmin=0,
+                cmax=1,
                 colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]
             ),
@@ -127,6 +129,8 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             mode="markers",
             marker=dict(size=np.asarray(size)+5,
                 color=color,
+                cmin=0,
+                cmax=1,
                 colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]
             ),
@@ -145,6 +149,8 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
             mode="markers",
             marker=dict(size=np.asarray(size)+5,
                 color=color,
+                cmin=0,
+                cmax=1,
                 colorscale=default_options["colorscale"],
                 line_width=default_options["lw"]),
             showlegend=False,
@@ -204,10 +210,10 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
             fig.update_xaxes(row=1, col=1, range=[neut[2][0] - 100, neut[2][0] + 100])
 
         fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
-        return fig
-    
+        return fig 
 
 def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashid:int=None, zoom=True, debug=False):
+    colorscale = [[0, 'green'], [0.5, 'yellow'], [1,"orange"]]
     specs = [
         [
             {"type": "scatter"},
@@ -254,15 +260,16 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
             ophit_color = [float(x) if x > 0 else 0 for x in run[tracked]["OpHitPur"][idx][flash_filter]]
 
             if debug:
-                print(f"FlashID: {int(flashid)}")
-                print(f"Flash Size: {np.sum(ophit_size)} PE")
-                print(f"Flash Purity: {run[tracked]['OpHitFlashPur'][idx][flash_filter][0]:.2f}")
+                print(f"**Event: {int(idx)}")
+                print(f"**Flash ID: {int(flashid)}")
+                print(f"  Size: {np.sum(ophit_size)} PE")
+                print(f"  Purity: {run[tracked]['OpHitFlashPur'][idx][flash_filter][0]:.2f}")
             
             ophits = get_ophit_positions(run, tracked, idx, flash_filter, debug=debug)
             
             if debug:
                 # print(f"Flash Purity: {np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size):.2f}")
-                print(f"Flash Vertex (Y,Z): {np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size):.2f}, {np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size):.2f}")
+                print(f"  Vertex (Y,Z): {np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size):.2f}, {np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size):.2f}")
         
 
         flash = [[],[],[]]
@@ -270,14 +277,15 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
         flash[1] = [np.sum(np.multiply(ophits[1],ophit_size))/np.sum(ophit_size)]
         flash[2] = [np.sum(np.multiply(ophits[2],ophit_size))/np.sum(ophit_size)]
         fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 20, neut_color)
-        fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 20, true_color)
-        fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color, {"colorscale":"viridis"})
+        fig = add_data_to_event(fig, ccint, "0", "Truth", "Daughter", true_name,"square-open", 10, true_color)
+        fig = add_data_to_event(fig, ophits, "1", "Reco", "Ophits", "Ophits","circle", ophit_size, ophit_color)
         fig = add_data_to_event(fig, flash, "1", "Reco", "Flash", "Flash","circle", 10, "red")
 
         fig = format_coustom_plotly(fig, figsize=(None, 600))
         fig.update_layout(
-            title_text="TNuE: <b>%.2fMeV</b> Cluster: %i"
-            % (run["Reco"]["TNuE"][idx], idx),
+            coloraxis=dict(colorscale=colorscale),
+            title_text="TNuE: <b>%.2fMeV</b> Event: %i FlashID: %i Purity: %.2f"
+            % (run["Reco"]["TNuE"][idx], idx, flashid, np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size)),
             title_x=0.5,
         )
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
