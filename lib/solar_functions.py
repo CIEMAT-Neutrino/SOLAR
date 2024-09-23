@@ -355,31 +355,9 @@ def get_solar_weigths(weights="B16-GS98"):
         }  # Flux amp of each component
         return weights_dict
 
-    # if weights == "B16-AGSS09met":
-    #     weights_dict = {
-    #         "pp": 5.991e00,
-    #         "pep": 1e-10,
-    #         "b7": 1e-10,
-    #         "n13": 3.066e-02,
-    #         "o15": 2.331e-02,
-    #         "f17": 5.836e-04,
-    #         "b8": 5.691e-04,
-    #         "hep": 7.930e-07,
-    #     }  # Flux amp of each component
-    #     return weights_dict
     else:
-        print("ERROR: Weights not defined, using BS05!")
-        weights_dict = {
-            "pp": 6.03e00,
-            "pep": 1.46e-10,
-            "b7": 4.50e-10,
-            "n13": 2.04e-02,
-            "o15": 1.44e-02,
-            "f17": 3.26e-04,
-            "b8": 4.50e-04,
-            "hep": 8.25e-07,
-        }  # Flux amp of each component
-        return weights_dict
+        print("ERROR: Weights not defined, using B16-GS98!")
+        get_solar_weigths("B16-GS98")
 
 
 def get_solar_colors(source):
@@ -418,6 +396,8 @@ def get_solar_spectrum(
     bins,
     weigths="B16-GS98",
     in_path=f"{root}/data/SOLAR/",
+    interpolation='linear',
+    bounds=(0,0),
     debug=False,
 ):
     """
@@ -427,8 +407,9 @@ def get_solar_spectrum(
         components (list): list of components
         bins (np.array): energy bins
         weigths (str): weigths (default: "BS05")
-        interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: (0,0))
-        in_path (str): input path (default: "../data/SOLAR/")
+        in_path (str): input path (default: "../data/SOLAR/").
+        interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: 'linear')
+        bounds (Any): bounds for the interpolation (default: (0,0))
         debug (bool): if True, print debug messages (default: False)
 
     Returns:
@@ -441,9 +422,10 @@ def get_solar_spectrum(
     for idx, source in enumerate(components):
         array = read_solar_data(in_path, source, weigths)
         if source != "pep" and source != "b7":
-            func = interpolate.interp1d(
-                array[0], array[1], kind="cubic", bounds_error=False, fill_value=0
-            )
+            # func = interpolate.interp1d(
+            #     array[0], array[1], kind="cubic", bounds_error=False, fill_value=0
+            # )
+            func = interpolate_solar_data(array[0], array[1], source, interpolation=interpolation, bounds=bounds, debug=debug)
             y = y + func(x)
 
     return y
@@ -513,25 +495,35 @@ def plot_solar_spectrum(
     return fig
 
 
-def get_neutrino_cs(bins, interpolation, path=f"{root}/data/SOLAR", debug=False):
+def interpolate_solar_data(x, y, label, interpolation=None, bounds=None, debug=False):
+    """
+    Interpolate the solar flux data.
+    """
+    if debug: rprint(f"{label}\nInterpolation: {interpolation}\n Bounds: {bounds}")
+    func = interpolate.interp1d(
+        x, y, kind=interpolation, bounds_error=False, fill_value=bounds
+    )
+    return func
+
+
+def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"{root}/data/SOLAR/", label='neutrino_cc_final', debug=False):
     """
     Read in marley data and return the neutrino cc spectrum.
     """
     # Get the neutrino cc spectrum from file
-    data = np.loadtxt(path + "/neutrino_cc.txt")
+    data = np.loadtxt(f'{path}{label}.txt')
     energies = data[:, 0]
     cc = data[:, 1]
 
-    if debug:
-        rprint("Interpolation: %s" % interpolation)
-    func = interpolate.interp1d(
-        energies, cc, kind="cubic", bounds_error=False, fill_value=interpolation
-    )
+    if interpolation != None:
+        func = interpolate_solar_data(energies, cc, label, interpolation=interpolation, bounds=bounds, debug=debug)
+    if interpolation == None:
+        func = interpolate_solar_data(energies, cc, label, interpolation='linear', bounds="extrapolate", debug=debug)
     return func(bins)
 
 
 def get_detected_solar_spectrum(
-    bins, mass=10e9, components=[], interpolation=(0, 0), debug=False
+    bins, mass=10e9, components=[], interpolation="linear", bounds=(0,0), debug=False
 ):
     """
     Get the data for the detected solar spectrum.
@@ -547,16 +539,14 @@ def get_detected_solar_spectrum(
         spectrum (np.array): detected solar spectrum data
     """
     # Prepare solar spectrum to convolve with marley signal
-    CS = get_neutrino_cs(bins, interpolation=interpolation)
+    CS = get_neutrino_cs(bins, interpolation=interpolation, bounds=bounds, debug=debug)  # Cross-section [cm²]
     mol = 39.948  # Molar mass [g/mol]
 
     # Get the solar spectrum
     if components == []:
         components = ["b8", "hep"]
     flux = get_solar_spectrum(components, bins)
-    func = interpolate.interp1d(
-        bins, flux, kind="cubic", bounds_error=False, fill_value=0
-    )
+    func = interpolate_solar_data(bins, flux, "solar_spectrum", interpolation=interpolation, bounds=bounds, debug=debug)
     # Compute the effective flux by convolving with the cross-section and detector properties
     spectrum = func(bins)
     factor = (bins[1] - bins[0]) * mass * const.N_A / mol
@@ -570,7 +560,8 @@ def plot_detected_solar_spectrum(
     bins,
     mass=10e9,
     components: list = ["b8", "hep"],
-    interpolation=(0, 0),
+    interpolation="linear",
+    bounds=(0,0),
     osc=False,
     debug=False,
 ):
@@ -593,7 +584,7 @@ def plot_detected_solar_spectrum(
     oscillation = get_oscillation_map(output="interp1d")
     osc_func = oscillation[list(oscillation.keys())[0]]
     spectrum = get_detected_solar_spectrum(
-        bins, mass=mass, components=components, interpolation=interpolation, debug=debug
+        bins, mass=mass, components=components, interpolation=interpolation, bounds=bounds, debug=debug
     )
     data["Energy"] = bins
     for source in components:
@@ -602,6 +593,7 @@ def plot_detected_solar_spectrum(
             mass=mass,
             components=[source],
             interpolation=interpolation,
+            bounds=bounds,
             debug=debug,
         )
         # If value in spectrum smaller than 1e-10, set it to NaN
@@ -655,7 +647,7 @@ def plot_detected_solar_spectrum(
     return fig, data
 
 
-def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, debug=False):
+def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, interpolation="linear", bounds=(0,0), debug=False):
     """
     Plot the detected solar spectrum.
 
@@ -670,7 +662,7 @@ def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, de
         fig (plotly.graph_objects.Figure): plotly figure
     """
     colors = plotly.colors.qualitative.Prism
-    cc_array = get_neutrino_cs(bins, interpolation="extrapolate")
+    cc_array = get_neutrino_cs(bins, interpolation, bounds, debug = debug)
     fig = make_subplots(
         rows=1,
         cols=3,
@@ -683,22 +675,24 @@ def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, de
     # 1st plot
     fig = plot_solar_spectrum(fig, 0)
     # 2nd plot
-    fig.add_trace(
-        go.Scatter(
-            legendgrouptitle_text="Marley X-Section",
-            legendgroup=1,
-            x=bins,
-            y=cc_array,
-            mode="lines",
-            name="NuE-Ar CC",
-            line=dict(color=colors[-1]),
-        ),
-        row=1,
-        col=2,
-    )
+    cc_array_linear = get_neutrino_cs(bins, "linear", (0,0), debug = debug)
+    for cc, ll, ls, lc in zip([cc_array_linear, cc_array], ["linear", "default"], ["solid","dash"], [colors[-2], colors[-1]]):
+        fig.add_trace(
+            go.Scatter(
+                legendgrouptitle_text="Marley X-Section",
+                legendgroup=1,
+                x=bins,
+                y=cc,
+                mode="lines",
+                name=f"NuE-Ar CC {ll}",
+                line=dict(color=lc, dash=ls),
+            ),
+            row=1,
+            col=2,
+        )
     # 3rd plot
     fig, data = plot_detected_solar_spectrum(
-        fig, 2, bins, mass=mass, components=components, osc=osc, debug=debug
+        fig, 2, bins, mass=mass, components=components, interpolation=interpolation, bounds=bounds, osc=osc, debug=debug
     )
     fig = format_coustom_plotly(
         fig,
