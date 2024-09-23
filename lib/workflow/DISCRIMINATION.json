@@ -40,16 +40,15 @@
             "Energy": 0,
             "TotalEnergy": 0,
             "SelectedEnergy": 0,
-            "RecoEnergy": 0,
             "SelectedAdjClEnergy": 0,
+            "SelectedAdjClEnergyRatio": 0,
             "SelectedMaxAdjClEnergy": 0,
             "TotalAdjClEnergy": 0,
             "MaxAdjClEnergy": 0,
             "SelectedAdjClR": 0,
             "SelectedMaxAdjClR": 0,
             "TotalAdjClR": 0,
-            "MaxAdjClR": 0,
-            "Discriminant": 0
+            "MaxAdjClR": 0
         },
         "STRINGS": {},
         "BOOLS": {

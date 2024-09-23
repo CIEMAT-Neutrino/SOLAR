@@ -48,7 +48,16 @@
             "AdjOpFlashSTD": 0,
             "AdjOpFlashFast": 0,
             "AdjOpFlashPur": 0,
-            "AdjOpFlashNHit": 1
+            "AdjOpFlashNHit": 1,
+            "AdjOpFlashResidual": 0,
+            "MatchedOpFlashR": 1,
+            "MatchedOpFlashRecoX": 1,
+            "MatchedOpFlashRecoY": 1,
+            "MatchedOpFlashRecoZ": 1,
+            "MatchedOpFlashMaxPE": 1,
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashTime": 1,
+            "MatchedOpFlashResidual": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -58,8 +67,6 @@
             "NHits": 1,
             "Ind0NHits": 1,
             "Ind1NHits": 1,
-            "AdjClNum": 0,
-            "AdjOpFlashNum": 0,
             "TPC": 1
         },
         "DOUBLES": {
@@ -68,10 +75,7 @@
             "TNuX": 1,
             "TNuY": 1,
             "TNuZ": 1,
-            "ElectronE": 0,
-            "GammaE": 0,
-            "NeutronP": 0,
-            "VisEnergy": 0,
+            "RecoX": 1,
             "RecoY": 1,
             "Ind0RecoY": 1,
             "Ind1RecoY": 1,

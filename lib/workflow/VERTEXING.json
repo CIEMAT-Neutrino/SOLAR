@@ -49,6 +49,7 @@
             "AdjClMainZ": 1,
             "AdjOpFlashR": 0,
             "AdjOpFlashPE": 0,
+            "AdjOpFlashNHit": 0,
             "AdjOpFlashTime": 0,
             "AdjOpFlashRecoY": 0,
             "AdjOpFlashRecoZ": 0,

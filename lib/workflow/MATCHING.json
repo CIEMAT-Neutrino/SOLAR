@@ -42,6 +42,7 @@
             "Ind1NHits": 1
         },
         "DOUBLES": {
+            "Purity": 1,
             "MainE": 1,
             "TNuE": 1,
             "TNuX": 1,
