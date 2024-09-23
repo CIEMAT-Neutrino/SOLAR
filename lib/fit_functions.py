@@ -253,17 +253,23 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
 
 
 def generate_bins(acc, x, debug=False):
+    if type(acc) == tuple:
+        acc = acc[0]
+
     if type(acc) == int:
         try:
-            x_array = np.arange(np.min(x), np.max(x), 1)
+            if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
+                x_array = np.linspace(np.min(x), np.max(x), acc + 1)
+            elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
+                x_array = np.arange(np.min(x), np.max(x) + 1, acc)
+            else:
+                rprint(f"[red]ERROR: x type {type(x[0])} not supported![/red]")
+                return None
+
         except ValueError:
             rprint("[red]ERROR: x might be empty![/red]")
             return None
-
-    elif type(acc) == tuple:
-        try:
-            x_array = np.linspace(np.min(x), np.max(x), acc[0] + 1)
-        except ValueError:
+        except IndexError:
             rprint("[red]ERROR: x might be empty![/red]")
             return None
 
@@ -302,6 +308,16 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
     if scan_y is None:
         x = remove_outliers((x), per=per, debug=debug)
         x_array = generate_bins(acc, x, debug=debug)
+
+        this_h, this_x_bins = np.histogram(x, bins=x_array, density=density)
+        if norm:
+            this_h = this_h / (np.sum(this_h))
+
+        x_bins.append((this_x_bins[1:] + this_x_bins[:-1]) / 2)
+        h.append(this_h)
+        labels.append("Spectrum")
+
+        return x_bins, h, labels
 
     else:
         # Check if scan_y is the same length as x
@@ -343,15 +359,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
             x_bins.append((this_x_bins[1:] + this_x_bins[:-1]) / 2)
             h.append(this_h)
 
-    this_h, this_x_bins = np.histogram(x, bins=x_array, density=density)
-    if norm:
-        this_h = this_h / (np.sum(this_h))
-
-    x_bins.append((this_x_bins[1:] + this_x_bins[:-1]) / 2)
-    h.append(this_h)
-    labels.append("Spectrum")
-
-    return x_bins, h, labels
+        return x_bins, h, labels
 
 
 def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, acc=100, debug=False):
