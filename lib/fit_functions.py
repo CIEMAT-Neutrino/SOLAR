@@ -259,7 +259,7 @@ def generate_bins(acc, x, debug=False):
             if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
                 x_array = np.linspace(np.min(x), np.max(x), acc)
             elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
-                x_array = np.arange(np.min(x), np.max(x) + 1, acc)-1
+                x_array = np.arange(np.min(x), np.max(x) + 1, acc)
             else:
                 if debug:
                     rprint(
@@ -431,7 +431,7 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
 
 
 def fit_hist1d(
-    x, y, fit={"func": "polynomial", "trimm": (5, 5), "print": True}, debug=False
+    x, y, fit={"func": "polynomial", "trimm": (1, 1), "print": True}, debug=False
 ):
     """
     Given a 1D histogram, fit a function to the histogram.
@@ -574,7 +574,7 @@ def get_hist2d_fit(
     fit: dict = {
         "color": "grey",
         "opacity": 1,
-        "trimm": (5, 5),
+        "trimm": (1, 1),
         "spec_type": "max",
         "func": "linear",
         "threshold": 0.4,
@@ -652,7 +652,7 @@ def get_hist2d_fit(
             "\nFit %s: %.2f +/- %.2f" % (labels[i], popt[i], perr[i])
             for i in range(len(labels))
         ]
-        rprint("[cyan]INFO: " + "".join(debug_text) + "[/cyan]")
+        rprint(f"[cyan]INFO: {''.join(debug_text)}[/cyan]")
     return fig, popt, perr
 
 
@@ -692,7 +692,7 @@ def get_hist1d_fit(
     idx,
     per=[1, 99],
     acc=50,
-    fit={"color": "grey", "trimm": (5, 5), "func": "gauss"},
+    fit={"color": "grey", "trimm": (1, 1), "func": "gauss"},
     debug=False,
 ):
     """
