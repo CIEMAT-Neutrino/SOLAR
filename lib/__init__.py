@@ -2,6 +2,7 @@ import os
 import pickle
 import json
 
+from typing import Optional
 from src.utils import get_project_root
 from scipy.signal import find_peaks
 from sklearn.ensemble import RandomForestClassifier
@@ -35,3 +36,5 @@ red_energy_edges, red_energy_centers, red_ebin = get_default_energies(
     root, "REDUCED_RECO_ENERGY")
 lowe_energy_edges, lowe_energy_centers, lowe_ebin = get_default_energies(
     root, "LOWE_RECO_ENERGY")
+
+colors = px.colors.qualitative.Prism
