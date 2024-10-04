@@ -41,6 +41,7 @@
             "AdjClTime": 0,
             "AdjClRecoY": 0,
             "AdjClRecoZ": 0,
+            "AdjClMainID": 0,
             "AdjClMainPDG": 0,
             "AdjClMainX": 0,
             "AdjClMainY": 0,

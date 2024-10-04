@@ -1,7 +1,7 @@
+from lib.__init__ import *
 import sys
 
 sys.path.insert(0, "../")
-from lib.__init__ import *
 
 np.seterr(divide="ignore", invalid="ignore")
 plt.rcParams.update({"font.size": 15})
@@ -36,7 +36,8 @@ run = load_multi(
 ### DATA SELECTION ###
 analysis_info = read_input_file(
     "analysis",
-    INTEGERS=["RECO_ENERGY_RANGE", "RECO_ENERGY_BINS", "NADIR_RANGE", "NADIR_BINS"],
+    INTEGERS=["RECO_ENERGY_RANGE", "RECO_ENERGY_BINS",
+              "NADIR_RANGE", "NADIR_BINS"],
     debug=False,
 )
 energy_edges = np.linspace(
@@ -57,7 +58,8 @@ run = compute_reco_workflow(
 
 for jdx, config in enumerate(configs):
     print("Processing %s" % config)
-    info = json.load(open("../config/" + f"{config}/{config}_config" + ".json", "r"))
+    info = json.load(
+        open("../config/" + f"{config}/{config}_config" + ".json", "r"))
 
     max_energy = 30
     acc = 50
@@ -83,7 +85,8 @@ for jdx, config in enumerate(configs):
         DOUBLES=["CHARGE_AMP", "ELECTRON_TAU"],
         debug=False,
     )
-    corr_popt = [calibration_info["CHARGE_AMP"][0], calibration_info["ELECTRON_TAU"][0]]
+    corr_popt = [calibration_info["CHARGE_AMP"]
+                 [0], calibration_info["ELECTRON_TAU"][0]]
 
     run["Reco"]["ElectronE"] = 1e3 * run["Reco"]["TMarleyE"][:, 2]
     run["Reco"]["GammaE"] = 1e3 * np.sum(
@@ -110,7 +113,7 @@ for jdx, config in enumerate(configs):
         fig,
         1,
         1,
-        trimm=15,
+        trimm=(15, 15),
         spec_type="bottom",
         func_type="linear",
         debug=user_input["debug"],
@@ -217,7 +220,8 @@ for jdx, config in enumerate(configs):
     if not os.path.exists("../images/calibration/%s_calibration/" % (config)):
         os.makedirs("../images/calibration/%s_calibration/" % (config))
     fig.write_image(
-        "../images/calibration/%s_calibration/%s_reco_energy.png" % (config, config),
+        "../images/calibration/%s_calibration/%s_reco_energy.png" % (
+            config, config),
         width=2400,
         height=1080,
     )

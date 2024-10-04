@@ -1,0 +1,12 @@
+{
+    "NAME": "SolarNuAna_",
+    "PATH": "/data/HD/1x2x6_lateralAPA/",
+    "GEOMETRY": "hd",
+    "VERSION": "1x2x6_lateralAPA",
+    "FULL_DETECTOR_FACTOR": 6,
+    "TIMEWINDOW": 0.00225,
+    "EVENT_TICKS": 4500,
+    "DETECTOR_SIZE_X": 730,
+    "DETECTOR_SIZE_Y": 1220,
+    "DETECTOR_SIZE_Z": 1400
+}

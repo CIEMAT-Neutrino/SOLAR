@@ -18,7 +18,7 @@ print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_id
 
 density = ""
 fig = make_subplots(rows=2, cols=3,subplot_titles=("Electron","Gamma","Electron+Gamma"))
-fig, top_bottom_popt, top_bottom_perr = get_hist2d_fit(data["ElectronE"][filter_idx],data["TNuE"][filter_idx],acc,fig,1,1,trimm=15,threshold=0.3,spec_type="top+bottom",func_type="linear",density=density,debug=user_input["debug"])
+fig, top_bottom_popt, top_bottom_perr = get_hist2d_fit(data["ElectronE"][filter_idx],data["TNuE"][filter_idx],acc,fig,1,1,trimm=(15,15),threshold=0.3,spec_type="top+bottom",func_type="linear",density=density,debug=user_input["debug"])
 top_popt = top_bottom_popt[:2]; bottom_popt = top_bottom_popt[2:]
 top_perr = top_bottom_perr[:2]; bottom_perr = top_bottom_perr[2:]
 top_func = lambda x: top_popt[0]*x + top_popt[1]

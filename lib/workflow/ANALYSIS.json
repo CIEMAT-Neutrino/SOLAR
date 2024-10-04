@@ -44,7 +44,9 @@
             "SelectedAdjClNum": 0,
             "AdjOpFlashNum": 0,
             "AssFlashIdx": 0,
-            "Matching": -1
+            "Matching": -1,
+            "MainPDG": 1,
+            "MainParentPDG": 1
         },
         "DOUBLES": {
             "TNuE": 1,
@@ -81,7 +83,9 @@
             "MatchedOpFlashR": 0,
             "DriftTime": 0,
             "MainParentE": 1,
+            "MainParentK": 1,
             "MainE": 1,
+            "MainK": 1,
             "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1

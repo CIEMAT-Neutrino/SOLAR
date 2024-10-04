@@ -57,10 +57,6 @@
         "SelectedAdjClEnergyRatio",
         "SelectedMaxAdjClEnergy",
         "TotalAdjClEnergy",
-        "MaxAdjClEnergy",
-        "SelectedAdjClR",
-        "SelectedMaxAdjClR",
-        "TotalAdjClR",
-        "MaxAdjClR"
+        "MaxAdjClEnergy"
     ]
 }

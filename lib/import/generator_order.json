@@ -1,6 +1,6 @@
 {
     "hd": {
-        "hd_1x2x6": {
+        "1x2x6_lateralAPA": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 27,
@@ -34,7 +34,7 @@
             "GammasInCryostat": 28,
             "GammasInCavern": 29
         },
-        "hd_1x2x6_lowBgAPA": {
+        "1x2x6_centralAPA": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 27,
@@ -67,34 +67,10 @@
             "NeutronsInCavernwall": 19,
             "GammasInCryostat": 28,
             "GammasInCavern": 29
-        },
-        "hd_1x2x6_legacy": {
-            "Unknown": 0,
-            "Marley": 1,
-            "APA": 4,
-            "Neutron": 6,
-            "CPA": 3,
-            "Ar42InLAr": 5,
-            "Kr85InLAr": 8,
-            "Ar39InLAr": 9,
-            "Rn222InLAr": 7,
-            "Po210InLAr": 2
-        },
-        "hd_1x2x6_mcc11": {
-            "Unknown": 0,
-            "Marley": 1,
-            "APA": 4,
-            "Neutron": 6,
-            "Po210InLAr": 2,
-            "CPA": 3,
-            "Ar42InLAr": 5,
-            "Kr85InLAr": 8,
-            "Ar39InLAr": 9,
-            "Rn222InLAr": 7
         }
     },
     "vd": {
-        "vd_1x8x14_3view_30deg": {
+        "1x8x14_3view_30deg": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 26,
@@ -126,26 +102,6 @@
             "NeutronsInCavernwall": 18,
             "GammasInCryosta": 27,
             "GammasInCavern": 28
-        },
-        "vd_1x8x6_3view_30deg": {
-            "Unknown": 0,
-            "Marley": 0,
-            "Ar39LAr": 0,
-            "Kr85LAr": 0,
-            "Ar42LAr": 0,
-            "K42From42ArLAr": 0,
-            "Rn222ChainRn222LAr": 0,
-            "Rn220ChainPb212LAr": 0,
-            "K40CPA": 0,
-            "U238ChainCPA": 0,
-            "K42From42ArCPA": 0,
-            "Rn220ChainFromPb212CPA": 0,
-            "Rn222ChainPDS": 0,
-            "GammasInCavernwall": 0,
-            "GammasInFoam": 0,
-            "NeutronsInCavernwall": 0,
-            "GammasInCryostat": 0,
-            "GammasInCavern": 0
         }
     }
 }
