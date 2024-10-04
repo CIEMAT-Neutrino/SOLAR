@@ -1,15 +1,22 @@
-import gc, numba, json
+import json
+import pickle
+import numba
 import numpy as np
 
+from typing import Optional
 from rich import print as rprint
 from itertools import product
 from src.utils import get_project_root
 from particle import Particle
 
+from lib.df_functions import npy2df
+from lib.ana_functions import get_default_info
+
 root = get_project_root()
 
+
 def compute_reco_workflow(
-    run, configs, params={}, workflow="ANALYSIS", rm_branches=True, debug=False
+    run: dict[dict], configs: dict[list], params: Optional[dict] = None, workflow: str = "BASIC", rm_branches: bool = True, debug: bool = False
 ):
     """
     Compute the reco variables for the events in the run.
@@ -31,26 +38,24 @@ def compute_reco_workflow(
     terminal_output = f"\nComputing {workflow} workflow\n"
 
     if workflow == "BASIC":
+        terminal_output += f"Selected basic workflow. Returning loaded variables.\n"
         pass
 
-    if workflow == "TRUTH":
-        run, output  = compute_true_efficiency(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_marley_directions(
-            run, configs, params, trees=["Truth"], rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-
-    if workflow == "MARLEY":
+    elif workflow == "TRUTH":
         run, output = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
         terminal_output += output
-        # Check if key in params and set to False if not
-        if "NORM_TO_NUE" not in params:
-            params["NORM_TO_NUE"] = False
+        run, output = compute_marley_directions(
+            run, configs, params, trees=["Truth"], rm_branches=rm_branches, debug=debug
+        )
+        terminal_output += output
+
+    elif workflow == "MARLEY":
+        run, output = compute_true_efficiency(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
+        terminal_output += output
         run, output = compute_marley_energies(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, debug=debug
         )
@@ -63,11 +68,8 @@ def compute_reco_workflow(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, debug=debug
         )
         terminal_output += output
-    
-    if workflow == "RAW":
-        # Check if key in params and set to False if not
-        if "NORM_TO_NUE" not in params:
-            params["NORM_TO_NUE"] = False
+
+    elif workflow == "RAW":
         run, output = compute_marley_energies(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, debug=debug
         )
@@ -77,7 +79,7 @@ def compute_reco_workflow(
         )
         terminal_output += output
 
-    if workflow == "TRACK":
+    elif workflow == "TRACK":
         run, output = compute_marley_directions(
             run, configs, params, trees=["Reco"], rm_branches=rm_branches, debug=debug
         )
@@ -87,8 +89,12 @@ def compute_reco_workflow(
         )
         terminal_output += output
 
-    if workflow == "ADJCL":
+    elif workflow == "ADJCL":
         run, output = compute_adjcl_basics(
+            run, configs, params, rm_branches=rm_branches, debug=debug
+        )
+        terminal_output += output
+        run, output = compute_cluster_energy(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
         terminal_output += output
@@ -97,37 +103,89 @@ def compute_reco_workflow(
         )
         terminal_output += output
 
-    if workflow == "ADJFLASH":
+    elif workflow in ["ADJFLASH", "OPHIT"]:
         run, output = compute_opflash_advanced(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
         terminal_output += output
-        # run, output = compute_opflash_matching(
-        #     run, configs, params, rm_branches=rm_branches, debug=debug
-        # )
-        # terminal_output += output
-        # run, output = compute_recox(
-        #     run, configs, params, rm_branches=rm_branches, debug=debug
-        # )
-        # terminal_output += output
+        if workflow == "OPHIT":
+            run, output = compute_ophit_basic(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
 
-    if workflow == "OPHIT":
-        run, output = compute_ophit_basic(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        # run, output = compute_ophit_advanced(
-        #     run, configs, params, rm_branches=rm_branches, debug=debug
-        # )
-        # terminal_output += output
+    elif workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        default_workflow_params = {"DEFAULT_ENERGY_TIME": "Time",
+                                   "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime", "RANDOM_CORRECTION_RATIO": 0.0, "NORM_TO_NUE": False}
+        for key in default_workflow_params:
+            if params is None:
+                params = {}
+            if key not in params:
+                params[key] = default_workflow_params[key]
 
-    if workflow == "CALIBRATION":
-        run, output = compute_main_variables(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
+        if workflow == "ANALYSIS":
+            run, output = compute_main_variables(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            run, output = compute_true_drift(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow == "CORRECTION":
+            run, output = compute_adjcl_basics(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            run, output = compute_cluster_charge(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+            run, output = compute_particle_energies(
+                run, configs, params, trees=["Reco"], rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+            run, output = compute_cluster_energy(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+            run, output = compute_cluster_calibration(
+                run, configs, {}, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+            run, output = compute_adjcl_basics(
+                run, configs, {}, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+            run, output = compute_adjcl_advanced(
+                run, configs, {}, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+            run, output = compute_total_energy(
+                run, configs, {}, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+            run, output = compute_reco_energy(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
+        if workflow in ["SMEARING", "ANALYSIS"]:
+            run, output = compute_energy_calibration(
+                run, configs, params, rm_branches=rm_branches, debug=debug
+            )
+            terminal_output += output
 
-    if workflow == "VERTEXING":
+    elif workflow == "VERTEXING":
+        default_workflow_params = {"MAX_FLASH_R": None, "MIN_FLASH_PE": None,
+                                   "RATIO_FLASH_PEvsR": None}
+        for key in default_workflow_params:
+            if params is None:
+                params = {}
+            if key not in params:
+                params[key] = default_workflow_params[key]
+
         run, output = compute_main_variables(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
@@ -144,114 +202,6 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, debug=debug
         )
         terminal_output += output
-
-    if workflow == "ANALYSIS":
-        run, output = compute_opflash_advanced(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_opflash_matching(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_recox(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_cluster_energy(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-    
-    if workflow == "ENERGY":
-        run, output = compute_particle_energies(
-            run, configs, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_true_drift(
-            run, configs, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_cluster_energy(
-            run, configs, params={"DEFAULT_ENERGY_TIME":"TrueDriftTime", "DEFAULT_ADJCL_ENERGY_TIME":"AdjClTrueDriftTime"},debug=debug
-        )
-        terminal_output += output
-        run, output = compute_adjcl_basics(
-            run, configs, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_adjcl_advanced(
-            run, configs, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_reco_energy(
-            run, configs, debug=debug
-        )
-        terminal_output += output
-
-    if workflow == "SOLAR":
-        run = compute_filtered_run(
-            run, configs, params={('Reco','Primary'):('equal',True)}, debug=debug
-        )
-        run, output = compute_opflash_advanced(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_opflash_matching(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_recox(
-            run, configs, params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_main_variables(
-            run, configs, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_true_drift(
-            run, configs, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_cluster_energy(
-            run, configs, params=params, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_adjcl_basics(
-            run, configs, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_adjcl_advanced(
-            run, configs, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-        run, output = compute_reco_energy(
-            run, configs, rm_branches=rm_branches, debug=debug
-        )
-        terminal_output += output
-    
-    # if workflow == "FULL":
-    #     run, output = compute_adjcl_basics(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_opflash_matching(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_adjcl_advanced(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_recox(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_cluster_energy(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_reco_energy(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
-    #     run, output = compute_opflash_advanced(
-    #         run, configs, params, rm_branches=rm_branches, debug=debug
-    #     )
 
     rprint(terminal_output + f"{workflow} workflow \t-> Done!")
     return run
@@ -262,46 +212,68 @@ def compute_main_variables(run, configs, params={}, rm_branches=False, debug=Fal
     Compute the main (backtracked) variables of main particle correspondong to the cluster in the run.
     """
     @numba.njit
-    def expand_variables(variable):
-        x = variable[:,0]
-        y = variable[:,1]
-        z = variable[:,2]
-        return x,y,z
-    
-    for variable in ["MainVertex", "MainParentVertex"]:
-        x,y,z = expand_variables(run["Reco"][variable])
-        main_variable = variable.split("Vertex")[0]
-        run["Reco"][f"{main_variable}X"] = x
-        run["Reco"][f"{main_variable}Y"] = y
-        run["Reco"][f"{main_variable}Z"] = z
+    def expand_variables(branch):
+        x = branch[:, 0]
+        y = branch[:, 1]
+        z = branch[:, 2]
+        return x, y, z
 
-    run["Reco"]["ErrorY"]   = abs(run["Reco"]["MainY"] - run["Reco"]["RecoY"]) 
-    run["Reco"]["ErrorZ"]   = abs(run["Reco"]["MainZ"] - run["Reco"]["RecoZ"])
-    run["Reco"]["ErrorTot"] = np.sqrt(np.power(run["Reco"]["ErrorZ"],2) + np.power(run["Reco"]["ErrorY"],2))
+    required_branches = ["MainVertex",
+                         "MainParentVertex", "RecoX", "RecoY", "RecoZ"]
+
+    for branch in ["MainVertex", "MainParentVertex"]:
+        x, y, z = expand_variables(run["Reco"][branch])
+        main_branch = branch.split("Vertex")[0]
+        run["Reco"][f"{main_branch}X"] = x
+        run["Reco"][f"{main_branch}Y"] = y
+        run["Reco"][f"{main_branch}Z"] = z
+
+    # run["Reco"]["ErrorX"] = abs(run["Reco"]["MainX"] - run["Reco"]["RecoX"])
+    run["Reco"]["ErrorY"] = abs(run["Reco"]["MainY"] - run["Reco"]["RecoY"])
+    run["Reco"]["ErrorZ"] = abs(run["Reco"]["MainZ"] - run["Reco"]["RecoZ"])
+    run["Reco"]["2DError"] = np.sqrt(
+        np.power(run["Reco"]["ErrorZ"], 2) + np.power(run["Reco"]["ErrorY"], 2))
+    # run["Reco"]["3DError"] = np.sqrt(
+    #     np.power(run["Reco"]["ErrorZ"], 2) + np.power(run["Reco"]["ErrorY"], 2) + np.power(run["Reco"]["ErrorX"], 2))
 
     run["Reco"]["Neutrino"] = run["Reco"]["Generator"] == 1
-    run["Reco"]["Electron"] = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,0] > 0.5)
-    run["Reco"]["Gamma"]    = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,1] > 0.5)
-    run["Reco"]["Neutron"]  = (run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:,2] > 0.5)
 
-    output = f"Main variables computation \t-> Done!\n"
+    run["Reco"]["Electron"] = (
+        run["Reco"]["Generator"] == 1) * (run["Reco"]["MarleyFrac"][:, 0] > 0.5)
+
+    run["Reco"]["Gamma"] = (run["Reco"]["Generator"] == 1) * \
+        (run["Reco"]["MarleyFrac"][:, 1] > 0.5)
+
+    run["Reco"]["Neutron"] = (run["Reco"]["Generator"]
+                              == 1) * (run["Reco"]["MarleyFrac"][:, 2] > 0.5)
+
+    output = f"\tMain variables computation \t-> Done!\n"
     return run, output
 
 
-def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=False):
+def compute_true_efficiency(run: dict[dict], configs: dict[list], params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the true efficiency of the events in the run.
     """
     # New branches
-    new_branches = ["RecoIndex", "RecoMatch", "ClCount", "HitCount", "TrueIndex"]
-    run["Truth"][new_branches[0]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[1]] = np.zeros(len(run["Truth"]["Event"]), dtype=bool)
-    run["Truth"][new_branches[2]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[3]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Reco"][new_branches[4]] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
+    new_branches = ["RecoIndex", "RecoMatch",
+                    "ClCount", "HitCount", "TrueIndex"]
+    run["Truth"][new_branches[0]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=int)
+    run["Truth"][new_branches[1]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=bool)
+    run["Truth"][new_branches[2]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=int)
+    run["Truth"][new_branches[3]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=int)
+    run["Reco"][new_branches[4]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=int)
 
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
@@ -328,38 +300,49 @@ def compute_true_efficiency(run, configs, params={}, rm_branches=False, debug=Fa
         run["Reco"]["TrueIndex"][jdx] = np.asarray(result[4])
 
     run = remove_branches(run, rm_branches, [], debug=debug)
-    output = f"True efficiency computation \t-> Done! ({new_branches})\n"
+    output = f"\tTrue efficiency computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_marley_directions(run, configs, params={}, trees=["Truth","Reco"], rm_branches=False, debug=False):
+def compute_marley_directions(run, configs, params={}, trees=["Truth", "Reco"], rm_branches=False, debug=False):
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
-    new_branches = ["TMarleyTheta","TMarleyPhi","TMarleyDirectionX","TMarleyDirectionY","TMarleyDirectionZ","TMarleyDirectionMod"]
+    new_branches = ["TMarleyTheta", "TMarleyPhi", "TMarleyDirectionX",
+                    "TMarleyDirectionY", "TMarleyDirectionZ", "TMarleyDirectionMod"]
     for tree in trees:
         for branch in new_branches:
-            run[tree][branch] = np.zeros((len(run[tree]["Event"]),len(run[tree]["TMarleyPDG"][0])),dtype=float)
+            run[tree][branch] = np.zeros(
+                (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
 
         for config in configs:
-            info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+            info = json.load(
+                open(f"{root}/config/{config}/{config}_config.json", "r"))
+            params = get_param_dict(
+                f"{root}/config/{config}/{config}_config.json", params, debug=debug)
             idx = np.where(
                 (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
             )
-            for direction,start,end in zip(["TMarleyDirectionX","TMarleyDirectionY","TMarleyDirectionZ"],["TNuX","TNuY","TNuZ"],["TMarleyEndX","TMarleyEndY","TMarleyEndZ"]):
-                run[tree][direction][idx] = run[tree][start][:,None][idx] - run[tree][end][idx]
-            
-            run[tree]["TMarleyDirectionMod"][idx] = np.sqrt(np.power(run[tree]["TMarleyDirectionX"][idx],2) + np.power(run[tree]["TMarleyDirectionY"][idx],2) + np.power(run[tree]["TMarleyDirectionZ"][idx],2))
-            for coord in ["X","Y","Z"]:
-                run[tree][f"TMarleyDirection{coord}"][idx] = run[tree][f"TMarleyDirection{coord}"][idx]/run[tree]["TMarleyDirectionMod"][idx]
+            for direction, start, end in zip(["TMarleyDirectionX", "TMarleyDirectionY", "TMarleyDirectionZ"], ["TNuX", "TNuY", "TNuZ"], ["TMarleyEndX", "TMarleyEndY", "TMarleyEndZ"]):
+                run[tree][direction][idx] = run[tree][start][:,
+                                                             None][idx] - run[tree][end][idx]
 
-            run[tree]["TMarleyTheta"][idx] = np.arccos(run[tree]["TMarleyDirectionZ"][idx])
-            run[tree]["TMarleyPhi"][idx] = np.arctan2(run[tree]["TMarleyDirectionY"][idx],run[tree]["TMarleyDirectionX"][idx])
+            run[tree]["TMarleyDirectionMod"][idx] = np.sqrt(np.power(run[tree]["TMarleyDirectionX"][idx], 2) + np.power(
+                run[tree]["TMarleyDirectionY"][idx], 2) + np.power(run[tree]["TMarleyDirectionZ"][idx], 2))
+            for coord in ["X", "Y", "Z"]:
+                run[tree][f"TMarleyDirection{coord}"][idx] = run[tree][f"TMarleyDirection{coord}"][idx] / \
+                    run[tree]["TMarleyDirectionMod"][idx]
 
-            run = remove_branches(run, rm_branches, ["TMarleyDirectionMod"], tree=tree, debug=debug)
+            run[tree]["TMarleyTheta"][idx] = np.arccos(
+                run[tree]["TMarleyDirectionZ"][idx])
+            run[tree]["TMarleyPhi"][idx] = np.arctan2(
+                run[tree]["TMarleyDirectionY"][idx], run[tree]["TMarleyDirectionX"][idx])
 
-    output = f"Marley direction computation \t-> Done! ({new_branches})\n"
+            run = remove_branches(
+                run, rm_branches, ["TMarleyDirectionMod"], tree=tree, debug=debug)
+
+    output = f"\tMarley direction computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
@@ -367,127 +350,170 @@ def compute_particle_directions(run, configs, params={}, trees=["Reco"], rm_bran
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
-    new_branches = ["MTrackTheta","MTrackPhi","MTrackDirectionX","MTrackDirectionY","MTrackDirectionZ","MTrackDirectionMod"]
+    new_branches = ["MTrackTheta", "MTrackPhi", "MTrackDirectionX",
+                    "MTrackDirectionY", "MTrackDirectionZ", "MTrackDirectionMod"]
     for tree in trees:
-        run[tree]["MTrackDirection"] = np.zeros((len(run[tree]["Event"]),3),dtype=float)
+        run[tree]["MTrackDirection"] = np.zeros(
+            (len(run[tree]["Event"]), 3), dtype=np.float32)
         for branch in new_branches:
-            run[tree][branch] = np.zeros(len(run[tree]["Event"]),dtype=float)
-        for config in configs:  
-            info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+            run[tree][branch] = np.zeros(
+                len(run[tree]["Event"]), dtype=np.float32)
+        for config in configs:
+            info = json.load(
+                open(f"{root}/config/{config}/{config}_config.json", "r"))
+            params = get_param_dict(
+                f"{root}/config/{config}/{config}_config.json", params, debug=debug)
             idx = np.where(
                 (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
             )
-            run[tree]["MTrackDirection"][idx] = np.subtract(run[tree]["MTrackEnd"][idx], run[tree]["MTrackStart"][idx])
+            run[tree]["MTrackDirection"][idx] = np.subtract(
+                run[tree]["MTrackEnd"][idx], run[tree]["MTrackStart"][idx])
             # run[tree]["MTrackDirectionMod"][idx] = np.linalg.norm(run[tree]["MTrackDirection"][idx], axis=1)
             # run[tree]["MTrackDirection"][idx] = run[tree]["MTrackDirection"][idx]/run[tree]["MTrackDirectionMod"][:,None][idx]
-            for coord_idx, coord in enumerate(["MTrackDirectionX","MTrackDirectionY","MTrackDirectionZ"]):
+            for coord_idx, coord in enumerate(["MTrackDirectionX", "MTrackDirectionY", "MTrackDirectionZ"]):
                 rprint(f"Computing {coord} direction")
-                run[tree][coord][idx] = run[tree]["MTrackDirection"][:,coord_idx][idx]
+                run[tree][coord][idx] = run[tree]["MTrackDirection"][:, coord_idx][idx]
 
-            run[tree]["MTrackTheta"][idx] = np.arccos(run[tree]["MTrackDirectionZ"][idx])
-            run[tree]["MTrackPhi"][idx] = np.arctan2(run[tree]["MTrackDirectionY"][idx],run[tree]["MTrackDirectionX"][idx])
+            run[tree]["MTrackTheta"][idx] = np.arccos(
+                run[tree]["MTrackDirectionZ"][idx])
+            run[tree]["MTrackPhi"][idx] = np.arctan2(
+                run[tree]["MTrackDirectionY"][idx], run[tree]["MTrackDirectionX"][idx])
 
-        run = remove_branches(run, rm_branches, ["MTrackDirectionMod"], tree=tree, debug=debug)
+        run = remove_branches(
+            run, rm_branches, ["MTrackDirectionMod"], tree=tree, debug=debug)
 
-    output = f"Marley direction computation \t-> Done! ({new_branches})\n"
+    output = f"\tMarley direction computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_marley_energies(run, configs, params={"NORM_TO_NUE":False}, trees=["Truth","Reco"], rm_branches=False, debug=False):
+def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches=False, debug=False):
+    if params is None:
+        params = {"NORM_TO_NUE": False}
     for tree in trees:
-        pdg_list = np.unique(run[tree]["TMarleyPDG"][np.where(run[tree]["TMarleyMother"] == 0)])
+        pdg_list = np.unique(run[tree]["TMarleyPDG"]
+                             [np.where(run[tree]["TMarleyMother"] == 0)])
         pdg_list = pdg_list[pdg_list != 0]
         mass_list = [Particle.from_pdgid(pdg).mass for pdg in pdg_list]
-        new_branches = ["TMarleySumE","TMarleySumP","TMarleySumK","TMarleyK","TMarleyMass"]
-        run[tree][new_branches[0]] = np.zeros((len(run[tree]["Event"]),len(pdg_list)),dtype=float)
-        run[tree][new_branches[1]] = np.zeros((len(run[tree]["Event"]),len(pdg_list)),dtype=float)
-        run[tree][new_branches[2]] = np.zeros((len(run[tree]["Event"]),len(pdg_list)),dtype=float)
-        run[tree][new_branches[3]] = np.zeros((len(run[tree]["Event"]),len(run[tree]["TMarleyPDG"][0])),dtype=float)
-        run[tree][new_branches[4]] = np.zeros((len(run[tree]["Event"]),len(run[tree]["TMarleyPDG"][0])),dtype=float)
+        new_branches = ["TMarleySumE", "TMarleySumP",
+                        "TMarleySumK", "TMarleyK", "TMarleyMass"]
+        run[tree][new_branches[0]] = np.zeros(
+            (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32)
+        run[tree][new_branches[1]] = np.zeros(
+            (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32)
+        run[tree][new_branches[2]] = np.zeros(
+            (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32)
+        run[tree][new_branches[3]] = np.zeros(
+            (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
+        run[tree][new_branches[4]] = np.zeros(
+            (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
 
         full_pdg_list = np.unique(run[tree]["TMarleyPDG"])
-        for non_pdg in [0,1000120249,1000140289,1000190419,1000210499,1000220489,1000130279,1000360809,1000360829]:
+        for non_pdg in [0, 1000120249, 1000140289, 1000190419, 1000210499, 1000220489, 1000130279, 1000360809, 1000360829]:
             full_pdg_list = full_pdg_list[full_pdg_list != non_pdg]
-        full_mass_dict = {pdg:Particle.from_pdgid(pdg).mass for pdg in full_pdg_list}
+        full_mass_dict = {pdg: Particle.from_pdgid(
+            pdg).mass for pdg in full_pdg_list}
 
         # Gnearte branch for the mass of the particles frmo the TMarleyPDG m times n array and store it in the TMarleyMass branch
-        run[tree]["TMarleyMass"] = np.vectorize(full_mass_dict.get)(run[tree]["TMarleyPDG"])
-        run[tree]["TMarleyMass"] = np.nan_to_num(run[tree]["TMarleyMass"],nan=0.0,posinf=0.0,neginf=0.0)
-        run[tree]["TMarleyK"] = np.subtract(run[tree]["TMarleyE"], run[tree]["TMarleyMass"])
+        run[tree]["TMarleyMass"] = np.vectorize(
+            full_mass_dict.get)(run[tree]["TMarleyPDG"])
+        run[tree]["TMarleyMass"] = np.nan_to_num(
+            run[tree]["TMarleyMass"], nan=0.0, posinf=0.0, neginf=0.0)
+        run[tree]["TMarleyK"] = np.subtract(
+            run[tree]["TMarleyE"], run[tree]["TMarleyMass"])
 
-        for idx,pdg in enumerate(pdg_list):
-            run[tree][new_branches[0]][:,idx] = np.sum(run[tree]["TMarleyE"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0),axis=1)
-            run[tree][new_branches[1]][:,idx] = np.sum(run[tree]["TMarleyP"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0),axis=1)
-            run[tree][new_branches[2]][:,idx] = np.sum(run[tree]["TMarleyK"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0),axis=1)
-        
+        for idx, pdg in enumerate(pdg_list):
+            run[tree][new_branches[0]][:, idx] = np.sum(
+                run[tree]["TMarleyE"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+            run[tree][new_branches[1]][:, idx] = np.sum(
+                run[tree]["TMarleyP"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+            run[tree][new_branches[2]][:, idx] = np.sum(
+                run[tree]["TMarleyK"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+
         if params["NORM_TO_NUE"]:
             # Divide by the energy of the neutrino
-            run[tree][new_branches[0]] = run[tree][new_branches[0]]/run[tree]["TNuE"][:,None]
-            run[tree][new_branches[1]] = run[tree][new_branches[1]]/run[tree]["TNuE"][:,None]
-            run[tree][new_branches[2]] = run[tree][new_branches[2]]/run[tree]["TNuE"][:,None]
-        
-        pdg_list = np.repeat(pdg_list, len(run[tree]["Event"])).reshape(len(pdg_list),len(run[tree]["Event"])).T
+            run[tree][new_branches[0]] = run[tree][new_branches[0]] / \
+                run[tree]["TNuE"][:, None]
+            run[tree][new_branches[1]] = run[tree][new_branches[1]] / \
+                run[tree]["TNuE"][:, None]
+            run[tree][new_branches[2]] = run[tree][new_branches[2]] / \
+                run[tree]["TNuE"][:, None]
+
+        pdg_list = np.repeat(pdg_list, len(run[tree]["Event"])).reshape(
+            len(pdg_list), len(run[tree]["Event"])).T
         run[tree]["TMarleySumPDG"] = pdg_list
-        
-        run = remove_branches(run, rm_branches, ["TMarleyMass"], tree=tree, debug=debug)
-    
-    output = f"Marley energy computation \t-> Done! ({new_branches})\n"
+
+        run = remove_branches(
+            run, rm_branches, ["TMarleyMass"], tree=tree, debug=debug)
+
+    output = f"\tMarley energy computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_particle_energies(run, configs, params={"NORM_TO_NUE":False}, trees=["Truth","Reco"], rm_branches=False, debug=False):
+def compute_particle_energies(run, configs, params: Optional[dict] = None, trees: list[str] = ["Truth", "Reco"], rm_branches: bool = False, debug: bool = False):
     """
     This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
     """
-    particles = {"Electron": 11, "Gamma": 22, "Neutron": 2112, "Neutrino": 12, "Proton": 2212}
-    particles_mass = { particle:values for particle,values in zip(particles.keys(),[Particle.from_pdgid(particles[particle]).mass for particle in particles])}
+    if params is None:
+        params = {"NORM_TO_NUE": False}
+    particles_pdg = {"Electron": 11, "Gamma": 22,
+                     "Neutron": 2112, "Neutrino": 12, "Proton": 2212}
+    particles_mass = {particle: values for particle, values in zip(particles_pdg.keys(
+    ), [Particle.from_pdgid(particles_pdg[particle]).mass for particle in particles_pdg])}
     particles_mass["Neutrino"] = 0
-    new_branches = list(particles.keys())
-    for tree, particle in product(trees,particles):
-        run[tree][f"{particle}E"] = np.zeros(len(run[tree]["Event"]), dtype=float)
-        # run[tree][f"{particle}P"] = np.zeros(len(run[tree]["Event"]), dtype=float)
-        run[tree][f"{particle}K"] = np.zeros(len(run[tree]["Event"]), dtype=float)
+    prticles_pdg_mass = {particles_pdg[particle]: particles_mass[particle]
+                         for particle in particles_pdg}
 
-    for config, tree in product(configs,trees):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
-        idx = np.where(
-            (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
-            * (np.asarray(run[tree]["Version"]) == info["VERSION"])
+    new_branches = list(particles_pdg.keys())
+
+    for tree, particle in product(trees, particles_pdg):
+        run[tree][f"{particle}E"] = np.zeros(
+            len(run[tree]["Event"]), dtype=np.float32)
+        run[tree][f"{particle}K"] = np.zeros(
+            len(run[tree]["Event"]), dtype=np.float32)
+
+    # Create the MarleyMass branch from the TMarleyPDG branch according to the particles_mass dictionary
+    if len(run[tree]["TMarleyPDG"][0]) > 0:
+        run[tree]["MarleyMass"] = np.vectorize(
+            prticles_pdg_mass.get)(run[tree]["TMarleyPDG"])
+    else:
+        run[tree]["MarleyMass"] = np.zeros(
+            (len(run[tree]["TMarleyPDG"]), len(run[tree]["TMarleyPDG"][0])), dtype=bool)
+    run[tree]["MarleyMass"] = np.nan_to_num(
+        run[tree]["MarleyMass"], nan=0.0, posinf=0.0, neginf=0.0)
+
+    for particle in particles_pdg:
+        run[tree][f"{particle}E"] = np.sum(
+            run[tree]["TMarleyE"]
+            * np.array(run[tree]["TMarleyPDG"]
+                       == particles_pdg[particle]) * np.array(run[tree]["TMarleyMother"] == 0),
+            axis=1,
         )
 
-        for particle in particles:
-            run[tree][f"{particle}E"][idx] = np.sum(
-                run[tree]["TMarleyE"][idx]
-                * np.array(run[tree]["TMarleyPDG"][idx] == particles[particle]),
-                axis=1,
-            )
-            # run[tree][f"{particle}P"][idx] = np.sum(
-            #     run[tree]["TMarleyP"][idx]
-            #     * np.array(run[tree]["TMarleyPDG"][idx] == particles[particle]),
-            #     axis=1,
-            # )
-            run[tree][f"{particle}K"][idx] = np.sum(
-                (run[tree]["TMarleyE"][idx] - particles_mass[particle])
-                * np.array(run[tree]["TMarleyPDG"][idx] == particles[particle]),
-                axis=1,
-            )
-            
-            if params["NORM_TO_NUE"]:
-                for particle in particles:
-                    run[tree][f"{particle}E"] = run[tree][f"{particle}E"]/run[tree]["TNuE"]
-                    # run[tree][f"{particle}P"] = run[tree][f"{particle}P"]/run[tree]["TNuE"]
-                    run[tree][f"{particle}K"] = run[tree][f"{particle}K"]/run[tree]["TNuE"]
+        run[tree][f"{particle}K"] = np.sum(
+            np.subtract(run[tree]["TMarleyE"],
+                        run[tree]["MarleyMass"])
+            * np.array(run[tree]["TMarleyPDG"]
+                       == particles_pdg[particle]) * np.array(run[tree]["TMarleyMother"] == 0),
+            axis=1,
+        )
+
+        if params["NORM_TO_NUE"]:
+            for particle in particles_pdg:
+                run[tree][f"{particle}E"] = run[tree][f"{particle}E"] / \
+                    run[tree]["TNuE"]
+                run[tree][f"{particle}K"] = run[tree][f"{particle}K"] / \
+                    run[tree]["TNuE"]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
-    output = f"Particle energy combination \t-> Done! ({new_branches})\n"
+    output = f"\tParticle energy combination \t-> Done! ({new_branches})\n"
     return run, output
 
 
 def compute_opflash_matching(
     run,
     configs,
-    params={"MAX_FLASH_R": None, "MIN_FLASH_PE": None, "RATIO_FLASH_PEvsR": None},
+    params: Optional[dict] = None,
     rm_branches=False,
     debug=False,
 ):
@@ -508,17 +534,26 @@ def compute_opflash_matching(
     run["Reco"][new_branches[0]] = np.zeros(
         (len(run["Reco"]["Event"]), len(run["Reco"]["AdjOpFlashR"][0])), dtype=bool
     )
-    run["Reco"][new_branches[1]] = np.zeros(len(run["Reco"]["Event"]), dtype=bool)
-    run["Reco"][new_branches[2]] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
-    run["Reco"][new_branches[3]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"][new_branches[4]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"][new_branches[5]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"][new_branches[6]] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+    run["Reco"][new_branches[1]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=bool)
+    run["Reco"][new_branches[2]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=int)
+    run["Reco"][new_branches[3]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32)
+    run["Reco"][new_branches[4]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32)
+    run["Reco"][new_branches[5]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32)
+    run["Reco"][new_branches[6]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32)
     run["Reco"][new_branches[7]] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32
     )
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
@@ -528,26 +563,34 @@ def compute_opflash_matching(
             continue
 
         # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
 
         # Select all FlashMatch candidates
         max_r_filter = run["Reco"]["AdjOpFlashR"][idx] < params["MAX_FLASH_R"]
         min_pe_filter = run["Reco"]["AdjOpFlashPE"][idx] > params["MIN_FLASH_PE"]
-        signal_nan_filter = (run["Reco"]["AdjOpFlashSignal"][idx] > 0) * (run["Reco"]["AdjOpFlashSignal"][idx] < np.inf)
+        signal_nan_filter = (run["Reco"]["AdjOpFlashSignal"][idx]
+                             > 0) * (run["Reco"]["AdjOpFlashSignal"][idx] < np.inf)
         # max_ratio_filter = run["Reco"]["AdjOpFlashPE"][idx] > 3000 * run["Reco"]["AdjOpFlashMaxPE"][idx] / run["Reco"]["AdjOpFlashPE"][idx]
 
-        repeated_array = np.repeat(
-            run["Reco"]["Time"][idx], len(run["Reco"]["AdjOpFlashTime"][idx][0])
+        converted_array = reshape_array(
+            run["Reco"]["Time"][idx], len(
+                run["Reco"]["AdjOpFlashTime"][idx][0])
         )
-        converted_array = np.reshape(
-            repeated_array, (-1, len(run["Reco"]["AdjOpFlashTime"][idx][0]))
-        )
+        # repeated_array = np.repeat(
+        #     run["Reco"]["Time"][idx], len(
+        #         run["Reco"]["AdjOpFlashTime"][idx][0])
+        # )
+        # converted_array = np.reshape(
+        #     repeated_array, (-1, len(run["Reco"]["AdjOpFlashTime"][idx][0]))
+        # )
         max_drift_filter = (
             np.abs(converted_array - 2 * run["Reco"]["AdjOpFlashTime"][idx])
             < params["MAX_DRIFT_FACTOR"] * info["EVENT_TICKS"]
         )
         run["Reco"]["FlashMathedIdx"][idx] = (
-            (max_r_filter) * (min_pe_filter) * (max_drift_filter) * (signal_nan_filter)
+            (max_r_filter) * (min_pe_filter) *
+            (max_drift_filter) * (signal_nan_filter)
         )
 
         # If at least one candidate is found, mark the event as matched and select the best candidate
@@ -555,7 +598,8 @@ def compute_opflash_matching(
             np.sum(run["Reco"]["FlashMathedIdx"][idx], axis=1) > 0
         )
         run["Reco"]["AssFlashIdx"][idx] = np.argmax(
-            run["Reco"]["AdjOpFlashSignal"][idx] * run["Reco"]["FlashMathedIdx"][idx],
+            run["Reco"]["AdjOpFlashSignal"][idx] *
+            run["Reco"]["FlashMathedIdx"][idx],
             axis=1,
         )
 
@@ -570,7 +614,8 @@ def compute_opflash_matching(
             idx[0], run["Reco"]["AssFlashIdx"][idx]
         ]
         run["Reco"]["DriftTime"][idx] = (
-            run["Reco"]["Time"][idx] - 2 * run["Reco"]["MatchedOpFlashTime"][idx]
+            run["Reco"]["Time"][idx] - 2 *
+            run["Reco"]["MatchedOpFlashTime"][idx]
         )
         run["Reco"]["AdjClDriftTime"][idx] = (
             run["Reco"]["AdjClTime"][idx]
@@ -580,12 +625,12 @@ def compute_opflash_matching(
     run = remove_branches(
         run, rm_branches, ["FlashMathedIdx", "AssFlashIdx"], debug=debug
     )
-    output = f"OpFlash matching \t\t-> Done! ({new_branches})\n"
+    output = f"\tOpFlash matching \t\t-> Done! ({new_branches})\n"
     return run, output
 
 
 def compute_recox(
-    run, configs, params={"DEFAULT_RECOX_TIME": None}, rm_branches=False, debug=False
+    run, configs, params: Optional[dict] = None, rm_branches: bool = False, debug: bool = False
 ):
     """
     Compute the reconstructed X position of the events in the run.
@@ -593,27 +638,31 @@ def compute_recox(
     new_branches = ["RecoX", "AdjCldT", "AdjClRecoX"]
     run["Reco"][new_branches[0]] = np.zeros(len(run["Reco"]["Event"]))
     run["Reco"][new_branches[1]] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32
     )
     run["Reco"][new_branches[2]] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32
     )
 
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        # Get values from the configuration file or use the ones given as input
-        params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
 
-        repeated_array = np.repeat(
-            run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
-        )
-        converted_array = np.reshape(
-            repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
-        )
+        converted_array = reshape_array(
+            run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+
+        # repeated_array = np.repeat(
+        #     run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
+        # )
+        # converted_array = np.reshape(
+        #     repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
+        # )
         run["Reco"]["AdjCldT"][idx] = run["Reco"]["AdjClTime"][idx] - converted_array
 
         if info["GEOMETRY"] == "hd":
@@ -641,12 +690,15 @@ def compute_recox(
                 / info["EVENT_TICKS"]
             )
 
-            repeated_array = np.repeat(
-                run["Reco"]["RecoX"], len(run["Reco"]["AdjClTime"][0])
-            )
-            converted_array = np.reshape(
-                repeated_array, (-1, len(run["Reco"]["AdjClTime"][0]))
-            )
+            converted_array = reshape_array(
+                run["Reco"]["RecoX"], len(run["Reco"]["AdjClTime"][0]))
+
+            # repeated_array = np.repeat(
+            #     run["Reco"]["RecoX"], len(run["Reco"]["AdjClTime"][0])
+            # )
+            # converted_array = np.reshape(
+            #     repeated_array, (-1, len(run["Reco"]["AdjClTime"][0]))
+            # )
             run["Reco"]["AdjClRecoX"][plus_idx] = (
                 run["Reco"]["AdjCldT"][plus_idx]
                 * (info["DETECTOR_SIZE_X"] / 2)
@@ -667,14 +719,10 @@ def compute_recox(
                 / info["EVENT_TICKS"]
                 + info["DETECTOR_SIZE_X"] / 2
             )
-                        
-            converted_array = reshape_array(run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
-            # repeated_array = np.repeat(
-            #     run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0])
-            # )
-            # converted_array = np.reshape(
-            #     repeated_array, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
-            # )
+
+            converted_array = reshape_array(
+                run["Reco"]["RecoX"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+
             run["Reco"]["AdjClRecoX"][idx] = (
                 run["Reco"]["AdjCldT"][idx]
                 * info["DETECTOR_SIZE_X"]
@@ -682,14 +730,14 @@ def compute_recox(
             ) + converted_array
 
     run = remove_branches(run, rm_branches, ["AdjCldT"], debug=debug)
-    output = f"Computed RecoX \t\t\t-> Done! ({new_branches})\n"
+    output = f"\tComputed RecoX \t\t\t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_cluster_energy(
+def compute_cluster_charge(
     run,
     configs,
-    params={"DEFAULT_ENERGY_TIME": None, "DEFAULT_ADJCL_ENERGY_TIME": None},
+    params: Optional[dict] = None,
     rm_branches=False,
     debug=False,
 ):
@@ -697,237 +745,478 @@ def compute_cluster_energy(
     Correct the charge of the events in the run according to the correction file.
     """
     # New branches
-    new_branches = ["Correction", "Energy", "AdjClCorrection", "AdjClEnergy"]
-    run["Reco"][new_branches[0]] = np.ones(len(run["Reco"]["Event"]))
-    run["Reco"][new_branches[1]] = np.zeros(len(run["Reco"]["Event"]))
-    run["Reco"][new_branches[2]] = np.ones(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=float
-    )
-    run["Reco"][new_branches[3]] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=float
-    )
+    new_branches = ["ElectronCharge", "ElectronTime"]
+    for branch in new_branches:
+        run["Reco"][branch] = np.ones(len(run["Reco"]["Event"]))
+
+    run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0, axis=1)
 
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-
-        params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
-        corr_info = json.load(open(f"{root}/config/{config}/wbkg/{config}_calib/{config}_charge_correction.json","r"))
-        corr_popt = [corr_info["CHARGE_AMP"], corr_info["ELECTRON_TAU"]]
-        reco_popt = [corr_info["SLOPE"], corr_info["INTERCEPT"]]
-        
-        run["Reco"]["Correction"][idx] = np.exp(
-            np.abs(run["Reco"][params["DEFAULT_ENERGY_TIME"]][idx]) / corr_popt[1]
+        run["Reco"]["ElectronCharge"][idx] = run["Reco"]["Charge"][idx] + np.sum(
+            np.where((run["Reco"]["AdjClMainPDG"][idx] == 11),
+                     run["Reco"]["AdjClCharge"][idx], 0),
+            axis=1
         )
-        run["Reco"]["AdjClCorrection"][idx] = np.exp(
-            np.abs(run["Reco"][params["DEFAULT_ADJCL_ENERGY_TIME"]][idx]) / corr_popt[1]
-        )
-        run["Reco"]["Energy"][idx] = (
-            run["Reco"]["Charge"][idx] * run["Reco"]["Correction"][idx] / corr_popt[0]
-        )
-        run["Reco"]["AdjClEnergy"][idx] = (
-            run["Reco"]["AdjClCharge"][idx]
-            * run["Reco"]["Correction"][idx][:, np.newaxis]
-            / corr_popt[0]
-        )
-        # Fine tuning of the energy calibration
-        run["Reco"]["Energy"][idx] = (run["Reco"]["Energy"][idx] - reco_popt[1]) / reco_popt[0]
+        # Compute the average weighted time of the clusters
+        run["Reco"]["ElectronTime"][idx] = ((run["Reco"]["Charge"][idx] *
+                                             run["Reco"]["Time"][idx]) + np.sum(
+            np.where((run["Reco"]["AdjClMainPDG"][idx] == 11),
+                     run["Reco"]["AdjClCharge"][idx] * run["Reco"]["AdjClTime"][idx], 0),
+            axis=1
+        )) / run["Reco"]["ElectronCharge"][idx]
 
     run = remove_branches(
-        run, rm_branches, ["Correction", "AdjClCorrection"], debug=debug
+        run, rm_branches, [], debug=debug
     )
-    output = f"Clutser energy computation\t-> Done! ({new_branches})\n"
+    output = f"\tClutser charge computation\t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_reco_energy(run, configs, params={}, rm_branches=False, debug=False):
+def compute_cluster_energy(
+    run: dict,
+    configs: dict,
+    params: Optional[dict] = None,
+    rm_branches: bool = False,
+    debug: bool = False,
+) -> tuple[dict, str]:
     """
-    Compute the total energy of the events in the run.
+    Correct the charge of the events in the run according to the correction file.
     """
-    new_branches = ["RecoEnergy","TotalEnergy","SelectedEnergy","TotalAdjClEnergy","SelectedAdjClEnergy","SelectedMaxAdjClEnergy","SelectedAdjClEnergyRatio","Discriminant",]
+    def calibration_func(x, a, b, c, d):
+        return a*np.exp(-b*x)+c/(1+np.exp(-d*x))
+
+    # New branches
+    new_branches = ["Correction",
+                    "CorrectedCharge", "CorrectionFactor", "Energy"]
     for branch in new_branches:
-        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
-    
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=np.float32)
+
+    new_vector_branches = [
+        "AdjClCorrection", "AdjClCorrectedCharge", "AdjClCorrectionFactor", "AdjClEnergy"]
+
+    for branch in new_vector_branches:
+        run["Reco"][branch] = np.ones(
+            (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32
+        )
+
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
 
-        discriminant_info = json.load(
-            open(
-                f"{root}/config/{config}/wbkg/{config}_calib/{config}_discriminant_calibration.json",
-                "r",
-            )
+        corr_info = json.load(open(
+            f"{root}/config/{config}/Marley/{config}_calib/{config}_electroncharge_correction.json", "r"))
+
+        drift_popt = [corr_info["CHARGE_AMP"], corr_info["ELECTRON_TAU"]]
+        corr_popt = [corr_info["CORRECTION_AMP"],
+                     corr_info["CORRECTION_DECAY"], corr_info["CORRECTION_CONST"], corr_info["CORRECTION_SIGMOID"]]
+
+        # Divide the filter idx into two groups, one with the random correction and one without
+        random_idx = idx[0][:int(
+            len(idx[0])*params["RANDOM_CORRECTION_RATIO"])]
+        default_idx = idx[0][int(
+            len(idx[0])*params["RANDOM_CORRECTION_RATIO"]):]
+
+        run["Reco"]["RandomEnergyTime"] = np.random.normal(
+            0, info["EVENT_TICKS"], len(run["Reco"]["Event"]))
+        run["Reco"]["RandomAdjClEnergyTime"] = np.random.normal(
+            0, info["EVENT_TICKS"], (len(run["Reco"]["Event"]), len(
+                run["Reco"]["AdjClCharge"][0]))
         )
-        
-        calib_info = json.load(
-            open(
-                f"{root}/config/{config}/wbkg/{config}_calib/{config}_energy_calibration.json",
-                "r",
+        if params["RANDOM_CORRECTION_RATIO"] > 0:
+            rprint(
+                f"[yellow]--> Applying random correction {100*params['RANDOM_CORRECTION_RATIO']:.1f}% to {branch}[/yellow]")
+
+        for branch, rand_branch, default_param in zip(["Correction", "AdjClCorrection"], ["RandomEnergyTime", "RandomAdjClEnergyTime"], [params["DEFAULT_ENERGY_TIME"], params["DEFAULT_ADJCL_ENERGY_TIME"]]):
+
+            run["Reco"][branch][default_idx] = np.exp(
+                np.abs(run["Reco"][default_param]
+                       [default_idx]) / drift_popt[1]
             )
+
+            run["Reco"][branch][random_idx] = np.exp(
+                np.abs(run["Reco"][rand_branch]
+                       [random_idx]) / drift_popt[1]
+            )
+
+        run["Reco"]["CorrectedCharge"][idx] = run["Reco"]["Charge"][idx] * \
+            run["Reco"]["Correction"][idx]
+
+        run["Reco"]["CorrectionFactor"][idx] = calibration_func(
+            run["Reco"]["NHits"][idx], *corr_popt)
+
+        run["Reco"]["Energy"][idx] = run["Reco"]["CorrectedCharge"][idx] / \
+            run["Reco"]["CorrectionFactor"][idx]
+
+        run["Reco"]["AdjClCorrectedCharge"][idx] = run["Reco"]["AdjClCharge"][idx] * \
+            run["Reco"]["AdjClCorrection"][idx]
+
+        run["Reco"]["AdjClCorrectionFactor"][idx] = corr_popt[0] * np.exp(
+            -run["Reco"]["AdjClNHit"][idx] / corr_popt[1]) + corr_popt[2]
+
+        run["Reco"]["AdjClEnergy"][idx] = run["Reco"]["AdjClCorrectedCharge"][idx] / \
+            run["Reco"]["AdjClCorrectionFactor"][idx]
+
+    run = remove_branches(
+        run, rm_branches, new_branches[:-1]+new_vector_branches[:-1], debug=debug
+    )
+    output = f"\tClutser energy computation\t-> Done! ({new_branches+new_vector_branches})\n"
+    return run, output
+
+
+def compute_cluster_calibration(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
+    """
+    Correct the charge of the events in the run according to the correction file.
+    """
+    new_branches = ["Energy"]
+    for config in configs:
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+        idx = np.where(
+            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+        )
+
+        corr_info = json.load(open(
+            f"{root}/config/{config}/Marley/{config}_calib/{config}_charge_calibration.json", "r"))
+
+        corr_popt = [corr_info["SLOPE"], corr_info["INTERCEPT"]]
+        run["Reco"]["Energy"][idx] = run["Reco"]["Energy"][idx] - corr_popt[1] * \
+            corr_popt[0]
+
+    run = remove_branches(
+        run, rm_branches, [], debug=debug
+    )
+    output = f"\tClutser energy computation\t-> Done! ({new_branches})\n"
+    return run, output
+
+
+def compute_total_energy(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
+    """
+    Compute the total energy of the events in the run.
+    """
+    output = ""
+    new_branches = ["SelectedAdjClNum", "RecoEnergy", "TotalEnergy", "SelectedEnergy", "TotalAdjClEnergy",
+                    "SelectedAdjClEnergy", "SelectedMaxAdjClEnergy", "SelectedAdjClEnergyRatio", "Discriminant",]
+    for branch in new_branches:
+        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
+
+    for config in configs:
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+        idx = np.where(
+            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
 
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
+        selected_filter = (run["Reco"]["AdjClR"][idx] < info["MIN_BKG_R"]) + \
+            (run["Reco"]["AdjClCharge"][idx] > info["MAX_BKG_CHARGE"])
+
+        if debug:
+            output += \
+                f"[yellow]***Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}%\n[/yellow]"
+
+        run["Reco"]["SelectedAdjClNum"][idx] = np.sum(selected_filter, axis=1)
         run["Reco"]["SelectedAdjClEnergy"][idx] = np.sum(
-            np.where((run["Reco"]["AdjClR"][idx] < info["MIN_BKG_R"]) + (run["Reco"]["AdjCldT"][idx] < info["MIN_BKG_DT"]) + (run["Reco"]["AdjClCharge"][idx] > info["MAX_BKG_CHARGE"]), run["Reco"]["AdjClEnergy"][idx], 0),
-            axis=1
-        )
+            run["Reco"]["AdjClEnergy"][idx], where=selected_filter, axis=1)
         run["Reco"]["SelectedMaxAdjClEnergy"][idx] = np.max(
-            np.where((run["Reco"]["AdjClR"][idx] < info["MIN_BKG_R"]) + (run["Reco"]["AdjCldT"][idx] < info["MIN_BKG_DT"]) + (run["Reco"]["AdjClCharge"][idx] > info["MAX_BKG_CHARGE"]), run["Reco"]["AdjClEnergy"][idx], 0),
-            axis=1
-        )
+            run["Reco"]["AdjClEnergy"][idx], where=selected_filter, axis=1, initial=0)
 
-        run["Reco"]["TotalEnergy"][idx] = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx] 
-        run["Reco"]["SelectedEnergy"][idx] = run["Reco"]["Energy"][idx] + run["Reco"]["SelectedAdjClEnergy"][idx] 
-        run["Reco"]["SelectedAdjClEnergyRatio"][idx] = run["Reco"]["SelectedAdjClEnergy"][idx] / run["Reco"]["Energy"][idx]
+        run["Reco"]["TotalEnergy"][idx] = run["Reco"]["Energy"][idx] + \
+            run["Reco"]["TotalAdjClEnergy"][idx]
+        run["Reco"]["SelectedEnergy"][idx] = run["Reco"]["Energy"][idx] + \
+            run["Reco"]["SelectedAdjClEnergy"][idx]
+        run["Reco"]["SelectedAdjClEnergyRatio"][idx] = run["Reco"]["SelectedAdjClEnergy"][idx] / \
+            run["Reco"]["Energy"][idx]
 
-        run["Reco"]["Discriminant"][idx] = (
-            run["Reco"]["SelectedMaxAdjClEnergy"][idx] + run["Reco"]["SelectedAdjClEnergyRatio"][idx]
-        )
-
-        bot_idx = np.where(
-            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
-            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
-            * (run["Reco"]["Discriminant"] >= discriminant_info["DISCRIMINANT_THRESHOLD"])
-        )
-        top_idx = np.where(
-            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
-            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
-            * (run["Reco"]["Discriminant"] < discriminant_info["DISCRIMINANT_THRESHOLD"])
-        )
-        run["Reco"]["RecoEnergy"][bot_idx] = (
-            run["Reco"]["Energy"][bot_idx] / discriminant_info["LOWER"]["ENERGY_AMP"]
-            - discriminant_info["LOWER"]["INTERSECTION"]
-        )
-        run["Reco"]["RecoEnergy"][top_idx] = (
-            run["Reco"]["Energy"][top_idx] / discriminant_info["UPPER"]["ENERGY_AMP"]
-            - discriminant_info["UPPER"]["INTERSECTION"]
-        )
-        for energy_label, energy_key in zip(["TotalEnergy","RecoEnergy"],["TOTAL","RECO"]):
-            run["Reco"][energy_label][idx] = (run["Reco"][energy_label][idx] - calib_info[energy_key]["INTERSECTION"]) / calib_info[energy_key]["ENERGY_AMP"]
-
-    run = remove_branches(run, rm_branches, ["TotalAdjClEnergy", "SelectedAdjClEnergy"], debug=debug)
-    output = f"Total energy computation \t-> Done! ({new_branches})\n"
+    run = remove_branches(
+        run, rm_branches, ["TotalAdjClEnergy", "SelectedAdjClEnergy"], debug=debug)
+    output += f"\tTotal energy computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_opflash_advanced(run, configs, params={}, rm_branches=False, debug=False):
+def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
+    features = get_default_info(root, "ML_FEATURES")
+    new_branches = ["RecoEnergy", "Upper", "Lower"]
+    for branch in new_branches:
+        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
+
+    for config in configs:
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+        for name in configs[config]:
+            idx = np.where(
+                (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+                * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+                * (np.asarray(run["Reco"]["Name"]) == name)
+            )
+
+            # Save the trained model to a file so it can be used later using pickle
+            if name != "Marley":
+                name = "wbkg"
+            with open(f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl", 'rb') as model_file:
+                rf_classifier = pickle.load(model_file)
+
+            discriminant_info = json.load(
+                open(
+                    f"{root}/config/{config}/{name}/{config}_calib/{config}_discriminant_calibration.json",
+                    "r",
+                )
+            )
+            def upper_func(x): return x - discriminant_info["UPPER"]["OFFSET"]
+            def lower_func(x): return x - discriminant_info["LOWER"]["OFFSET"]
+
+            thld = discriminant_info["DISCRIMINANT_THRESHOLD"]
+
+            run["Reco"]["Upper"][idx] = np.asarray(
+                run["Reco"]["ElectronK"][idx] > run["Reco"]["TNuE"][idx] + thld, dtype=bool)
+            run["Reco"]["Lower"][idx] = np.asarray(
+                run["Reco"]["ElectronK"][idx] < run["Reco"]["TNuE"][idx] + thld, dtype=bool)
+
+            df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "TNuE", "NHits", "Upper", "Lower"],
+                        debug=debug)
+
+            df['ML'] = rf_classifier.predict(df[features])
+            df['Discriminant'] = rf_classifier.predict_proba(df[features])[
+                :, 1]
+            upper_idx = df["Discriminant"] >= discriminant_info["ML_THRESHOLD"]
+            lower_idx = df["Discriminant"] < discriminant_info["ML_THRESHOLD"]
+
+            df.loc[upper_idx, "RecoEnergy"] = upper_func(
+                df.loc[upper_idx, "Energy"])
+            df.loc[lower_idx, "RecoEnergy"] = lower_func(
+                df.loc[lower_idx, "Energy"])
+            run["Reco"]["RecoEnergy"][idx] = df["RecoEnergy"].values
+
+    run = remove_branches(
+        run, rm_branches, [], debug=debug)
+    output = f"\tReco energy computation \t-> Done! ({new_branches})\n"
+    return run, output
+
+
+def compute_energy_calibration(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
+    output = ""
+    new_branches = ["RecoEnergy",
+                    "SelectedEnergy", "TotalEnergy"]
+
+    for config in configs:
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+        for name in configs[config]:
+            idx = np.where(
+                (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+                * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+                * (np.asarray(run["Reco"]["Name"]) == name)
+            )
+
+            try:
+                reco_info = json.load(
+                    open(
+                        f"{root}/config/{config}/{name}/{config}_calib/{config}_{name}_energy_calibration.json",
+                        "r",
+                    )
+                )
+                if debug:
+                    output += f"[yellow]***Applying energy calibration from {name}[/yellow]\n"
+
+            except FileNotFoundError:
+                reco_info = json.load(
+                    open(
+                        f"{root}/config/{config}/Marley/{config}_calib/{config}_Marley_energy_calibration.json",
+                        "r",
+                    )
+                )
+                output += f"[yellow]***Applying default energy calibration from Marley[/yellow]\n"
+
+            for energy in ["Reco", "Selected", "Total"]:
+                run["Reco"][f"{energy}Energy"][idx] = (run["Reco"][f"{energy}Energy"][idx] -
+                                                       reco_info[energy.upper()]["INTERSECTION"]) / reco_info[energy.upper()]["ENERGY_AMP"]
+
+    run = remove_branches(
+        run, rm_branches, [], debug=debug)
+    output += f"\tReco energy calibration \t-> Done! ({new_branches})\n"
+    return run, output
+
+
+def compute_opflash_advanced(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the OpFlash variables for the events in the run.
     """
     # New branches
-    new_branches = ["AdjOpFlashMaxPE", "AdjOpFlashNHit", "AdjOpFlashPE", "AdjOpFlashR", "AdjOpFlashRecoY", "AdjOpFlashRecoZ", "AdjOpFlashSignal", "AdjOpFlashRatio", "AdjOpFlashErrorY", "AdjOpFlashErrorZ"]
+    new_branches = ["AdjOpFlashMaxPE", "AdjOpFlashNHit", "AdjOpFlashPE", "AdjOpFlashR", "AdjOpFlashRecoY",
+                    "AdjOpFlashRecoZ", "AdjOpFlashSignal", "AdjOpFlashRatio", "AdjOpFlashErrorY", "AdjOpFlashErrorZ"]
 
-    run["Reco"]["AdjOpFlashNum"] = np.sum(run["Reco"]["AdjOpFlashR"] != 0, axis=1)
+    run["Reco"]["AdjOpFlashNum"] = np.sum(
+        run["Reco"]["AdjOpFlashR"] != 0, axis=1)
     # run["Reco"]["AdjOpFlashR"] = np.where(run["Reco"]["AdjOpFlashR"] == 0, np.nan, run["Reco"]["AdjOpFlashR"])
-    run["Reco"]["AdjOpFlashRatio"] = run["Reco"]["AdjOpFlashMaxPE"]/run["Reco"]["AdjOpFlashPE"]
-    run["Reco"]["AdjOpFlashSignal"] = run["Reco"]["AdjOpFlashNHit"]*run["Reco"]["AdjOpFlashPE"]/run["Reco"]["AdjOpFlashR"]
+    run["Reco"]["AdjOpFlashRatio"] = run["Reco"]["AdjOpFlashMaxPE"] / \
+        run["Reco"]["AdjOpFlashPE"]
+    run["Reco"]["AdjOpFlashSignal"] = run["Reco"]["AdjOpFlashNHit"] * \
+        run["Reco"]["AdjOpFlashPE"]/run["Reco"]["AdjOpFlashR"]
     # Set AdjOpFlashSignal to 0 if it is Nan
-    run["Reco"]["AdjOpFlashSignal"] = np.where(np.isnan(run["Reco"]["AdjOpFlashSignal"]), 0, run["Reco"]["AdjOpFlashSignal"])
+    run["Reco"]["AdjOpFlashSignal"] = np.where(
+        np.isnan(run["Reco"]["AdjOpFlashSignal"]), 0, run["Reco"]["AdjOpFlashSignal"])
     # If AdjOpFlashRatio is 0 set it to Nan
-    run["Reco"]["AdjOpFlashRatio"] = np.where(run["Reco"]["AdjOpFlashRatio"] == 0, np.nan, run["Reco"]["AdjOpFlashRatio"])
-    run["Reco"]["AdjOpFlashErrorY"] = run["Reco"]["AdjOpFlashRecoY"] - reshape_array(run["Reco"]["TNuY"], len(run["Reco"]["AdjOpFlashRecoY"][0]))
-    run["Reco"]["AdjOpFlashErrorZ"] = run["Reco"]["AdjOpFlashRecoZ"] - reshape_array(run["Reco"]["TNuZ"], len(run["Reco"]["AdjOpFlashRecoZ"][0]))
+    run["Reco"]["AdjOpFlashRatio"] = np.where(
+        run["Reco"]["AdjOpFlashRatio"] == 0, np.nan, run["Reco"]["AdjOpFlashRatio"])
+    run["Reco"]["AdjOpFlashErrorY"] = run["Reco"]["AdjOpFlashRecoY"] - \
+        reshape_array(run["Reco"]["TNuY"], len(
+            run["Reco"]["AdjOpFlashRecoY"][0]))
+    run["Reco"]["AdjOpFlashErrorZ"] = run["Reco"]["AdjOpFlashRecoZ"] - \
+        reshape_array(run["Reco"]["TNuZ"], len(
+            run["Reco"]["AdjOpFlashRecoZ"][0]))
 
-    output = f"OpFlash variables computation \t-> Done! ({new_branches})\n"
+    output = f"\tOpFlash variables computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_ophit_basic(run, configs, params={}, rm_branches=False, debug=False):
+def compute_ophit_basic(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the OpFlash variables for the events in the run.
     """
     # Generate repeated arrays of TNuX, TNuY, TNuZ
-    # repeated_x = np.repeat(run["Truth"]["TNuX"], len(run["Truth"]["OpHitX"][0]))
-    repeated_y = np.repeat(run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
-    repeated_z = np.repeat(run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
-    # converted_x = np.reshape(repeated_x, (-1, len(run["Truth"]["OpHitX"][0])))
-    converted_y = np.reshape(repeated_y, (-1, len(run["Truth"]["OpHitY"][0])))
-    converted_z = np.reshape(repeated_z, (-1, len(run["Truth"]["OpHitZ"][0])))    
-    
+    converted_y = reshape_array(
+        run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
+    # repeated_y = np.repeat(run["Truth"]["TNuY"],
+    #                        len(run["Truth"]["OpHitY"][0]))
+    # converted_y = np.reshape(repeated_y, (-1, len(run["Truth"]["OpHitY"][0])))
+    conveterd_z = reshape_array(
+        run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
+    # repeated_z = np.repeat(run["Truth"]["TNuZ"],
+    #                        len(run["Truth"]["OpHitZ"][0]))
+    # converted_z = np.reshape(repeated_z, (-1, len(run["Truth"]["OpHitZ"][0])))
+
     # New branches
     new_branches = ["OpHitR"]
     for branch in new_branches:
-        run["Truth"][branch] = np.zeros((len(run["Truth"]["Event"]),len(run["Truth"]["OpHitT"])),dtype=float)
+        run["Truth"][branch] = np.zeros(
+            (len(run["Truth"]["Event"]), len(run["Truth"]["OpHitT"])), dtype=np.float32)
 
     # Create OpHitR array
-    run["Truth"]["OpHitR"] = np.sqrt(np.power(converted_y-run["Truth"]["OpHitY"],2) + np.power(converted_z-run["Truth"]["OpHitZ"],2),dtype=float)
-    
-    output = f"Basic OpHit variables computation \t-> Done! ({new_branches})\n"
+    run["Truth"]["OpHitR"] = np.sqrt(np.power(
+        converted_y-run["Truth"]["OpHitY"], 2) + np.power(converted_z-run["Truth"]["OpHitZ"], 2), dtype=np.float32)
+
+    output = f"\tBasic OpHit variables computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_ophit_advanced(run, configs, params={}, rm_branches=False, debug=False):
+def compute_ophit_advanced(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the OpFlash variables for the events in the run.
     """
     # Generate repeated arrays of TNuX, TNuY, TNuZ
-    repeated_x = np.repeat(run["Truth"]["TNuX"], len(run["Truth"]["OpHitX"][0]))
-    repeated_y = np.repeat(run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
-    repeated_z = np.repeat(run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
-    converted_x = np.reshape(repeated_x, (-1, len(run["Truth"]["OpHitX"][0])))
-    converted_y = np.reshape(repeated_y, (-1, len(run["Truth"]["OpHitY"][0])))
-    converted_z = np.reshape(repeated_z, (-1, len(run["Truth"]["OpHitZ"][0])))    
-    
+    converted_x = reshape_array(
+        run["Truth"]["TNuX"], len(run["Truth"]["OpHitX"][0]))
+    # repeated_x = np.repeat(run["Truth"]["TNuX"],
+    #                        len(run["Truth"]["OpHitX"][0]))
+    # converted_x = np.reshape(repeated_x, (-1, len(run["Truth"]["OpHitX"][0])))
+    converted_y = reshape_array(
+        run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
+    # repeated_y = np.repeat(run["Truth"]["TNuY"],
+    #                        len(run["Truth"]["OpHitY"][0]))
+    # converted_y = np.reshape(repeated_y, (-1, len(run["Truth"]["OpHitY"][0])))
+    converted_z = reshape_array(
+        run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
+    # repeated_z = np.repeat(run["Truth"]["TNuZ"],
+    #                        len(run["Truth"]["OpHitZ"][0]))
+    # converted_z = np.reshape(repeated_z, (-1, len(run["Truth"]["OpHitZ"][0])))
+
     flash_id_list = np.unique(run["Truth"]["OpHitFlashID"])
     # New branches
-    new_branches = ["OpFlashRefPE","OpFlashResidual","OpFlashTime","OpFlashPur","OpFlashSignal","OpFlashNHit","OpFlashPE"]
+    new_branches = ["OpFlashRefPE", "OpFlashResidual", "OpFlashTime",
+                    "OpFlashPur", "OpFlashSignal", "OpFlashNHit", "OpFlashPE"]
     for branch in new_branches:
-        run["Truth"][branch] = np.zeros((len(run["Truth"]["Event"]),len(flash_id_list)),dtype=float)
+        run["Truth"][branch] = np.zeros(
+            (len(run["Truth"]["Event"]), len(flash_id_list)), dtype=np.float32)
 
     # Make empty array for OpHitResidual
-    run["Truth"]["OpHitResidual"] = np.zeros((len(run["Truth"]["Event"]),len(run["Truth"]["OpHitPE"][0])),dtype=float)
-    
+    run["Truth"]["OpHitResidual"] = np.zeros(
+        (len(run["Truth"]["Event"]), len(run["Truth"]["OpHitPE"][0])), dtype=np.float32)
+
     # Make each entry in the OpFlashID equal to its idx
-    run["Truth"]["OpFlashID"] = np.ones((len(run["Truth"]["Event"]), len(flash_id_list)),dtype=int)
-    run["Truth"]["OpFlashID"] = run["Truth"]["OpFlashID"] * np.arange(len(flash_id_list))
+    run["Truth"]["OpFlashID"] = np.ones(
+        (len(run["Truth"]["Event"]), len(flash_id_list)), dtype=int)
+    run["Truth"]["OpFlashID"] = run["Truth"]["OpFlashID"] * \
+        np.arange(len(flash_id_list))
     # print(run["Truth"]["OpFlashID"])
 
     # Change all nans in run["Truth"]["OpHitPur"] for 0
-    run["Truth"]["OpHitPur"] = np.nan_to_num(run["Truth"]["OpHitPur"],nan=0.0,posinf=0.0,neginf=0.0)
-    run["Truth"]["OpHitDecay"] = np.power(converted_x,2) / (np.power(converted_x,2) + np.power(converted_y - run["Truth"]["OpHitY"],2) + np.power(converted_z - run["Truth"]["OpHitZ"],2))
-    run["Truth"]["OpHitRefPE"] = np.array(run["Truth"]["OpHitPE"] * run["Truth"]["OpHitPur"])
-    
+    run["Truth"]["OpHitPur"] = np.nan_to_num(
+        run["Truth"]["OpHitPur"], nan=0.0, posinf=0.0, neginf=0.0)
+    run["Truth"]["OpHitDecay"] = np.power(converted_x, 2) / (np.power(converted_x, 2) + np.power(
+        converted_y - run["Truth"]["OpHitY"], 2) + np.power(converted_z - run["Truth"]["OpHitZ"], 2))
+    run["Truth"]["OpHitRefPE"] = np.array(
+        run["Truth"]["OpHitPE"] * run["Truth"]["OpHitPur"])
+
     for flash_id in flash_id_list:
         jdx = np.where(run["Truth"]["OpFlashID"] == flash_id)
         flash_id_filter = np.asarray(run["Truth"]["OpHitFlashID"] == flash_id)
         event_id_count = np.sum(flash_id_filter, axis=1)
-        run["Truth"]["OpFlashRefPE"][jdx] = np.sum(run["Truth"]["OpHitRefPE"] * flash_id_filter, axis=1) / event_id_count
-        run["Truth"]["OpHitRefPE"][flash_id_filter] = np.repeat(run["Truth"]["OpFlashRefPE"][jdx], event_id_count)
+        run["Truth"]["OpFlashRefPE"][jdx] = np.sum(
+            run["Truth"]["OpHitRefPE"] * flash_id_filter, axis=1) / event_id_count
+        run["Truth"]["OpHitRefPE"][flash_id_filter] = np.repeat(
+            run["Truth"]["OpFlashRefPE"][jdx], event_id_count)
         run["Truth"]["OpFlashNHit"][jdx] = np.sum(flash_id_filter, axis=1)
-        run["Truth"]["OpFlashPE"][jdx] = np.sum(run["Truth"]["OpHitPE"] * flash_id_filter, axis=1) / event_id_count
-        
-        run["Truth"]["OpFlashResidual"][jdx] = np.mean(np.power((run["Truth"]["OpHitPE"] - run["Truth"]["OpHitRefPE"] * run["Truth"]["OpHitDecay"]) * flash_id_filter ,2), axis=1)/run["Truth"]["OpFlashNHit"][jdx]/run["Truth"]["OpFlashPE"][jdx]
-        run["Truth"]["OpHitResidual"][flash_id_filter] = np.repeat(run["Truth"]["OpFlashResidual"][jdx], event_id_count)
-        run["Truth"]["OpFlashTime"][jdx] = np.sum((run["Truth"]["OpHitT"] * run["Truth"]["OpHitPE"]) * flash_id_filter, axis=1) / np.sum(run["Truth"]["OpHitPE"] * flash_id_filter, axis=1)
-        # run["Truth"]["OpFlashPur"][jdx] = np.sum(run["Truth"]["OpHitPur"][idx] * run["Truth"]["OpHitPE"][idx], axis=1) / np.sum(run["Truth"]["OpHitPE"][idx], axis=1)
-    run["Truth"]["OpFlashSignal"] = (abs(run["Truth"]["OpFlashTime"]) < 5) == True
+        run["Truth"]["OpFlashPE"][jdx] = np.sum(
+            run["Truth"]["OpHitPE"] * flash_id_filter, axis=1) / event_id_count
 
-    output= f"Advanced OpHit variables computation \t-> Done! ({new_branches})\n"
+        run["Truth"]["OpFlashResidual"][jdx] = np.mean(np.power((run["Truth"]["OpHitPE"] - run["Truth"]["OpHitRefPE"] * run["Truth"]
+                                                                 ["OpHitDecay"]) * flash_id_filter, 2), axis=1)/run["Truth"]["OpFlashNHit"][jdx]/run["Truth"]["OpFlashPE"][jdx]
+        run["Truth"]["OpHitResidual"][flash_id_filter] = np.repeat(
+            run["Truth"]["OpFlashResidual"][jdx], event_id_count)
+        run["Truth"]["OpFlashTime"][jdx] = np.sum((run["Truth"]["OpHitT"] * run["Truth"]["OpHitPE"])
+                                                  * flash_id_filter, axis=1) / np.sum(run["Truth"]["OpHitPE"] * flash_id_filter, axis=1)
+        # run["Truth"]["OpFlashPur"][jdx] = np.sum(run["Truth"]["OpHitPur"][idx] * run["Truth"]["OpHitPE"][idx], axis=1) / np.sum(run["Truth"]["OpHitPE"][idx], axis=1)
+    run["Truth"]["OpFlashSignal"] = (
+        abs(run["Truth"]["OpFlashTime"]) < 5) == True
+
+    output = f"\tAdvanced OpHit variables computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_true_drift(run, configs, params={}, rm_branches=False, debug=False):
+def compute_true_drift(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the true drift time of the events in the run.
     """
     # New branches
     new_branches = ["TrueDriftTime", "AdjClTrueDriftTime"]
-    run["Reco"]["TrueDriftTime"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
+    run["Reco"]["TrueDriftTime"] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32)
     run["Reco"]["AdjClTrueDriftTime"] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32
     )
 
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
@@ -939,27 +1228,31 @@ def compute_true_drift(run, configs, params={}, rm_branches=False, debug=False):
             run["Reco"]["AdjClTrueDriftTime"][idx] = abs(
                 run["Reco"]["AdjClMainX"][idx]
             ) * 2 * info["EVENT_TICKS"]/info["DETECTOR_SIZE_X"]
-        
+
         if info["GEOMETRY"] == "vd":
-            run["Reco"]["TrueDriftTime"][idx] = (info["DETECTOR_SIZE_X"] - run["Reco"]["MainVertex"][idx, 0]) * 0.5 * info["EVENT_TICKS"] / info["DETECTOR_SIZE_X"]
-            run["Reco"]["AdjClTrueDriftTime"][idx] = (info["DETECTOR_SIZE_X"] - run["Reco"]["AdjClMainX"][idx]) * 0.5 * info["EVENT_TICKS"] / info["DETECTOR_SIZE_X"]
+            run["Reco"]["TrueDriftTime"][idx] = (
+                info["DETECTOR_SIZE_X"] - run["Reco"]["MainVertex"][idx, 0]) * 0.5 * info["EVENT_TICKS"] / info["DETECTOR_SIZE_X"]
+            run["Reco"]["AdjClTrueDriftTime"][idx] = (
+                info["DETECTOR_SIZE_X"] - run["Reco"]["AdjClMainX"][idx]) * 0.5 * info["EVENT_TICKS"] / info["DETECTOR_SIZE_X"]
 
     # Select all values bigger than 1e6 or smaller than 0 and set them to 0
     run["Reco"]["TrueDriftTime"] = np.where(
-        (run["Reco"]["TrueDriftTime"] > 1e6) | (run["Reco"]["TrueDriftTime"] < 0),
+        (run["Reco"]["TrueDriftTime"] > 1e6) | (
+            run["Reco"]["TrueDriftTime"] < 0),
         0,
         run["Reco"]["TrueDriftTime"],
     )
     run["Reco"]["AdjClTrueDriftTime"] = np.where(
-        (run["Reco"]["AdjClTrueDriftTime"] > 1e6) | (run["Reco"]["AdjClTrueDriftTime"] < 0),
+        (run["Reco"]["AdjClTrueDriftTime"] > 1e6) | (
+            run["Reco"]["AdjClTrueDriftTime"] < 0),
         0,
         run["Reco"]["AdjClTrueDriftTime"],
     )
-    output = f"True drift time computation \t-> Done!\n"
+    output = f"\tTrue drift time computation \t-> Done!\n"
     return run, output
 
 
-def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False):
+def compute_adjcl_basics(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute basic variables for the adjacent clusters
 
@@ -969,7 +1262,7 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
         params: dictionary containing the parameters for the reco functions
         debug: print debug information
     """
-    @numba.njit
+    @ numba.njit
     def count_occurrences(arr, length):
         """
         Count the occurrences of each element in the array.
@@ -981,35 +1274,40 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
         return [np.sum(arr == i) for i in range(length)]
 
     # New branches
+    new_branches = ["AdjClNum", "TotalAdjClCharge", "MaxAdjClCharge",
+                    "MeanAdjClCharge", "MeanAdjClR", "MeanAdjClTime"]
+
+    for branch in new_branches:
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=np.float32)
+
+    new_vector_branches = ["AdjClSameGenNum",
+                           "TotalAdjClSameGenCharge", "MaxAdjClSameGenCharge", "MeanAdjClSameGenCharge"]
+    run["Reco"][new_vector_branches[0]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=int)
+    for branch in new_vector_branches[1:]:
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=np.float32
+        )
+
+    run["Reco"]["AdjClGenNum"] = np.apply_along_axis(
+        count_occurrences,
+        arr=run["Reco"]["AdjClGen"],
+        length=len(run["Reco"]["TruthPart"][0]) + 1,
+        axis=1,
+    )
+
     run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0, axis=1)
-    run["Reco"]["TotalAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"]["MaxAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"]["MeanAdjClCharge"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"]["MeanAdjClR"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    run["Reco"]["MeanAdjClTime"] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-
-    run["Reco"]["AdjClSameGenNum"] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
-    run["Reco"]["TotalAdjClSameGenCharge"] = np.zeros(
-        len(run["Reco"]["Event"]), dtype=float
-    )
-    run["Reco"]["MaxAdjClSameGenCharge"] = np.zeros(
-        len(run["Reco"]["Event"]), dtype=float
-    )
-    run["Reco"]["MeanAdjClSameGenCharge"] = np.zeros(
-        len(run["Reco"]["Event"]), dtype=float
-    )
-
-    run["Reco"]["AdjClGenNum"] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Truth"]["TruthPart"][0]) + 1), dtype=int
-    )
 
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         run["Reco"]["TotalAdjClCharge"][idx] = np.sum(
             run["Reco"]["AdjClCharge"][idx], axis=1
         )
@@ -1019,23 +1317,22 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
         run["Reco"]["MeanAdjClCharge"][idx] = np.mean(
             run["Reco"]["AdjClCharge"][idx], axis=1
         )
-        run["Reco"]["MeanAdjClR"][idx] = np.mean(run["Reco"]["AdjClR"][idx], axis=1)
+        run["Reco"]["MeanAdjClR"][idx] = np.mean(
+            run["Reco"]["AdjClR"][idx], axis=1
+        )
         run["Reco"]["MeanAdjClTime"][idx] = np.mean(
             run["Reco"]["AdjClTime"][idx], axis=1
         )
-        run["Reco"]["AdjClGenNum"][idx] = np.apply_along_axis(
-            count_occurrences,
-            arr=run["Reco"]["AdjClGen"][idx],
-            length=len(run["Reco"]["TruthPart"][idx][0]) + 1,
-            axis=1,
-        )
-        converted_array = reshape_array(run["Reco"]["AdjClGen"][idx], len(run["Reco"]["AdjClGen"][idx][0]))
-        repeated_array = np.repeat(
-            run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0])
-        )
-        converted_array = np.reshape(
-            repeated_array, (-1, len(run["Reco"]["AdjClGen"][idx][0]))
-        )
+        converted_array = reshape_array(
+            run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0]))
+
+        # repeated_array = np.repeat(
+        #     run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0])
+        # )
+        # converted_array = np.reshape(
+        #     repeated_array, (-1, len(run["Reco"]["AdjClGen"][idx][0]))
+        # )
+
         gen_idx = converted_array == run["Reco"]["AdjClGen"][idx]
         run["Reco"]["AdjClSameGenNum"][idx] = np.sum(gen_idx, axis=1)
         run["Reco"]["TotalAdjClSameGenCharge"][idx] = np.sum(
@@ -1049,11 +1346,11 @@ def compute_adjcl_basics(run, configs, params={}, rm_branches=False, debug=False
         )
 
     run = remove_branches(run, rm_branches, [], debug=debug)
-    output = f"AdjCl basic computation \t-> Done!\n"
+    output = f"\tAdjCl basic computation \t-> Done!\n"
     return run, output
 
 
-def compute_adjcl_advanced(run, configs, params={}, rm_branches=False, debug=False):
+def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branches=False, debug=False):
     """
     Compute the energy of the individual adjacent clusters based on the main calibration.
 
@@ -1066,64 +1363,85 @@ def compute_adjcl_advanced(run, configs, params={}, rm_branches=False, debug=Fal
     # New branches
     new_branches = ["TotalAdjClEnergy", "MaxAdjClEnergy"]
     for branch in new_branches:
-        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]), dtype=float)
-    
-    run["Reco"]["AdjCldT"] = np.zeros((len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=float)
-    run["Reco"]["AdjClRelCharge"] = np.zeros((len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=float)
-    run["Reco"]["AdjClChargePerHit"] = np.zeros((len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=float)
-    
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=np.float32)
+
+    run["Reco"]["AdjCldT"] = np.zeros(
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32)
+    run["Reco"]["AdjClRelCharge"] = np.zeros(
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32)
+    run["Reco"]["AdjClChargePerHit"] = np.zeros(
+        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32)
+
     for config in configs:
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        params = get_param_dict(
+            f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
-        params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
         run["Reco"]["MaxAdjClEnergy"][idx] = np.max(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
-        repeated_array_time = np.repeat(
-            run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
-        )
-        repeated_array_nhits = np.repeat(
-            run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHit"][idx][0])
-        )
-        repeated_array_charge = np.repeat(
-            run["Reco"]["Charge"][idx], len(run["Reco"]["AdjClCharge"][idx][0])
-        )
-        converted_array_time = np.reshape(
-            repeated_array_time, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
-        )
-        converted_array_nhits = np.reshape(
-            repeated_array_nhits, (-1, len(run["Reco"]["AdjClNHit"][idx][0]))
-        )
-        converted_array_charge = np.reshape(
-            repeated_array_charge, (-1, len(run["Reco"]["AdjClCharge"][idx][0]))
-        )
-        run["Reco"]["AdjCldT"][idx] = run["Reco"]["AdjClTime"][idx] - converted_array_time
-        run["Reco"]["AdjClRelCharge"] = run["Reco"]["AdjClCharge"][idx] / converted_array_charge
-        run["Reco"]["AdjClChargePerHit"] = run["Reco"]["AdjClCharge"][idx] / run["Reco"]["AdjClNHit"][idx]
+        converted_array_time = reshape_array(
+            run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+        # repeated_array_time = np.repeat(
+        #     run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
+        # )
+        # converted_array_time = np.reshape(
+        #     repeated_array_time, (-1, len(run["Reco"]["AdjClTime"][idx][0]))
+        # )
+        converted_array_nhits = reshape_array(
+            run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHit"][idx][0]))
+        # repeated_array_nhits = np.repeat(
+        #     run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHit"][idx][0])
+        # )
+        # converted_array_nhits = np.reshape(
+        #     repeated_array_nhits, (-1, len(run["Reco"]["AdjClNHit"][idx][0]))
+        # )
+        converted_array_charge = reshape_array(
+            run["Reco"]["Charge"][idx], len(run["Reco"]["AdjClCharge"][idx][0]))
+        # repeated_array_charge = np.repeat(
+        #     run["Reco"]["Charge"][idx], len(run["Reco"]["AdjClCharge"][idx][0])
+        # )
+        # converted_array_charge = np.reshape(
+        #     repeated_array_charge, (-1,
+        #                             len(run["Reco"]["AdjClCharge"][idx][0]))
+        # )
+        run["Reco"]["AdjCldT"][idx] = run["Reco"]["AdjClTime"][idx] - \
+            converted_array_time
+        run["Reco"]["AdjClRelCharge"] = run["Reco"]["AdjClCharge"][idx] / \
+            converted_array_charge
+        run["Reco"]["AdjClChargePerHit"] = run["Reco"]["AdjClCharge"][idx] / \
+            run["Reco"]["AdjClNHit"][idx]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
-    output = f"AdjCl energy computation \t-> Done! ({new_branches})\n"
+    output = f"\tAdjCl energy computation \t-> Done! ({new_branches})\n"
     return run, output
 
 
-def compute_filtered_run(run, configs, params: dict = {}, debug=False):
+def compute_filtered_run(run: dict, configs: dict, params: Optional[dict] = None, debug: bool = False):
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
     """
     new_run = {}
-    if type(params) != dict:
+    if type(params) != dict and params != None:
         rprint(f"[red]Params must be a dictionary![/red]")
+        return run
+
+    if params == None:
+        if debug:
+            rprint("[yellow]No filter applied![/yellow]")
         return run
 
     new_trees = run.keys()
     for tree in new_trees:
-        new_run[tree] = {}  
+        new_run[tree] = {}
         branch_list = list(run[tree].keys())
         idx = np.ones(len(run[tree]["Event"]), dtype=bool)
         filter_output = ""
@@ -1132,14 +1450,17 @@ def compute_filtered_run(run, configs, params: dict = {}, debug=False):
                 continue
 
             if type(param) != tuple or len(param) != 2:
-                rprint(f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
+                rprint(
+                    f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
                 return run
             if type(params[param]) != tuple or len(params[param]) != 2:
-                rprint(f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
+                rprint(
+                    f"[red]ERROR: Filter must be a tuple or list of length 2![/red]")
                 return run
 
             if param[1] not in run[param[0]].keys():
-                rprint(f"[red]ERROR: Branch {param[1]} not found in the run![/red]")
+                rprint(
+                    f"[red]ERROR: Branch {param[1]} not found in the run![/red]")
                 return run
 
             if params[param][0] == "bigger":
@@ -1151,14 +1472,18 @@ def compute_filtered_run(run, configs, params: dict = {}, debug=False):
             elif params[param][0] == "different":
                 idx = idx & (run[param[0]][param[1]] != params[param][1])
             elif params[param][0] == "between":
-                idx = idx & (run[param[0]][param[1]] > params[param][1][0]) & (run[param[0]][param[1]] < params[param][1][1])
+                idx = idx & (run[param[0]][param[1]] > params[param][1][0]) & (
+                    run[param[0]][param[1]] < params[param][1][1])
             elif params[param][0] == "outside":
-                idx = idx & ((run[param[0]][param[1]] < params[param][1][0]) + (run[param[0]][param[1]] > params[param][1][1]))
+                idx = idx & ((run[param[0]][param[1]] < params[param][1]
+                              [0]) + (run[param[0]][param[1]] > params[param][1][1]))
             elif params[param][0] == "contains":
-                idx = idx & np.array([params[param][1] in item for item in run[param[0]][param[1]]])
+                idx = idx & np.array(
+                    [params[param][1] in item for item in run[param[0]][param[1]]])
             if debug:
-                filter_output = filter_output + f"-> {param[1]}: {params[param][0]} {params[param][1]}:\t{np.sum(idx):.1E} ({100*np.sum(idx)/len(run[tree]['Event']):.1f}%) events\n" 
-        
+                filter_output = filter_output + \
+                    f"-> {param[1]}: {params[param][0]} {params[param][1]}:\t{np.sum(idx):.1E} ({100*np.sum(idx)/len(run[tree]['Event']):.1f}%) events\n"
+
         jdx = np.where(idx == True)
         for branch in branch_list:
             try:
@@ -1166,16 +1491,19 @@ def compute_filtered_run(run, configs, params: dict = {}, debug=False):
             except Exception as e:
                 rprint(f"Error filtering {branch}: {e}")
 
-    if filter_output != "": rprint(filter_output)
+    if filter_output != "":
+        rprint(filter_output)
     return new_run
 
 
-def get_param_dict(config_file, in_params, debug=False):
+def get_param_dict(config_file: dict, in_params: Optional[dict] = None, debug: bool = False):
     """
     Get the parameters for the reco workflow from the input files.
     """
     params = json.load(open(config_file, "r"))
     terminal_print = ""
+    if in_params is None:
+        return params
     for param in params.keys():
         try:
             if in_params[param] != None:
@@ -1212,16 +1540,16 @@ def add_filter(filters, labels, this_filter, this_label, cummulative, debug=Fals
 
 
 def compute_solarnuana_filters(
-        run,
-        configs,
-        config,
-        name,
-        gen,
-        filter_list,
-        params={},
-        cummulative=True,
-        debug=False,
-    ):
+    run,
+    configs,
+    config,
+    name,
+    gen,
+    filter_list,
+    params={},
+    cummulative=True,
+    debug=False,
+):
     """
     Compute the filters for the solar workflow computation.
 
@@ -1248,12 +1576,14 @@ def compute_solarnuana_filters(
     version_filter = np.asarray(run["Reco"]["Version"]) == info["VERSION"]
     name_filter = np.asarray(run["Reco"]["Name"]) == name
     gen_filter = np.asarray(run["Reco"]["Generator"]) == gen
-    base_filter = (geo_filter) * (version_filter) * (name_filter) * (gen_filter)
+    base_filter = (geo_filter) * (version_filter) * \
+        (name_filter) * (gen_filter)
 
     labels.append("All")
     filters.append(base_filter)
 
-    params = get_param_dict(f"{root}/config/{config}/{config}_config.json", params, debug=debug)
+    params = get_param_dict(
+        f"{root}/config/{config}/{config}_config.json", params, debug=debug)
     for this_filter in filter_list:
         if this_filter == "Primary":
             primary_filter = run["Reco"]["Primary"] == True
@@ -1381,7 +1711,7 @@ def compute_solarnuana_filters(
     return filters, labels
 
 
-def remove_branches(run, remove, branches, tree:str="Reco", debug=False):
+def remove_branches(run, remove, branches, tree: str = "Reco", debug=False):
     """
     Remove branches from the run dictionary
 
@@ -1400,13 +1730,13 @@ def remove_branches(run, remove, branches, tree:str="Reco", debug=False):
             print(f"-> Removing branches: {branches}")
         for branch in branches:
             run[tree].pop(branch)
-            gc.collect()
     else:
         pass
 
     return run
 
-@numba.njit
+
+@ numba.njit
 def generate_index(
     true_event,
     true_flag,
@@ -1426,7 +1756,7 @@ def generate_index(
     true_counts = np.zeros(len(true_event), dtype=np.int32)
     true_nhits = np.zeros(len(true_event), dtype=np.int32)
     reco_result = np.zeros(len(reco_event), dtype=np.int32)
-    
+
     end_j = 0
     for i in range(1, len(reco_event)):
         start_j = reco_result[i - 1]
@@ -1455,6 +1785,9 @@ def generate_index(
     return true_result, true_match, true_counts, true_nhits, reco_result
 
 
-def reshape_array(array, length):
+def reshape_array(array: np.array, length: int, debug: bool = False):
+    """
+    Reshape the array to the desired length.
+    """
     repeated_array = np.repeat(array, length)
     return np.reshape(repeated_array, (-1, length))
