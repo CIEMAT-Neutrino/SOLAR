@@ -8,10 +8,10 @@ import dask.dataframe as dd
 import plotly.graph_objects as go
 import plotly.express as px
 
+from typing import Optional
 from dask import delayed
 from rich import print as rprint
 from .io_functions import (
-    print_colored,
     get_branches2use,
     get_bkg_config,
     get_simple_name,
@@ -22,7 +22,8 @@ from .plt_functions import format_coustom_plotly
 
 root = get_project_root()
 
-def explode(df, explode, keep=None, debug=False):
+
+def explode(df: pd.DataFrame, explode: list[str], keep: Optional[list] = None, debug: bool = False) -> pd.DataFrame:
     """
     Function to explode a list of columns of a dataframe.
 
@@ -40,13 +41,16 @@ def explode(df, explode, keep=None, debug=False):
         old_keep = keep.copy()
         for col in old_keep:
             if col not in df.columns:
-                print_colored(f"Column {col} not found in the dataframe", "WARNING")
+                rprint(
+                    f"[yellow]Column {col} not found in the dataframe[/yellow]")
                 keep.remove(col)
+
     # make a copy of explode to avoid modifying the original list
     old_explode = explode.copy()
     for col in old_explode:
         if col not in df.columns:
-            print_colored(f"Column {col} not found in the dataframe", "WARNING")
+            rprint(
+                f"[yellow]Column {col} not found in the dataframe[/yellow]")
             explode.remove(col)
 
     try:
@@ -54,9 +58,10 @@ def explode(df, explode, keep=None, debug=False):
         if keep is not None:
             # Make a copy of the dataframe but only with the columns to keep + the columns to explode
             result_df = df[keep + explode].explode(explode)
+
         else:
             result_df = df.explode(explode)
-    
+
     except ValueError:
         # Convert Pandas DataFrame to Dask DataFrame but keep the columns in keep + explode
         ddf = dd.from_pandas(df[keep + explode], npartitions=2)
@@ -82,29 +87,34 @@ def explode(df, explode, keep=None, debug=False):
         )
 
     if debug:
-        print_colored("Dataframe exploded!", "SUCCESS")
+        rprint("[green]Dataframe exploded![/green]")
     return result_df
 
 
-def npy2df(run, tree, branches=[], debug=False):
+def npy2df(run: dict, tree: Optional[str] = None, branches: Optional[list[str]] = None, debug: bool = False) -> pd.DataFrame:
     """
     Function to convert the dictionary of the TTree into a pandas Dataframe.
 
     Args:
         run (dict): Dictionary with the data to save (delete the keys that you don't want to save or set Force = False to save only the new ones)
-        tree (list(str)): Name of the tree to convert to dataframe.
+        tree (str): Name of the tree to convert to dataframe.
         branches (list(str)): List of branches to convert to dataframe.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         df_dict (dict(pandas.DataFrame)): Dataframe dict with the data of the TTree.
     """
-    if tree not in run.keys():
+    if tree is None:
+        rprint(f"[yellow]Tree not defined. Returning df from root.[/yellow]")
+        tree = "Data"
+        run = {tree: run}
+
+    elif tree not in run.keys():
         rprint(f"[red]Tree {tree} not found in the dictionary[/red]")
         raise KeyError
 
     df = pd.DataFrame()
-    if branches == []:
+    if branches is None:
         branches = run[tree].keys()
     for branch in branches:
         try:
@@ -120,11 +130,15 @@ def npy2df(run, tree, branches=[], debug=False):
             continue
 
     if debug:
-        rprint(df.groupby(["Geometry", "Version", "Name"])["Event"].count())
+        try:
+            rprint(df.groupby(["Geometry", "Version", "Name"])[
+                "Event"].count())
+        except KeyError:
+            rprint(df.describe())
     return df
 
 
-def dict2df(run, debug=False):
+def dict2df(run: dict, debug: bool = False) -> list[pd.DataFrame]:
     """
     Function to convert the dictionary of the TTree into a list of pandas Dataframes of len = len(branches)
     i.e. df_list = [df_truth, df_reco, ...]
@@ -148,15 +162,16 @@ def dict2df(run, debug=False):
             except AttributeError:
                 df[key] = run[branch][key]
             if debug:
-                print_colored(" --- Dataframe for key %s created\n" % key, "DEBUG")
-                print_colored(df[key] + "\n", "DEBUG")
+                rprint(
+                    f"[magenta] --- Dataframe for key {key} created\n[/magenta]")
+                rprint(f"{df[key]} \n")
         df_list.append(df)
 
-    print_colored("DataFrame generated from dict!", "SUCCESS")
+    rprint(f"[green]DataFrame generated from dict![/green]")
     return df_list
 
 
-def merge_df(df1, df2, label1, label2, debug=False):
+def merge_df(df1: pd.DataFrame, df2: pd.DataFrame, label1: str, label2: str, debug: bool = False) -> pd.DataFrame:
     """
     Function to merge two dataframes in one adding an extra column to indicate its origin.
     Also maintain the columns that are not in both df an include NaNs in the missing columns.
@@ -176,13 +191,11 @@ def merge_df(df1, df2, label1, label2, debug=False):
     df = pd.concat([df1, df2], ignore_index=True)  # Merge the two dataframes
 
     if debug:
-        print_colored(
-            " --- New dataframe from %s, %s created" % (label1, label2), "DEBUG"
-        )
+        rprint(f" --- New dataframe from {label1}, {label2} created")
     return df
 
 
-def reorder_df(df, info, bkg_dict, color_dict, debug=False):
+def reorder_df(df: pd.DataFrame, info: dict, bkg_dict: dict, color_dict: dict, debug: bool = False) -> tuple[pd.DataFrame, list]:
     """
     Reorder the dataframe according to the background dictionary.
 
@@ -210,11 +223,14 @@ def reorder_df(df, info, bkg_dict, color_dict, debug=False):
         color_list.append(color_dict[list(bkg_dict.values()).index(bkg)])
 
     if debug:
-        print_colored("Reordered dataframe with columns: %s" % order, "INFO")
+        rprint(f"[cyan]Reordered dataframe with columns: {order}[/cyan]")
     return df, color_list
 
 
-def generate_truth_dataframe(run, info, fullname=True, debug=False):
+def generate_truth_dataframe(run: dict, info: dict, fullname: bool = True, debug: bool = False) -> pd.DataFrame:
+    """
+    Generate a dataframe with the truth information of the run.
+    """
     bkg_dict, color_dict = get_bkg_config(info)
     if fullname:
         columns = list(bkg_dict.values())[1:]
@@ -223,7 +239,8 @@ def generate_truth_dataframe(run, info, fullname=True, debug=False):
         columns = [name_dict[name] for name in list(bkg_dict.values())[1:]]
 
     truth_gen_df = pd.DataFrame(
-        np.asarray(run["Truth"]["TruthPart"])[:, 0 : len(list(bkg_dict.values())[1:])],
+        np.asarray(run["Truth"]["TruthPart"])[
+            :, 0: len(list(bkg_dict.values())[1:])],
         columns=columns,
     )
     truth_gen_df["Geometry"] = run["Truth"]["Geometry"]
@@ -240,7 +257,8 @@ def generate_truth_dataframe(run, info, fullname=True, debug=False):
 
 def calculate_mean_truth_df(truth_gen_df, debug=False):
     mean_truth_df = (
-        truth_gen_df.drop(columns=["Geometry", "Version"]).groupby("Name").mean()
+        truth_gen_df.drop(
+            columns=["Geometry", "Version"]).groupby("Name").mean()
     )
     mean_truth_df = mean_truth_df.replace(0, np.nan).mean()
     return mean_truth_df
@@ -282,11 +300,13 @@ def calculate_pileup_df_dict(run, configs, factor=1, debug=False):
     pileup_df_dict = {}
     color_dict = {}
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info, debug=debug)
         truth_gen_df = generate_truth_dataframe(run, info, debug=debug)
         df = calculate_mean_truth_df(truth_gen_df, debug=debug)
-        df, color_list = reorder_df(df, info, bkg_dict, color_dict, debug=debug)
+        df, color_list = reorder_df(
+            df, info, bkg_dict, color_dict, debug=debug)
         color_dict[config] = color_list
         pileup_df = calculate_pileup_df(df, info, factor=factor, debug=debug)
         pileup_df_dict[config] = pileup_df
@@ -314,7 +334,8 @@ def generate_pileup_matrix(run, configs, factor, save=False, show=False, debug=F
         )
 
         if save:
-            fig.write_image(f"{root}/images/bkg/{config}_PileUp_Area.png", scale=1.5)
+            fig.write_image(
+                f"{root}/images/bkg/{config}_PileUp_Area.png", scale=1.5)
         if show:
             fig.show()
     return fig
@@ -327,7 +348,8 @@ def generate_background_distribution(
         rows=len(configs), cols=1, shared_yaxes=False, shared_xaxes=False
     )
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
         bkg_dict, color_dict = get_bkg_config(info)
         truth_gen_df = generate_truth_dataframe(run, info, fullname=fullname)
         mean_truth_df = calculate_mean_truth_df(truth_gen_df)
@@ -343,7 +365,8 @@ def generate_background_distribution(
     if save:
         name = truth_gen_df["Name"].values[0]
         version = info["VERSION"]
-        save_figure(fig,f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution", rm=save)
+        save_figure(
+            fig, f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution", rm=save)
     if show:
         fig.show()
     return fig
@@ -361,14 +384,15 @@ def generate_pileup_distribution(fig, pileup_df_dict, color_dict, debug=False):
         df = pd.DataFrame({"Counts": y_values}, index=x_values)["Counts"]
         if debug:
             rprint(df)
-        fig = plot_generator_distribution(fig, df, color_list, idx=(1, 1), debug=debug)
+        fig = plot_generator_distribution(
+            fig, df, color_list, idx=(1, 1), debug=debug)
 
     fig = format_generator_distribution(fig, info, debug=debug)
     return fig
 
 
 def plot_generator_distribution(
-    fig, df, color_list, idx=(1, 1), add_values=True, debug=False
+    fig, df: pd.DataFrame, color_list: list, idx: tuple[int, int] = (1, 1), add_values: bool = True, debug: bool = False
 ):
     if debug:
         rprint(df)
@@ -394,7 +418,7 @@ def plot_generator_distribution(
     return fig
 
 
-def format_generator_distribution(fig, info, debug=False):
+def format_generator_distribution(fig, info: dict, debug: bool = False):
     fig = format_coustom_plotly(
         fig,
         title="Background generation %s" % (info["VERSION"]),
