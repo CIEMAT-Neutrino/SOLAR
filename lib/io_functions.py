@@ -1,16 +1,24 @@
-import uproot, os, copy, stat, json
+import uproot
+import os
+import copy
+import stat
+import json
 import numpy as np
 import pandas as pd
 import awkward as ak
+import plotly
 import plotly.express as px
 import plotly.graph_objs as go
+
+from typing import Optional
 from rich import print as rprint
 from src.utils import get_project_root
 from matplotlib import pyplot as plt
 
 root = get_project_root()
 
-def save_figure(fig,path,rm=False,debug=False)->None:
+
+def save_figure(fig, path: str, rm: bool = False, output: str = "png", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -21,34 +29,36 @@ def save_figure(fig,path,rm=False,debug=False)->None:
     """
     folder_path = "/".join(path.split("/")[:-1])
     try:
-        #Make the directory recursively
+        # Make the directory recursively
         os.makedirs(folder_path)
     except FileExistsError:
         if debug:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
-    
+
     # Check if figure already exists
-    if os.path.isfile(f"{path}.png"):
+    if os.path.isfile(f"{path}.{output}"):
         if rm:
-            os.remove(f"{path}.png")
+            os.remove(f"{path}.{output}")
             if debug:
-                rprint(f"Removed existing figure in: {path}.png")
+                rprint(f"Removed existing figure in: {path}.{output}")
         else:
-            print_colored("File already exists. Skipping...", "WARNING")
+            if debug:
+                rprint("File already exists. Skipping...", "WARNING")
             return 0
-    
+
     # Check type of figure to select the correct saving method
-    if type(fig) == go._figure.Figure:
-        fig.write_image(f"{path}.png")
+    if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
+        fig.write_image(f"{path}.{output}")
         if debug:
-            rprint(f"Saved figure in: {path}.png")
-    if type(fig) == plt.Figure:
-        fig.savefig(f"{path}.png")
+            rprint(f"Saved figure in: {path}.{output}")
+
+    elif type(fig) == plt.Figure:
+        fig.savefig(f"{path}.{output}")
         if debug:
-            rprint(f"Saved figure in: {path}.png")
+            rprint(f"Saved figure in: {path}.{output}")
     else:
-        rprint("The input figure is not a plotly.graph_objs._figure.Figure object")
-        # fig.savefig(path + ".png")
+        rprint("The input figure is not a known type: ", type(fig))
+        # fig.savefig(path + ".{output}")
 
 
 def print_colored(string, color, bold=False, italic=False, debug=False):
@@ -119,7 +129,8 @@ def root2npy(root_info, user_input, trim=False, debug=False):
     """
     path = root_info["Path"]
     name = root_info["Name"]
-    rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
+    rprint("Converting from: " +
+           root_info["Path"] + root_info["Name"] + ".root")
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"]:
             if root_info["TreeNames"][tree].lower() == "test":
@@ -135,17 +146,20 @@ def root2npy(root_info, user_input, trim=False, debug=False):
 
             for branch in root_info[tree]:
                 if branch not in done_root_info:
-                    done_root_info.append(branch)  # To avoid repeating branches
+                    # To avoid repeating branches
+                    done_root_info.append(branch)
                 print_colored(
                     "\n" + tree + " ---> " + out_folder + ": " + str(branch),
                     "SUCCESS",
                 )
 
                 # if "Map" not in branch:
-                this_array = f[root_info["Folder"] + "/" + tree][branch].array()
+                this_array = f[root_info["Folder"] +
+                               "/" + tree][branch].array()
                 if trim != False and debug:
                     print("Selected trimming value: ", trim)
-                resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
+                resized_array = resize_subarrays(
+                    this_array, 0, trim=trim, debug=debug)
                 save2pnfs(
                     path + name + "/" + out_folder + "/" + branch + ".npy",
                     user_input,
@@ -193,7 +207,8 @@ def resize_subarrays(array, value, trim=False, debug=False):
     except ValueError:
         check_expand = True
         if debug:
-            rprint(f"[yellow]-> Array needs resizing for numpy conversion![/yellow]")
+            rprint(
+                f"[yellow]-> Array needs resizing for numpy conversion![/yellow]")
 
     if check_expand:
         expand = False
@@ -201,7 +216,8 @@ def resize_subarrays(array, value, trim=False, debug=False):
             max_len = max(map(len, array))
             mean_len = sum(map(len, array)) / len(array)
             if debug:
-                rprint(f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]")
+                rprint(
+                    f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]")
 
             if max_len != mean_len:
                 expand = True
@@ -214,13 +230,15 @@ def resize_subarrays(array, value, trim=False, debug=False):
             expand = True
 
         if expand:
-            tot_array = resize_subarrays_fixed(array, value, max_len, debug=debug)
+            tot_array = resize_subarrays_fixed(
+                array, value, max_len, debug=debug)
         else:
             tot_array = array
     else:
         tot_array = np.asarray(array)
 
-    if debug: rprint(f"[green]-> Returning array as type: {type(tot_array)}[/green]")
+    if debug:
+        rprint(f"[green]-> Returning array as type: {type(tot_array)}[/green]")
     return np.asarray(tot_array)
 
 
@@ -246,7 +264,8 @@ def resize_subarrays_fixed(array, value, max_len, debug=False):
             for this_array in array
         ]
         if debug:
-            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
+            rprint(
+                f"[green]-> Successfully resized array to {max_len}[/green]")
     except AttributeError:
         tot_array = [
             this_array[:max_len]
@@ -255,7 +274,8 @@ def resize_subarrays_fixed(array, value, max_len, debug=False):
             for this_array in array
         ]
         if debug:
-            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
+            rprint(
+                f"[green]-> Successfully resized array to {max_len}[/green]")
     except TypeError:
         tot_array = array
         if debug:
@@ -294,6 +314,7 @@ def array2list(array, debug=False):
     if debug:
         rprint(f"--- Array lenght is {len(array)} ---")
     return array
+
 
 def get_tree_info(root_file, debug=False):
     """
@@ -349,7 +370,8 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
         default = input("Continue with default processing? (y/n): ")
         if default.lower() in ["y", "yes"]:
             if len(trees) == 2:
-                rename_default = input("Use default tree names (Truth - Reco)? (y/n): ")
+                rename_default = input(
+                    "Use default tree names (Truth - Reco)? (y/n): ")
                 if rename_default.lower() in ["y", "yes"]:
                     out_folder = ["Truth", "Reco"]
                     input_loop = False
@@ -420,17 +442,19 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
                 branches.append(branch)  # save the branch name in a list
 
         # Check if file already exists
-        save2pnfs(f"{path}{name}/{out_folder[i]}/Branches.npy", user_input, branches, user_input["debug"])        
+        save2pnfs(f"{path}{name}/{out_folder[i]}/Branches.npy",
+                  user_input, branches, user_input["debug"])
         output[tree] = np.asarray(branches, dtype=object)
         output["TreeNames"][tree] = out_folder[i]
-        save2pnfs(f"{path}{name}/TTrees.npy", user_input, output, user_input["debug"])
+        save2pnfs(f"{path}{name}/TTrees.npy", user_input,
+                  output, user_input["debug"])
 
     if debug:
         rprint(output)
     return output
 
 
-def save2pnfs(filename:str, user_input:dict, data, debug:bool) -> None:
+def save2pnfs(filename: str, user_input: dict, data, debug: bool) -> None:
     """
     Save the data in a .npy file to pnfs (dCache) storage.
 
@@ -441,19 +465,22 @@ def save2pnfs(filename:str, user_input:dict, data, debug:bool) -> None:
         debug (bool): if True, the debug mode is activated (default: False)
     """
     # Check data filetype
-    if debug: rprint(type(data))
+    if debug:
+        rprint(type(data))
     if type(data) != np.ndarray:
         data = np.asarray(data)
 
     if os.path.isfile(filename):
         if user_input["rewrite"]:
             # Delete the file
-            os.remove(filename)                
-            np.save(filename, data)  # save the branches of each tree in a .npy file
+            os.remove(filename)
+            # save the branches of each tree in a .npy file
+            np.save(filename, data)
         else:
             rprint("File already exists. Skipping...")
     else:
-        np.save(filename, data)  # save the branches of each tree in a .npy file
+        # save the branches of each tree in a .npy file
+        np.save(filename, data)
 
 
 def get_branches(name: str, path: str, debug=False):
@@ -470,7 +497,8 @@ def get_branches(name: str, path: str, debug=False):
         branch_dict (dict): dictionary with the branches of the root file
     """
     branch_dict = dict()
-    tree_info = np.load(path + name + "/" + "TTrees.npy", allow_pickle=True).item()
+    tree_info = np.load(path + name + "/" + "TTrees.npy",
+                        allow_pickle=True).item()
 
     for tree in tree_info["TreeNames"].keys():
         branch_dict[tree_info["TreeNames"][tree]] = tree_info[tree]
@@ -494,7 +522,8 @@ def get_branches2use(run, debug=False):
     ]
     if debug:
         print_colored(
-            "\nFounded keys " + str(branches) + " to construct the dictionaries.",
+            "\nFounded keys " + str(branches) +
+            " to construct the dictionaries.",
             "DEBUG",
         )
     return branches
@@ -547,7 +576,8 @@ def remove_processed_branches(root_info, debug=False):
         root_info[tree] = np.delete(root_info[tree], remove_idx)
         if debug:
             print_colored(
-                "New branch list to process for Tree %s: %s" % (tree, root_info[tree]),
+                "New branch list to process for Tree %s: %s" % (
+                    tree, root_info[tree]),
                 color="SUCCESS",
             )
     return root_info
@@ -558,7 +588,7 @@ def load_multi(
     tree_labels: list = ["Config", "Truth", "Reco"],
     load_all: bool = False,
     preset=None,
-    branches={},
+    branches: Optional[dict] = None,
     generator_swap=False,
     debug=False,
 ):
@@ -580,7 +610,8 @@ def load_multi(
     out = ""
     run = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
         path = info["PATH"]
         name = info["NAME"]
         geo = info["GEOMETRY"]
@@ -624,7 +655,8 @@ def load_multi(
                                     allow_pickle=True,
                                 )
                             )
-                            run[tree][identifiyer_label] = np.asarray(run[tree][identifiyer_label], dtype=str)
+                            run[tree][identifiyer_label] = np.asarray(
+                                run[tree][identifiyer_label], dtype=str)
                     else:
                         run[tree]["Name"] = np.concatenate(
                             (
@@ -681,7 +713,8 @@ def load_multi(
                                     run[tree]["GeneratorLabel"] = label_branch
                                 else:
                                     run[tree]["GeneratorLabel"] = np.concatenate(
-                                        (run[tree]["GeneratorLabel"], label_branch), axis=0
+                                        (run[tree]["GeneratorLabel"],
+                                         label_branch), axis=0
                                     )
                             if generator_swap == True:
                                 if key == "Generator":
@@ -717,7 +750,8 @@ def load_multi(
                                     )
                                 except ValueError:
                                     run[tree][key] = (
-                                        run[tree][key].tolist() + branch.tolist()
+                                        run[tree][key].tolist() +
+                                        branch.tolist()
                                     )
                                     run[tree][key] = resize_subarrays(
                                         run[tree][key], 0, trim=False, debug=debug
@@ -728,14 +762,17 @@ def load_multi(
                                     + f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
                                 )
                         except FileNotFoundError:
-                            out = out + f"\n[red]File {key} not found![/red]"
+                            if debug:
+                                out = out + \
+                                    f"\n[red]File {key} not found![/red]"
 
     if debug:
         for tree in branches_dict.keys():
             try:
-                out = out + f"\nKeys extracted from the reco tree:\n"
+                out = out + f"\nKeys extracted from the {tree} tree:\n"
                 out = out + str(run[tree].keys())
-                out = out + "\n-> Total reco clusters: %i\n" % len(run[tree]["Event"])
+                out = out + \
+                    "\n-> Total reco clusters: %i\n" % len(run[tree]["Event"])
             except KeyError:
                 out = out + "- No reco tree found!\n"
 
@@ -821,7 +858,8 @@ def get_bkg_config(info, debug=False):
         color_dict[idx] = color_ass[bkg]
 
     if debug:
-        print_colored("Loaded background dictionary: %s" % str(bkg_dict), "INFO")
+        print_colored("Loaded background dictionary: %s" %
+                      str(bkg_dict), "INFO")
     return bkg_dict, color_dict
 
 
@@ -831,7 +869,8 @@ def get_gen_label(configs, debug=False):
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
@@ -935,7 +974,8 @@ def get_bkg_weights(info, names, debug=False):
 def get_gen_weights(configs, names, debug=False):
     weights_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"]
         name_list = names[config]
@@ -974,7 +1014,8 @@ def get_simple_name(name_list, debug=False):
             simple_name[name] = name
 
     if debug:
-        print_colored("Loaded simple name dictionary: %s" % str(simple_name), "INFO")
+        print_colored("Loaded simple name dictionary: %s" %
+                      str(simple_name), "INFO")
     return simple_name
 
 
