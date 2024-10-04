@@ -38,7 +38,11 @@
         "BOOLS": {}
     },
     "Reco": {
-        "VECTORS": {},
+        "VECTORS": {
+            "TMarleyE": 1,
+            "TMarleyPDG": 1,
+            "TMarleyMother": 1
+        },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,

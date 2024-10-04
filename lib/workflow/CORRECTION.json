@@ -20,13 +20,18 @@
     },
     "Reco": {
         "VECTORS": {
+            "TruthPart": 1,
             "TMarleyE": 1,
             "TMarleyK": 1,
             "TMarleyPDG": 1,
             "TMarleyMother": 1,
-            "AdjClNHit": 1,
+            "MainVertex": 1,
+            "MainParentVertex": 1,
+            "AdjClMainPDG": 1,
             "AdjClCharge": 1,
-            "AdjClTime": 1
+            "AdjClTime": 1,
+            "AdjClGen": 1,
+            "AdjClR": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -43,6 +48,7 @@
             "AdjOpFlashNum": 0
         },
         "DOUBLES": {
+            "Purity": 1,
             "TNuE": 1,
             "TNuX": 1,
             "TNuY": 1,
@@ -55,12 +61,7 @@
             "VisEnergy": 0,
             "Time": 1,
             "Charge": 1,
-            "ElectronCharge": 0,
-            "Correction": 0,
-            "CorrectedCharge": 0,
-            "CorrectionFactor": 0,
-            "CorrectedChargePerMeV": 0,
-            "Energy": 0
+            "ElectronCharge": 0
         },
         "STRINGS": {},
         "BOOLS": {

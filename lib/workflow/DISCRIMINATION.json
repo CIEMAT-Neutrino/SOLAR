@@ -6,6 +6,10 @@
         "BOOLS": {}
     },
     "Truth": {
+        "VECTORS": {
+            "TruthPart": 1,
+            "TMarleyMother": 1
+        },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
@@ -15,6 +19,18 @@
         "BOOLS": {}
     },
     "Reco": {
+        "VECTORS": {
+            "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyK": 1,
+            "TMarleyPDG": 1,
+            "TMarleyMother": 1,
+            "AdjClNHit": 1,
+            "AdjClCharge": 1,
+            "AdjClTime": 1,
+            "AdjClGen": 1,
+            "AdjClR": 1
+        },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
@@ -36,7 +52,10 @@
             "Time": 1,
             "Charge": 1,
             "ElectronCharge": 0,
-            "Correction": 1,
+            "Correction": 0,
+            "CorrectedCharge": 0,
+            "CorrectionFactor": 0,
+            "CorrectedChargePerMeV": 0,
             "Energy": 0,
             "TotalEnergy": 0,
             "SelectedEnergy": 0,
