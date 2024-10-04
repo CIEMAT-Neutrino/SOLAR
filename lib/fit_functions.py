@@ -15,6 +15,13 @@ energy_edges, energy_centers, ebin = get_default_energies(root)
 nhits = get_default_nhits(root)
 
 
+def polinomial(x, *p, debug=False):
+    """
+    Polynomial function.
+    """
+    return np.polyval(p, x)
+
+
 def peak(x, coefficients, debug=False):
     """
     Peak finder function.
@@ -86,15 +93,6 @@ def linear(x, coefficients, debug=False):
     m = coefficients[0]
     n = coefficients[1]
     return m * np.asarray(x) + n
-
-
-def polynomial(x, coefficients, debug=False):
-    """
-    Polynomial function.
-    """
-    if debug:
-        print("Polynomial coefficients: ", coefficients)
-    return np.polyval(coefficients, x)
 
 
 def fit_hist2d(x, y, z, fit={"func": "polynomial"}, debug=False):
@@ -259,18 +257,22 @@ def generate_bins(acc, x, debug=False):
     if type(acc) == int:
         try:
             if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
-                x_array = np.linspace(np.min(x), np.max(x), acc + 1)
+                x_array = np.linspace(np.min(x), np.max(x), acc)
             elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
-                x_array = np.arange(np.min(x), np.max(x) + 1, acc)
+                x_array = np.arange(np.min(x), np.max(x) + 1, acc)-1
             else:
-                rprint(f"[red]ERROR: x type {type(x[0])} not supported![/red]")
+                if debug:
+                    rprint(
+                        f"[red]ERROR: x type {type(x[0])} not supported![/red]")
                 return None
 
         except ValueError:
-            rprint("[red]ERROR: x might be empty![/red]")
+            if debug:
+                rprint("[red]ERROR: x might be empty![/red]")
             return None
         except IndexError:
-            rprint("[red]ERROR: x might be empty![/red]")
+            if debug:
+                rprint("[red]ERROR: x might be empty![/red]")
             return None
 
     elif type(acc) == list:
@@ -306,18 +308,23 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
     x_bins = []
     labels = []
     if scan_y is None:
-        x = remove_outliers((x), per=per, debug=debug)
-        x_array = generate_bins(acc, x, debug=debug)
+        if len(x) > 0:
+            x = remove_nans_and_infs(x, debug=debug)
+            x = remove_outliers(x, per=per, debug=debug)
+            x_array = generate_bins(acc, x, debug=debug)
 
-        this_h, this_x_bins = np.histogram(x, bins=x_array, density=density)
-        if norm:
-            this_h = this_h / (np.sum(this_h))
+            h, this_x_bins = np.histogram(
+                x, bins=x_array, density=density)
+            if norm:
+                h = h / (np.sum(h))
 
-        x_bins.append((this_x_bins[1:] + this_x_bins[:-1]) / 2)
-        h.append(this_h)
-        labels.append("Spectrum")
+            x_bins = (this_x_bins[1:] + this_x_bins[:-1]) / 2
+            return x_bins, h, "Spectrum"
 
-        return x_bins, h, labels
+        else:
+            if debug:
+                rprint("[red]ERROR: Returning empty array![/red]")
+            return None, None, None
 
     else:
         # Check if scan_y is the same length as x
@@ -326,7 +333,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
             print("x: ", len(x), "\nscan_y: ", len(scan_y))
             raise ValueError
 
-        x, scan_y = remove_nans_and_infs(x, scan_y, debug=debug)
+        x, scan_y = remove_nans_and_infs((x, scan_y), debug=debug)
         x, scan_y = remove_outliers((x, scan_y), per=per, debug=debug)
         x_array = generate_bins(acc[0], x, debug=debug)
         y_array = generate_bins(acc[1], scan_y, debug=debug)
@@ -378,7 +385,7 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
         x (array): x-axis array.
         y (array): y-axis array.
     """
-    x, y = remove_nans_and_infs(x, y, debug=debug)
+    x, y = remove_nans_and_infs((x, y), debug=debug)
     x, y = remove_outliers((x, y), per=per, debug=debug)
 
     mean_variable_array = []
@@ -408,11 +415,12 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
                 mean_variable_array.append(np.mean(y[value_filter]))
                 std_variable_array.append(np.std(y[value_filter]))
         else:
-            rprint("[red]ERROR: Returning empty array![/red]")
+            if debug:
+                rprint("[red]ERROR: Returning empty array![/red]")
             return [0], [0], [0]
 
     array = np.array(mean_variable_array)
-    values, array = remove_nans_and_infs(values, array, debug=debug)
+    values, array = remove_nans_and_infs((values, array), debug=debug)
     array_error = np.array(std_variable_array)
 
     if norm:
@@ -423,7 +431,7 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
 
 
 def fit_hist1d(
-    x, y, fit={"func": "polynomial", "trimm": 5, "print": True}, debug=False
+    x, y, fit={"func": "polynomial", "trimm": (5, 5), "print": True}, debug=False
 ):
     """
     Given a 1D histogram, fit a function to the histogram.
@@ -432,15 +440,15 @@ def fit_hist1d(
         x (array): x-axis array.
         y (array): y-axis array.
         func (str): function to fit to histogram (exponential, polynomial, etc.).
-        trimm (int): number of bins to remove from the beginning and end of the histogram.
+        trimm (tuple[int]): number of bins to remove from the beginning and end of the histogram.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         func (function): function to fit to histogram.
     """
     # Remove x values at the beginning and end of the array
-    x = x[fit["trimm"]: -fit["trimm"]]
-    y = y[fit["trimm"]: -fit["trimm"]]
+    x = x[fit["trimm"][0]: -fit["trimm"][1]]
+    y = y[fit["trimm"][0]: -fit["trimm"][1]]
 
     if fit["func"] == "slope1":
         if fit["print"] and debug:
@@ -526,7 +534,7 @@ def get_hist2d(x, y, per: tuple = (1, 99), acc=50, norm=True, density=False, log
         z (array): 2D histogram array.
     """
     # Compute percentile for x & y array determination using a numpy fucntion
-    x, y = remove_nans_and_infs(x, y, debug=debug)
+    x, y = remove_nans_and_infs((x, y), debug=debug)
     x, y = remove_outliers((x, y), per=per, debug=debug)
 
     # Compute the number of bins using the Freedman-Diaconis rule
@@ -566,7 +574,7 @@ def get_hist2d_fit(
     fit: dict = {
         "color": "grey",
         "opacity": 1,
-        "trimm": 5,
+        "trimm": (5, 5),
         "spec_type": "max",
         "func": "linear",
         "threshold": 0.4,
@@ -641,7 +649,7 @@ def get_hist2d_fit(
 
     if fit["print"]:
         debug_text = [
-            "\nFit parameter %s: %f +/- %f" % (labels[i], popt[i], perr[i])
+            "\nFit %s: %.2f +/- %.2f" % (labels[i], popt[i], perr[i])
             for i in range(len(labels))
         ]
         rprint("[cyan]INFO: " + "".join(debug_text) + "[/cyan]")
@@ -684,7 +692,7 @@ def get_hist1d_fit(
     idx,
     per=[1, 99],
     acc=50,
-    fit={"color": "grey", "trimm": 5, "func": "gauss"},
+    fit={"color": "grey", "trimm": (5, 5), "func": "gauss"},
     debug=False,
 ):
     """
@@ -698,7 +706,7 @@ def get_hist1d_fit(
             row (int): row of subplot.
             col (int): column of subplot.
         func (str): function to fit to histogram (exponential, polynomial, etc.).
-        trimm (int): number of bins to remove from the beginning and end of the histogram.
+        trimm (tuple[int]): number of bins to remove from the beginning and end of the histogram.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
@@ -743,7 +751,7 @@ def get_hist1d_fit(
 
         if fit["print"]:
             debug_text = [
-                "\nFit parameter %s: %f +/- %f" % (labels[i], popt[i], perr[i])
+                "\nFit %s: %.2f +/- %.2f" % (labels[i], popt[i], perr[i])
                 for i in range(len(labels))
             ]
             rprint("[cyan]INFO: " + "".join(debug_text) + "[/cyan]")
@@ -834,7 +842,7 @@ def get_hist1d_diff(x, y, offset: float = 0, norm: bool = True, debug=False) -> 
     return intercept, counts
 
 
-def remove_nans_and_infs(x, y, debug=False) -> tuple:
+def remove_nans_and_infs(data, debug=False) -> tuple:
     """
     Given an x and y array, remove the values that correspond to inf or nan values.
 
@@ -847,35 +855,67 @@ def remove_nans_and_infs(x, y, debug=False) -> tuple:
         x (array): x-axis array.
         y (array): y-axis array.
     """
-
-    initial_len = len(x)
-    x = np.asarray(x)
-    y = np.asarray(y)
-
     if debug:
-        rprint(f"[cyan]INFO: Removing outliers from x and y arrays...[/cyan]")
+        rprint(
+            f"[cyan]INFO: Removing nans and infs from data of size {len(data)}...[/cyan]")
+    if len(data) > 2:
+        x = data
+        initial_len = len(x)
+        x = np.asarray(x)
 
-    if np.any(np.isinf(x)) or np.any(np.isnan(x)):
-        x = x[np.where(np.isinf(x) == False)]
-        y = y[np.where(np.isinf(x) == False)]
-        x = x[np.where(np.isnan(x) == False)]
-        y = y[np.where(np.isnan(x) == False)]
-        reduced_len = len(x)
         if debug:
-            rprint(
-                f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+            rprint(f"[cyan]INFO: Removing outliers from x array...[/cyan]")
 
-    if np.any(np.isinf(y)) or np.any(np.isnan(y)):
-        y = y[np.where(np.isinf(y) == False)]
-        x = x[np.where(np.isinf(y) == False)]
-        y = y[np.where(np.isnan(y) == False)]
-        x = x[np.where(np.isnan(y) == False)]
-        reduced_len = len(y)
+        if np.any(np.isinf(x)) or np.any(np.isnan(x)):
+            x = x[np.where(np.isinf(x) == False)]
+            x = x[np.where(np.isnan(x) == False)]
+            reduced_len = len(x)
+            if debug:
+                rprint(
+                    f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+
+        return x
+
+    elif len(data) == 2 and len(data[0]) == len(data[1]):
+        x, y = data
+        initial_len = len(x)
+        x = np.asarray(x)
+        y = np.asarray(y)
+
         if debug:
-            rprint(
-                f"[yellow]WARNING: y contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+            rprint(f"[cyan]INFO: Removing outliers from x and y arrays...[/cyan]")
 
-    return x, y
+        if np.any(np.isinf(x)) or np.any(np.isnan(x)):
+            x = x[np.where(np.isinf(x) == False)]
+            y = y[np.where(np.isinf(x) == False)]
+            x = x[np.where(np.isnan(x) == False)]
+            y = y[np.where(np.isnan(x) == False)]
+            reduced_len = len(x)
+            if debug:
+                rprint(
+                    f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+
+        if np.any(np.isinf(y)) or np.any(np.isnan(y)):
+            y = y[np.where(np.isinf(y) == False)]
+            x = x[np.where(np.isinf(y) == False)]
+            y = y[np.where(np.isnan(y) == False)]
+            x = x[np.where(np.isnan(y) == False)]
+            reduced_len = len(y)
+            if debug:
+                rprint(
+                    f"[yellow]WARNING: y contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+
+        return x, y
+
+    elif len(data) == 0:
+        if debug:
+            rprint("[yellow]WARNING: Size 0 data![/yellow]")
+        return data
+
+    else:
+        if debug:
+            rprint("[red]ERROR: Could not remove outliers![/red]")
+        return data
 
 
 def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> tuple:
@@ -891,7 +931,7 @@ def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> t
         x (array): x-axis array.
         y (array): y-axis array.
     """
-    if len(data) == 1:
+    if len(data) > 2:
         x = data
         try:
             lims = np.percentile(x, per, axis=0, keepdims=False)
@@ -908,11 +948,12 @@ def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> t
             x = np.asarray(reduced_x)
 
         except:
-            rprint("[red]ERROR: Could not remove outliers![/red]")
+            if debug:
+                rprint("[red]ERROR: Could not remove outliers![/red]")
 
         return x
 
-    elif len(data) == 2:
+    elif len(data) == 2 and len(data[0]) == len(data[1]):
         x, y = data
         try:
             lims = np.percentile([x, y], per, axis=1, keepdims=False)
@@ -934,6 +975,12 @@ def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> t
             x, y = np.asarray(reduced_x), np.asarray(reduced_y)
 
         except:
-            rprint("[red]ERROR: Could not remove outliers![/red]")
+            if debug:
+                rprint("[red]ERROR: Could not remove outliers![/red]")
 
         return x, y
+
+    else:
+        if debug:
+            rprint("[red]ERROR: Could not remove outliers![/red]")
+        return data
