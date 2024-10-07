@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 root = get_project_root()
 
 
-def save_figure(fig, path: str, rm: bool = False, output: str = "png", debug: bool = False) -> None:
+def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, file: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -27,20 +27,31 @@ def save_figure(fig, path: str, rm: bool = False, output: str = "png", debug: bo
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    folder_path = "/".join(path.split("/")[:-1])
+    if config is None:
+        save_path = path
+        filename = f"{file}.{output}"
+    else:
+        if name is None:
+            save_path = f"{path}/{config}/"
+            filename = f"{config}_{file}.{output}"
+        else:
+            save_path = f"{path}/{config}/{name}/"
+            filename = f"{config}_{name}_{file}.{output}"
     try:
         # Make the directory recursively
-        os.makedirs(folder_path)
+        os.makedirs(f"{save_path}")
     except FileExistsError:
         if debug:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
 
     # Check if figure already exists
-    if os.path.isfile(f"{path}.{output}"):
+    if os.path.isfile(f"{save_path}/{filename}"):
         if rm:
-            os.remove(f"{path}.{output}")
+            os.remove(
+                f"{save_path}/{filename}")
             if debug:
-                rprint(f"Removed existing figure in: {path}.{output}")
+                rprint(
+                    f"Removed existing figure in: {save_path}/{filename}")
         else:
             if debug:
                 rprint("File already exists. Skipping...", "WARNING")
@@ -48,14 +59,17 @@ def save_figure(fig, path: str, rm: bool = False, output: str = "png", debug: bo
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
-        fig.write_image(f"{path}.{output}")
+        fig.write_image(
+            f"{save_path}/{filename}")
         if debug:
-            rprint(f"Saved figure in: {path}.{output}")
+            rprint(
+                f"Saved figure in: {save_path}/{filename}")
 
     elif type(fig) == plt.Figure:
-        fig.savefig(f"{path}.{output}")
+        fig.savefig(f"{save_path}/{filename}")
         if debug:
-            rprint(f"Saved figure in: {path}.{output}")
+            rprint(
+                f"Saved figure in: {save_path}/{filename}")
     else:
         rprint("The input figure is not a known type: ", type(fig))
         # fig.savefig(path + ".{output}")
@@ -772,9 +786,9 @@ def load_multi(
                 out = out + f"\nKeys extracted from the {tree} tree:\n"
                 out = out + str(run[tree].keys())
                 out = out + \
-                    "\n-> Total reco clusters: %i\n" % len(run[tree]["Event"])
+                    f"\n-> # {tree} entries: %i\n" % len(run[tree]["Event"])
             except KeyError:
-                out = out + "- No reco tree found!\n"
+                out = out + f"- No {tree} tree found!\n"
 
     rprint(out)
     return run
@@ -852,7 +866,7 @@ def get_bkg_config(info, debug=False):
     f = json.load(open(f"{root}/lib/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
 
-    color_ass = get_bkg_color(bkg_list)
+    color_ass = get_gen_color(bkg_list)
     for idx, bkg in enumerate(bkg_list):
         bkg_dict[idx] = bkg
         color_dict[idx] = color_ass[bkg]
@@ -863,7 +877,7 @@ def get_bkg_config(info, debug=False):
     return bkg_dict, color_dict
 
 
-def get_gen_label(configs, debug=False):
+def get_gen_label(configs: dict[str, list[str]], debug: bool = False) -> dict:
     """
     Get the generator label from configuration.
     """
@@ -898,7 +912,7 @@ def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=Fal
     return truth_values, reco_values
 
 
-def get_bkg_color(name_list, debug=False):
+def get_gen_color(name_list, debug=False):
     """
     Get the color for each background according to its "simple" name.
 
