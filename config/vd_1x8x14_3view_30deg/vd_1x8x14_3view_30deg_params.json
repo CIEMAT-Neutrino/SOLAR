@@ -25,5 +25,6 @@
     "MAX_DRIFT_FACTOR": 1,
     "MAX_ENERGY_PER_HIT": 3.5,
     "MIN_ENERGY_PER_HIT": 0,
-    "FIDUTIAL_FACTOR": 0.05
+    "FIDUTIAL_FACTOR": 0.05,
+    "NORM_TO_NUE": false
 }
