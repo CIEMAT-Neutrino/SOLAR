@@ -255,7 +255,7 @@ def generate_truth_dataframe(run: dict, info: dict, fullname: bool = True, debug
     return truth_gen_df
 
 
-def calculate_mean_truth_df(truth_gen_df, debug=False):
+def calculate_mean_truth_df(truth_gen_df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
     mean_truth_df = (
         truth_gen_df.drop(
             columns=["Geometry", "Version"]).groupby("Name").mean()
@@ -264,7 +264,7 @@ def calculate_mean_truth_df(truth_gen_df, debug=False):
     return mean_truth_df
 
 
-def calculate_pileup_df(mean_truth_df, info, factor=1, debug=False):
+def calculate_pileup_df(mean_truth_df: pd.DataFrame, info: dict, factor: float = 1, debug: bool = False) -> pd.DataFrame:
     mean_truth_df = mean_truth_df / info["TIMEWINDOW"]
     timewindow = (
         factor
@@ -296,7 +296,7 @@ def calculate_pileup_df(mean_truth_df, info, factor=1, debug=False):
     return pileup_df
 
 
-def calculate_pileup_df_dict(run, configs, factor=1, debug=False):
+def calculate_pileup_df_dict(run: dict[dict], configs: dict[str, list[str]], factor: float = 1, debug: bool = False):
     pileup_df_dict = {}
     color_dict = {}
     for idx, config in enumerate(configs):
