@@ -115,6 +115,8 @@ def compute_reco_workflow(
             terminal_output += output
 
     elif workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        trees = ["Reco"]
+        clusters = [""]
         if workflow == "ANALYSIS":
             run, output = compute_main_variables(
                 run, configs, params, rm_branches=rm_branches, debug=debug
@@ -123,22 +125,25 @@ def compute_reco_workflow(
                 run, configs, params, rm_branches=rm_branches, debug=debug
             )
             terminal_output += output
-        if workflow == "CORRECTION":
+        if workflow == "CORRECTION" or workflow == "CALIBRATION":
+            trees = ["Truth", "Reco"]
             run, output = compute_adjcl_basics(
                 run, configs, params, rm_branches=rm_branches, debug=debug
             )
-            run, output = compute_cluster_charge(
+            run, output = compute_electron_cluster(
                 run, configs, params, rm_branches=rm_branches, debug=debug
             )
             terminal_output += output
         if workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
             run, output = compute_particle_energies(
-                run, configs, params, trees=["Reco"], rm_branches=rm_branches, debug=debug
+                run, configs, params, trees=trees, rm_branches=rm_branches, debug=debug
             )
             terminal_output += output
         if workflow in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+            if workflow == "CORRECTION" or workflow == "CALIBRATION":
+                clusters.append("Electron")
             run, output = compute_cluster_energy(
-                run, configs, params, rm_branches=rm_branches, debug=debug
+                run, configs, params, clusters, rm_branches=rm_branches, debug=debug
             )
             terminal_output += output
         if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
@@ -248,6 +253,9 @@ def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], para
     """
     Compute the true efficiency of the events in the run.
     """
+    output = ""
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "NHits", "Charge", "Generator"]}
     # New branches
     new_branches = ["RecoIndex", "RecoMatch",
                     "ClCount", "HitCount", "TrueIndex"]
@@ -299,6 +307,8 @@ def compute_marley_directions(run, configs, params={}, trees=["Truth", "Reco"], 
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyEnd", "TMarleyDirection"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "MTrackEnd", "MTrackStart", "MTrackDirection"]}
     new_branches = ["TMarleyTheta", "TMarleyPhi", "TMarleyDirectionX",
                     "TMarleyDirectionY", "TMarleyDirectionZ", "TMarleyDirectionMod"]
     for tree in trees:
@@ -339,6 +349,8 @@ def compute_particle_directions(run: dict, configs: dict, params: Optional[dict]
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyEnd", "TMarleyDirection"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "MTrackEnd", "MTrackStart", "MTrackDirection"]}
     new_branches = ["MTrackTheta", "MTrackPhi", "MTrackDirectionX",
                     "MTrackDirectionY", "MTrackDirectionZ", "MTrackDirectionMod"]
     for tree in trees:
@@ -375,6 +387,8 @@ def compute_particle_directions(run: dict, configs: dict, params: Optional[dict]
 
 
 def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TNuE", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyK"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "TNuE", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyK"]}
     if params is None:
         params = {"NORM_TO_NUE": False}
     for tree in trees:
@@ -437,11 +451,13 @@ def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=[
     return run, output
 
 
-def compute_particle_energies(run, configs, params: Optional[dict] = {"NORM_TO_NUE", False}, trees: list[str] = ["Truth", "Reco"], rm_branches: bool = False, debug: bool = False):
+def compute_particle_energies(run, configs, params: Optional[dict] = None, trees: list[str] = ["Truth", "Reco"], rm_branches: bool = False, debug: bool = False):
     """
     This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
     """
     output = ""
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE"]}
     particles_pdg = {"Electron": 11, "Gamma": 22,
                      "Neutron": 2112, "Neutrino": 12, "Proton": 2212}
     particles_mass = {particle: values for particle, values in zip(particles_pdg.keys(
@@ -718,7 +734,7 @@ def compute_cluter_drift(
     return run, output
 
 
-def compute_cluster_charge(
+def compute_electron_cluster(
     run,
     configs: dict[str, list[str]],
     params: Optional[dict] = None,
@@ -767,6 +783,7 @@ def compute_cluster_energy(
     run: dict,
     configs: dict,
     params: Optional[dict] = None,
+    clusters: list[str] = [""],
     rm_branches: bool = False,
     output: Optional[str] = None,
     debug: bool = False,
@@ -778,8 +795,11 @@ def compute_cluster_energy(
         return a*np.exp(-b*x)+c/(1+np.exp(-d*x))
 
     # New branches
-    new_branches = ["Correction",
-                    "CorrectedCharge", "CorrectionFactor", "Energy"]
+    new_branches = ["Correction", "CorrectionFactor"]
+    for cluster in clusters:
+        new_branches.append(f"Corrected{cluster}Charge")
+        new_branches.append(f"{cluster}Energy")
+
     for branch in new_branches:
         run["Reco"][branch] = np.zeros(
             len(run["Reco"]["Event"]), dtype=np.float32)
@@ -835,14 +855,21 @@ def compute_cluster_energy(
                        [random_idx]) / drift_popt[1]
             )
 
-        run["Reco"]["CorrectedCharge"][idx] = run["Reco"]["Charge"][idx] * \
-            run["Reco"]["Correction"][idx]
-
         run["Reco"]["CorrectionFactor"][idx] = calibration_func(
             run["Reco"]["NHits"][idx], *corr_popt)
 
-        run["Reco"]["Energy"][idx] = run["Reco"]["CorrectedCharge"][idx] / \
-            run["Reco"]["CorrectionFactor"][idx]
+        for cluster in clusters:
+            # run["Reco"]["CorrectedCharge"][idx] = run["Reco"]["Charge"][idx] * \
+            #     run["Reco"]["Correction"][idx]
+
+            run["Reco"][f"Corrected{cluster}Charge"][idx] = run["Reco"][f"{cluster}Charge"][idx] * \
+                run["Reco"]["Correction"][idx]
+
+            # run["Reco"]["Energy"][idx] = run["Reco"]["CorrectedCharge"][idx] / \
+            #     run["Reco"]["CorrectionFactor"][idx]
+
+            run["Reco"][f"{cluster}Energy"][idx] = run["Reco"][f"Corrected{cluster}Charge"][idx] / \
+                run["Reco"]["CorrectionFactor"][idx]
 
         run["Reco"]["AdjClCorrectedCharge"][idx] = run["Reco"]["AdjClCharge"][idx] * \
             run["Reco"]["AdjClCorrection"][idx]
@@ -952,14 +979,22 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             )
 
             # Save the trained model to a file so it can be used later using pickle
-            if name != "Marley":
-                name = "wbkg"
-            with open(f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl", 'rb') as model_file:
+            default_sample = "Marley"
+            try:
+                path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
+                open(path, "r")
+                rprint(f"[cyan]Loading model for {name}[/cyan]")
+            except FileNotFoundError:
+                rprint(
+                    f"[yellow]WARNING: Model file not found for {name}. Defaulting to Marley![/yellow]")
+                path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
+
+            with open(path, 'rb') as model_file:
                 rf_classifier = pickle.load(model_file)
 
             discriminant_info = json.load(
                 open(
-                    f"{root}/config/{config}/{name}/{config}_calib/{config}_discriminant_calibration.json",
+                    f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_discriminant_calibration.json",
                     "r",
                 )
             )
