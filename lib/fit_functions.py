@@ -15,6 +15,17 @@ energy_edges, energy_centers, ebin = get_default_energies(root)
 nhits = get_default_nhits(root)
 
 
+def resolution(x, p0, p1, p2, b):
+    """
+    Resolution function.
+    """
+    residuals = np.sqrt(np.power(p2, 2) + np.power(p1 /
+                        np.sqrt(x-b), 2) + np.power(p0 / (x-b), 2))
+    residuals[np.isnan(residuals)] = 0
+    residuals[np.isinf(residuals)] = 0
+    return residuals
+
+
 def polinomial(x, *p, debug=False):
     """
     Polynomial function.
@@ -369,7 +380,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
         return x_bins, h, labels
 
 
-def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, acc=100, debug=False):
+def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm: bool = True, acc=100, debug: bool = False) -> tuple:
     """
     Given an x array, generate a 1D histogram.
 
@@ -399,11 +410,14 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
         values = energy_centers
 
     elif variable == "nhits":
+        values = []
         for nhit in nhits:
             nhit_filter = np.where(x == nhit)
-            mean_variable_array.append(np.mean(y[nhit_filter]))
-            std_variable_array.append(np.std(y[nhit_filter]))
-        values = nhits
+            if len(nhit_filter) > 0:
+                print(nhits)
+                values.append(nhit)
+                mean_variable_array.append(np.mean(y[nhit_filter]))
+                std_variable_array.append(np.std(y[nhit_filter]))
 
     else:
         values = generate_bins(acc, x, debug=debug)
@@ -424,8 +438,8 @@ def get_variable_scan(x, y, variable="energy", per: tuple = (1, 99), norm=True, 
     array_error = np.array(std_variable_array)
 
     if norm:
-        array_error = array_error / np.max(array)
         array = array / np.max(array)
+        array_error = array_error / np.max(array)
 
     return values, array, array_error
 
@@ -664,7 +678,8 @@ def plot_hist2d_fit(
             x=x,
             y=func(x, *popt),
             mode="lines",
-            marker=dict(color=fit["color"], opacity=fit["opacity"]),
+            marker=dict(color=fit["color"],
+                        opacity=fit["opacity"]),
             name="Fit",
         ),
         row=idx[0],
