@@ -21,15 +21,11 @@ config = user_input["config_file"].split("/")[-1].split("_config")[0]
 configs = {config: config + "_config"}
 names = {config: user_input["root_file"]}
 
-truth_labels, reco_labels = get_workflow_branches(
-    workflow="ANALYSIS", debug=user_input["debug"]
-)
 run = load_multi(
     names,
     configs,
     load_all=False,
-    preset="",
-    branches={"Truth": truth_labels, "Reco": reco_labels},
+    preset="ANALYSIS",
     debug=user_input["debug"],
 )
 

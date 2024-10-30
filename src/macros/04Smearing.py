@@ -49,7 +49,7 @@ for idx,energy_bin in enumerate(energy_centers):
             "Flux":flux,
             "FluxB8":fluxb8,
             "FluxHEP":fluxhep,
-            "RecoEnergy":energy_centers,
+            "SolarEnergy":energy_centers,
         }
     )
 
@@ -102,11 +102,11 @@ print_colored("-> Saved images to ../images/calibration/%s_calibration/%s_smeari
 if user_input["show"]: fig.show()
 
 df = pd.DataFrame(list_hist)
-this_df = explode(df,["Flux","Hist","RecoEnergy"])
+this_df = explode(df,["Flux","Hist","SolarEnergy"])
 this_df["TrueEnergy"] = this_df["TrueEnergy"].astype(float)
 print(this_df.groupby("Version")["Flux"].sum())
 fig=px.bar(this_df,
-    x="RecoEnergy",
+    x="SolarEnergy",
     y="Flux",
     log_y=False,
     color="TrueEnergy",

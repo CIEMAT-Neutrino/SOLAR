@@ -1,10 +1,10 @@
 # ln -s /pc/choozdsk01/palomare/DUNE/SOLAR/data/ .
 
 # Load function libraries and set up the environment
+from lib.__init__ import *
 import sys
 
 sys.path.insert(0, "../")
-from lib.__init__ import *
 
 np.seterr(divide="ignore", invalid="ignore")
 plt.rcParams.update({"font.size": 15})
@@ -24,20 +24,19 @@ config = user_input["config_file"].split("/")[-1].split("_config")[0]
 configs = {config: config + "_config"}
 names = {config: user_input["root_file"]}
 
-truth_labels, reco_labels = get_workflow_branches(workflow="CALIBRATION", debug=False)
 run = load_multi(
     names,
     configs,
     load_all=False,
-    preset="",
-    branches={"Truth": truth_labels, "Reco": reco_labels},
+    preset="CALIBRATION",
     debug=False,
 )
 
 # Load analysis configuration
 analysis_info = read_input_file(
     "analysis",
-    INTEGERS=["RECO_ENERGY_RANGE", "RECO_ENERGY_BINS", "NADIR_RANGE", "NADIR_BINS"],
+    INTEGERS=["RECO_ENERGY_RANGE", "RECO_ENERGY_BINS",
+              "NADIR_RANGE", "NADIR_BINS"],
     debug=False,
 )
 energy_edges = np.linspace(
@@ -54,7 +53,8 @@ run = compute_reco_workflow(run, configs, workflow="CALIBRATION", debug=True)
 # Filter the data for calibration
 max_energy = 20
 acc = 50
-info = json.load(open("../config/" + f"{config}/{config}_config" + ".json", "r"))
+info = json.load(
+    open("../config/" + f"{config}/{config}_config" + ".json", "r"))
 total_energy_filter = run["Reco"]["TNuE"] < max_energy * 1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] > 0.9
 geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
@@ -108,7 +108,8 @@ plt.close()
 run = compute_cluster_energy(
     run,
     configs,
-    params={"DEFAULT_ENERGY_TIME": "Time", "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime"},
+    params={"DEFAULT_ENERGY_TIME": "Time",
+            "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime"},
     debug=user_input["debug"],
 )
 
@@ -170,7 +171,8 @@ fig = format_coustom_plotly(fig, fontsize=18)
 if not os.path.exists("../images/calibration/%s_calibration/" % config):
     os.makedirs("../images/calibration/%s_calibration/" % config)
 fig.write_image(
-    "../images/calibration/%s_calibration/%s_calibration.png" % (config, config),
+    "../images/calibration/%s_calibration/%s_calibration.png" % (
+        config, config),
     width=2400,
     height=1080,
 )

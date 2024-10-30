@@ -74,7 +74,7 @@ data = {
     "MaxAdjClEnergy": np.zeros(tree.GetEntries(), dtype=float),
     "TotalAdjClEnergy": np.zeros(tree.GetEntries(), dtype=float),
     "TotalEnergy": np.zeros(tree.GetEntries(), dtype=float),
-    "RecoEnergy": np.zeros(tree.GetEntries(), dtype=float),
+    "SolarEnergy": np.zeros(tree.GetEntries(), dtype=float),
 }
 
 
@@ -200,9 +200,9 @@ for i in track(range(tree.GetEntries()), description="Computing data..."):
             data["MaxAdjClEnergy"][i] = adj_cl_energy
         data["TotalAdjClEnergy"][i] += adj_cl_energy
     data["TotalEnergy"][i] = data["TotalAdjClEnergy"][i] + data["Energy"][i] + 1.9
-    if data["RecoEnergy"][i] > 1.5:
+    if data["SolarEnergy"][i] > 1.5:
         data["Energy"][i] * calib_info["ENERGY_AMP"][0] + calib_info["INTERSECTION"][0]
-    if data["RecoEnergy"][i] < 1.5:
+    if data["SolarEnergy"][i] < 1.5:
         (
             data["Energy"][i] * calib_info["ENERGY_AMP"][0]
             + calib_info["INTERSECTION"][0]

@@ -24,15 +24,11 @@ config = user_input["config_file"].split("/")[-1].split("_config")[0]
 configs = {config: config + "_config"}
 names = {config: user_input["root_file"]}
 
-truth_labels, reco_labels = get_workflow_branches(
-    workflow="ANALYSIS", debug=user_input["debug"]
-)
 run = load_multi(
     names,
     configs,
     load_all=False,
-    preset="",
-    branches={"Truth": truth_labels, "Reco": reco_labels},
+    preset="SMEARING",
     debug=user_input["debug"],
 )
 
@@ -108,7 +104,7 @@ for idx, energy_bin in enumerate(energy_centers):
             "Flux": flux,
             "FluxB8": fluxb8,
             "FluxHEP": fluxhep,
-            "RecoEnergy": energy_centers,
+            "SolarEnergy": energy_centers,
         }
     )
 
@@ -214,12 +210,12 @@ print_colored(
 # fig.show()
 
 df = pd.DataFrame(list_hist)
-this_df = explode(df, ["Flux", "Hist", "RecoEnergy"])
+this_df = explode(df, ["Flux", "Hist", "SolarEnergy"])
 this_df["TrueEnergy"] = this_df["TrueEnergy"].astype(float)
 print(this_df.groupby("Version")["Flux"].sum())
 fig = px.bar(
     this_df,
-    x="RecoEnergy",
+    x="SolarEnergy",
     y="Flux",
     log_y=False,
     color="TrueEnergy",

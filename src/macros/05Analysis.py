@@ -1,14 +1,3 @@
-import sys, json
-
-sys.path.insert(0, "../")
-import ROOT
-
-import numpy as np
-import pandas as pd
-import plotly.express as px
-
-from ROOT import TFile, TTree
-
 from lib import (
     compute_solarnuana_filters,
     compute_solar_spectrum,
@@ -22,8 +11,18 @@ from lib import (
     compute_root_workflow,
     explode,
     get_simple_name,
-    get_bkg_color,
+    get_gen_color,
 )
+from ROOT import TFile, TTree
+import plotly.express as px
+import pandas as pd
+import numpy as np
+import ROOT
+import sys
+import json
+
+sys.path.insert(0, "../")
+
 
 np.seterr(divide="ignore", invalid="ignore")
 
@@ -80,11 +79,13 @@ for jdx, name in enumerate(user_input["root_file"]):
     # Get the total number of events for this file
     if "wbkg" not in user_input["root_file"]:
         int_time = count_truth_df[name] * info["TIMEWINDOW"]
-        print("Total number of events for", name, "is", str(count_truth_df[name]))
+        print("Total number of events for", name,
+              "is", str(count_truth_df[name]))
     else:
         print(count_truth_df)
         int_time = count_truth_df["Marley"].values[0] * info["TIMEWINDOW"]
-        print("Total number of events for", name, "is", str(count_truth_df["Marley"]))
+        print("Total number of events for", name,
+              "is", str(count_truth_df["Marley"]))
     # Start generator loop
     for kdx, gen in enumerate(gen_list):
         filters = compute_solarnuana_filters(
@@ -139,7 +140,7 @@ fig = px.bar(
     facet_row_spacing=0.1,
     color="GenLabel",
     color_discrete_sequence=pd.Series(this_plot_df["GenLabel"].unique()).map(
-        get_bkg_color(this_plot_df["GenLabel"].unique())
+        get_gen_color(this_plot_df["GenLabel"].unique())
     ),
     barmode="overlay",
 )

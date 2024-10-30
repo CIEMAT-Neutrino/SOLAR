@@ -26,8 +26,8 @@ bottom_func = lambda x: bottom_popt[0]*x + bottom_popt[1]
 
 # Compute reco energy
 idx = data["TotalAdjClEnergy"] > 1.5
-data["RecoEnergy"][idx] = top_func(data["Energy"][idx])
-data["RecoEnergy"][~idx] = bottom_func(data["Energy"][~idx])
+data["SolarEnergy"][idx] = top_func(data["Energy"][idx])
+data["SolarEnergy"][~idx] = bottom_func(data["Energy"][~idx])
 
 reco_df  = npy2df(data, "", debug=user_input["debug"])
 this_df = reco_df[(reco_df["NeutronP"] == 0) & (reco_df["Primary"] == data_filter["primary"]) & (reco_df["TNuE"] < data_filter["max_energy"])]
