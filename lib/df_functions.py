@@ -3,7 +3,6 @@ from src.utils import get_project_root
 import json
 import pandas as pd
 import numpy as np
-import itertools
 import dask.dataframe as dd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -11,14 +10,14 @@ import plotly.express as px
 from typing import Optional
 from dask import delayed
 from rich import print as rprint
+
+from plotly.subplots import make_subplots
+from .plt_functions import format_coustom_plotly
 from .io_functions import (
     get_branches2use,
     get_bkg_config,
-    get_simple_name,
-    save_figure,
+    save_figure
 )
-from plotly.subplots import make_subplots
-from .plt_functions import format_coustom_plotly
 
 root = get_project_root()
 
