@@ -256,7 +256,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
     return np.asarray(tot_array)
 
 
-def resize_subarrays_fixed(array, value, max_len, debug=False):
+def resize_subarrays_fixed(array, value, max_len, debug: bool = False):
     """
     Resize the arrays so that the have the same lenght and numpy can handle them
     The arrays with len < size are filled with 0 until they have selected size
@@ -497,7 +497,7 @@ def save2pnfs(filename: str, user_input: dict, data, debug: bool) -> None:
         np.save(filename, data)
 
 
-def get_branches(name: str, path: str, debug=False):
+def get_branches(name: str, path: str, debug: bool = False):
     """
     Function which returns a dictionary with the following structure:
     \n {"YourName_Tree1":[BRANCH_LIST], "YourName_Tree2":[BRANCH_LIST]}
@@ -519,6 +519,7 @@ def get_branches(name: str, path: str, debug=False):
 
     if debug:
         rprint(branch_dict)
+
     return branch_dict
 
 
@@ -576,9 +577,8 @@ def remove_processed_branches(root_info, debug=False):
     """
     path = root_info["Path"] + root_info["Name"] + "/"
     for tree in root_info["TreeNames"]:
-        # print(root_info[tree])
-        dir_list = os.listdir(path + root_info["TreeNames"][tree] + "/")
         remove_idx = []
+        dir_list = os.listdir(path + root_info["TreeNames"][tree] + "/")
         for branch in dir_list:
             for i in range(len(root_info[tree])):
                 if branch.split(".")[0] == root_info[tree][i]:
@@ -601,11 +601,11 @@ def load_multi(
     configs: dict,
     tree_labels: list = ["Config", "Truth", "Reco"],
     load_all: bool = False,
-    preset=None,
-    branches: Optional[dict] = None,
-    generator_swap=False,
-    debug=False,
-):
+    preset: Optional[str] = None,
+    branches: Optional[dict[str, list[str]]] = None,
+    generator_swap: bool = False,
+    debug: bool = False,
+) -> dict:
     """
     Load multiple files with different configurations and merge them into a single dictionary
 
@@ -621,177 +621,160 @@ def load_multi(
     Returns:
         run (dict): dictionary with the loaded data
     """
-    out = ""
+    output = ""
     run = dict()
+    ref_branch = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
     for idx, config in enumerate(configs):
         info = json.load(
             open(f"{root}/config/{config}/{config}_config.json", "r"))
+
         path = info["PATH"]
         name = info["NAME"]
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
-        filepath = f"{root}{path}{name}"
+        filepath = f"{path}{name}"
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
         for jdx, name in enumerate(configs[config]):
-            if load_all == True:
+            if load_all:
                 branches_dict = get_branches(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
-            elif preset != None:
-                tree_branches = get_workflow_branches(
-                    tree_list=tree_labels, workflow=preset, debug=False
-                )  # Get PRESET branches
-                # branches_dict = {"Truth": truth_labels, "Reco": reco_labels}
-                branches_dict = {
-                    tree_labels[i]: tree_branches[i] for i in range(len(tree_labels))
-                }
                 if debug:
-                    rprint(branches_dict)
+                    rprint(f"Loaded all branches: {branches_dict}")
+            elif preset is not None:
+                if debug:
+                    rprint(f"Loaded preset branches: \n")
+                branches_dict = get_workflow_branches(
+                    trees=tree_labels, workflow=preset, debug=debug
+                )  # Get PRESET branches
+
             else:
                 branches_dict = branches  # Get CUSTOMIZED branches from the input
+                if debug:
+                    rprint(f"Custom branches: {branches_dict}")
 
             for tree in branches_dict.keys():
-                if branches_dict[tree] == []:
-                    continue  # If the tree is empty, skip it
+                if len(branches_dict[tree]) == 0:
+                    if debug:
+                        output += f"\n[red]No branches found for {tree} tree![/red]"
+                    continue
                 else:
-                    if (
-                        idx == 0 and jdx == 0
-                    ):  # If it is the first file, create the dictionary
+                    if idx == 0 and jdx == 0:
                         run[tree] = dict()
                         for identifiyer_label, identifiyer in zip(
                             ["Name", "Geometry", "Version"], [name, geo, vers]
                         ):
                             run[tree][identifiyer_label] = [identifiyer] * len(
                                 np.load(
-                                    filepath + name + "/" + tree + "/Event.npy",
+                                    f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
                                     allow_pickle=True,
                                 )
                             )
                             run[tree][identifiyer_label] = np.asarray(
                                 run[tree][identifiyer_label], dtype=str)
                     else:
-                        run[tree]["Name"] = np.concatenate(
-                            (
-                                run[tree]["Name"],
-                                [name]
-                                * len(
-                                    np.load(
-                                        filepath + name + "/" + tree + "/Event.npy",
-                                        allow_pickle=True,
-                                    )
-                                ),
-                            ),
-                            axis=0,
-                        )
-                        run[tree]["Geometry"] = np.concatenate(
-                            (
-                                run[tree]["Geometry"],
-                                [geo]
-                                * len(
-                                    np.load(
-                                        filepath + name + "/" + tree + "/Event.npy",
-                                        allow_pickle=True,
-                                    )
-                                ),
-                            ),
-                            axis=0,
-                        )
-                        run[tree]["Version"] = np.concatenate(
-                            (
-                                run[tree]["Version"],
-                                [vers]
-                                * len(
-                                    np.load(
-                                        f"{filepath}{name}/{tree}/Event.npy",
-                                        allow_pickle=True,
-                                    )
-                                ),
-                            ),
-                            axis=0,
-                        )
-
-                    for key in branches_dict[tree]:
-                        try:
-                            branch = np.load(
-                                filepath + name + "/" + tree + "/" + key + ".npy",
-                                allow_pickle=True,
-                            )
-                            if key == "Generator":
-                                # Create a new branch with the background names according to the bkg_dict
-                                label_branch = np.asarray(
-                                    [bkg_dict[gen] for gen in branch], dtype=str
-                                )
-                                if idx == 0 and jdx == 0:
-                                    run[tree]["GeneratorLabel"] = label_branch
-                                else:
-                                    run[tree]["GeneratorLabel"] = np.concatenate(
-                                        (run[tree]["GeneratorLabel"],
-                                         label_branch), axis=0
-                                    )
-                            if generator_swap == True:
-                                if key == "Generator":
-                                    if name in bkg_dict.values():
-                                        out = (
-                                            out
-                                            + f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
+                        for identifiyer_label, identifiyer in zip(
+                            ["Name", "Geometry", "Version"], [name, geo, vers]
+                        ):
+                            run[tree][identifiyer_label] = np.concatenate(
+                                (
+                                    run[tree][identifiyer_label],
+                                    [identifiyer]
+                                    * len(
+                                        np.load(
+                                            f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
+                                            allow_pickle=True,
                                         )
-                                        mapped_gen = inv_bkg_dict[name]
-                                        # branch[branch == 2] = mapped_gen # Map the generator to the correct background
-                                        branch[
-                                            :
-                                        ] = mapped_gen  # Map the generator to the correct background
+                                    ),
+                                ),
+                                axis=0,
+                            )
 
-                                if key == "TruthPart" and name in bkg_dict.values():
-                                    mapped_gen = inv_bkg_dict[name]
-                                    branch = resize_subarrays_fixed(
-                                        branch,
-                                        0,
-                                        max_len=len(bkg_dict.keys()),
-                                        debug=debug,
-                                    )
-                                    branch[:, mapped_gen - 1] = branch[:, 1]
-                                    if mapped_gen != 2:
-                                        branch[:, 1] = 0
+                for key in branches_dict[tree]:
+                    if debug:
+                        print(f"Loading {key} branch")
+                    try:
+                        branch = np.load(
+                            f"{filepath}{name}/{tree}/{key}.npy",
+                            allow_pickle=True,
+                        )
+                    except FileNotFoundError:
+                        if debug:
+                            output += f"\n[red]File {key} not found![/red]"
+                        continue
 
-                            if idx == 0 and jdx == 0:
-                                run[tree][key] = branch
-                            else:
-                                try:
-                                    run[tree][key] = np.concatenate(
-                                        (run[tree][key], branch), axis=0
-                                    )
-                                except ValueError:
-                                    run[tree][key] = (
-                                        run[tree][key].tolist() +
-                                        branch.tolist()
-                                    )
-                                    run[tree][key] = resize_subarrays(
-                                        run[tree][key], 0, trim=False, debug=debug
-                                    )
-                            if key == "Event":
-                                out = (
-                                    out
-                                    + f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
-                                )
-                        except FileNotFoundError:
+                    if key == "Generator":
+                        # Create a new branch with the background names according to the bkg_dict
+                        label_branch = np.asarray(
+                            [bkg_dict[gen] for gen in branch], dtype=str
+                        )
+                        if idx == 0 and jdx == 0:
+                            run[tree]["GeneratorLabel"] = label_branch
+                        else:
+                            run[tree]["GeneratorLabel"] = np.concatenate(
+                                (run[tree]["GeneratorLabel"],
+                                    label_branch), axis=0
+                            )
+                    if generator_swap == True:
+                        if key == "Generator":
+                            if name in bkg_dict.values():
+                                output += f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
+                                mapped_gen = inv_bkg_dict[name]
+                                # branch[branch == 2] = mapped_gen # Map the generator to the correct background
+                                branch[
+                                    :
+                                ] = mapped_gen  # Map the generator to the correct background
+
+                        if key == "TruthPart" and name in bkg_dict.values():
                             if debug:
-                                out = out + \
-                                    f"\n[red]File {key} not found![/red]"
+                                print(
+                                    f"-> Changing the generator for {name} to {inv_bkg_dict[name]}")
+                            mapped_gen = inv_bkg_dict[name]
+                            branch = resize_subarrays_fixed(
+                                branch,
+                                0,
+                                max_len=len(bkg_dict.keys()),
+                                debug=debug,
+                            )
+                            branch[:, mapped_gen - 1] = branch[:, 1]
+                            if mapped_gen != 2:
+                                branch[:, 1] = 0
+
+                    if idx == 0 and jdx == 0:
+                        run[tree][key] = branch
+                        if debug:
+                            print(f"Loaded {key} branch")
+                    else:
+                        if debug:
+                            print(f"Concatenating {key} branch")
+                        try:
+                            run[tree][key] = np.concatenate(
+                                (run[tree][key], branch), axis=0
+                            )
+                        except ValueError:
+                            run[tree][key] = (
+                                run[tree][key].tolist() +
+                                branch.tolist()
+                            )
+                            run[tree][key] = resize_subarrays(
+                                run[tree][key], 0, trim=False, debug=debug
+                            )
+                    if key == "Event":
+                        output += f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
 
     if debug:
         for tree in branches_dict.keys():
             try:
-                out = out + f"\nKeys extracted from the {tree} tree:\n"
-                out = out + str(run[tree].keys())
-                out = out + \
+                output = output + f"\nKeys extracted from the {tree} tree:\n"
+                output = output + str(run[tree].keys())
+                output = output + \
                     f"\n-> # {tree} entries: %i\n" % len(run[tree]["Event"])
             except KeyError:
-                out = out + f"- No {tree} tree found!\n"
+                output = output + f"- No {tree} tree found!\n"
 
-    rprint(out)
-    return run
+    return run, output
 
 
 def save_proccesed_variables(run, info={}, force=False, debug=False):
@@ -896,8 +879,7 @@ def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=Fal
     """ """
     info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
     weight_list = get_bkg_weights(info)
-    truth_values = []
-    reco_values = []
+    truth_values, reco_values = [], []
     for bkg_idx, bkg in enumerate(mean_truth_df.index):
         truth_values.append(
             mean_truth_df.values[bkg_idx]
@@ -924,32 +906,32 @@ def get_gen_color(name_list, debug=False):
         color_dict (dict): dictionary with the colors of the backgrounds
     """
     color_dict = dict()
-    simple_name_list = get_simple_name(name_list, debug=debug)
+    simple_names_list = get_simple_names(name_list, debug=debug)
     colors = px.colors.qualitative.Prism
     for name in name_list:
-        if simple_name_list[name] == "Unknown":
+        if simple_names_list[name] == "Unknown":
             color_dict[name] = "black"
-        elif simple_name_list[name] == "Marley":
+        elif simple_names_list[name] == "Marley":
             color_dict[name] = colors[6]
-        elif simple_name_list[name] == "APA":
+        elif simple_names_list[name] == "APA":
             color_dict[name] = colors[8]
-        elif simple_name_list[name] == "Neutron":
+        elif simple_names_list[name] == "Neutron":
             color_dict[name] = colors[3]
-        elif simple_name_list[name] == "CPA":
+        elif simple_names_list[name] == "CPA":
             color_dict[name] = colors[9]
-        elif simple_name_list[name] == "Ar42":
+        elif simple_names_list[name] == "Ar42":
             color_dict[name] = colors[1]
-        elif simple_name_list[name] == "K42":
+        elif simple_names_list[name] == "K42":
             color_dict[name] = colors[1]
-        elif simple_name_list[name] == "Kr85":
+        elif simple_names_list[name] == "Kr85":
             color_dict[name] = "pink"
-        elif simple_name_list[name] == "Ar39":
+        elif simple_names_list[name] == "Ar39":
             color_dict[name] = colors[10]
-        elif simple_name_list[name] == "Rn22":
+        elif simple_names_list[name] == "Rn22":
             color_dict[name] = colors[5]
-        elif simple_name_list[name] == "Po210":
+        elif simple_names_list[name] == "Po210":
             color_dict[name] = "brown"
-        elif simple_name_list[name] == "PDS":
+        elif simple_names_list[name] == "PDS":
             color_dict[name] = colors[7]
         else:
             color_dict[name] = "black"
@@ -959,12 +941,12 @@ def get_gen_color(name_list, debug=False):
 
 def get_bkg_weights(info, names, debug=False):
     bkg_dict, color_dict = get_bkg_config(info, debug=False)
-    weights_dict = dict()
+    weights = dict()
     for bkg in bkg_dict.values():
-        weights_dict[bkg] = 1
+        weights[bkg] = 1
     if "wbkg" in names:
-        weights_dict["wbkg"] = 1
-        return weights_dict
+        weights["wbkg"] = 1
+        return weights
     else:
         if info["GEOMETRY"] == "hd" and info["VERSION"] == "hd_1x2x6":
             custom_weights = {"NeutronsInCavernwall": 1e3}
@@ -981,72 +963,77 @@ def get_bkg_weights(info, names, debug=False):
             custom_weights = {"Neutron": 1e2}
 
         for bkg in custom_weights:
-            weights_dict[bkg] = custom_weights[bkg]
-        return weights_dict
+            weights[bkg] = custom_weights[bkg]
+        return weights
 
 
-def get_gen_weights(configs, names, debug=False):
-    weights_dict = dict()
+def get_gen_weights(configs: dict[str, list[str]], names: dict[str, list[str]], debug: bool = False) -> dict:
+    weights = dict()
     for idx, config in enumerate(configs):
         info = json.load(
             open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
         # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
         geo = info["GEOMETRY"]
         name_list = names[config]
-        geo_weights_dict = get_bkg_weights(info, name_list)
+        geo_weights = get_bkg_weights(info, name_list)
         for idx, name in enumerate(name_list):
-            weights_dict[(geo, name)] = geo_weights_dict[name]
-    return weights_dict
+            weights[(geo, name)] = geo_weights[name]
+    return weights
 
 
-def get_simple_name(name_list, debug=False):
-    simple_name = dict()
+def get_simple_names(names: list, debug: bool = False) -> dict:
+    simple_names = dict()
     basic_names = ["Ar42", "Ar39", "Kr85", "Po210", "Rn22"]
-    for name in name_list:
+    for name in names:
         if "LAr" in name:
             for basic_name in basic_names:
                 if basic_name in name:
-                    simple_name[name] = basic_name
+                    simple_names[name] = basic_name
             if "K42" in name:
-                simple_name[name] = "Ar42"
+                simple_names[name] = "Ar42"
 
         elif "Gamma" in name:
-            simple_name[name] = "Gamma"
+            simple_names[name] = "Gamma"
         elif "Neutron" in name:
-            simple_name[name] = "Neutron"
+            simple_names[name] = "Neutron"
         elif "CPA" in name:
-            simple_name[name] = "CPA"
+            simple_names[name] = "CPA"
         elif "Cathode" in name:
-            simple_name[name] = "CPA"
+            simple_names[name] = "CPA"
         elif "CRP" in name:
-            simple_name[name] = "APA"
+            simple_names[name] = "APA"
         elif "APA" in name:
-            simple_name[name] = "APA"
+            simple_names[name] = "APA"
         elif "PDS" in name:
-            simple_name[name] = "PDS"
+            simple_names[name] = "PDS"
         else:
-            simple_name[name] = name
+            simple_names[name] = name
 
     if debug:
-        print_colored("Loaded simple name dictionary: %s" %
-                      str(simple_name), "INFO")
-    return simple_name
+        rprint(
+            f"[cyan][INFO] Loaded simple name dictionary: {simple_names}[/cyan]")
+    return simple_names
 
 
-def get_workflow_branches(tree_list, workflow: str = "BASIC", debug=False):
+def get_workflow_branches(trees: list, workflow: Optional[str] = None, debug: bool = False) -> dict[str, list[str]]:
     """
     Get the workflow variables from the input file.
 
     Args:
-        workflow (str): workflow (default: "BASIC")
+        trees (list): list of the trees to analyze
+        workflow (str): workflow to analyze (default: None)
         debug (bool): if True, print debug messages (default: False)
 
     Returns:
-        truth_list (list): list of truth variables
+        tree_braches (dict): dictionary with the branches of the trees listed in the workflow configuration file.
     """
+
+    if workflow is None:
+        return dict()
+
     f = json.load(open(f"{root}/lib/workflow/{workflow}.json", "r"))
-    branch_lists = []
-    for tree in tree_list:
+    tree_branches = {}
+    for tree in trees:
         tree_branch_list = []
         if tree not in f.keys():
             raise KeyError(f"Tree {tree} not found in the workflow file")
@@ -1054,7 +1041,9 @@ def get_workflow_branches(tree_list, workflow: str = "BASIC", debug=False):
             for branch_type in f[tree]:
                 for branch in f[tree][branch_type]:
                     tree_branch_list.append(branch)
-            branch_lists.append(tree_branch_list)
+            tree_branches[tree] = tree_branch_list
+
     if debug:
-        rprint()
-    return branch_lists
+        rprint(tree_branches)
+
+    return tree_branches

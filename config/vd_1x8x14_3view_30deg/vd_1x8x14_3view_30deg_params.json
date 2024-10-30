@@ -5,7 +5,7 @@
     "MAX_FLASH_R": 100,
     "MIN_FLASH_PE": 100,
     "MAX_FLASH_PE_RATIO": 0.3,
-    "DEFAULT_ANALYSIS_ENERGY": "RecoEnergy",
+    "DEFAULT_ANALYSIS_ENERGY": "SolarEnergy",
     "DEFAULT_RECOX_TIME": "DriftTime",
     "DEFAULT_ENERGY_TIME": "Time",
     "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
