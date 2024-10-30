@@ -59,7 +59,7 @@
             "Correction": -1e6,
             "Energy": -1e6,
             "TotalEnergy": -1e6,
-            "RecoEnergy": -1e6,
+            "SolarEnergy": -1e6,
             "SelectedAdjClEnergy": 0,
             "SelectedMaxAdjClEnergy": 0,
             "TotalAdjClEnergy": 0,

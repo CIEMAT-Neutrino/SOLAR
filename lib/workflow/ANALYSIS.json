@@ -2,13 +2,14 @@
     "Config": {
         "INTEGERS": {},
         "DOUBLES": {},
-        "STRINGS": {},
+        "STRINGS": {
+            "Geometry": ""
+        },
         "BOOLS": {}
     },
     "Truth": {
         "INTEGERS": {
-            "Event": 1,
-            "Flag": 1
+            "Event": 1
         },
         "DOUBLES": {
             "TNuE": 1
@@ -26,6 +27,7 @@
             "TMarleyMother": 1,
             "MainParentVertex": 1,
             "MainVertex": 1,
+            "AdjClMainE": 1,
             "AdjClMainX": 1,
             "AdjClMainY": 1,
             "AdjClMainZ": 1,
@@ -66,7 +68,7 @@
             "Energy": 0,
             "TotalEnergy": 0,
             "SelectedEnergy": 0,
-            "RecoEnergy": 0,
+            "SolarEnergy": 0,
             "SelectedAdjClEnergy": 0,
             "SelectedMaxAdjClEnergy": 0,
             "SelectedAdjClEnergyRatio": 0,

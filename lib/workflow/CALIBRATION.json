@@ -8,25 +8,40 @@
     "Truth": {
         "VECTORS": {
             "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyK": 1,
+            "TMarleyPDG": 1,
             "TMarleyMother": 1
         },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
         },
-        "DOUBLES": {},
+        "DOUBLES": {
+            "TNuE": 1,
+            "TNuX": 1
+        },
         "STRINGS": {},
         "BOOLS": {}
     },
     "Reco": {
         "VECTORS": {
+            "TruthPart": 1,
             "TMarleyE": 1,
             "TMarleyK": 1,
             "TMarleyPDG": 1,
             "TMarleyMother": 1,
-            "AdjClNHit": 1,
+            "MainVertex": 1,
+            "MainParentVertex": 1,
+            "AdjClMotherPDG": 1,
+            "AdjClMotherID": 1,
+            "AdjClMainPDG": 1,
             "AdjClCharge": 1,
-            "AdjClTime": 1
+            "AdjClMainX": 1,
+            "AdjClTime": 1,
+            "AdjClNHit": 1,
+            "AdjClGen": 1,
+            "AdjClR": 1
         },
         "INTEGERS": {
             "Event": 1,

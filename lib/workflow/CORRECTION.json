@@ -8,13 +8,18 @@
     "Truth": {
         "VECTORS": {
             "TruthPart": 1,
+            "TMarleyE": 1,
+            "TMarleyK": 1,
+            "TMarleyPDG": 1,
             "TMarleyMother": 1
         },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
         },
-        "DOUBLES": {},
+        "DOUBLES": {
+            "TNuE": 1
+        },
         "STRINGS": {},
         "BOOLS": {}
     },
@@ -27,6 +32,8 @@
             "TMarleyMother": 1,
             "MainVertex": 1,
             "MainParentVertex": 1,
+            "AdjClMotherPDG": 1,
+            "AdjClMotherID": 1,
             "AdjClMainPDG": 1,
             "AdjClCharge": 1,
             "AdjClTime": 1,
