@@ -5,6 +5,7 @@ from .ana_functions import get_default_energies, get_default_nhits
 import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from typing import Optional
 
 from rich import print as rprint
 from scipy.optimize import curve_fit
@@ -13,6 +14,10 @@ np.seterr(divide='ignore', invalid='ignore')
 root = get_project_root()
 energy_edges, energy_centers, ebin = get_default_energies(root)
 nhits = get_default_nhits(root)
+
+
+def calibration_func(x, a, b, c, d):
+    return a*np.exp(-b*x)+c/(1+np.exp(-d*x))
 
 
 def resolution(x, p0, p1, p2, b):
@@ -268,7 +273,8 @@ def generate_bins(acc, x, debug=False):
     if type(acc) == int:
         try:
             if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
-                x_array = np.linspace(np.min(x), np.max(x), acc)
+                bin_width = (np.max(x) - np.min(x)) / acc
+                x_array = np.arange(np.min(x), np.max(x)+bin_width, bin_width)
             elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
                 x_array = np.arange(np.min(x), np.max(x) + 1, acc)
             else:
@@ -298,7 +304,7 @@ def generate_bins(acc, x, debug=False):
     return x_array
 
 
-def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=True, density=False, debug=False):
+def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=None, norm=True, density=False, debug=False):
     """
     Given an x array, generate a 1D histogram.
 
@@ -315,22 +321,27 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
         x (array): x-axis array.
         y (array): y-axis array.
     """
-    h = []
-    x_bins = []
-    labels = []
+    h, x_bins, labels = [], [], []
     if scan_y is None:
         if len(x) > 0:
             x = remove_nans_and_infs(x, debug=debug)
-            x = remove_outliers(x, per=per, debug=debug)
-            x_array = generate_bins(acc, x, debug=debug)
+            if per is not None:
+                x = remove_outliers(x, per=per, debug=debug)
+            if isinstance(acc, int):
+                x_array = generate_bins(acc, x, debug=debug)
+            else:
+                x_array = acc
+
+            if debug:
+                print(f"Generating histogram from array: {x_array}")
 
             h, this_x_bins = np.histogram(
                 x, bins=x_array, density=density)
+
             if norm:
                 h = h / (np.sum(h))
 
-            x_bins = (this_x_bins[1:] + this_x_bins[:-1]) / 2
-            return x_bins, h, "Spectrum"
+            return x_array, h, "Spectrum"
 
         else:
             if debug:
@@ -345,7 +356,8 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
             raise ValueError
 
         x, scan_y = remove_nans_and_infs((x, scan_y), debug=debug)
-        x, scan_y = remove_outliers((x, scan_y), per=per, debug=debug)
+        if per is not None:
+            x, scan_y = remove_outliers((x, scan_y), per=per, debug=debug)
         x_array = generate_bins(acc[0], x, debug=debug)
         y_array = generate_bins(acc[1], scan_y, debug=debug)
 
@@ -357,12 +369,14 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
 
             scan_filter = np.where(
                 (x > (scan_value-scan_bin/2)) & (x < (scan_value+scan_bin/2)))
+
             if scan_y is not None:
                 this_filtered_y = scan_y[scan_filter]
                 try:
                     this_h, this_x_bins = np.histogram(
                         this_filtered_y, bins=y_array, density=density)
                     labels.append(f"{scan_value}")
+
                 except ValueError:
                     print("y might be empty!")
                     continue
@@ -374,7 +388,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: tuple = (1, 99), acc=None, norm=T
             if norm:
                 this_h = this_h / (np.sum(this_h))
 
-            x_bins.append((this_x_bins[1:] + this_x_bins[:-1]) / 2)
+            x_bins.append(x_array)
             h.append(this_h)
 
         return x_bins, h, labels
@@ -397,10 +411,10 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
         y (array): y-axis array.
     """
     x, y = remove_nans_and_infs((x, y), debug=debug)
-    x, y = remove_outliers((x, y), per=per, debug=debug)
+    if per is not None:
+        x, y = remove_outliers((x, y), per=per, debug=debug)
 
-    mean_variable_array = []
-    std_variable_array = []
+    mean_variable_array, std_variable_array = [], []
     if variable == "energy":
         for energy in energy_centers:
             energy_filter = np.where(
@@ -549,7 +563,8 @@ def get_hist2d(x, y, per: tuple = (1, 99), acc=50, norm=True, density=False, log
     """
     # Compute percentile for x & y array determination using a numpy fucntion
     x, y = remove_nans_and_infs((x, y), debug=debug)
-    x, y = remove_outliers((x, y), per=per, debug=debug)
+    if per is not None:
+        x, y = remove_outliers((x, y), per=per, debug=debug)
 
     # Compute the number of bins using the Freedman-Diaconis rule
     # https://en.wikipedia.org/wiki/Freedman%E2%80%93Diaconis_rule
@@ -705,7 +720,7 @@ def get_hist1d_fit(
     x,
     fig,
     idx,
-    per=[1, 99],
+    per: Optional[tuple] = (1, 99),
     acc=50,
     fit={"color": "grey", "trimm": (1, 1), "func": "gauss"},
     debug=False,
@@ -841,8 +856,7 @@ def get_hist1d_diff(x, y, offset: float = 0, norm: bool = True, debug=False) -> 
         intercept: array of intercepts.
         counts: array of counts.
     """
-    intercept = []
-    counts = []
+    intercept, counts = [], []
     for b in np.arange(0, np.max(x-y), 0.1):
         diagonal_filter = np.where((x > y+b-0.05) * (
             x < y+b+0.05))
@@ -933,7 +947,7 @@ def remove_nans_and_infs(data, debug=False) -> tuple:
         return data
 
 
-def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> tuple:
+def remove_outliers(data: tuple, per: Optional[tuple] = (1, 99), debug: bool = False) -> tuple:
     """
     Given an x and y array, remove the values that correspond to outliers.
 
@@ -946,20 +960,21 @@ def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> t
         x (array): x-axis array.
         y (array): y-axis array.
     """
+    if per is None:
+        return data
+
     if len(data) > 2:
         x = data
         try:
             lims = np.percentile(x, per, axis=0, keepdims=False)
-
-            if debug:
-                rprint(
-                    f'{type(x)} x\n[cyan]INFO: Percentile limits: {str(lims)}[/cyan]')
-
             reduced_x = [
                 i
                 for i in x
-                if lims[0] < i < lims[1]
+                if lims[0] <= i <= lims[1]
             ]
+            if debug:
+                rprint(
+                    f'{type(x)} x\n[cyan]INFO: Percentile limits: {str(lims)} reducing array to {100*len(reduced_x)/len(x):.1f}%[/cyan]')
             x = np.asarray(reduced_x)
 
         except:
@@ -972,21 +987,19 @@ def remove_outliers(data: tuple, per: tuple = (1, 99), debug: bool = False) -> t
         x, y = data
         try:
             lims = np.percentile([x, y], per, axis=1, keepdims=False)
-
-            if debug:
-                rprint(
-                    f'{type(x)} x\n{type(y)} {y}\n[cyan]INFO: Percentile limits: {str(lims)}[/cyan]')
-
             reduced_x = [
                 i
                 for i, j in zip(x, y)
-                if lims[0][0] < i < lims[1][0] and lims[0][1] < j < lims[1][1]
+                if lims[0][0] <= i <= lims[1][0] and lims[0][1] <= j <= lims[1][1]
             ]
             reduced_y = [
                 j
                 for i, j in zip(x, y)
-                if lims[0][0] < i < lims[1][0] and lims[0][1] < j < lims[1][1]
+                if lims[0][0] <= i <= lims[1][0] and lims[0][1] <= j <= lims[1][1]
             ]
+            if debug:
+                rprint(
+                    f'{type(x)} x\n{type(y)} {y}\n[cyan]INFO: Percentile limits: {str(lims)} reducing arrays to x:{100*len(reduced_x)/len(x):.1f}% and y:{100*len(reduced_y)/len(y):.1f}%[/cyan]')
             x, y = np.asarray(reduced_x), np.asarray(reduced_y)
 
         except:
