@@ -409,7 +409,7 @@ def compute_root_workflow(
                 ###########################
                 # Reco Energy Computation
                 ###########################
-                for energy_label, energy_key in zip(["TotalEnergy", "RecoEnergy", "SelectedEnergy"], ["TOTAL", "RECO", "SELECTED"]):
+                for energy_label, energy_key in zip(["TotalEnergy", "SolarEnergy", "SelectedEnergy"], ["TOTAL", "RECO", "SELECTED"]):
                     reco[energy_label][i] = (
                         (reco[energy_label][i] - calib_info[energy_key]
                          ["INTERSECTION"]) / calib_info[energy_key]["ENERGY_AMP"]

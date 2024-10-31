@@ -21,6 +21,7 @@ def get_flash_time(run, tree, idx, filter, debug=False):
     if debug: print(f"  Time: {2*flash_time:.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
     return flash_time
 
+
 def get_ophit_positions(run, tree, idx, filter=None, debug=False):
     ophits = [[],[],[]]
     # If filter is not None, then we filter the ophits by the filter array
@@ -160,6 +161,7 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
     )
     return fig
 
+
 def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=False):
     specs = [
         [
@@ -211,6 +213,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
 
         fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
         return fig 
+
 
 def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashid:int=None, zoom=True, debug=False):
     colorscale = [[0, 'green'], [0.5, 'yellow'], [1,"orange"]]

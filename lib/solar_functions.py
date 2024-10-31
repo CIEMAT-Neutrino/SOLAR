@@ -506,7 +506,7 @@ def interpolate_solar_data(x, y, label, interpolation=None, bounds=None, debug=F
     return func
 
 
-def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"{root}/data/SOLAR/", label='neutrino_cc_final', debug=False):
+def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/", label='neutrino_cc_final', debug=False):
     """
     Read in marley data and return the neutrino cc spectrum.
     """

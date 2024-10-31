@@ -24,10 +24,11 @@ def get_flag_dict(debug = False):
         ("-rw","--rewrite"):"rewrite \t(True/False)",
         ("-s","--show"):"show \t(Show resulting images)",
         ("-t","--trim"):"trim \t(True/False)",
-        ("-v","--variable"):"variable \t(RecoEnergy, TotalEnergy, etc.)",
+        ("-v","--variable"):"variable \t(SolarEnergy, TotalEnergy, etc.)",
         }
     if debug: rprint(flag_dict)
     return flag_dict
+
 
 def initialize_macro(macro, input_list=["config_file","root_file","debug"], default_dict={}, debug=False):
     '''
@@ -77,6 +78,7 @@ def initialize_macro(macro, input_list=["config_file","root_file","debug"], defa
             user_input[bool_key] = user_input[bool_key][0].lower() in ['true', '1', 't', 'y', 'yes']
     return user_input
 
+
 def update_user_input(user_input, new_input_list, debug=False):
     '''
     This function updates the user input by asking the user to provide the missing information.
@@ -100,6 +102,7 @@ def update_user_input(user_input, new_input_list, debug=False):
             pass
     
     return new_user_input
+
 
 def select_input_file(user_input, debug=False):
     '''
@@ -131,6 +134,7 @@ def select_input_file(user_input, debug=False):
     # if debug: print_colored("Using config file %s"%new_user_input["config_file"][0],"INFO")
     return new_user_input
 
+
 def use_default_input(user_input, default_dict, debug=False):
     '''
     This function updates the user input by asking the user to provide the missing information.
@@ -148,6 +152,7 @@ def use_default_input(user_input, default_dict, debug=False):
     info = json.open(open(f'{root}/config/'+user_input["config_file"]))
     new_user_input = user_input.copy()
     return new_user_input
+
 
 def check_macro_config(user_input, debug=False):
     '''
@@ -170,6 +175,7 @@ def check_macro_config(user_input, debug=False):
 
     return user_input
 
+
 def print_macro_info(macro, debug=False):
     '''
     This function prints the information of the macro.
@@ -183,6 +189,7 @@ def print_macro_info(macro, debug=False):
     rprint (file_contents+"\n")
     f.close
     if debug: rprint("----- Debug mode activated -----")
+
 
 def print_header(debug = False):
     '''
