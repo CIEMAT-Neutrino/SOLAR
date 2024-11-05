@@ -8,6 +8,7 @@ import matplotlib.colors as colors
 import matplotlib.cm as cm
 import plotly.graph_objects as go
 
+from typing import Optional
 from rich import print as rprint
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
@@ -79,7 +80,7 @@ def colored_line(x, y, c, ax, **lc_kwargs):
 def format_coustom_plotly(
     fig: go.Figure,
     title: str = None,
-    legend: dict = dict(),
+    legend: Optional[dict] = None,
     fontsize: int = 16,
     figsize: int = None,
     ranges: tuple = (None, None),
@@ -111,6 +112,11 @@ def format_coustom_plotly(
     Returns:
         fig (plotly.graph_objects.Figure): plotly figure
     """
+
+    if legend == None:
+        legend = dict(groupclick="toggleitem")
+
+
     # Find the number of subplots
     if type(fig) == go.Figure:
         try:
@@ -144,7 +150,6 @@ def format_coustom_plotly(
         paper_bgcolor=margin["color"],
         bargap=bargap,
     )  # font size and template
-
     fig.update_xaxes(
         matches=matches[0],
         showline=True,
