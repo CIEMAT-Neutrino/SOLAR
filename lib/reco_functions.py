@@ -43,7 +43,7 @@ def compute_reco_workflow(
         rprint(f"No workflow selected. Returning same run.\n")
         return run
 
-    elif workflow == "TRUTH":
+    elif "TRUTH" in workflow:
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -52,7 +52,7 @@ def compute_reco_workflow(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif workflow == "MARLEY":
+    elif "MARLEY" in workflow:
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -69,7 +69,7 @@ def compute_reco_workflow(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif workflow == "RAW":
+    elif "RAW" in workflow:
         run, output, this_new_branches = compute_marley_energies(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
         )
@@ -78,7 +78,7 @@ def compute_reco_workflow(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif workflow == "TRACK":
+    elif "TRACK" in workflow:
         run, output, this_new_branches = compute_marley_directions(
             run, configs, params, trees=["Reco"], rm_branches=rm_branches, output=output, debug=debug
         )
@@ -87,7 +87,7 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif workflow == "ADJCL":
+    elif "ADJCL" in workflow:
         run, output, this_new_branches = compute_adjcl_basics(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -104,7 +104,7 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif workflow in ["ADJFLASH", "OPHIT"]:
+    elif [ a in workflow for a in ["ADJFLASH", "OPHIT"]].count(True) > 0:
         run, output, this_new_branches = compute_opflash_advanced(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -114,15 +114,16 @@ def compute_reco_workflow(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-    elif workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+    # elif workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+    elif [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
         trees = ["Reco"]
         clusters = [""]
-        if workflow == "ANALYSIS":
+        if "ANALYSIS" in workflow:
             run, output, this_new_branches = compute_main_variables(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow == "CORRECTION" or workflow == "CALIBRATION":
+        if [ a in workflow for a in ["CORRECTION", "CALIBRATION"]].count(True) > 0:
             trees = ["Truth", "Reco"]
             run, output, this_new_branches = compute_adjcl_basics(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
@@ -132,13 +133,16 @@ def compute_reco_workflow(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        # if workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        if [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
             run, output, this_new_branches = compute_particle_energies(
                 run, configs, params, trees=trees, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
-            if workflow == "CORRECTION" or workflow == "CALIBRATION":
+        # if workflow in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        if [ a in workflow for a in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
+            # if workflow == "CORRECTION" or workflow == "CALIBRATION":
+            if "CORRECTION" in workflow or "CALIBRATION" in workflow:
                 clusters.append("Electron")
             run, output, this_new_branches = compute_true_drift(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
@@ -152,7 +156,8 @@ def compute_reco_workflow(
                 run, configs, params, clusters, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        # if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        if [ a in workflow for a in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
             run, output, this_new_branches = compute_cluster_calibration(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
@@ -169,17 +174,20 @@ def compute_reco_workflow(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        # if workflow in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
+        if [ a in workflow for a in ["RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
             run, output, this_new_branches = compute_reco_energy(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-        if workflow in ["SMEARING", "ANALYSIS"]:
+        # if workflow in ["SMEARING", "ANALYSIS"]:
+        if [ a in workflow for a in ["SMEARING", "ANALYSIS"]].count(True) > 0:
             run, output, this_new_branches = compute_energy_calibration(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
-    elif workflow == "VERTEXING":
+    # elif workflow == "VERTEXING":
+    elif "VERTEXING" in workflow:
         default_workflow_params = {"MAX_FLASH_R": None, "MIN_FLASH_PE": None,
                                    "RATIO_FLASH_PEvsR": None}
         for key in default_workflow_params:
@@ -252,15 +260,16 @@ def compute_marley_particle(run: dict[dict], configs: dict[str, list[str]], para
     '''
     Compute the Marley particle type for the events in the run.
     '''
+    signal = "Marley"
     if output is None:
         output = ""
-    required_branches = ["Generator", "TMarleyFrac"]
+    required_branches = ["Generator", f"T{signal}Frac"]
     new_branches = ["Neutrino", "Electron", "Gamma", "Neutron"]
 
     run["Reco"]["Neutrino"] = run["Reco"]["Generator"] == 1
     for idx, particle in enumerate(new_branches[1:]):
         run["Reco"][particle] = (run["Reco"]["Generator"] == 1) * \
-            (run["Reco"]["TMarleyFrac"][:, idx] > 0.5)
+            (run["Reco"][f"T{signal}Frac"][:, idx] > 0.5)
 
     output += f"\tMarley particle computation \t-> Done!\n"
     return run, output, new_branches
@@ -319,18 +328,19 @@ def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], para
     return run, output, new_branches
 
 
-def compute_marley_directions(run, configs, params={}, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
+def compute_signal_directions(run, configs, params={}, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyEnd", "TMarleyDirection"],
+    signal = "Marley"
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}End", f"T{signal}Direction"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", "MTrackEnd", "MTrackStart", "MTrackDirection"]}
-    new_branches = ["TMarleyTheta", "TMarleyPhi", "TMarleyDirectionX",
-                    "TMarleyDirectionY", "TMarleyDirectionZ", "TMarleyDirectionMod"]
+    new_branches = [f"T{signal}Theta", f"T{signal}Phi", f"T{signal}DirectionX",
+                    f"T{signal}DirectionY", f"T{signal}DirectionZ", f"T{signal}DirectionMod"]
     for tree in trees:
         for branch in new_branches:
             run[tree][branch] = np.zeros(
-                (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
+                (len(run[tree]["Event"]), len(run[tree][f"T{signal}PDG"][0])), dtype=np.float32)
 
         for config in configs:
             info, params, output = get_param_dict(
@@ -339,23 +349,23 @@ def compute_marley_directions(run, configs, params={}, trees=["Truth", "Reco"], 
                 (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
             )
-            for direction, start, end in zip(["TMarleyDirectionX", "TMarleyDirectionY", "TMarleyDirectionZ"], ["TNuX", "TNuY", "TNuZ"], ["TMarleyEndX", "TMarleyEndY", "TMarleyEndZ"]):
+            for direction, start, end in zip([f"T{signal}DirectionX", f"T{signal}DirectionY", f"T{signal}DirectionZ"], ["TNuX", "TNuY", "TNuZ"], [f"T{signal}EndX", f"T{signal}EndY", f"T{signal}EndZ"]):
                 run[tree][direction][idx] = run[tree][start][:,
                                                              None][idx] - run[tree][end][idx]
 
-            run[tree]["TMarleyDirectionMod"][idx] = np.sqrt(np.power(run[tree]["TMarleyDirectionX"][idx], 2) + np.power(
-                run[tree]["TMarleyDirectionY"][idx], 2) + np.power(run[tree]["TMarleyDirectionZ"][idx], 2))
+            run[tree][f"T{signal}DirectionMod"][idx] = np.sqrt(np.power(run[tree][f"T{signal}DirectionX"][idx], 2) + np.power(
+                run[tree][f"T{signal}DirectionY"][idx], 2) + np.power(run[tree][f"T{signal}DirectionZ"][idx], 2))
             for coord in ["X", "Y", "Z"]:
-                run[tree][f"TMarleyDirection{coord}"][idx] = run[tree][f"TMarleyDirection{coord}"][idx] / \
-                    run[tree]["TMarleyDirectionMod"][idx]
+                run[tree][f"T{signal}Direction{coord}"][idx] = run[tree][f"T{signal}Direction{coord}"][idx] / \
+                    run[tree][f"T{signal}DirectionMod"][idx]
 
-            run[tree]["TMarleyTheta"][idx] = np.arccos(
-                run[tree]["TMarleyDirectionZ"][idx])
-            run[tree]["TMarleyPhi"][idx] = np.arctan2(
-                run[tree]["TMarleyDirectionY"][idx], run[tree]["TMarleyDirectionX"][idx])
+            run[tree][f"T{signal}Theta"][idx] = np.arccos(
+                run[tree][f"T{signal}DirectionZ"][idx])
+            run[tree][f"T{signal}Phi"][idx] = np.arctan2(
+                run[tree][f"T{signal}DirectionY"][idx], run[tree][f"T{signal}DirectionX"][idx])
 
             run = remove_branches(
-                run, rm_branches, ["TMarleyDirectionMod"], tree=tree, debug=debug)
+                run, rm_branches, [f"T{signal}DirectionMod"], tree=tree, debug=debug)
 
     output += f"\tMarley direction computation \t-> Done!\n"
     return run, output, new_branches
@@ -365,7 +375,7 @@ def compute_particle_directions(run: dict, configs: dict, params: Optional[dict]
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyEnd", "TMarleyDirection"],
+    required_branches = {"Truth": ["Event", "Geometry", "Version"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", "MTrackEnd", "MTrackStart", "MTrackDirection"]}
     new_branches = ["MTrackTheta", "MTrackPhi", "MTrackDirectionX",
                     "MTrackDirectionY", "MTrackDirectionZ", "MTrackDirectionMod"]
@@ -398,20 +408,21 @@ def compute_particle_directions(run: dict, configs: dict, params: Optional[dict]
         run = remove_branches(
             run, rm_branches, ["MTrackDirectionMod"], tree=tree, debug=debug)
 
-    output += f"\tMarley direction computation \t-> Done!\n"
+    output += f"\tParticle direction computation \t-> Done!\n"
     return run, output, new_branches
 
 
-def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TNuE", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyK"],
-                         "Reco": ["Event", "Flag", "Geometry", "Version", "TNuE", "TMarleyPDG", "TMarleyMother", "TMarleyE", "TMarleyP", "TMarleyK"]}
-    new_branches = ["TMarleySumE", "TMarleySumP",
-                    "TMarleySumK", "TMarleyK", "TMarleyMass"]
+def compute_signal_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
+    signal = "Marley"
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"]}
+    new_branches = [f"T{signal}SumE", f"T{signal}SumP",
+                    f"T{signal}SumK", f"T{signal}K", f"T{signal}Mass"]
     if params is None:
         params = {"NORM_TO_NUE": False}
     for tree in trees:
-        pdg_list = np.unique(run[tree]["TMarleyPDG"]
-                             [np.where(run[tree]["TMarleyMother"] == 0)])
+        pdg_list = np.unique(run[tree][f"T{signal}PDG"]
+                             [np.where(run[tree][f"T{signal}Mother"] == 0)])
         pdg_list = pdg_list[pdg_list != 0]
         mass_list = [Particle.from_pdgid(pdg).mass for pdg in pdg_list]
         run[tree][new_branches[0]] = np.zeros(
@@ -421,31 +432,31 @@ def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=[
         run[tree][new_branches[2]] = np.zeros(
             (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32)
         run[tree][new_branches[3]] = np.zeros(
-            (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
+            (len(run[tree]["Event"]), len(run[tree][f"T{signal}PDG"][0])), dtype=np.float32)
         run[tree][new_branches[4]] = np.zeros(
-            (len(run[tree]["Event"]), len(run[tree]["TMarleyPDG"][0])), dtype=np.float32)
+            (len(run[tree]["Event"]), len(run[tree][f"T{signal}PDG"][0])), dtype=np.float32)
 
-        full_pdg_list = np.unique(run[tree]["TMarleyPDG"])
+        full_pdg_list = np.unique(run[tree][f"T{signal}PDG"])
         for non_pdg in [0, 1000120249, 1000140289, 1000190419, 1000210499, 1000220489, 1000130279, 1000360809, 1000360829]:
             full_pdg_list = full_pdg_list[full_pdg_list != non_pdg]
         full_mass_dict = {pdg: Particle.from_pdgid(
             pdg).mass for pdg in full_pdg_list}
 
-        # Gnearte branch for the mass of the particles frmo the TMarleyPDG m times n array and store it in the TMarleyMass branch
-        run[tree]["TMarleyMass"] = np.vectorize(
-            full_mass_dict.get)(run[tree]["TMarleyPDG"])
-        run[tree]["TMarleyMass"] = np.nan_to_num(
-            run[tree]["TMarleyMass"], nan=0.0, posinf=0.0, neginf=0.0)
-        run[tree]["TMarleyK"] = np.subtract(
-            run[tree]["TMarleyE"], run[tree]["TMarleyMass"])
+        # Gnearte branch for the mass of the particles frmo the T{signal}PDG m times n array and store it in the T{signal}Mass branch
+        run[tree][f"T{signal}Mass"] = np.vectorize(
+            full_mass_dict.get)(run[tree][f"T{signal}PDG"])
+        run[tree][f"T{signal}Mass"] = np.nan_to_num(
+            run[tree][f"T{signal}Mass"], nan=0.0, posinf=0.0, neginf=0.0)
+        run[tree][f"T{signal}K"] = np.subtract(
+            run[tree][f"T{signal}E"], run[tree][f"T{signal}Mass"])
 
         for idx, pdg in enumerate(pdg_list):
             run[tree][new_branches[0]][:, idx] = np.sum(
-                run[tree]["TMarleyE"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+                run[tree][f"T{signal}E"]*(run[tree][f"T{signal}PDG"] == pdg)*(run[tree][f"T{signal}Mother"] == 0), axis=1)
             run[tree][new_branches[1]][:, idx] = np.sum(
-                run[tree]["TMarleyP"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+                run[tree][f"T{signal}P"]*(run[tree][f"T{signal}PDG"] == pdg)*(run[tree][f"T{signal}Mother"] == 0), axis=1)
             run[tree][new_branches[2]][:, idx] = np.sum(
-                run[tree]["TMarleyK"]*(run[tree]["TMarleyPDG"] == pdg)*(run[tree]["TMarleyMother"] == 0), axis=1)
+                run[tree][f"T{signal}K"]*(run[tree][f"T{signal}PDG"] == pdg)*(run[tree][f"T{signal}Mother"] == 0), axis=1)
 
         if params["NORM_TO_NUE"]:
             # Divide by the energy of the neutrino
@@ -458,12 +469,12 @@ def compute_marley_energies(run, configs, params: Optional[dict] = None, trees=[
 
         pdg_list = np.repeat(pdg_list, len(run[tree]["Event"])).reshape(
             len(pdg_list), len(run[tree]["Event"])).T
-        run[tree]["TMarleySumPDG"] = pdg_list
+        run[tree][f"T{signal}SumPDG"] = pdg_list
 
         run = remove_branches(
-            run, rm_branches, ["TMarleyMass"], tree=tree, debug=debug)
+            run, rm_branches, [f"T{signal}Mass"], tree=tree, debug=debug)
 
-    output += f"\tMarley energy computation \t-> Done!\n"
+    output += f"\tSignal energy computation \t-> Done!\n"
     return run, output, new_branches
 
 
@@ -471,8 +482,9 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
     """
     This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
     """
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE"],
-                         "Reco": ["Event", "Flag", "Geometry", "Version", "TMarleyPDG", "TMarleyMother", "TMarleyE"]}
+    signal = "Marley"
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"]}
     particles_pdg = {"Electron": 11, "Gamma": 22,
                      "Neutron": 2112, "Neutrino": 12, "Proton": 2212}
     particles_mass = {particle: values for particle, values in zip(particles_pdg.keys(
@@ -487,14 +499,14 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
             len(run[tree]["Event"]), dtype=np.float32)
         run[tree][f"{particle}K"] = np.zeros(
             len(run[tree]["Event"]), dtype=np.float32)
-        if len(run[tree]["TMarleyPDG"][0]) > 0:
-            run[tree]["MarleyMass"] = np.vectorize(
-                prticles_pdg_mass.get)(run[tree]["TMarleyPDG"])
+        if len(run[tree][f"T{signal}PDG"][0]) > 0:
+            run[tree][f"{signal}Mass"] = np.vectorize(
+                prticles_pdg_mass.get)(run[tree][f"T{signal}PDG"])
         else:
-            run[tree]["MarleyMass"] = np.zeros(
-                (len(run[tree]["TMarleyPDG"]), len(run[tree]["TMarleyPDG"][0])), dtype=bool)
-        run[tree]["MarleyMass"] = np.nan_to_num(
-            run[tree]["MarleyMass"], nan=0.0, posinf=0.0, neginf=0.0)
+            run[tree][f"{signal}Mass"] = np.zeros(
+                (len(run[tree][f"T{signal}PDG"]), len(run[tree][f"T{signal}PDG"][0])), dtype=bool)
+        run[tree][f"{signal}Mass"] = np.nan_to_num(
+            run[tree][f"{signal}Mass"], nan=0.0, posinf=0.0, neginf=0.0)
 
     for config, tree in product(configs, trees):
         info, params, output = get_param_dict(
@@ -506,17 +518,17 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
         for particle in particles_pdg:
             # Create the MarleyMass branch from the TMarleyPDG branch according to the particles_mass dictionary
             run[tree][f"{particle}E"][idx] = np.sum(
-                run[tree]["TMarleyE"][idx]
-                * np.array(run[tree]["TMarleyPDG"][idx]
-                           == particles_pdg[particle]) * np.array(run[tree]["TMarleyMother"][idx] == 0),
+                run[tree][f"T{signal}E"][idx]
+                * np.array(run[tree][f"T{signal}PDG"][idx]
+                           == particles_pdg[particle]) * np.array(run[tree][f"T{signal}Mother"][idx] == 0),
                 axis=1,
             )
 
             run[tree][f"{particle}K"][idx] = np.sum(
-                np.subtract(run[tree]["TMarleyE"][idx],
-                            run[tree]["MarleyMass"][idx])
-                * np.array(run[tree]["TMarleyPDG"][idx]
-                           == particles_pdg[particle]) * np.array(run[tree]["TMarleyMother"][idx] == 0),
+                np.subtract(run[tree][f"T{signal}E"][idx],
+                            run[tree][f"{signal}Mass"][idx])
+                * np.array(run[tree][f"T{signal}PDG"][idx]
+                           == particles_pdg[particle]) * np.array(run[tree][f"T{signal}Mother"][idx] == 0),
                 axis=1,
             )
 
@@ -1507,11 +1519,17 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
             elif params[param][0] == "different":
                 idx = idx & (run[param[0]][param[1]] != params[param][1])
             elif params[param][0] == "between":
-                idx = idx & (run[param[0]][param[1]] > params[param][1][0]) & (
-                    run[param[0]][param[1]] < params[param][1][1])
+                idx = idx & (run[param[0]][param[1]] > params[param][1][0]) & \
+                            (run[param[0]][param[1]] < params[param][1][1])
+            elif params[param][0] == "absbetween":
+                idx = idx & (abs(run[param[0]][param[1]]) > params[param][1][0]) & \
+                            (abs(run[param[0]][param[1]]) < params[param][1][1])
             elif params[param][0] == "outside":
-                idx = idx & ((run[param[0]][param[1]] < params[param][1]
-                              [0]) + (run[param[0]][param[1]] > params[param][1][1]))
+                idx = idx & ((run[param[0]][param[1]] < params[param][1][0]) + \
+                            (run[param[0]][param[1]] > params[param][1][1]))
+            elif params[param][0] == "absoutside":
+                idx = idx & ((abs(run[param[0]][param[1]]) < params[param][1][0]) + \
+                             (abs(run[param[0]][param[1]]) > params[param][1][1]))
             elif params[param][0] == "contains":
                 idx = idx & np.array(
                     [params[param][1] in item for item in run[param[0]][param[1]]])
