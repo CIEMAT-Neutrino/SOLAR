@@ -48,28 +48,44 @@ def get_neutrino_positions(run, tree, idx):
     return neut, neut_name, neut_color
 
 
-def get_marley_positions(run, tree, idx):
+def get_signal_positions(run, tree, idx):
     ccint = [[],[],[]]
-    ccint[0] = [x for x in run[tree]["TMarleyX"][idx] if x != 0]
-    ccint[1] = [x for x in run[tree]["TMarleyY"][idx] if x != 0]
-    ccint[2] = [x for x in run[tree]["TMarleyZ"][idx] if x != 0]
+    ccint[0] = [x for x in run[tree]["TSignalX"][idx] if x != 0]
+    ccint[1] = [x for x in run[tree]["TSignalY"][idx] if x != 0]
+    ccint[2] = [x for x in run[tree]["TSignalZ"][idx] if x != 0]
     true_name = [
-        Particle.from_pdgid(x).name for x in run[tree]["TMarleyPDG"][idx] if x not in [0, 1000190419] 
+        Particle.from_pdgid(x).name for x in run[tree]["TSignalPDG"][idx] if x not in [0, 1000190419] 
     ]
     true_color = [
-        get_pdg_color(int(x)) for x in run[tree]["TMarleyPDG"][idx] if x != 0
+        list(get_pdg_color([x]).values())[0] for x in run[tree]["TSignalPDG"][idx] if x != 0
     ]
     return ccint, true_name, true_color
 
 
-def get_main_positions(run, tree, idx, reco, color_dict):
+def get_edep_positions(run, tree, idx, max_edep_size=100):
+    edep = [[],[],[]]
+    edep[0] = [x for x in run[tree]["TSignalXDepList"][idx] if x != 0]
+    edep[1] = [x for x in run[tree]["TSignalYDepList"][idx] if x != 0]
+    edep[2] = [x for x in run[tree]["TSignalZDepList"][idx] if x != 0]
+    edep_size = [x for x in run[tree]["TSignalEDepList"][idx] if x != 0]
+    edep_size = [x if x < max_edep_size else max_edep_size for x in edep_size]
+    edep_name = [
+        Particle.from_pdgid(x).name for x in run[tree]["TSignalPDGDepList"][idx] if x not in [0, 1000190419] 
+    ]
+    edep_color = [
+        list(get_pdg_color([x]).values())[0] for x in run[tree]["TSignalPDGDepList"][idx] if x != 0
+    ]
+    return edep, edep_name, edep_color, edep_size
+
+
+def get_main_positions(run, tree, idx, reco):
     main_vertex = [[],[],[]]
     main_vertex[0] = [run[tree][f"{reco}X"][idx]]
     main_vertex[1] = [run[tree][f"{reco}Y"][idx]]
     main_vertex[2] = [run[tree][f"{reco}Z"][idx]]
     main_name = [Particle.from_pdgid(run[tree]["MainPDG"][idx]).name]
     main_color = get_pdg_color(int(run[tree]["MainPDG"][idx]))
-    return main_vertex,main_name,main_color
+    return main_vertex, main_name, main_color
 
 
 def get_adjcl_positions(run, tree, idx, reco, color_dict):
@@ -162,6 +178,56 @@ def add_data_to_event(fig, data, idx, title, subtitle, name, symbol, size, color
     return fig
 
 
+def plot_edep_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=False):
+    specs = [
+        [
+            {"type": "scatter"},
+            {"type": "scatter"},
+            {"type": "scatter3d", "colspan": 2},
+            None,
+        ]
+    ]
+    fig = make_subplots(rows=1, cols=4, specs=specs, subplot_titles=[""])
+
+    for i, config in enumerate(configs):
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
+        bkg_dict, color_dict = get_bkg_config(info)
+        if idx is None:
+            idx = np.random.randint(len(run["Truth"]["Event"]))
+
+        # neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
+        ccint, true_name, true_color = get_signal_positions(run, tracked, idx)
+        edep, edep_name, edep_color, edep_size = get_edep_positions(run, tracked, idx)
+        # adj, adjcl_name, adjcl_color = get_adjcl_positions(run, tracked, idx, tracked, color_dict)
+
+        # fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 15, neut_color, {"lw":1})
+        fig = add_data_to_event(fig, ccint, "0", "Truth", "Particles", true_name,"square-open", 15, true_color,{"lw":1})
+        fig = add_data_to_event(fig, edep, "1", "Raw", "EDeps", edep_name,"circle", 100*edep_size, edep_color, {})
+        # fig = add_data_to_event(fig, adj, "1", "Reco", "Adjacent", adjcl_name,"square", 10, adjcl_color)
+
+        fig = format_coustom_plotly(fig, figsize=(None, 600), tickformat=(".1f",".1f"))
+        
+        particle = Particle.from_pdgid(run[tracked]["TSignalPDG"][:,0][idx]).name 
+        fig.update_layout(
+            title_text="%s <b>%.2fMeV</b> Cluster: %i"
+            % (particle, run[tracked]["TSignalE"][:,0][idx], idx),
+            title_x=0.5,
+        )
+
+        fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
+        fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
+        fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
+        fig = add_geometry_planes(fig, info["GEOMETRY"], row=1, col=3)
+        
+        if zoom:
+            fig.update_xaxes(row=1, col=2, range=[ccint[0][0] - 100, ccint[0][0] + 100])
+            fig.update_yaxes(row=1, col=2, range=[ccint[1][0] - 100, ccint[1][0] + 100])
+            fig.update_xaxes(row=1, col=1, range=[ccint[2][0] - 100, ccint[2][0] + 100])
+
+        fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
+        return fig 
+
+
 def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=False):
     specs = [
         [
@@ -186,8 +252,8 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
                 idx = np.random.randint(len(run["Reco"]["Event"]))
 
         neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
-        ccint, true_name, true_color = get_marley_positions(run, tracked, idx)
-        main, main_name, main_color = get_main_positions(run, tracked, idx, tracked, color_dict)
+        ccint, true_name, true_color = get_signal_positions(run, tracked, idx)
+        main, main_name, main_color = get_main_positions(run, tracked, idx, tracked)
         adj, adjcl_name, adjcl_color = get_adjcl_positions(run, tracked, idx, tracked, color_dict)
 
         fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 15, neut_color, {"lw":1})
@@ -236,7 +302,7 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
                 idx = np.random.randint(len(run[tracked]["Event"]))
 
         neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
-        ccint, true_name, true_color = get_marley_positions(run, tracked, idx)
+        ccint, true_name, true_color = get_signal_positions(run, tracked, idx)
         # If flashid is not None, then we filter the ophits by the flashid
         if flashid == "All":
             ophits = get_ophit_positions(run, tracked, idx)

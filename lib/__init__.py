@@ -38,6 +38,9 @@ nhits = get_default_nhits(root)
 
 energy_edges, energy_centers, ebin = get_default_energies(root)
 
+bkg_energy_edges, bkg_energy_centers, bkg_ebin = get_default_energies(
+    root, "BKG_RECO_ENERGY")
+
 red_energy_edges, red_energy_centers, red_ebin = get_default_energies(
     root, "REDUCED_RECO_ENERGY")
 

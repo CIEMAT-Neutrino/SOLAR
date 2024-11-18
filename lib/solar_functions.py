@@ -1,6 +1,7 @@
 from src.utils import get_project_root
 
 import os
+import json
 import plotly
 import numba
 import numpy as np
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
+from typing import Optional
 from plotly.subplots import make_subplots
 from scipy import interpolate
 from particle import Particle
@@ -17,7 +19,6 @@ from scipy import constants as const
 from rich import print as rprint
 
 from lib.io_functions import (
-    print_colored,
     get_bkg_config,
     get_gen_label,
     get_gen_weights,
@@ -129,7 +130,7 @@ def compute_solar_spectrum(
                 dm2=this_dm2,
                 sin13=this_sin13,
                 sin12=this_sin12,
-                path=f"{root}/data/OSCILLATION/pkl/rebin/",
+                path=f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/pkl/rebin/",
                 ext="pkl",
                 auto=this_auto,
                 debug=debug,
@@ -142,7 +143,7 @@ def compute_solar_spectrum(
                 sin13 = sin13_list[i]
                 sin12 = sin12_list[i]
                 oscillation_df = pd.read_pickle(
-                    f"{root}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
+                    f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/pkl/rebin/osc_probability_dm2_%.3e_sin13_%.3e_sin12_%.3e.pkl"
                     % (dm2, sin13, sin12)
                 )
 
@@ -168,10 +169,10 @@ def compute_solar_spectrum(
 
                 if save and ldx == len(filters[0]) - 1:
                     if not os.path.exists(
-                        f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                     ):
                         os.makedirs(
-                            f"{root}/data/SENSITIVITY/"
+                            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SENSITIVITY/"
                             + config
                             + "/"
                             + name
@@ -180,7 +181,7 @@ def compute_solar_spectrum(
                             + "/"
                         )
                     weighted_df.to_pickle(
-                        f"{root}/data/SENSITIVITY/"
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SENSITIVITY/"
                         + config
                         + "/"
                         + name
@@ -203,11 +204,7 @@ def compute_solar_spectrum(
             raised_activity = gen_weigths_dict[(info["GEOMETRY"], name)]
             weight = np.ones(len(r_hist)) / (raised_activity * int_time)
             if debug:
-                print_colored(
-                    "Weight for %s with filter %s: %.2e"
-                    % (name, filters[1][ldx], raised_activity),
-                    color="INFO",
-                )
+                rprint(f"[cyan][INFO] Weight for {name} with filter {filters[1][ldx]}: {raised_activity:.2e}[/cyan]")
             r_hist = r_hist * info["FULL_DETECTOR_FACTOR"] * factor * weight
             total_counts = r_hist.tolist()
 
@@ -229,14 +226,14 @@ def compute_solar_spectrum(
                 ).mul(nadir_y, axis=0)
                 # If output folder does not exist, create it
                 if not os.path.exists(
-                    f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
+                    f"/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                 ):
                     os.makedirs(
-                        f"{root}/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SENSITIVITY/" + config + "/" + name + "/" + gen_label + "/"
                     )
                 if save:
                     weighted_df.to_pickle(
-                        f"{root}/data/SENSITIVITY/"
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SENSITIVITY/"
                         + config
                         + "/"
                         + name
@@ -245,8 +242,6 @@ def compute_solar_spectrum(
                         + "/%s_events.pkl" % (gen_label)
                     )
                 weighted_df_dict[(None, None, None)] = weighted_df
-
-        # if debug:print_colored("Total counts for %s with filter %s: %.2e"%(gen_label,filters[1][ldx],np.sum(total_counts)),color="INFO")
 
         this_dict_array = {
             "Geometry": info["GEOMETRY"],
@@ -304,25 +299,33 @@ def get_pdg_name(unique_value_list, debug=False):
     return pdg_dict
 
 
-def get_pdg_color(pdg_list, debug=False):
+def get_pdg_color(pdgs: list[str], debug:bool=False):
     """
     Get the color for each pdg.
     """
-    default_color_dict = {12: "red", 11: "orange", 22: "blue", 2112: "green", 2212: "purple", -12: "cyan",}
-    if type(pdg_list) == int:
+    # default_color_dict = {12: "red", 11: "orange", 22: "blue", 2112: "green", 2212: "purple", -12: "cyan",}
+    output = ""
+    default_color_dict = json.load(open(f"{root}/lib/import/pdg_color.json"))
+    if debug:
+        rprint(f"[cyan]PDGs: {default_color_dict}[/cyan]")
+    color_dict = dict()
+    for pdg in pdgs:
+        # print(f"{pdg}: {type(pdg)}")
+        if ~isinstance(pdg, str):
+            if isinstance(pdg, int):
+                pdg = str(pdg)
+            elif isinstance(pdg, np.int64):
+                pdg = str(pdg)
         try:
-            return default_color_dict[pdg_list]
+            color_dict[pdg] = default_color_dict[pdg]
         except:
-            return "grey"
+            if debug:
+                output += f"[yellow][WARNING] PDG {pdg} not found in default color dictionary![/yellow]\n"
+            color_dict[pdg] = "grey"
 
-    else:
-        color_dict = dict()
-        for pdg in pdg_list:
-            try:
-                color_dict[pdg] = default_color_dict[pdg]
-            except:
-                color_dict[pdg] = "grey"
-        return color_dict
+    if output != "":
+        rprint(output)
+    return color_dict
 
 
 def get_solar_weigths(weights="B16-GS98"):
@@ -356,7 +359,7 @@ def get_solar_weigths(weights="B16-GS98"):
         return weights_dict
 
     else:
-        print("ERROR: Weights not defined, using B16-GS98!")
+        rprint("[red][ERROR] Weights not defined, using B16-GS98![/red]")
         get_solar_weigths("B16-GS98")
 
 
@@ -372,15 +375,19 @@ def get_solar_colors(source):
             return colors[idx]
 
 
-def read_solar_data(in_path, source, weigths):
+def read_solar_data(source, path: Optional[str] = None, weigths: str = "B16-GS98"):
     """
     Read in the solar flux data and interpolate it to the desired energy bins.
     """
+
+    if path == None:
+        path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/"
+
     data = get_solar_weigths(weigths)
     energy = []
     flux = []
     factor = 1e10 * data[source]
-    text = open(in_path + source + ".dat", "r")
+    text = open(path + source + ".dat", "r")
     lines = text.readlines()
 
     for j in range(len(lines)):
@@ -395,7 +402,7 @@ def get_solar_spectrum(
     components: list,
     bins,
     weigths="B16-GS98",
-    in_path=f"{root}/data/SOLAR/",
+    path: Optional[str] = None,
     interpolation='linear',
     bounds=(0,0),
     debug=False,
@@ -407,7 +414,7 @@ def get_solar_spectrum(
         components (list): list of components
         bins (np.array): energy bins
         weigths (str): weigths (default: "BS05")
-        in_path (str): input path (default: "../data/SOLAR/").
+        path (str): input path (default: "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/")
         interpolation (Any): interpolation method from scipy.interpolate.interp1d (default: 'linear')
         bounds (Any): bounds for the interpolation (default: (0,0))
         debug (bool): if True, print debug messages (default: False)
@@ -415,12 +422,15 @@ def get_solar_spectrum(
     Returns:
         y (np.array): interpolated flux values
     """
+    if path == None:
+        path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/"
 
     x = bins
     y = np.zeros(len(x))  # Array that will host the interpolated flux values.
 
+
     for idx, source in enumerate(components):
-        array = read_solar_data(in_path, source, weigths)
+        array = read_solar_data(source, path, weigths)
         if source != "pep" and source != "b7":
             # func = interpolate.interp1d(
             #     array[0], array[1], kind="cubic", bounds_error=False, fill_value=0
@@ -433,11 +443,11 @@ def get_solar_spectrum(
 
 def plot_solar_spectrum(
     fig,
-    idx,
+    idx: int,
     components: list = ["pp", "pep", "b7", "f17", "o15", "n13", "b8", "hep"],
-    weigths="B16-GS98",
-    in_path=f"{root}/data/SOLAR/",
-    debug=False,
+    weigths: str = "B16-GS98",
+    path: Optional[str] = None,
+    debug: bool = False,
 ):
     """
     Plot the solar flux data.
@@ -453,8 +463,10 @@ def plot_solar_spectrum(
     Returns:
         fig (plotly.graph_objects.Figure): the plotly figure object
     """
+    if path == None:
+        path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/"
     for source in components:
-        array = read_solar_data(in_path, source, weigths)
+        array = read_solar_data(source, path, weigths)
         if source != "b7":
             fig.add_trace(
                 go.Scatter(
@@ -506,7 +518,7 @@ def interpolate_solar_data(x, y, label, interpolation=None, bounds=None, debug=F
     return func
 
 
-def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/", label='neutrino_cc_final', debug=False):
+def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/", label='neutrino_cc_final', debug=False):
     """
     Read in marley data and return the neutrino cc spectrum.
     """

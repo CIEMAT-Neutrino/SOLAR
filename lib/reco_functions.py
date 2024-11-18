@@ -1,6 +1,7 @@
 import json
 import pickle
 import numba
+import yaml
 import numpy as np
 
 from typing import Optional
@@ -260,7 +261,7 @@ def compute_marley_particle(run: dict[dict], configs: dict[str, list[str]], para
     '''
     Compute the Marley particle type for the events in the run.
     '''
-    signal = "Marley"
+    signal = "Signal"
     if output is None:
         output = ""
     required_branches = ["Generator", f"T{signal}Frac"]
@@ -332,7 +333,7 @@ def compute_signal_directions(run, configs, params={}, trees=["Truth", "Reco"], 
     """
     This functions loops over the Marley particles and computes the direction of the particles, returning variables with the same structure as TMarleyPDG.
     """
-    signal = "Marley"
+    signal = "Signal"
     required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}End", f"T{signal}Direction"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", "MTrackEnd", "MTrackStart", "MTrackDirection"]}
     new_branches = [f"T{signal}Theta", f"T{signal}Phi", f"T{signal}DirectionX",
@@ -413,7 +414,7 @@ def compute_particle_directions(run: dict, configs: dict, params: Optional[dict]
 
 
 def compute_signal_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
-    signal = "Marley"
+    signal = "Signal"
     required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"]}
     new_branches = [f"T{signal}SumE", f"T{signal}SumP",
@@ -482,7 +483,7 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
     """
     This functions looks into "TMarleyPDG" branch and combines the corresponding "TMarleyE" entries to get a total energy for each daughter particle.
     """
-    signal = "Marley"
+    signal = "Signal"
     required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"]}
     particles_pdg = {"Electron": 11, "Gamma": 22,
@@ -490,7 +491,7 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
     particles_mass = {particle: values for particle, values in zip(particles_pdg.keys(
     ), [Particle.from_pdgid(particles_pdg[particle]).mass for particle in particles_pdg])}
     particles_mass["Neutrino"] = 0
-    prticles_pdg_mass = {particles_pdg[particle]: particles_mass[particle]
+    particles_pdg_mass = {particles_pdg[particle]: particles_mass[particle]
                          for particle in particles_pdg}
 
     new_branches = list(particles_pdg.keys())
@@ -500,11 +501,17 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
         run[tree][f"{particle}K"] = np.zeros(
             len(run[tree]["Event"]), dtype=np.float32)
         if len(run[tree][f"T{signal}PDG"][0]) > 0:
-            run[tree][f"{signal}Mass"] = np.vectorize(
-                prticles_pdg_mass.get)(run[tree][f"T{signal}PDG"])
+            try:
+                run[tree][f"{signal}Mass"] = np.vectorize(
+                    particles_pdg_mass.get)(run[tree][f"T{signal}PDG"])
+            except TypeError:
+                rprint(f"Failed pdg-mass computation: {particles_pdg_mass}")
+                return run, output, new_branches
+                
         else:
             run[tree][f"{signal}Mass"] = np.zeros(
                 (len(run[tree][f"T{signal}PDG"]), len(run[tree][f"T{signal}PDG"][0])), dtype=bool)
+        
         run[tree][f"{signal}Mass"] = np.nan_to_num(
             run[tree][f"{signal}Mass"], nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -1041,7 +1048,7 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             try:
                 path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
                 open(path, "r")
-                output += f"[cyan]Loading model for {name}[/cyan]"
+                output += f"\t***[cyan]Loading model for {name}[/cyan]\n"
             except FileNotFoundError:
                 output += f"\t***[yellow][WARNING] Model file not found for {name}. Defaulting to Marley![/yellow]\n"
                 path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
@@ -1461,22 +1468,64 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
     return run, output, new_branches
 
 
-def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optional[dict] = None, output: Optional[str] = None, debug: bool = False):
+def import_filter_preset(params:dict, config: str, preset: Optional[str], output: Optional[str] = None, debug: bool = False)-> dict:
+    """
+    Import the filter configuration from the yml file.
+
+    Args:
+        params: dictionary containing the filter configuration
+        config: path to the configuration file
+        preset: name of the preset to be imported
+        output: output string
+        debug: print debug information
+
+    Returns:
+        params: dictionary containing the filter configuration
+    """
+    if preset is None:
+        return params
+
+    if output is None:
+        output = ""
+
+    if preset is not None:
+        # Load yml config file
+        with open(f"{root}/config/{config}/{config}_filter.yml", "r") as file:
+            filter_config = yaml.load(file, Loader=yaml.FullLoader)
+            for tree_dict in filter_config[preset]:
+                tree_name = list(tree_dict.keys())[0]
+                if list(tree_dict.values())[0] is None:
+                    continue
+                else:
+                    for branch_dict in list(tree_dict.values())[0]: 
+                        branch_name = list(branch_dict.keys())[0]
+                        filter_key = (tree_name, branch_name)
+                        filter_cut = (list(branch_dict[branch_name][0].keys())[0], list(branch_dict[branch_name][0].values())[0]) 
+                        params[filter_key] = filter_cut
+    return params   
+
+
+def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optional[dict] = None, preset: Optional[str] = None, output: Optional[str] = None, debug: bool = False):
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
     """
-    if output is None:
-        output = ""
 
     new_run = {}
     if type(params) != dict and params != None:
         output += f"[red][ERROR]Params must be a dictionary![/red]"
         return run
 
-    if params == None:
+    if output is None:
+        output = ""
+
+    if params == None and preset == None:
         if debug:
             output += "[yellow][WARNING] No filter applied![/yellow]"
         return run
+    elif params == None and preset != None:
+        params = {}
+    elif params != None and preset != None:
+        output += f"[cyan][INFO] Combining preset {preset} with custom filters[/cyan]"
 
     new_trees = run.keys()
     branch_ref = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
@@ -1484,62 +1533,74 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
         new_run[tree] = {}
         branch_list = list(run[tree].keys())
         idx = np.zeros(len(run[tree][branch_ref[tree]]), dtype=bool)
+        kdx = np.zeros(len(run[tree][branch_ref[tree]]), dtype=bool)
 
         # Make sure that only the entries that correspond to the correct geometry, version and name are selected
         for config in configs:
             info = json.load(
                 open(f"{root}/config/{config}/{config}_config.json", "r"))
+            params = import_filter_preset(params, config, preset, output, debug)                 
             for name in configs[config]:
                 config_filter = (run[tree]["Geometry"] == info["GEOMETRY"]) & (
                     run[tree]["Version"] == info["VERSION"]) & (run[tree]["Name"] == name)
-                idx = idx + config_filter
+                jdx = idx + config_filter
+        
+                if debug:
+                    output += f"From {len(run[tree][branch_ref[tree]])} events, {len(jdx)} have been selected by configs for {tree} tree.\n"
+                
+                for param in params:
+                    if param[0] != tree:
+                        continue
+
+                    if not isinstance(params[param], tuple) and not isinstance(params[param], list):
+                        output += f"[red][ERROR]: Filter must be tuple or list, but found {type(params[param])}[/red]"
+                        if debug: print(f"{param}: {params[param]}")
+                        return run, output
+                    
+                    if len(params[param]) != 2:
+                        output += f"[red][ERROR]: Filter must be of length 2![/red]"
+                        if debug: print(f"{param}: {params[param]}")
+                        return run, output
+
+                    if param[1] not in run[param[0]].keys():
+                        output += f"[red][ERROR]: Branch {param[1]} not found in the run![/red]"
+                        if debug: print(f"{param}: {params[param]}")
+                        return run, output
+
+                    if params[param][0] == "bigger":
+                        jdx = jdx & (run[param[0]][param[1]] > params[param][1])
+                    elif params[param][0] == "smaller":
+                        jdx = jdx & (run[param[0]][param[1]] < params[param][1])
+                    elif params[param][0] == "equal":
+                        jdx = jdx & (run[param[0]][param[1]] == params[param][1])
+                    elif params[param][0] == "different":
+                        jdx = jdx & (run[param[0]][param[1]] != params[param][1])
+                    elif params[param][0] == "between":
+                        jdx = jdx & (run[param[0]][param[1]] > params[param][1][0]) & \
+                                    (run[param[0]][param[1]] < params[param][1][1])
+                    elif params[param][0] == "absbetween":
+                        jdx = jdx & (abs(run[param[0]][param[1]]) > params[param][1][0]) & \
+                                    (abs(run[param[0]][param[1]]) < params[param][1][1])
+                    elif params[param][0] == "outside":
+                        jdx = jdx & ((run[param[0]][param[1]] < params[param][1][0]) + \
+                                    (run[param[0]][param[1]] > params[param][1][1]))
+                    elif params[param][0] == "absoutside":
+                        jdx = jdx & ((abs(run[param[0]][param[1]]) < params[param][1][0]) + \
+                                    (abs(run[param[0]][param[1]]) > params[param][1][1]))
+                    elif params[param][0] == "contains":
+                        jdx = jdx & np.array(
+                            [params[param][1] in item for item in run[param[0]][param[1]]])
+                    if debug:
+                        output += f"-> {param[1]}: {params[param][0]} {params[param][1]}:\t{np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
+
+                kdx = kdx + jdx
+
+        combined_filter = np.where(kdx == True)
         if debug:
-            output += f"From {len(run[tree][branch_ref[tree]])} events, {len(idx)} have been selected by configs for {tree} tree.\n"
-        for param in params:
-            if param[0] != tree:
-                continue
-
-            if type(param) != tuple or len(param) != 2:
-                output += f"[red][ERROR]: Filter must be a tuple or list of length 2![/red]"
-                return run
-            if type(params[param]) != tuple or len(params[param]) != 2:
-                output += f"[red][ERROR]: Filter must be a tuple or list of length 2![/red]"
-                return run
-
-            if param[1] not in run[param[0]].keys():
-                output += f"[red][ERROR]: Branch {param[1]} not found in the run![/red]"
-                return run
-
-            if params[param][0] == "bigger":
-                idx = idx & (run[param[0]][param[1]] > params[param][1])
-            elif params[param][0] == "smaller":
-                idx = idx & (run[param[0]][param[1]] < params[param][1])
-            elif params[param][0] == "equal":
-                idx = idx & (run[param[0]][param[1]] == params[param][1])
-            elif params[param][0] == "different":
-                idx = idx & (run[param[0]][param[1]] != params[param][1])
-            elif params[param][0] == "between":
-                idx = idx & (run[param[0]][param[1]] > params[param][1][0]) & \
-                            (run[param[0]][param[1]] < params[param][1][1])
-            elif params[param][0] == "absbetween":
-                idx = idx & (abs(run[param[0]][param[1]]) > params[param][1][0]) & \
-                            (abs(run[param[0]][param[1]]) < params[param][1][1])
-            elif params[param][0] == "outside":
-                idx = idx & ((run[param[0]][param[1]] < params[param][1][0]) + \
-                            (run[param[0]][param[1]] > params[param][1][1]))
-            elif params[param][0] == "absoutside":
-                idx = idx & ((abs(run[param[0]][param[1]]) < params[param][1][0]) + \
-                             (abs(run[param[0]][param[1]]) > params[param][1][1]))
-            elif params[param][0] == "contains":
-                idx = idx & np.array(
-                    [params[param][1] in item for item in run[param[0]][param[1]]])
-            if debug:
-                output += f"-> {param[1]}: {params[param][0]} {params[param][1]}:\t{np.sum(idx):.1E} ({100*np.sum(idx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
-
-        jdx = np.where(idx == True)
+            print(f"From {len(run[tree][branch_ref[tree]])} events, {np.sum(kdx)} have been selected by filters for {tree} tree.")
         for branch in branch_list:
             try:
-                new_run[tree][branch] = np.asarray(run[tree][branch])[jdx]
+                new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
             except Exception as e:
                 output += f"[red][ERROR] Couldn't filter branch {branch}: {e}[/red]"
 

@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import awkward as ak
+import yaml
 import plotly
 import plotly.express as px
 import plotly.graph_objs as go
@@ -628,11 +629,13 @@ def load_multi(
         info = json.load(
             open(f"{root}/config/{config}/{config}_config.json", "r"))
 
-        path = info["PATH"]
         name = info["NAME"]
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
+        
+        path = f'{info["PATH"]}/{geo}/{vers}/'
         filepath = f"{path}{name}"
+        
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
@@ -792,7 +795,7 @@ def save_proccesed_variables(run, info={}, force=False, debug=False):
     """
 
     aux = copy.deepcopy(run)
-    path = info["PATH"] + info["NAME"] + "/"
+    path = f'{info["PATH"]}/{info["GEOMETRY"]}/{info["VERSION"]}/{info["NAME"]}/'
     branches = get_branches2use(
         run, debug=debug
     )  # Load the branches of the TTree not in ['Name', 'Path', 'Labels', 'Colors']

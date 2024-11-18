@@ -114,7 +114,7 @@ def format_coustom_plotly(
     """
 
     if legend == None:
-        legend = dict(groupclick="toggleitem")
+        legend = dict(groupclick="toggleitem", font=dict(size=fontsize-3))
 
 
     # Find the number of subplots
@@ -124,14 +124,14 @@ def format_coustom_plotly(
             rows, cols = rows[-1], cols[-1]
         except Exception:
             rows, cols = 1, 1
-            rprint("[red]Error: unknown figure type[/red]")
+            rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel![/red]")
     else:
         rows, cols = 1, 1
-        rprint("[red]Error: unknown figure type[/red]")
+        rprint(f"[red][ERROR]: unknown figure type! {type(type(fig))}[/red]")
 
     if debug:
-        rprint("[blue]Detected number of subplots: " +
-               str(rows * cols) + "[/blue]")
+        rprint("[cyan][INFO]Detected number of subplots: " +
+               str(rows * cols) + "[/cyan]")
 
     if figsize == None:
         figsize = (800 + 600 * (cols - 1), 600 + 200 * (rows - 1))
