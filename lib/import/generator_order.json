@@ -1,6 +1,6 @@
 {
     "hd": {
-        "1x2x6_lateralAPA": {
+        "hd_1x2x6_lateralAPA": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 27,
@@ -34,7 +34,7 @@
             "GammasInCryostat": 28,
             "GammasInCavern": 29
         },
-        "1x2x6_centralAPA": {
+        "hd_1x2x6_centralAPA": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 27,
@@ -70,7 +70,7 @@
         }
     },
     "vd": {
-        "1x8x14_3view_30deg": {
+        "vd_1x8x14_3view_30deg": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 26,
