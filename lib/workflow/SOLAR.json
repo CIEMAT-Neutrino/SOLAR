@@ -8,11 +8,11 @@
     "Truth": {
         "VECTORS": {
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyX": 1,
-            "TMarleyY": 1,
-            "TMarleyZ": 1,
-            "TMarleyPDG": 1
+            "TSignalE": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1,
+            "TSignalPDG": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -30,11 +30,11 @@
     "Reco": {
         "VECTORS": {
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyX": 1,
-            "TMarleyY": 1,
-            "TMarleyZ": 1,
-            "TMarleyPDG": 1,
+            "TSignalE": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1,
+            "TSignalPDG": 1,
             "MainVertex": 0,
             "MainParentVertex": 0,
             "AdjClR": 0,
@@ -55,7 +55,7 @@
             "AdjOpFlashRecoZ": 1,
             "AdjOpFlashMaxPE": 1,
             "AdjOpFlashNHit": 1,
-            "MarleyFrac": 0
+            "SignalFrac": 0
         },
         "INTEGERS": {
             "Event": 1,

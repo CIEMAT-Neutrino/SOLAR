@@ -8,15 +8,15 @@
     "Truth": {
         "VECTORS": {
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyX": 1,
-            "TMarleyY": 1,
-            "TMarleyZ": 1,
-            "TMarleyMother": 1,
-            "TMarleyEndX": 1,
-            "TMarleyEndY": 1,
-            "TMarleyEndZ": 1,
-            "TMarleyPDG": 1
+            "TSignalE": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1,
+            "TSignalMother": 1,
+            "TSignalEndX": 1,
+            "TSignalEndY": 1,
+            "TSignalEndZ": 1,
+            "TSignalPDG": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -35,17 +35,17 @@
     "Reco": {
         "VECTORS": {
             "MainParentVertex": 1,
-            "TMarleyMother": 1,
-            "TMarleyEndX": 1,
-            "TMarleyEndY": 1,
-            "TMarleyEndZ": 1,
-            "TMarleyPDG": 1,
+            "TSignalMother": 1,
+            "TSignalEndX": 1,
+            "TSignalEndY": 1,
+            "TSignalEndZ": 1,
+            "TSignalPDG": 1,
             "MainVertex": 1,
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyX": 1,
-            "TMarleyY": 1,
-            "TMarleyZ": 1
+            "TSignalE": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1
         },
         "INTEGERS": {
             "Event": 1,

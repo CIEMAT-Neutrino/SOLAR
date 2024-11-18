@@ -8,10 +8,10 @@
     "Truth": {
         "VECTORS": {
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyK": 1,
-            "TMarleyPDG": 1,
-            "TMarleyMother": 1
+            "TSignalE": 1,
+            "TSignalK": 1,
+            "TSignalPDG": 1,
+            "TSignalMother": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -26,10 +26,10 @@
     "Reco": {
         "VECTORS": {
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyK": 1,
-            "TMarleyPDG": 1,
-            "TMarleyMother": 1,
+            "TSignalE": 1,
+            "TSignalK": 1,
+            "TSignalPDG": 1,
+            "TSignalMother": 1,
             "MainVertex": 1,
             "MainParentVertex": 1,
             "AdjClMotherPDG": 1,

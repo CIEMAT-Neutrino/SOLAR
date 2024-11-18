@@ -36,6 +36,11 @@
         30
     ],
     "RECO_ENERGY_BINS": 60,
+    "BKG_RECO_ENERGY_RANGE": [
+        0,
+        18
+    ],
+    "BKG_RECO_ENERGY_BINS": 120,
     "REDUCED_RECO_ENERGY_RANGE": [
         5,
         21

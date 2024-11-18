@@ -31,7 +31,7 @@
             "AdjClMainX": 1,
             "AdjClMainY": 1,
             "AdjClMainZ": 1,
-            "MarleyFrac": 1
+            "SignalFrac": 1
         },
         "INTEGERS": {
             "Event": 1,

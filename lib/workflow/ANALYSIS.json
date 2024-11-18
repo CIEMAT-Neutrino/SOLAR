@@ -19,12 +19,12 @@
     },
     "Reco": {
         "VECTORS": {
-            "MarleyFrac": 1,
+            "SignalFrac": 1,
             "TruthPart": 1,
-            "TMarleyE": 1,
-            "TMarleyK": 1,
-            "TMarleyPDG": 1,
-            "TMarleyMother": 1,
+            "TSignalE": 1,
+            "TSignalK": 1,
+            "TSignalPDG": 1,
+            "TSignalMother": 1,
             "MainParentVertex": 1,
             "MainVertex": 1,
             "AdjClMainE": 1,
