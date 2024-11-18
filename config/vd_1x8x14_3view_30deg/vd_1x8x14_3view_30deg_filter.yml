@@ -1,0 +1,14 @@
+"CORRECTION": null
+"CALIBRATION": null
+"DISCRIMINATION": null
+"RECONSTRUCTION": null
+"SMEARING": null
+"FIDUCIALIZATION":
+- "Truth": null
+- "Reco":
+  - "RecoX":
+    - "absbetween": [10, 620]
+  - "RecoY":
+    - "absbetween": [10, 1340]
+  - "RecoZ":
+    - "absbetween": [10, 2090]

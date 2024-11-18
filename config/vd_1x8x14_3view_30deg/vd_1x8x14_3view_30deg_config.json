@@ -1,8 +1,8 @@
 {
     "NAME": "SolarNuAna_",
-    "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/VD/1x8x14_3view_30deg/",
+    "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data",
     "GEOMETRY": "vd",
-    "VERSION": "1x8x14_3view_30deg",
+    "VERSION": "vd_1x8x14_3view_30deg",
     "FULL_DETECTOR_FACTOR": 8,
     "TIMEWINDOW": 0.004,
     "EVENT_TICKS": 8000,
