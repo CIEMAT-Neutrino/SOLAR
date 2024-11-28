@@ -1,4 +1,7 @@
 {
+    "ASSYMETRY_ERROR": 0.001,
+    "SIGNAL_ERROR": 0.04,
+    "BACKGROUND_ERROR": 0.02,
     "NADIR_RANGE": [
         -1,
         1
@@ -35,7 +38,7 @@
         0,
         30
     ],
-    "RECO_ENERGY_BINS": 60,
+    "RECO_ENERGY_BINS": 120,
     "BKG_RECO_ENERGY_RANGE": [
         0,
         18
