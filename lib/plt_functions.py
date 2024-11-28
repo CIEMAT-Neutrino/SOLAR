@@ -116,15 +116,15 @@ def format_coustom_plotly(
     if legend == None:
         legend = dict(groupclick="toggleitem", font=dict(size=fontsize-3))
 
-
     # Find the number of subplots
     if type(fig) == go.Figure:
         try:
             rows, cols = fig._get_subplot_rows_columns()
             rows, cols = rows[-1], cols[-1]
         except Exception:
+            if debug: rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel for type![/red]")
             rows, cols = 1, 1
-            rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel![/red]")
+   
     else:
         rows, cols = 1, 1
         rprint(f"[red][ERROR]: unknown figure type! {type(type(fig))}[/red]")
@@ -134,7 +134,7 @@ def format_coustom_plotly(
                str(rows * cols) + "[/cyan]")
 
     if figsize == None:
-        figsize = (800 + 600 * (cols - 1), 600 + 200 * (rows - 1))
+        figsize = (800 + 400 * (cols - 1), 600 + 200 * (rows - 1))
 
     default_margin = {"color": "white", "margin": (0, 0, 0, 0)}
     if margin != None:
@@ -212,6 +212,7 @@ def format_coustom_plotly(
             )
         except AttributeError:
             pass
+    
     return fig
 
 
