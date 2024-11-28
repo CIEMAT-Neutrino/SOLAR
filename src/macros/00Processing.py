@@ -24,7 +24,7 @@ user_input = check_macro_config(user_input, debug=user_input["debug"])
 info = json.load(open(f'{root}/config/{user_input["config_file"]}.json', "r"))
 for name in user_input["root_file"]:
     root_info = get_root_info(
-        f'{info["NAME"]}{name}', f'{info["PATH"]}', user_input, debug=user_input["debug"]
+        name=f'{info["NAME"]}{name}', path=f'{info["PATH"]}/{info["GEOMETRY"]}/{info["VERSION"]}/', user_input=user_input, debug=user_input["debug"]
     )
     if user_input["rewrite"] == False:
         root_info = remove_processed_branches(root_info, debug=user_input["debug"])
