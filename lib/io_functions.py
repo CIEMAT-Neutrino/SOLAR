@@ -19,28 +19,24 @@ from matplotlib import pyplot as plt
 root = get_project_root()
 
 
-def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, file: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False) -> None:
+def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False):
     """
-    Save the figure in the path
-
-    Args:
-        fig (plotly.graph_objs._figure.Figure): figure to save
-        path (str): path to save the figure
-        debug (bool): if True, the debug mode is activated (default: False)
+    Prepare the path to save a file.
     """
     if config is None:
         save_path = path
-        filename = f"{file}.{output}"
+        filename = f"{filename}.{output}"
     else:
         if name is None:
             save_path = f"{path}/{config}/"
-            filename = f"{config}_{file}.{output}"
+            filename = f"{config}_{filename}.{output}"
         else:
             save_path = f"{path}/{config}/{name}/"
-            filename = f"{config}_{name}_{file}.{output}"
+            filename = f"{config}_{name}_{filename}.{output}"
     try:
         # Make the directory recursively
         os.makedirs(f"{save_path}")
+    
     except FileExistsError:
         if debug:
             print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
@@ -56,21 +52,57 @@ def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str
         else:
             if debug:
                 rprint("File already exists. Skipping...", "WARNING")
-            return 0
+    
+    return f"{save_path}/{filename}"
+
+
+def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
+    """
+    Save the figure in the path
+
+    Args:
+        df (pd.DataFrame): figure to save
+        path (str): path to save the figure
+        debug (bool): if True, the debug mode is activated (default: False)
+    """
+    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
+
+    # Check type of figure to select the correct saving method
+    if type(df) == pd.DataFrame:
+        df.to_pickle(f"{filepath}")
+        if debug:
+            rprint(
+                f"Saved dataframe in: {filepath}")
+            
+    else:
+        rprint("The input df is not a known type: ", type(df))
+        # fig.savefig(path + ".{output}")
+
+
+def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False) -> None:
+    """
+    Save the figure in the path
+
+    Args:
+        fig (plotly.graph_objs._figure.Figure): figure to save
+        path (str): path to save the figure
+        debug (bool): if True, the debug mode is activated (default: False)
+    """
+    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
         fig.write_image(
-            f"{save_path}/{filename}")
+            f"{filepath}")
         if debug:
             rprint(
-                f"Saved figure in: {save_path}/{filename}")
+                f"Saved figure in: {filepath}")
 
     elif type(fig) == plt.Figure:
-        fig.savefig(f"{save_path}/{filename}")
+        fig.savefig(f"{filepath}")
         if debug:
             rprint(
-                f"Saved figure in: {save_path}/{filename}")
+                f"Saved figure in: {filepath}")
     else:
         rprint("The input figure is not a known type: ", type(fig))
         # fig.savefig(path + ".{output}")
@@ -606,7 +638,7 @@ def load_multi(
     branches: Optional[dict[str, list[str]]] = None,
     generator_swap: bool = False,
     debug: bool = False,
-) -> dict:
+) -> tuple[dict, str]:
     """
     Load multiple files with different configurations and merge them into a single dictionary
 
@@ -835,7 +867,7 @@ def save_proccesed_variables(run, info={}, force=False, debug=False):
     return 0
 
 
-def get_bkg_config(info, debug=False):
+def get_bkg_config(info: dict, add_custom: list[str] = None, debug: bool = False):
     """
     This function returns a dictionary of background names according to the input file.
     Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
@@ -850,7 +882,11 @@ def get_bkg_config(info, debug=False):
     bkg_dict = {}
     color_dict = {}
     f = json.load(open(f"{root}/lib/import/generator_order.json", "r"))
-    bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
+    bkg_list = list(f[info["GEOMETRY"]][info["VERSION"]].keys())
+    
+    if add_custom is not None:
+        for custom in add_custom:
+            bkg_list.append(custom)
 
     color_ass = get_gen_color(bkg_list)
     for idx, bkg in enumerate(bkg_list):
@@ -858,8 +894,8 @@ def get_bkg_config(info, debug=False):
         color_dict[idx] = color_ass[bkg]
 
     if debug:
-        print_colored("Loaded background dictionary: %s" %
-                      str(bkg_dict), "INFO")
+        print(f"Loaded background dictionary: {bkg_dict}")
+    
     return bkg_dict, color_dict
 
 
@@ -873,31 +909,31 @@ def get_gen_label(configs: dict[str, list[str]], debug: bool = False) -> dict:
             open(f"{root}/config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
-        for idx, gen in enumerate(get_bkg_config(info, debug)[0].values()):
+        for idx, gen in enumerate(get_bkg_config(info, debug=debug)[0].values()):
             gen_dict[(geo, version, idx)] = gen
     return gen_dict
 
 
-def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
-    """ """
-    info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
-    weight_list = get_bkg_weights(info)
-    truth_values, reco_values = [], []
-    for bkg_idx, bkg in enumerate(mean_truth_df.index):
-        truth_values.append(
-            mean_truth_df.values[bkg_idx]
-            * np.power(info["TIMEWINDOW"] * weight_list[bkg], -1)
-        )
-        reco_values.append(
-            count_reco_df.values[0][bkg_idx]
-            * np.power(count_truth_df.values[bkg_idx] * info["TIMEWINDOW"], -1)
-        )
-        if debug:
-            print(count_truth_df.values[bkg_idx], reco_values)
-    return truth_values, reco_values
+# def weight_lists(mean_truth_df, count_truth_df, count_reco_df, config, debug=False):
+#     """ """
+#     info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+#     weight_list = get_bkg_weights(info)
+#     truth_values, reco_values = [], []
+#     for bkg_idx, bkg in enumerate(mean_truth_df.index):
+#         truth_values.append(
+#             mean_truth_df.values[bkg_idx]
+#             * np.power(info["TIMEWINDOW"] * weight_list[bkg], -1)
+#         )
+#         reco_values.append(
+#             count_reco_df.values[0][bkg_idx]
+#             * np.power(count_truth_df.values[bkg_idx] * info["TIMEWINDOW"], -1)
+#         )
+#         if debug:
+#             print(count_truth_df.values[bkg_idx], reco_values)
+#     return truth_values, reco_values
 
 
-def get_gen_color(name_list, debug=False):
+def get_gen_color(names:list[str], debug=False):
     """
     Get the color for each background according to its "simple" name.
 
@@ -909,9 +945,9 @@ def get_gen_color(name_list, debug=False):
         color_dict (dict): dictionary with the colors of the backgrounds
     """
     color_dict = dict()
-    simple_names_list = get_simple_names(name_list, debug=debug)
+    simple_names_list = get_simple_names(names, debug=debug)
     colors = px.colors.qualitative.Prism
-    for name in name_list:
+    for name in names:
         if simple_names_list[name] == "Unknown":
             color_dict[name] = "black"
         elif simple_names_list[name] == "Marley":
@@ -933,58 +969,55 @@ def get_gen_color(name_list, debug=False):
         elif simple_names_list[name] == "Rn22":
             color_dict[name] = colors[5]
         elif simple_names_list[name] == "Po210":
-            color_dict[name] = "brown"
+            color_dict[name] = colors[0]
         elif simple_names_list[name] == "PDS":
             color_dict[name] = colors[7]
+        elif simple_names_list[name] == "HEP":
+            color_dict[name] = colors[7]
+        elif simple_names_list[name] == "8B":
+            color_dict[name] = colors[6]
         else:
             color_dict[name] = "black"
 
     return color_dict
 
 
-def get_bkg_weights(info, names, debug=False):
+def get_bkg_weights(info:dict, names:list[str], debug:bool=False) -> dict:
+    weights = dict()
     bkg_dict, color_dict = get_bkg_config(info, debug=False)
-    weights = dict()
-    for bkg in bkg_dict.values():
-        weights[bkg] = 1
-    if "wbkg" in names:
-        weights["wbkg"] = 1
-        return weights
-    else:
-        if info["GEOMETRY"] == "hd" and info["VERSION"] == "hd_1x2x6":
-            custom_weights = {"NeutronsInCavernwall": 1e3}
-        if info["GEOMETRY"] == "hd" and info["VERSION"] == "hd_1x2x6_legacy":
-            custom_weights = {
-                "Po210": 1e4,
-                "APA": 1e4,
-                "CPA": 1e2,
-                "Ar42": 1e4,
-                "Neutron": 1e3,
-                "Rn222": 1e4,
-            }
-        if info["GEOMETRY"] == "vd" and info["VERSION"] == "vd_1x8x14_3view_30deg":
-            custom_weights = {"Neutron": 1e2}
-
-        for bkg in custom_weights:
-            weights[bkg] = custom_weights[bkg]
-        return weights
-
-
-def get_gen_weights(configs: dict[str, list[str]], names: dict[str, list[str]], debug: bool = False) -> dict:
-    weights = dict()
-    for idx, config in enumerate(configs):
-        info = json.load(
-            open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
-        # Write a function that returns a dictionary of background names according to the input file. Each key of the dictionary should be a tuple of the form (geometry,version) and each value should be a list of background names.
-        geo = info["GEOMETRY"]
-        name_list = names[config]
-        geo_weights = get_bkg_weights(info, name_list)
-        for idx, name in enumerate(name_list):
-            weights[(geo, name)] = geo_weights[name]
+    production_weights = json.load(open(f"{root}/lib/import/production_weights.json", "r"))
+    custom_weights = production_weights[info["GEOMETRY"]][info["VERSION"]]
+    for name in names:
+        # Default weights
+        for bkg in bkg_dict.values():
+            # Set default weight to 100
+            weights[(name, bkg)] = 100
+            if name in ["wbkg", "lar_lowRate", "anode", "cathode"]:
+                weights[(name, bkg)] = custom_weights[name]
+            else:
+                try:
+                    weights[(name, bkg)] = custom_weights[bkg]
+                except KeyError:
+                    continue
+    
     return weights
 
 
-def get_simple_names(names: list, debug: bool = False) -> dict:
+def get_gen_weights(configs: dict[str, list[str]], debug: bool = False) -> dict:
+    weights = dict()
+    for idx, config in enumerate(configs):
+        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
+        bkg_dict, color_dict = get_bkg_config(info, debug=False)
+        for bkg in bkg_dict.values():
+            for names in configs[config]:
+                bkg_weights = get_bkg_weights(info, names)
+                for name in names:
+                    weights[(info["GEOMETRY"], name, bkg)] = bkg_weights[(name, bkg)]
+    
+    return weights
+
+
+def get_simple_names(names: list[str], debug: bool = False) -> dict:
     simple_names = dict()
     basic_names = ["Ar42", "Ar39", "Kr85", "Po210", "Rn22"]
     for name in names:
@@ -1009,6 +1042,10 @@ def get_simple_names(names: list, debug: bool = False) -> dict:
             simple_names[name] = "APA"
         elif "PDS" in name:
             simple_names[name] = "PDS"
+        elif "hep" in name.lower():
+            simple_names[name] = "HEP"
+        elif "8" in name.lower():
+            simple_names[name] = "8B"
         else:
             simple_names[name] = name
 

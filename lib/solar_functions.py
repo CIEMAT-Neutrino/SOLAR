@@ -201,7 +201,7 @@ def compute_solar_spectrum(
                 bins=energy_edges,
             )
             efficient_flux = {A: B for A, B in zip(energy_centers, r_hist / t_hist)}
-            raised_activity = gen_weigths_dict[(info["GEOMETRY"], name)]
+            raised_activity = gen_weigths_dict[(info["GEOMETRY"], name, gen_label)]
             weight = np.ones(len(r_hist)) / (raised_activity * int_time)
             if debug:
                 rprint(f"[cyan][INFO] Weight for {name} with filter {filters[1][ldx]}: {raised_activity:.2e}[/cyan]")

@@ -1,5 +1,3 @@
-from src.utils import get_project_root
-
 import json
 import pandas as pd
 import numpy as np
@@ -10,8 +8,8 @@ import plotly.express as px
 from typing import Optional
 from dask import delayed
 from rich import print as rprint
-
 from plotly.subplots import make_subplots
+
 from .plt_functions import format_coustom_plotly
 from .io_functions import (
     get_branches2use,
@@ -19,6 +17,7 @@ from .io_functions import (
     save_figure
 )
 
+from src.utils import get_project_root
 root = get_project_root()
 
 
@@ -341,7 +340,7 @@ def generate_pileup_matrix(run, configs, factor, save=False, show=False, debug=F
 
 
 def generate_background_distribution(
-    run, configs, fullname=True, add_values=True, show=False, save=False, debug=False
+    run, configs, fullname=True, add_values=True, show=False, save:Optional[str]=None, debug=False
 ):
     fig = make_subplots(
         rows=len(configs), cols=1, shared_yaxes=False, shared_xaxes=False
@@ -361,11 +360,10 @@ def generate_background_distribution(
         )
 
     fig = format_generator_distribution(fig, info, debug=debug)
-    if save:
+    if save is not None:
         name = truth_gen_df["Name"].values[0]
-        version = info["VERSION"]
         save_figure(
-            fig, f"{root}/images/bkg/rates/{version}/{version}_{name}_generator_distribution", rm=save)
+            fig, save, config, name, f"generator_distribution", rm=True, debug=debug)
     if show:
         fig.show()
     return fig
