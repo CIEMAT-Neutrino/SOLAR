@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from typing import Optional
 from scipy import interpolate
 from rich.progress import track
 from rich import print as rprint
@@ -17,13 +18,13 @@ from lib.plt_functions import format_coustom_plotly, unicode
 root = get_project_root()
 
 def get_nadir_angle(
-    path: str = f"{root}/data/OSCILLATION/", debug: bool = False
-):
+    path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/", debug: bool = False
+) -> list[np.array]:
     """
     This function can be used to obtain the nadir angle distribution for DUNE.
 
     Args:
-        path (str): Path to the nadir angle data file (default: f"{root}/data/OSCILLATION/")
+        path (str): Path to the nadir angle data file (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
         show (bool): If True, show the plot (default: False)
         debug (bool): If True, the debug mode is activated.
 
@@ -38,10 +39,14 @@ def get_nadir_angle(
         xnadir_centers = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
         ynadir_centers = pdf_array[0]
 
+    if debug:
+        print(f"Nadir angle data loaded: xnadir_centers = {xnadir_centers}, ynadir_centers = {ynadir_centers}")
+        print(f"Check for PDF normalization: {np.sum(ynadir_centers)}")
+
     return [xnadir_centers, ynadir_centers]
 
 
-def plot_nadir_angle(fig, idx, norm: bool = False, plot_type: str = "scatter", debug: bool = False):
+def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "scatter", debug: bool = False):
     """
     This function can be used to plot the nadir angle distribution for DUNE.
 
@@ -53,22 +58,17 @@ def plot_nadir_angle(fig, idx, norm: bool = False, plot_type: str = "scatter", d
     Returns:
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
-    nadir_data = get_nadir_angle(debug=debug)
+    nadir_data = get_nadir_angle(debug = debug)
     name = "Nadir Angle PDF"
     
-    if norm is True: 
-        nadir_data[1] = nadir_data[1] / np.max(nadir_data[1])
-        name = "DUNE Yearly Exposure (AU)"
-    
-    if isinstance(norm, float) or isinstance(norm, int): 
+    if norm is not None: 
         nadir_data[1] = nadir_data[1] / (norm*np.max(nadir_data[1]))
         name = "DUNE Yearly Exposure (AU)"
-    
+
     if plot_type == "scatter":
         fig.add_scatter(
-            x=nadir_data[0],
-            y=nadir_data[1],
+            x=nadir_data[0].astype(float),
+            y=nadir_data[1].astype(float),
             mode='markers',
             name=name,
             row=idx[0],
@@ -77,8 +77,8 @@ def plot_nadir_angle(fig, idx, norm: bool = False, plot_type: str = "scatter", d
     if plot_type == "hist":
         fig.add_trace(
             go.Scatter(
-                x=nadir_data[0],
-                y=nadir_data[1],
+                x=nadir_data[0].astype(float),
+                y=nadir_data[1].astype(float),
                 mode="lines",
                 line_shape="hvh",
                 name=name,
@@ -98,7 +98,7 @@ def get_oscillation_datafiles(
     dm2=None,
     sin13=None,
     sin12=None,
-    path: str = f"{root}/data/OSCILLATION/",
+    path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/",
     ext: str = "root",
     auto: bool = False,
     debug: bool = False,
@@ -110,7 +110,7 @@ def get_oscillation_datafiles(
         dm2 (float/list):   Solar mass squared difference (default: analysis["DM2"])
         sin13 (float/list): Solar mixing angle (default: analysis["SIN13"])
         sin12 (float/list): Solar mixing angle (default: analysis["SIN12"])
-        path (str):   Path to the oscillation data files (default: f"{root}/data/OSCILLATION/")
+        path (str):   Path to the oscillation data files (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
         ext (str):    Extension of the oscillation data files (default: "root")
         auto (bool):  If True, the function will look for all the oscillation data files in the path (default: False)
         debug (bool): If True, the debug mode is activated.
@@ -177,22 +177,23 @@ def get_oscillation_datafiles(
 
 
 def get_oscillation_map(
-    path=f"{root}/data/OSCILLATION/",
-    dm2=None,
-    sin13=None,
-    sin12=None,
-    ext="root",
-    auto=False,
-    rebin=False,
-    output="df",
-    save:bool=False,
-    debug:bool=False,
+    path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/",
+    dm2: Optional[list[float]] = None,
+    sin13: Optional[list[float]] = None,
+    sin12: Optional[list[float]] = None,
+    ext: Optional[str] = "root",
+    auto: bool = False,
+    rebin: bool = False,
+    rw: bool = False,
+    output: str = "df",
+    save: bool = False,
+    debug: bool = False,
 ):
     """
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
 
     Args:
-        path (str): Path to the oscillation data files (default: f"{root}/data/OSCILLATION/")
+        path (str): Path to the oscillation data files (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
         dm2 (float): Solar mass squared difference (default: "DEFAULT")
         sin13 (float): Solar mixing angle (default: "DEFAULT")
         sin12 (float): Solar mixing angle (default: "DEFAULT")
@@ -210,7 +211,7 @@ def get_oscillation_map(
 
     df_dict = {}
     interp_dict = {}
-    # nadir_data = get_nadir_angle(path=path, show=False, debug=debug)
+
     subfolder = ""
     if ext == "pkl":
         if rebin == True:
@@ -227,7 +228,6 @@ def get_oscillation_map(
         auto=auto,
         debug=debug,
     )
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
 
     if type(dm2) == float and type(sin13) == float and type(sin12) == float:
         dm2, sin13, sin12 = [dm2], [sin13], [sin12]
@@ -247,12 +247,14 @@ def get_oscillation_map(
                 if debug: rprint(f"Loading data from: {path}{ext}/{subfolder}/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
                 df = pd.read_pickle(f"{path}{ext}/{subfolder}/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
 
-                if rebin:
-                    save_path = f"{path}{ext}/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl"
-                    if glob.glob(save_path) != []:
-                        if debug: rprint(f"Loading rebinned data from {save_path}")
-                        df = pd.read_pickle(save_path)
-                    else: df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
+                save_path = f"{path}{ext}/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl"
+                if rebin and glob.glob(save_path) != [] and rw == False:
+                    if debug: rprint(f"Loading rebinned data from {save_path}")
+                    df = pd.read_pickle(save_path)
+                
+                elif rebin:
+                    if debug: rprint(f"[green]Saving rebinned oscillation data dm2 = {dm2_value:.3e}, sin13 = {sin13_value:.3e}, sin12 = {sin12_value:.3e}[/green]")
+                    df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
 
             else:
                 rprint(f"ERROR: file {path}osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl not found!")
@@ -271,14 +273,14 @@ def get_oscillation_map(
                 debug=debug,
             )
 
-            if rebin:
-                save_path = (f"{path}/pkl/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
-                if glob.glob(save_path) != []:
-                    if debug: rprint(f"Loading rebinned data from {save_path}")
-                    df = pd.read_pickle(save_path)
-                else:
-                    rprint(f"[green]Saving rebinned oscillation data dm2 = {dm2_value:.3e}, sin13 = {sin13_value:.3e}, sin12 = {sin12_value:.3e}[/green]") 
-                    df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
+            save_path = (f"{path}/pkl/rebin/osc_probability_dm2_{dm2_value:.3e}_sin13_{sin13_value:.3e}_sin12_{sin12_value:.3e}.pkl")
+            if rebin and glob.glob(save_path) != [] and rw == False:
+                if debug: rprint(f"Loading rebinned data from {save_path}")
+                df = pd.read_pickle(save_path)
+            
+            elif rebin:
+                if debug: rprint(f"[green]Saving rebinned oscillation data dm2 = {dm2_value:.3e}, sin13 = {sin13_value:.3e}, sin12 = {sin12_value:.3e}[/green]") 
+                df = rebin_df(df, show=False, save=save, save_path=save_path, debug=debug)
 
         else:
             print_colored("ERROR: ext must be 'root' or 'pkl'!", "FAIL")
@@ -306,14 +308,7 @@ def get_oscillation_map(
 
         df_dict[(dm2_value, sin13_value, sin12_value)] = df
 
-    if output == "figure":
-        fig = px.imshow(
-            df, color_continuous_scale="turbo", origin="lower", aspect="auto"
-        )
-        fig = format_coustom_plotly(fig)
-        return fig
-
-    elif output in ["interp1d", "interp2d"]:
+    if output in ["interp1d", "interp2d"]:
         if debug:
             print_colored("Returning interpolation dictionary!", "DEBUG")
         return interp_dict
@@ -329,7 +324,7 @@ def get_oscillation_map(
 
 
 def process_oscillation_map(
-    path=f"{root}/data/OSCILLATION/",
+    path=f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/",
     dm2_value=None,
     sin13_value=None,
     sin12_value=None,
@@ -433,7 +428,7 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, factor=1, d
 
 def rebin_df(
     df,
-    save_path=f"{root}/data/pkl/rebin/df.pkl",
+    save_path: Optional[str] = None,
     xarray=[],
     yarray=[],
     convolve=True,
@@ -450,7 +445,7 @@ def rebin_df(
         yarray (list): List of ybins to use for the rebinning.
         show (bool): If True, show the rebinning result (default: False)
         save (bool): If True, save the rebinning result (default: True)
-        save_path (str): Path to save the rebinning result (default: f"{root}/data/pkl/rebin/df.pkl")
+        save_path (str): Path to save the rebinning result.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
@@ -523,7 +518,12 @@ def rebin_df(
         fig.show()
 
     if save:
+        # Check if the file already exists
+        if os.path.exists(save_path):
+            os.remove(save_path)
         small_df.to_pickle(save_path)
+        # Give permissions to the file
+        os.system(f"chmod 777 {save_path}")
 
     return small_df
 
