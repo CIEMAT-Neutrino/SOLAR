@@ -14,6 +14,7 @@ from lib.solar_functions import get_pdg_color
 
 root = get_project_root()
 
+
 def get_flash_time(run, tree, idx, filter, debug=False):
     ophitPEs = [run[tree]["OpHitPE"][idx][x] for x in filter]
     ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]

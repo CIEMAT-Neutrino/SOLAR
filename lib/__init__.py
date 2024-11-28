@@ -2,7 +2,7 @@ import os
 import pickle
 import json
 
-from typing import Optional
+from itertools import product
 from src.utils import get_project_root
 from scipy.signal import find_peaks
 from sklearn.ensemble import RandomForestClassifier
@@ -10,7 +10,9 @@ from sklearn.metrics import roc_curve, auc, accuracy_score
 from scipy.interpolate import interp1d
 
 # Import all the local functions
-from .ana_functions import *
+from .reco_workflow import compute_reco_workflow
+from .workflow.default import get_default_energies, get_default_nhits
+from .workflow.filter import compute_filtered_run
 from .df_functions import *
 from .fit_functions import *
 from .geo_functions import *
@@ -19,7 +21,6 @@ from .hit_functions import *
 from .io_functions import *
 from .osc_functions import *
 from .plt_functions import *
-from .reco_functions import *
 from .root_functions import *
 from .solar_functions import *
 from .wkf_functions import *

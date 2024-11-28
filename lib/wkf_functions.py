@@ -6,11 +6,13 @@ import pandas as pd
 from ROOT import RDataFrame, TFile
 from rich.progress import track
 from rich import print as rprint
-from lib.ana_functions import get_default_info
-from lib.reco_functions import get_param_dict, generate_index
-from src.utils import get_project_root
 from particle import Particle
 
+from .workflow.default import get_default_info
+from .workflow.functions import get_param_dict
+from .workflow.efficiency import generate_index
+
+from src.utils import get_project_root
 root = get_project_root()
 
 

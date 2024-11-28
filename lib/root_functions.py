@@ -5,8 +5,8 @@ import pandas as pd
 
 from iminuit import Minuit
 from ROOT    import TFile, TTree, TList
+from rich import print as rprint
 
-from .io_functions import print_colored
 
 def th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=False):
     '''
@@ -37,7 +37,7 @@ def th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=False):
         for j in range(nbins_y):
             th2f.SetBinContent(i + 1, j + 1, int(z_values[j][i]))  # Note: ROOT histograms are filled in a column-major order
 
-    if debug: print_colored("Created TH2F histogram: %s"%name,"INFO")
+    if debug: rprint(f"Created TH2F histogram: {name}")
     return th2f
 
 
@@ -100,7 +100,7 @@ class Fitter:
             m = Minuit(self.ROOTOperator, A_pred=initial_A_pred, A_bkg=initial_A_bkg)
 
         else:
-            print_colored("ERROR: Unknown input type","ERROR")
+            rprint(f"[red][ERROR]: Unknown input type[/red]")
             return -1, -1, -1
         
         m.limits['A_pred'] = (initial_A_pred - 10, initial_A_pred + 10)

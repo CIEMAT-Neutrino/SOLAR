@@ -1,6 +1,6 @@
 from src.utils import get_project_root
 
-from .ana_functions import get_default_energies, get_default_nhits
+from .workflow.default import get_default_energies, get_default_nhits
 
 import numpy as np
 import plotly.graph_objects as go
