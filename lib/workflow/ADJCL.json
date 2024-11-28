@@ -75,6 +75,7 @@
             "NeutronP": 0,
             "VisEnergy": 0,
             "Purity": 1,
+            "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1,
             "Time": 1,

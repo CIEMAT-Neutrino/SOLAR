@@ -44,8 +44,9 @@
         },
         "DOUBLES": {
             "MainE": 1,
-            "RecoY": 1,
             "Time": 1,
+            "RecoX": 1,
+            "RecoY": 1,
             "RecoZ": 1,
             "Charge": 1
         },
