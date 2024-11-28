@@ -1,0 +1,30 @@
+{
+    "hd": {
+        "hd_1x2x6_lateralAPA": {
+            "Marley": 100,
+            "NeutronsInCavernwall": 1000000,
+            "wbkg": 10,
+            "lar_lowRate": 100,
+            "anode": 100,
+            "cathode": 100
+        },
+        "hd_1x2x6_centralAPA": {
+            "Marley": 100,
+            "NeutronsInCavernwall": 1000000,
+            "wbkg": 10,
+            "lar_lowRate": 100,
+            "anode": 100,
+            "cathode": 100
+        }
+    },
+    "vd": {
+        "vd_1x8x14_3view_30deg": {
+            "Marley": 100,
+            "NeutronsInCavernwall": 1000000,
+            "wbkg": 10,
+            "lar_lowRate": 100,
+            "anode": 100,
+            "cathode": 100
+        }
+    }
+}
