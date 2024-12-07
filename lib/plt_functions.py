@@ -81,6 +81,7 @@ def format_coustom_plotly(
     fig: go.Figure,
     title: str = None,
     legend: Optional[dict] = None,
+    legend_title: str = None,
     fontsize: int = 16,
     figsize: int = None,
     ranges: tuple = (None, None),
@@ -149,6 +150,7 @@ def format_coustom_plotly(
         font=dict(size=fontsize),
         paper_bgcolor=margin["color"],
         bargap=bargap,
+        legend_title_text=legend_title,
     )  # font size and template
     fig.update_xaxes(
         matches=matches[0],
@@ -231,7 +233,7 @@ def get_units(var, debug=False):
         "E": " (MeV) ",
         "P": " (MeV) ",
         "K": " (MeV) ",
-        "PE": " (counts) ",
+        "PE": " (PE) ",
         "Time": " (tick) ",
         "Energy": " (MeV) ",
         "Charge": " (ADC x tick) ",
