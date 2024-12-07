@@ -11,7 +11,7 @@ from particle import Particle
 
 from lib.df_functions import npy2df
 from lib.fit_functions import calibration_func
-from lib.workflow.default import get_default_info
+from lib.workflow.lib_default import get_default_info
 
 from src.utils import get_project_root
 root = get_project_root()

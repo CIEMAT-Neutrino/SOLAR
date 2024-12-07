@@ -140,7 +140,7 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
             run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
 
         converted_array_nhits = reshape_array(
-            run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHit"][idx][0]))
+            run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHits"][idx][0]))
 
         converted_array_charge = reshape_array(
             run["Reco"]["Charge"][idx], len(run["Reco"]["AdjClCharge"][idx][0]))
@@ -150,7 +150,7 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
         run["Reco"]["AdjClRelCharge"] = run["Reco"]["AdjClCharge"][idx] / \
             converted_array_charge
         run["Reco"]["AdjClChargePerHit"] = run["Reco"]["AdjClCharge"][idx] / \
-            run["Reco"]["AdjClNHit"][idx]
+            run["Reco"]["AdjClNHits"][idx]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tAdjCl energy computation \t-> Done!\n"

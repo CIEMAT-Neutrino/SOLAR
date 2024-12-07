@@ -77,12 +77,12 @@ def compute_opflash_event(run, configs, params: Optional[dict] = None, trees: Op
     Compute the OpFlash variables for the events in the run.
     """
     # New branches
-    new_branches = ["OpFlashMeanNHit", "OpFlashMeanR", "OpFlashMeanTime"]
+    new_branches = ["OpFlashMeanNHits", "OpFlashMeanR", "OpFlashMeanTime"]
     for branch in new_branches:
         run["Truth"][branch] = np.zeros(    
             len(run["Truth"]["Event"]), dtype=np.float32)
     
-    for var in ["NHit", "R", "Time"]:
+    for var in ["NHits", "R", "Time"]:
         # Weight the mean R by the PE
         run["Truth"][f"OpFlashMean{var}"] = np.sum(
             run["Truth"][f"OpFlash{var}"] * run["Truth"]["OpFlashPE"], axis=1) / np.sum(run["Truth"]["OpFlashPE"], axis=1)
@@ -100,11 +100,11 @@ def compute_opflash_main(run, configs, params: Optional[dict] = None, trees: Opt
     """
     # New branches
     for tree in trees:
-        new_branches = ["MainOpFlashPur", "MainOpFlashNHit", "MainOpFlashTime", "MainOpFlashMaxPE", "MainOpFlashPE", "MainOpFlashR", "MainOpFlashErrorY", "MainOpFlashErrorZ"]
+        new_branches = ["MainOpFlashPur", "MainOpFlashNHits", "MainOpFlashTime", "MainOpFlashMaxPE", "MainOpFlashPE", "MainOpFlashR", "MainOpFlashErrorY", "MainOpFlashErrorZ"]
         new_bool_branches = ["MainOpFlashSignal"]
         prefix = ""
         if tree == "Reco":
-            new_branches = ["MainAdjOpFlashPur", "MainAdjOpFlashNHit", "MainAdjOpFlashTime", "MainAdjOpFlashMaxPE", "MainAdjOpFlashPE", "MainAdjOpFlashR", "MainAdjOpFlashErrorY", "MainAdjOpFlashErrorZ"]
+            new_branches = ["MainAdjOpFlashPur", "MainAdjOpFlashNHits", "MainAdjOpFlashTime", "MainAdjOpFlashMaxPE", "MainAdjOpFlashPE", "MainAdjOpFlashR", "MainAdjOpFlashErrorY", "MainAdjOpFlashErrorZ"]
             new_bool_branches = ["MainAdjOpFlashSignal"]
             prefix = "Adj"
         
@@ -130,7 +130,7 @@ def compute_opflash_main(run, configs, params: Optional[dict] = None, trees: Opt
             run[tree][f"Main{prefix}OpFlashPur"][idx] = run[tree][f"{prefix}OpFlashPur"][idx][np.arange(run[tree][f"{prefix}OpFlashPur"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]
             run[tree][f"Main{prefix}OpFlashSignal"][idx] = run[tree][f"Main{prefix}OpFlashPur"][idx] > 0
 
-            run[tree][f"Main{prefix}OpFlashNHit"][idx] = run[tree][f"{prefix}OpFlashNHit"][idx][np.arange(run[tree][f"{prefix}OpFlashNHit"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]
+            run[tree][f"Main{prefix}OpFlashNHits"][idx] = run[tree][f"{prefix}OpFlashNHits"][idx][np.arange(run[tree][f"{prefix}OpFlashNHits"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]
             run[tree][f"Main{prefix}OpFlashTime"][idx] = run[tree][f"{prefix}OpFlashTime"][idx][np.arange(run[tree][f"{prefix}OpFlashTime"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]
             run[tree][f"Main{prefix}OpFlashPE"][idx] = run[tree][f"{prefix}OpFlashPE"][idx][np.arange(run[tree][f"{prefix}OpFlashPE"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]
             run[tree][f"Main{prefix}OpFlashMaxPE"][idx] = run[tree][f"{prefix}OpFlashMaxPE"][idx][np.arange(run[tree][f"{prefix}OpFlashMaxPE"][idx].shape[0]), run[tree][f"Main{prefix}OpFlashIdx"][idx]]

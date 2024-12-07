@@ -1,14 +1,14 @@
 from typing import Optional
 from rich import print as rprint
 
-from .workflow.main import compute_main_variables
-from .workflow.signal import compute_signal_energies, compute_particle_energies, compute_signal_directions
-from .workflow.efficiency import compute_true_efficiency
-from .workflow.cluster import compute_cluster_time, compute_electron_cluster, compute_cluster_calibration, compute_cluster_energy, compute_total_energy, compute_reco_energy, compute_energy_calibration
-from .workflow.adjcluster import compute_adjcl_basics, compute_adjcl_advanced
-from .workflow.ophit import compute_ophit_basic, compute_ophit_event
-from .workflow.opflash import compute_opflash_basic, compute_opflash_event, compute_opflash_main, compute_opflash_advanced, compute_opflash_matching
-from .workflow.drift import compute_true_drift
+from .workflow.lib_main import compute_main_variables
+from .workflow.lib_signal import compute_signal_energies, compute_particle_energies, compute_signal_directions
+from .workflow.lib_efficiency import compute_true_efficiency
+from .workflow.lib_cluster import compute_cluster_time, compute_electron_cluster, compute_cluster_calibration, compute_cluster_energy, compute_total_energy, compute_reco_energy, compute_energy_calibration
+from .workflow.lib_adjcluster import compute_adjcl_basics, compute_adjcl_advanced
+from .workflow.lib_ophit import compute_ophit_basic, compute_ophit_event
+from .workflow.lib_opflash import compute_opflash_basic, compute_opflash_event, compute_opflash_main, compute_opflash_advanced, compute_opflash_matching
+from .workflow.lib_drift import compute_true_drift
 
 
 def compute_reco_workflow(

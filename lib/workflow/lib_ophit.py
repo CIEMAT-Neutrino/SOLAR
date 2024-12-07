@@ -79,7 +79,7 @@ def compute_ophit_advanced(run, configs, params: Optional[dict] = None, rm_branc
     flash_id_list = np.unique(run["Truth"]["OpHitFlashID"])
     # New branches
     new_branches = ["OpFlashRefPE", "OpFlashResidual", "OpFlashTime",
-                    "OpFlashPur", "OpFlashSignal", "OpFlashNHit", "OpFlashPE"]
+                    "OpFlashPur", "OpFlashSignal", "OpFlashNHits", "OpFlashPE"]
     for branch in new_branches:
         run["Truth"][branch] = np.zeros(
             (len(run["Truth"]["Event"]), len(flash_id_list)), dtype=np.float32)
@@ -110,12 +110,12 @@ def compute_ophit_advanced(run, configs, params: Optional[dict] = None, rm_branc
             run["Truth"]["OpHitRefPE"] * flash_id_filter, axis=1) / event_id_count
         run["Truth"]["OpHitRefPE"][flash_id_filter] = np.repeat(
             run["Truth"]["OpFlashRefPE"][jdx], event_id_count)
-        run["Truth"]["OpFlashNHit"][jdx] = np.sum(flash_id_filter, axis=1)
+        run["Truth"]["OpFlashNHits"][jdx] = np.sum(flash_id_filter, axis=1)
         run["Truth"]["OpFlashPE"][jdx] = np.sum(
             run["Truth"]["OpHitPE"] * flash_id_filter, axis=1) / event_id_count
 
         run["Truth"]["OpFlashResidual"][jdx] = np.mean(np.power((run["Truth"]["OpHitPE"] - run["Truth"]["OpHitRefPE"] * run["Truth"]
-                                                                 ["OpHitDecay"]) * flash_id_filter, 2), axis=1)/run["Truth"]["OpFlashNHit"][jdx]/run["Truth"]["OpFlashPE"][jdx]
+                                                                 ["OpHitDecay"]) * flash_id_filter, 2), axis=1)/run["Truth"]["OpFlashNHits"][jdx]/run["Truth"]["OpFlashPE"][jdx]
         run["Truth"]["OpHitResidual"][flash_id_filter] = np.repeat(
             run["Truth"]["OpFlashResidual"][jdx], event_id_count)
         run["Truth"]["OpFlashTime"][jdx] = np.sum((run["Truth"]["OpHitT"] * run["Truth"]["OpHitPE"])

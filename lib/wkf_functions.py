@@ -8,9 +8,9 @@ from rich.progress import track
 from rich import print as rprint
 from particle import Particle
 
-from .workflow.default import get_default_info
+from .workflow.lib_default import get_default_info
 from .workflow.functions import get_param_dict
-from .workflow.efficiency import generate_index
+from .workflow.lib_efficiency import generate_index
 
 from src.utils import get_project_root
 root = get_project_root()
@@ -375,7 +375,7 @@ def compute_root_workflow(
                         )
                     adj_cl_energy = (
                         reco_tree.AdjClCharge.at(
-                            z) * adj_cl_correction / correction_amp(reco_tree.AdjClNHit.at(z))
+                            z) * adj_cl_correction / correction_amp(reco_tree.AdjClNHits.at(z))
                     )
 
                     adj_cl_r = reco_tree.AdjClR.at(z)

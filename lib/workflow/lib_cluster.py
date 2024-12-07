@@ -4,7 +4,7 @@ import numpy as np
 
 from typing import Optional
 from lib.workflow.functions import remove_branches, get_param_dict, reshape_array
-from lib.workflow.default import get_default_info
+from lib.workflow.lib_default import get_default_info
 
 from src.utils import get_project_root
 root = get_project_root()
@@ -115,7 +115,7 @@ def compute_cluster_energy(
             run["Reco"]["AdjClCorrection"][idx]
 
         run["Reco"]["AdjClCorrectionFactor"][idx] = corr_popt[0] * np.exp(
-            -run["Reco"]["AdjClNHit"][idx] / corr_popt[1]) + corr_popt[2]
+            -run["Reco"]["AdjClNHits"][idx] / corr_popt[1]) + corr_popt[2]
 
         run["Reco"]["AdjClEnergy"][idx] = run["Reco"]["AdjClCorrectedCharge"][idx] / \
             run["Reco"]["AdjClCorrectionFactor"][idx]

@@ -11,8 +11,8 @@ from scipy.interpolate import interp1d
 
 # Import all the local functions
 from .reco_workflow import compute_reco_workflow
-from .workflow.default import get_default_energies, get_default_nhits
-from .workflow.filter import compute_filtered_run
+from .workflow.lib_default import get_default_energies, get_default_nhits
+from .workflow.lib_filter import compute_filtered_run
 from .df_functions import *
 from .fit_functions import *
 from .geo_functions import *
@@ -49,3 +49,4 @@ lowe_energy_edges, lowe_energy_centers, lowe_ebin = get_default_energies(
     root, "LOWE_RECO_ENERGY")
 
 colors = px.colors.qualitative.Prism
+compare = px.colors.qualitative.Plotly
