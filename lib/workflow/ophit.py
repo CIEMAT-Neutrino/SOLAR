@@ -34,7 +34,7 @@ def compute_ophit_event(run, configs, params: Optional[dict] = None, rm_branches
     Compute the OpFlash variables for the events in the run.
     """
     # New branches
-    new_branches = ["OpHitMaxPE", "OpHitMeanPE", "OpHitMaxPEY", "OpHitMaxPEZ", "OpHitMaxPER", "OpHitMeanR"]
+    new_branches = ["OpHitMaxPE", "OpHitMeanPE", "OpHitMaxPEY", "OpHitMaxPEZ", "OpHitMaxPER", "OpHitMeanR", "OpHitMeanT"]
     for branch in new_branches:
         run["Truth"][branch] = np.zeros(    
             len(run["Truth"]["Event"]), dtype=np.float32)
@@ -49,12 +49,14 @@ def compute_ophit_event(run, configs, params: Optional[dict] = None, rm_branches
     run["Truth"]["OpHitMaxPEY"] = run["Truth"]["OpHitDY"][np.arange(run["Truth"]["OpHitDY"].shape[0]), run["Truth"]["OpHitMaxPEIdx"]]
     run["Truth"]["OpHitMaxPEZ"] = run["Truth"]["OpHitDZ"][np.arange(run["Truth"]["OpHitDZ"].shape[0]), run["Truth"]["OpHitMaxPEIdx"]]
     run["Truth"]["OpHitMaxPER"] = run["Truth"]["OpHitR"][np.arange(run["Truth"]["OpHitR"].shape[0]), run["Truth"]["OpHitMaxPEIdx"]]
-    # Weight the mean R by the PE
-    run["Truth"]["OpHitMeanR"] = np.sum(
-        run["Truth"]["OpHitR"] * run["Truth"]["OpHitPE"], axis=1) / np.sum(run["Truth"]["OpHitPE"], axis=1)
-    # In mean R, replace nans with -1e6
-    run["Truth"]["OpHitMeanR"] = np.nan_to_num(
-        run["Truth"]["OpHitMeanR"], nan=-1e6, posinf=-1e6, neginf=-1e6)
+    
+    for var in ["R", "T"]:
+        # Weight the mean R by the PE
+        run["Truth"][f"OpHitMean{var}"] = np.sum(
+            run["Truth"][f"OpHit{var}"] * run["Truth"]["OpHitPE"], axis=1) / np.sum(run["Truth"]["OpHitPE"], axis=1)
+        # In mean R, replace nans with -1e6
+        run["Truth"][f"OpHitMean{var}"] = np.nan_to_num(
+            run["Truth"][f"OpHitMean{var}"], nan=0, posinf=0, neginf=0)
 
     output += f"\tEvent OpHitStat variables computation \t-> Done!\n"
     return run, output, new_branches
