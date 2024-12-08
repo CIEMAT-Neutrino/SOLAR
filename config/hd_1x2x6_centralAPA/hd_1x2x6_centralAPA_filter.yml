@@ -4,7 +4,7 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
+                  - "SignalParticleE":
                             - "absbetween": [4, 30]
 
 "CORRECTION":
@@ -14,7 +14,7 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
+                  - "SignalParticleE":
                             - "absbetween": [4, 20]
                   - "NeutronK":
                             - "equal": 0
@@ -26,12 +26,12 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
+                  - "NHits":
+                            - "bigger": 2
+                  - "SignalParticleE":
                             - "absbetween": [4, 20]
                   - "NeutronK":
                             - "equal": 0
-                  - "NHits":
-                            - "bigger": 2
 
 "DISCRIMINATION":
         - "Truth": null
@@ -40,12 +40,12 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
+                  - "NHits":
+                            - "bigger": 2
+                  - "SignalParticleE":
                             - "absbetween": [4, 20]
                   - "NeutronK":
                             - "equal": 0
-                  - "NHits":
-                            - "bigger": 2
 
 "RECONSTRUCTION":
         - "Truth": null
@@ -54,10 +54,10 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
-                            - "absbetween": [4, 30]
                   - "NHits":
                             - "bigger": 2
+                  - "SignalParticleE":
+                            - "absbetween": [4, 30]
 
 "SMEARING":
         - "Truth": null
@@ -66,26 +66,28 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "TNuE":
-                            - "absbetween": [4, 30]
                   - "NHits":
                             - "bigger": 2
+                  - "SignalParticleE":
+                            - "absbetween": [4, 30]
 
 "ANALYSIS":
         - "Truth": null
         - "Reco":
                   - "Primary":
                             - "equal": true
+                  - "Generator":
+                            - "equal": 1
                   - "NHits":
                             - "bigger": 2
 
 "FIDUCIALIZATION":
         - "Truth": null
         - "Reco":
-                #   - "MainParentZ":
-                #             - "between": [5, 1395]
-                #   - "MainParentX":
-                #             - "outside": [-5, 5]
+                  #   - "MainParentZ":
+                  #             - "between": [5, 1395]
+                  #   - "MainParentX":
+                  #             - "outside": [-5, 5]
                   - "RecoX":
                             - "absbetween": [50, 310]
                   - "RecoY":

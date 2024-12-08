@@ -1,7 +1,7 @@
 "CORRECTION":
     - "Truth": null
     - "Reco":
-          - "TNuE":
+          - "SignalParticleE":
                 - "absbetween": [4, 20]
           - "NeutronK":
                 - "equal": 0
@@ -15,7 +15,7 @@
                 - "equal": true
           - "Generator":
                 - "equal": 1
-          - "TNuE":
+          - "SignalParticleE":
                 - "absbetween": [4, 20]
           - "NeutronK":
                 - "equal": 0
@@ -29,7 +29,7 @@
                 - "equal": true
           - "Generator":
                 - "equal": 1
-          - "TNuE":
+          - "SignalParticleE":
                 - "absbetween": [4, 20]
           - "NeutronK":
                 - "equal": 0
@@ -43,7 +43,7 @@
                 - "equal": true
           - "Generator":
                 - "equal": 1
-          - "TNuE":
+          - "SignalParticleE":
                 - "absbetween": [4, 30]
           - "NHits":
                 - "bigger": 2
@@ -51,7 +51,7 @@
 "SMEARING":
     - "Truth": null
     - "Reco":
-          - "TNuE":
+          - "SignalParticleE":
                 - "absbetween": [4, 30]
           - "Primary":
                 - "equal": true
