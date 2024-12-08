@@ -30,10 +30,10 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 0,
-            "TNuX": 0,
-            "TNuY": 0,
-            "TNuZ": 0
+            "SignalParticleE": 0,
+            "SignalParticleX": 0,
+            "SignalParticleY": 0,
+            "SignalParticleZ": 0
         },
         "STRINGS": {},
         "BOOLS": {}

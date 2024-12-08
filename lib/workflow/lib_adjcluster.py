@@ -109,16 +109,14 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
     """
     # New branches
     new_branches = ["TotalAdjClEnergy", "TotalAdjClMainE", "MaxAdjClEnergy"]
+    new_vector_branches = ["AdjCldTime", "AdjClRelCharge", "AdjClChargePerHit"]
     for branch in new_branches:
         run["Reco"][branch] = np.zeros(
             len(run["Reco"]["Event"]), dtype=np.float32)
 
-    run["Reco"]["AdjCldT"] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32)
-    run["Reco"]["AdjClRelCharge"] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32)
-    run["Reco"]["AdjClChargePerHit"] = np.zeros(
-        (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32)
+    for branch in new_vector_branches:
+        run["Reco"][branch] = np.zeros(
+            (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClTime"][0])), dtype=np.float32)
 
     for config in configs:
         info, params, output = get_param_dict(
@@ -139,13 +137,10 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
         converted_array_time = reshape_array(
             run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
 
-        converted_array_nhits = reshape_array(
-            run["Reco"]["NHits"][idx], len(run["Reco"]["AdjClNHits"][idx][0]))
-
         converted_array_charge = reshape_array(
             run["Reco"]["Charge"][idx], len(run["Reco"]["AdjClCharge"][idx][0]))
 
-        run["Reco"]["AdjCldT"][idx] = run["Reco"]["AdjClTime"][idx] - \
+        run["Reco"]["AdjCldTime"][idx] = run["Reco"]["AdjClTime"][idx] - \
             converted_array_time
         run["Reco"]["AdjClRelCharge"] = run["Reco"]["AdjClCharge"][idx] / \
             converted_array_charge
@@ -154,4 +149,4 @@ def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branc
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tAdjCl energy computation \t-> Done!\n"
-    return run, output, new_branches
+    return run, output, new_branches+new_vector_branches

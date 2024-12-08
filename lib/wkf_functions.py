@@ -204,7 +204,7 @@ def compute_root_workflow(
             true["Event"][i] = true_tree.Event
             true["Flag"][i] = true_tree.Flag
             if workflow in ["SMEARING"]:
-                true["TNuE"][i] = true_tree.TNuE
+                true["SignalParticleE"][i] = true_tree.SignalParticleE
 
         for i in track(
             range(reco_tree.GetEntries()),
@@ -426,7 +426,7 @@ def compute_root_workflow(
             except KeyError:
                 pass
             try:
-                if reco["TNuE"][i] < data_filter["min_energy"]:
+                if reco["SignalParticleE"][i] < data_filter["min_energy"]:
                     continue
                 if reco["ElectronE"][i] < data_filter["min_energy"]:
                     continue
@@ -436,7 +436,7 @@ def compute_root_workflow(
             except KeyError:
                 pass
             try:
-                if reco["TNuE"][i] > data_filter["max_energy"]:
+                if reco["SignalParticleE"][i] > data_filter["max_energy"]:
                     continue
                 if reco["ElectronE"][i] > data_filter["max_energy"]:
                     continue

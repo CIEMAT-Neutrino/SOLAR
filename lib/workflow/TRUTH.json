@@ -29,10 +29,10 @@
             "OpFlashNum": 1
         },
         "DOUBLES": {
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1
+            "SignalParticleE": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -49,7 +49,7 @@
             "NHits": 1
         },
         "DOUBLES": {
-            "TNuE": 1,
+            "SignalParticleE": 1,
             "Purity": 1,
             "Generator": 1,
             "Charge": 1

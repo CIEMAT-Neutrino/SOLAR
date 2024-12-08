@@ -30,7 +30,7 @@
             "AdjClMainX": 1,
             "AdjClMainE": 1,
             "AdjClTime": 1,
-            "AdjClNHit": 1,
+            "AdjClNHits": 1,
             "AdjClGen": 1,
             "AdjClR": 1
         },
@@ -44,7 +44,8 @@
             "AdjOpFlashNum": 0
         },
         "DOUBLES": {
-            "TNuE": 1,
+            "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "ElectronE": 0,
             "GammaE": 0,
             "NeutronE": 0,

@@ -7,17 +7,17 @@ def compute_ophit_basic(run, configs, params: Optional[dict] = None, rm_branches
     """
     Compute the OpFlash variables for the events in the run.
     """
-    # Generate repeated arrays of TNuX, TNuY, TNuZ
+    # Generate repeated arrays of SignalParticleX, SignalParticleY, SignalParticleZ
     converted_y = reshape_array(
-        run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
+        run["Truth"]["SignalParticleY"], len(run["Truth"]["OpHitY"][0]))
     converted_z = reshape_array(
-        run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
+        run["Truth"]["SignalParticleZ"], len(run["Truth"]["OpHitZ"][0]))
 
     # New branches
     new_branches = ["OpHitDY", "OpHitDZ", "OpHitR"]
     for branch in new_branches:
         run["Truth"][branch] = np.zeros(
-            (len(run["Truth"]["Event"]), len(run["Truth"]["OpHitT"])), dtype=np.float32)
+            (len(run["Truth"]["Event"]), len(run["Truth"]["OpHitTime"])), dtype=np.float32)
 
     # Create OpHitR array
     run["Truth"]["OpHitDY"] = np.absolute(run["Truth"]["OpHitY"] - converted_y)
@@ -66,15 +66,15 @@ def compute_ophit_advanced(run, configs, params: Optional[dict] = None, rm_branc
     """
     Compute the OpFlash variables for the events in the run.
     """
-    # Generate repeated arrays of TNuX, TNuY, TNuZ
+    # Generate repeated arrays of SignalParticleX, SignalParticleY, SignalParticleZ
     converted_x = reshape_array(
-        run["Truth"]["TNuX"], len(run["Truth"]["OpHitX"][0]))
+        run["Truth"]["SignalParticleX"], len(run["Truth"]["OpHitX"][0]))
 
     converted_y = reshape_array(
-        run["Truth"]["TNuY"], len(run["Truth"]["OpHitY"][0]))
+        run["Truth"]["SignalParticleY"], len(run["Truth"]["OpHitY"][0]))
 
     converted_z = reshape_array(
-        run["Truth"]["TNuZ"], len(run["Truth"]["OpHitZ"][0]))
+        run["Truth"]["SignalParticleZ"], len(run["Truth"]["OpHitZ"][0]))
 
     flash_id_list = np.unique(run["Truth"]["OpHitFlashID"])
     # New branches
@@ -118,7 +118,7 @@ def compute_ophit_advanced(run, configs, params: Optional[dict] = None, rm_branc
                                                                  ["OpHitDecay"]) * flash_id_filter, 2), axis=1)/run["Truth"]["OpFlashNHits"][jdx]/run["Truth"]["OpFlashPE"][jdx]
         run["Truth"]["OpHitResidual"][flash_id_filter] = np.repeat(
             run["Truth"]["OpFlashResidual"][jdx], event_id_count)
-        run["Truth"]["OpFlashTime"][jdx] = np.sum((run["Truth"]["OpHitT"] * run["Truth"]["OpHitPE"])
+        run["Truth"]["OpFlashTime"][jdx] = np.sum((run["Truth"]["OpHitTime"] * run["Truth"]["OpHitPE"])
                                                   * flash_id_filter, axis=1) / np.sum(run["Truth"]["OpHitPE"] * flash_id_filter, axis=1)
         # run["Truth"]["OpFlashPur"][jdx] = np.sum(run["Truth"]["OpHitPur"][idx] * run["Truth"]["OpHitPE"][idx], axis=1) / np.sum(run["Truth"]["OpHitPE"][idx], axis=1)
     run["Truth"]["OpFlashSignal"] = (

@@ -17,7 +17,7 @@ root = get_project_root()
 
 def get_flash_time(run, tree, idx, filter, debug=False):
     ophitPEs = [run[tree]["OpHitPE"][idx][x] for x in filter]
-    ophit_times = [run[tree]["OpHitT"][idx][x] for x in filter]
+    ophit_times = [run[tree]["OpHitTime"][idx][x] for x in filter]
     flash_time = np.sum(np.multiply(ophit_times,ophitPEs))/np.sum(ophitPEs)
     if debug: print(f"  Time: {2*flash_time:.2f} us ({np.min(ophit_times):.2f} : {np.max(ophit_times):.2f}) tick")
     return flash_time
@@ -41,9 +41,9 @@ def get_ophit_positions(run, tree, idx, filter=None, debug=False):
 
 def get_neutrino_positions(run, tree, idx):
     neut = [[],[],[]]
-    neut[0] = [run[tree]["TNuX"][idx]]
-    neut[1] = [run[tree]["TNuY"][idx]]
-    neut[2] = [run[tree]["TNuZ"][idx]]
+    neut[0] = [run[tree]["SignalParticleX"][idx]]
+    neut[1] = [run[tree]["SignalParticleY"][idx]]
+    neut[2] = [run[tree]["SignalParticleZ"][idx]]
     neut_name = [Particle.from_pdgid(12).name]
     neut_color = get_pdg_color(12)
     return neut, neut_name, neut_color
@@ -246,7 +246,7 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
         if idx is None:
             idx = np.random.randint(len(run["Reco"]["Event"]))
             while (
-                run["Reco"]["TNuE"][idx] > 30
+                run["Reco"]["SignalParticleE"][idx] > 30
                 or run["Reco"]["Primary"][idx] != True
                 or run["Reco"]["Generator"][idx] != 1
             ):
@@ -264,8 +264,8 @@ def plot_tpc_event(run, configs, idx=None, tracked="Reco", zoom = True, debug=Fa
 
         fig = format_coustom_plotly(fig, figsize=(None, 600))
         fig.update_layout(
-            title_text="TNuE: <b>%.2fMeV</b> Cluster: %i"
-            % (run["Reco"]["TNuE"][idx], idx),
+            title_text="SignalParticleE: <b>%.2fMeV</b> Cluster: %i"
+            % (run["Reco"]["SignalParticleE"][idx], idx),
             title_x=0.5,
         )
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
@@ -299,7 +299,7 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
         info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
         if idx is None:
             idx = np.random.randint(len(run[tracked]["Event"]))
-            while (run[tracked]["TNuE"][idx] > 30):
+            while (run[tracked]["SignalParticleE"][idx] > 30):
                 idx = np.random.randint(len(run[tracked]["Event"]))
 
         neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
@@ -354,8 +354,8 @@ def plot_pds_event(run, configs, idx=None, tracked="Truth", maxophit=100, flashi
         fig = format_coustom_plotly(fig, figsize=(None, 600))
         fig.update_layout(
             coloraxis=dict(colorscale=colorscale),
-            title_text="TNuE: <b>%.2fMeV</b> Event: %i FlashID: %i Purity: %.2f"
-            % (run["Reco"]["TNuE"][idx], idx, flashid, np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size)),
+            title_text="SignalParticleE: <b>%.2fMeV</b> Event: %i FlashID: %i Purity: %.2f"
+            % (run["Reco"]["SignalParticleE"][idx], idx, flashid, np.sum(np.multiply(ophit_color,ophit_size))/np.sum(ophit_size)),
             title_x=0.5,
         )
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)

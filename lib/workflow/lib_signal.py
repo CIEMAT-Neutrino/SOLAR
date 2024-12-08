@@ -7,6 +7,9 @@ from particle import Particle
 
 from lib.workflow.functions import get_param_dict, remove_branches
 
+from src.utils import get_project_root
+root = get_project_root()
+
 def compute_marley_particle(run: dict[dict], configs: dict[str, list[str]], params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug=False):
     '''
     Compute the Marley particle type for the events in the run.
@@ -47,7 +50,7 @@ def compute_signal_directions(run, configs, params:Optional[dict] = None, trees=
                 (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
             )
-            for direction, start, end in zip([f"T{signal}DirectionX", f"T{signal}DirectionY", f"T{signal}DirectionZ"], ["TNuX", "TNuY", "TNuZ"], [f"T{signal}EndX", f"T{signal}EndY", f"T{signal}EndZ"]):
+            for direction, start, end in zip([f"T{signal}DirectionX", f"T{signal}DirectionY", f"T{signal}DirectionZ"], ["SignalParticleX", "SignalParticleY", "SignalParticleZ"], [f"T{signal}EndX", f"T{signal}EndY", f"T{signal}EndZ"]):
                 run[tree][direction][idx] = run[tree][start][:,
                                                              None][idx] - run[tree][end][idx]
 
@@ -71,8 +74,8 @@ def compute_signal_directions(run, configs, params:Optional[dict] = None, trees=
 
 def compute_signal_energies(run, configs, params: Optional[dict] = None, trees=["Truth", "Reco"], rm_branches: bool = False, output: Optional[str] = None, debug=False):
     signal = "Signal"
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"],
-                         "Reco": ["Event", "Flag", "Geometry", "Version", "TNuE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"]}
+    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", "SignalParticleE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"],
+                         "Reco": ["Event", "Flag", "Geometry", "Version", "SignalParticleE", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E", f"T{signal}P", f"T{signal}K"]}
     new_branches = [f"T{signal}SumE", f"T{signal}SumP",
                     f"T{signal}SumK", f"T{signal}K", f"T{signal}Mass"]
     if params is None:
@@ -118,11 +121,11 @@ def compute_signal_energies(run, configs, params: Optional[dict] = None, trees=[
         if params["NORM_TO_NUE"]:
             # Divide by the energy of the neutrino
             run[tree][new_branches[0]] = run[tree][new_branches[0]] / \
-                run[tree]["TNuE"][:, None]
+                run[tree]["SignalParticleE"][:, None]
             run[tree][new_branches[1]] = run[tree][new_branches[1]] / \
-                run[tree]["TNuE"][:, None]
+                run[tree]["SignalParticleE"][:, None]
             run[tree][new_branches[2]] = run[tree][new_branches[2]] / \
-                run[tree]["TNuE"][:, None]
+                run[tree]["SignalParticleE"][:, None]
 
         pdg_list = np.repeat(pdg_list, len(run[tree]["Event"])).reshape(
             len(pdg_list), len(run[tree]["Event"])).T
@@ -201,9 +204,9 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
             if params["NORM_TO_NUE"]:
                 for particle in particles_pdg:
                     run[tree][f"{particle}E"][idx] = run[tree][f"{particle}E"][idx] / \
-                        run[tree]["TNuE"][idx]
+                        run[tree]["SignalParticleE"][idx]
                     run[tree][f"{particle}K"][idx] = run[tree][f"{particle}K"][idx] / \
-                        run[tree]["TNuE"][idx]
+                        run[tree]["SignalParticleE"][idx]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tParticle energy combination \t-> Done!\n"

@@ -1,111 +1,310 @@
 {
-    "BASIC":{
+    "BASIC": {
         "TRUTH": [
-            "Event","Flag",
-            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"
+            "Event",
+            "Flag",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "TMarleyE",
+            "TMarleyPDG",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ"
         ],
         "RECO": [
-            "Event","Flag",
-            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-            "TNuE","TNuX","TNuY","TNuZ",
-            "Primary","NHits","Charge","Generator","Time","Purity","RecoY","RecoZ","TPC",
+            "Event",
+            "Flag",
+            "MarleyFrac",
+            "TMarleyPDG",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "Primary",
+            "NHits",
+            "Charge",
+            "Generator",
+            "Time",
+            "Purity",
+            "RecoY",
+            "RecoZ",
+            "TPC",
             "AdjClCharge"
         ]
     },
-    
     "TRUTH": {
         "TRUTH": [
-            "Event","Flag",
-            "TruthPart","TNuE","TNuX","TNuY","TNuZ","TNuQSqr",
-            "TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
-            "TMarleyXDepList","TMarleyYDepList","TMarleyZDepList",
-            "HitNum","ClusterNum"
+            "Event",
+            "Flag",
+            "TruthPart",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "TNuQSqr",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyPDG",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "TMarleyXDepList",
+            "TMarleyYDepList",
+            "TMarleyZDepList",
+            "HitNum",
+            "ClusterNum"
         ],
         "RECO": [
-            "Event","Flag",
-            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-            "TNuX","TNuY","TNuZ","Purity","TNuE",
-            "Generator","MainVertex","MainE",
-            "MainParentVertex","MainParentE",
-            "Primary","Charge","NHits","RecoY","RecoZ",
-            "AdjClCharge","AdjClR","AdjClTime","AdjClGen"
-        ]
-    },
-    
-    "CALIBRATION":{
-        "TRUTH": [
-            "Event","Flag",
-            "TNuE","TruthPart"
-        ],
-        "RECO": [
-            "Event","Flag",
-            "MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP",
-            "TNuY","TNuZ","TNuE",
-            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
-            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY","Ind0Charge","Ind1Charge","Ind0dT","Ind1dT",
-            "AdjClNHit","AdjClR","AdjClCharge","AdjClTime",
-            "AdjClMainE","AdjClMainPDG"
-        ]
-    },
-  
-    "VERTEXING":{
-        "TRUTH": [
-            "Event","Flag",
-            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
-            "TMarleyXDepList","TMarleyYDepList","TMarleyZDepList"
-        ],
-        "RECO": [
-            "Event","Flag",
-            "TNuE","TNuX","TNuY","TNuZ","TMarleyE","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ",
-            "MainPDG","MainVertex","MainParentVertex",
-            "Primary","Generator","TPC","NHits","Charge","Time","RecoY","RecoZ",
-            "AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ","AdjClMainPDG","AdjClGen",
-            "AdjClMainX","AdjClMainY","AdjClMainZ",
-            "AdjOpFlashR","AdjOpFlashPE","AdjOpFlashTime","AdjOpFlashMaxPE"
-        ]
-    },
-
-    "ADJCL":{
-        "TRUTH": [
-            "Event","Flag","TruthPart",
-            "TNuE","TNuX","TNuY","TNuZ"
-        ],
-        "RECO": [
-            "Event","Flag","TruthPart",
-            "TNuX","TNuY","TNuZ","TNuE",
+            "Event",
+            "Flag",
+            "TruthPart",
+            "MarleyFrac",
+            "TMarleyPDG",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "Purity",
+            "SignalParticleE",
+            "Generator",
             "MainVertex",
-            "Primary","Generator","Purity","NHits","Charge","Time","RecoY","RecoZ",
-            "AdjClMainPDG","AdjClGen","AdjClNHit","AdjClR","AdjClCharge","AdjClTime","AdjClRecoY","AdjClRecoZ"
+            "MainE",
+            "MainParentVertex",
+            "MainParentE",
+            "Primary",
+            "Charge",
+            "NHits",
+            "RecoY",
+            "RecoZ",
+            "AdjClCharge",
+            "AdjClR",
+            "AdjClTime",
+            "AdjClGen"
         ]
     },
-
-    "ADJFLASH":{
+    "CALIBRATION": {
         "TRUTH": [
-            "Event","Flag",
-            "TNuE","TNuX","TNuY","TNuZ"
+            "Event",
+            "Flag",
+            "SignalParticleE",
+            "TruthPart"
         ],
         "RECO": [
-            "Event","Flag",
-            "TNuX","TNuY","TNuZ","TNuE",
-            "MainVertex","MainParentVertex",
-            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
-            "AdjClR","AdjClCharge","AdjClTime",
-            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR","AdjOpFlashPur"
+            "Event",
+            "Flag",
+            "MarleyFrac",
+            "TMarleyPDG",
+            "TMarleyE",
+            "TMarleyP",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "SignalParticleE",
+            "Primary",
+            "Generator",
+            "NHits",
+            "Charge",
+            "Time",
+            "RecoY",
+            "RecoZ",
+            "Ind0NHits",
+            "Ind1NHits",
+            "Ind0RecoY",
+            "Ind1RecoY",
+            "Ind0Charge",
+            "Ind1Charge",
+            "Ind0dTime",
+            "Ind1dTime",
+            "AdjClNHits",
+            "AdjClR",
+            "AdjClCharge",
+            "AdjClTime",
+            "AdjClMainE",
+            "AdjClMainPDG"
         ]
     },
-    
+    "VERTEXING": {
+        "TRUTH": [
+            "Event",
+            "Flag",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyPDG",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "TMarleyXDepList",
+            "TMarleyYDepList",
+            "TMarleyZDepList"
+        ],
+        "RECO": [
+            "Event",
+            "Flag",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "TMarleyE",
+            "TMarleyPDG",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "MainPDG",
+            "MainVertex",
+            "MainParentVertex",
+            "Primary",
+            "Generator",
+            "TPC",
+            "NHits",
+            "Charge",
+            "Time",
+            "RecoY",
+            "RecoZ",
+            "AdjClCharge",
+            "AdjClTime",
+            "AdjClRecoY",
+            "AdjClRecoZ",
+            "AdjClMainPDG",
+            "AdjClGen",
+            "AdjClMainX",
+            "AdjClMainY",
+            "AdjClMainZ",
+            "AdjOpFlashR",
+            "AdjOpFlashPE",
+            "AdjOpFlashTime",
+            "AdjOpFlashMaxPE"
+        ]
+    },
+    "ADJCL": {
+        "TRUTH": [
+            "Event",
+            "Flag",
+            "TruthPart",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ"
+        ],
+        "RECO": [
+            "Event",
+            "Flag",
+            "TruthPart",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "SignalParticleE",
+            "MainVertex",
+            "Primary",
+            "Generator",
+            "Purity",
+            "NHits",
+            "Charge",
+            "Time",
+            "RecoY",
+            "RecoZ",
+            "AdjClMainPDG",
+            "AdjClGen",
+            "AdjClNHit",
+            "AdjClR",
+            "AdjClCharge",
+            "AdjClTime",
+            "AdjClRecoY",
+            "AdjClRecoZ"
+        ]
+    },
+    "ADJFLASH": {
+        "TRUTH": [
+            "Event",
+            "Flag",
+            "SignalParticleE",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ"
+        ],
+        "RECO": [
+            "Event",
+            "Flag",
+            "SignalParticleX",
+            "SignalParticleY",
+            "SignalParticleZ",
+            "SignalParticleE",
+            "MainVertex",
+            "MainParentVertex",
+            "Primary",
+            "Generator",
+            "NHits",
+            "Charge",
+            "Time",
+            "RecoY",
+            "RecoZ",
+            "AdjClR",
+            "AdjClCharge",
+            "AdjClTime",
+            "AdjOpFlashTime",
+            "AdjOpFlashPE",
+            "AdjOpFlashMaxPE",
+            "AdjOpFlashR",
+            "AdjOpFlashPur"
+        ]
+    },
     "ANALYSIS": {
         "TRUTH": [
-            "Event","Flag",
-            "TruthPart","TNuE","TMarleyE","TMarleyP","TMarleyPDG","TMarleyX","TMarleyY","TMarleyZ"
+            "Event",
+            "Flag",
+            "TruthPart",
+            "SignalParticleE",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyPDG",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ"
         ],
         "RECO": [
-            "Event","Flag",
-            "TruthPart","MarleyFrac","TMarleyPDG","TMarleyE","TMarleyP","TMarleyX","TMarleyY","TMarleyZ",
-            "Primary","Generator","NHits","Charge","Time","RecoY","RecoZ",
-            "Ind0NHits","Ind1NHits","Ind0RecoY","Ind1RecoY",
-            "AdjClNHit","AdjClR","AdjClPur","AdjClCharge","AdjClTime",
-            "AdjOpFlashTime","AdjOpFlashPE","AdjOpFlashMaxPE","AdjOpFlashR"
+            "Event",
+            "Flag",
+            "TruthPart",
+            "MarleyFrac",
+            "TMarleyPDG",
+            "TMarleyE",
+            "TMarleyP",
+            "TMarleyX",
+            "TMarleyY",
+            "TMarleyZ",
+            "Primary",
+            "Generator",
+            "NHits",
+            "Charge",
+            "Time",
+            "RecoY",
+            "RecoZ",
+            "Ind0NHits",
+            "Ind1NHits",
+            "Ind0RecoY",
+            "Ind1RecoY",
+            "AdjClNHit",
+            "AdjClR",
+            "AdjClPur",
+            "AdjClCharge",
+            "AdjClTime",
+            "AdjOpFlashTime",
+            "AdjOpFlashPE",
+            "AdjOpFlashMaxPE",
+            "AdjOpFlashR"
         ]
     }
 }

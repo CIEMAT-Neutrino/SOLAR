@@ -266,45 +266,29 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         return x, y_top, y_bottom
 
 
-def generate_bins(acc, x, debug=False):
-    if type(acc) == tuple:
-        acc = acc[0]
+def plot_hist1d_signal(x, y, signal, fig, idx, debug:bool=False):
+    """
+    Given an x and y array, plot 2 histograms in the same plot according to the signal index.
+    """
 
-    if type(acc) == int:
-        try:
-            if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
-                bin_width = (np.max(x) - np.min(x)) / acc
-                x_array = np.arange(np.min(x), np.max(x)+bin_width, bin_width)
-            elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
-                x_array = np.arange(np.min(x), np.max(x) + 1, acc)
-            else:
-                if debug:
-                    rprint(
-                        f"[red]ERROR: x type {type(x[0])} not supported![/red]")
-                return None
+    x, y = remove_nans_and_infs((x, y), debug=debug)
+    signal = remove_nans_and_infs(signal, debug=debug)
 
-        except ValueError:
-            if debug:
-                rprint("[red]ERROR: x might be empty![/red]")
-            return None
-        except IndexError:
-            if debug:
-                rprint("[red]ERROR: x might be empty![/red]")
-            return None
+    if len(x) != len(y):
+        print("x and y arrays are not the same length!")
+        print("x: ", len(x), "\ny: ", len(y))
+        raise ValueError
 
-    elif type(acc) == list:
-        x_array = np.asarray(acc)
+    if len(x) != len(signal):
+        print("x and signal arrays are not the same length!")
+        print("x: ", len(x), "\nsignal: ", len(signal))
+        raise ValueError
 
-    else:
-        if debug:
-            rprint(
-                f"[yellow]WARNING: No known binning type, returning {type(acc)}: {acc}![/yellow]")
-        return acc
-
-    return x_array
+    x_array = generate_bins(100, x, debug=debug)
+    y_array = generate_bins(100, y, debug=debug)
 
 
-def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=None, norm=True, density=False, debug=False):
+def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=None, norm: bool=True, density: bool=False, debug: bool=False):
     """
     Given an x array, generate a 1D histogram.
 
@@ -368,7 +352,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
                 scan_bin = scan[idx] - scan[idx-1]
 
             scan_filter = np.where(
-                (x > (scan_value-scan_bin/2)) & (x < (scan_value+scan_bin/2)))
+                (x >= (scan_value-scan_bin/2)) & (x < (scan_value+scan_bin/2)))
 
             if scan_y is not None:
                 this_filtered_y = scan_y[scan_filter]
@@ -376,6 +360,7 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
                     this_h, this_x_bins = np.histogram(
                         this_filtered_y, bins=y_array, density=density)
                     labels.append(f"{scan_value}")
+                    x_array = y_array
 
                 except ValueError:
                     print("y might be empty!")
@@ -427,8 +412,7 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
         values = []
         for nhit in nhits:
             nhit_filter = np.where(x == nhit)
-            if len(nhit_filter) > 0:
-                print(nhits)
+            if np.sum(nhit_filter) > 0:
                 values.append(nhit)
                 mean_variable_array.append(np.mean(y[nhit_filter]))
                 std_variable_array.append(np.std(y[nhit_filter]))
@@ -869,6 +853,44 @@ def get_hist1d_diff(x, y, offset: float = 0, norm: bool = True, debug=False) -> 
         count = counts/np.sum(counts)
 
     return intercept, counts
+
+
+def generate_bins(acc, x, debug=False):
+    if type(acc) == tuple:
+        acc = acc[0]
+
+    if type(acc) == int:
+        try:
+            if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
+                bin_width = (np.max(x) - np.min(x)) / acc
+                x_array = np.arange(np.min(x), np.max(x)+bin_width, bin_width)
+            elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
+                x_array = np.arange(np.min(x)-acc/2, np.max(x) + 1, acc)
+            else:
+                if debug:
+                    rprint(
+                        f"[red]ERROR: x type {type(x[0])} not supported![/red]")
+                return None
+
+        except ValueError:
+            if debug:
+                rprint("[red]ERROR: x might be empty![/red]")
+            return None
+        except IndexError:
+            if debug:
+                rprint("[red]ERROR: x might be empty![/red]")
+            return None
+
+    elif type(acc) == list:
+        x_array = np.asarray(acc)
+
+    else:
+        if debug:
+            rprint(
+                f"[yellow]WARNING: No known binning type, returning {type(acc)}: {acc}![/yellow]")
+        return acc
+
+    return x_array
 
 
 def remove_nans_and_infs(data, debug=False) -> tuple:

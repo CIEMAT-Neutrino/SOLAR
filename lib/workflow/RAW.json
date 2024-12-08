@@ -34,10 +34,10 @@
             "OpFlashNum": 1
         },
         "DOUBLES": {
-            "TNuE": 0,
-            "TNuX": 0,
-            "TNuY": 0,
-            "TNuZ": 0
+            "SignalParticleE": 0,
+            "SignalParticleX": 0,
+            "SignalParticleY": 0,
+            "SignalParticleZ": 0
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -70,10 +70,10 @@
         },
         "DOUBLES": {
             "Purity": 0,
-            "TNuE": 0,
-            "TNuX": -1e6,
-            "TNuY": -1e6,
-            "TNuZ": -1e6,
+            "SignalParticleE": 0,
+            "SignalParticleX": -1e6,
+            "SignalParticleY": -1e6,
+            "SignalParticleZ": -1e6,
             "Time": -1e6,
             "Charge": 0,
             "MainE": 0,

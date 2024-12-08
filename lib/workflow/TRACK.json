@@ -24,10 +24,10 @@
             "TrackNum": 1
         },
         "DOUBLES": {
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1
+            "SignalParticleE": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -57,10 +57,10 @@
         },
         "DOUBLES": {
             "MainE": 1,
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1,
+            "SignalParticleE": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "Purity": 1,
             "RecoX": 1,
             "RecoY": 1,

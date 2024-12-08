@@ -102,10 +102,10 @@ def compute_solar_spectrum(
         if gen == 1:
             int_time = 1
             t_hist, bin_edges = np.histogram(
-                run["Truth"]["TNuE"][(truth_filter)], bins=energy_edges
+                run["Truth"]["SignalParticleE"][(truth_filter)], bins=energy_edges
             )
             r_hist, bin_edges = np.histogram(
-                run["Reco"]["TNuE"][this_filter], bins=energy_edges
+                run["Reco"]["SignalParticleE"][this_filter], bins=energy_edges
             )
             efficient_flux = {A: B for A, B in zip(energy_centers, r_hist / t_hist)}
 

@@ -58,11 +58,11 @@ def compute_opflash_basic(run, configs, params: Optional[dict] = None, trees: Op
                 (run[tree][f"{prefix}OpFlashPE"][idx] != 0) * (run[tree][f"{prefix}OpFlashSignal"][idx] == False), axis=1)
 
             run[tree][f"{prefix}OpFlashErrorY"][idx] = np.absolute(run[tree][f"{prefix}OpFlash{sufix}Y"][idx] - \
-                reshape_array(run[tree]["TNuY"][idx], len(
+                reshape_array(run[tree]["SignalParticleY"][idx], len(
                     run[tree][f"{prefix}OpFlash{sufix}Y"][idx][0])))
             
             run[tree][f"{prefix}OpFlashErrorZ"][idx] = np.absolute(run[tree][f"{prefix}OpFlash{sufix}Z"][idx] - \
-                reshape_array(run[tree]["TNuZ"][idx], len(
+                reshape_array(run[tree]["SignalParticleZ"][idx], len(
                     run[tree][f"{prefix}OpFlash{sufix}Z"][idx][0])))
             
             run[tree][f"{prefix}OpFlashR"][idx] = np.sqrt(np.power(
@@ -198,10 +198,10 @@ def compute_opflash_matching(run, configs, params: Optional[dict] = None, rm_bra
         run["Reco"]["MatchedOpFlashSignal"][idx] = run["Reco"]["MatchedOpFlashPur"][idx] > 0
         
         run["Reco"]["MatchedOpFlashErrorY"][idx] = np.absolute(run["Reco"]["MatchedOpFlashRecoY"][idx] - \
-            run["Reco"]["TNuY"][idx])
+            run["Reco"]["SignalParticleY"][idx])
         
         run["Reco"]["MatchedOpFlashErrorZ"][idx] = np.absolute(run["Reco"]["MatchedOpFlashRecoZ"][idx] - \
-            run["Reco"]["TNuZ"][idx])
+            run["Reco"]["SignalParticleZ"][idx])
     
     output += f"\tMatchedOpFlash Signal Defined \t\t-> Done!\n"
     return run, output, new_branches

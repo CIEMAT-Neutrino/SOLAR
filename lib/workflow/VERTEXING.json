@@ -19,10 +19,11 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1
+            "SignalParticleE": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -49,7 +50,7 @@
             "AdjClMainZ": 1,
             "AdjOpFlashR": 0,
             "AdjOpFlashPE": 0,
-            "AdjOpFlashNHit": 0,
+            "AdjOpFlashNHits": 0,
             "AdjOpFlashTime": 0,
             "AdjOpFlashRecoY": 0,
             "AdjOpFlashRecoZ": 0,
@@ -68,10 +69,11 @@
         },
         "DOUBLES": {
             "MainE": 1,
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1,
+            "SignalParticleE": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "Ind0RecoY": 1,
             "Ind1RecoY": 1,
             "Time": 1,

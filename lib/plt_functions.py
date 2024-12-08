@@ -548,8 +548,8 @@ def plot_nhit_energy_scan(df, variable, bins=100, density=False):
     for nhits in analysis_info["NHITS"]:
         for energy in energy_centers:
             this_df = df[
-                (df["TNuE"] > energy - ebin / 2)
-                & (df["TNuE"] < energy + ebin / 2)
+                (df["SignalParticleE"] > energy - ebin / 2)
+                & (df["SignalParticleE"] < energy + ebin / 2)
                 & (df["NHits"] >= nhits)
             ]
 

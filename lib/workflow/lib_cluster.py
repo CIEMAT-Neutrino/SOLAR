@@ -3,8 +3,11 @@ import pickle
 import numpy as np
 
 from typing import Optional
+from itertools import product
 from lib.workflow.functions import remove_branches, get_param_dict, reshape_array
 from lib.workflow.lib_default import get_default_info
+from lib.fit_functions import calibration_func
+from lib.df_functions import npy2df
 
 from src.utils import get_project_root
 root = get_project_root()
@@ -242,11 +245,11 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             thld = discriminant_info["DISCRIMINANT_THRESHOLD"]
 
             run["Reco"]["Upper"][idx] = np.asarray(
-                run["Reco"]["ElectronK"][idx] > run["Reco"]["TNuE"][idx] + thld, dtype=bool)
+                run["Reco"]["ElectronK"][idx] > run["Reco"]["SignalParticleE"][idx] + thld, dtype=bool)
             run["Reco"]["Lower"][idx] = np.asarray(
-                run["Reco"]["ElectronK"][idx] < run["Reco"]["TNuE"][idx] + thld, dtype=bool)
+                run["Reco"]["ElectronK"][idx] < run["Reco"]["SignalParticleE"][idx] + thld, dtype=bool)
 
-            df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "TNuE", "NHits", "Upper", "Lower"],
+            df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "SignalParticleE", "NHits", "Upper", "Lower"],
                         debug=debug)
 
             df['ML'] = rf_classifier.predict(df[features])

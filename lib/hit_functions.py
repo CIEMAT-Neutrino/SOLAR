@@ -21,7 +21,7 @@ def process_hit_run(hit_run, tree, debug=False):
 
     branches2keep = ["Event","Flag","Index","Main","Geometry","Version"]
     branches2rename = {}
-    branches2max = {"TPC":"TPC","Ind0TPC":"Ind0TPC","Ind1TPC":"Ind1TPC","Ind0T":"Ind0T","Ind1T":"Ind1T","MainPDG":"MotherPDG"}
+    branches2max = {"TPC":"TPC","Ind0TPC":"Ind0TPC","Ind1TPC":"Ind1TPC","Ind0Time":"Ind0Time","Ind1Time":"Ind1Time","MainPDG":"MotherPDG"}
     branches2sum = {"Charge":"Charge","Ind0Charge":"Ind0Charge","Ind1Charge":"Ind1Charge"}
     branches2ave = {"Ind0RecoY":"Ind0Y","Ind1RecoY":"Ind1Y","Ind0RecoZ":"Ind0Z","Ind1RecoZ":"Ind1Z"}
     branches2mean = {"Time":"Time","RecoY":"Y", "RecoZ":"Z", "MainX":"MotherX", "MainY":"MotherY", "MainZ":"MotherZ","MainE":"MotherE"}

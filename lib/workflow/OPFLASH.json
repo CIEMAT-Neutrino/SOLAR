@@ -7,9 +7,6 @@
     },
     "Truth": {
         "VECTORS": {
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1,
             "TSignalE": 1,
             "TSignalX": 1,
             "TSignalY": 1,
@@ -22,7 +19,7 @@
             "OpFlashFast": 1,
             "OpFlashPur": 1,
             "OpFlashR": 1,
-            "OpFlashNHit": 1,
+            "OpFlashNHits": 1,
             "OpFlashID": 1,
             "OpFlashX": 1,
             "OpFlashY": 1,
@@ -34,58 +31,22 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 1
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
+            "SignalParticleE": 1
         },
         "STRINGS": {},
         "BOOLS": {}
     },
     "Reco": {
-        "VECTORS": {
-            "TSignalE": 1,
-            "TSignalX": 1,
-            "TSignalY": 1,
-            "TSignalZ": 1,
-            "TSignalPDG": 1,
-            "MainVertex": 0,
-            "MainParentVertex": 0,
-            "MatchedOpFlashR": 1,
-            "MatchedOpFlashRecoX": 1,
-            "MatchedOpFlashRecoY": 1,
-            "MatchedOpFlashRecoZ": 1,
-            "MatchedOpFlashMaxPE": 1,
-            "MatchedOpFlashPE": 1,
-            "MatchedOpFlashTime": 1,
-            "MatchedOpFlashResidual": 1
-        },
+        "VECTORS": {},
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1,
-            "MainPDG": 1,
-            "Generator": 1,
-            "NHits": 1,
-            "Ind0NHits": 1,
-            "Ind1NHits": 1,
-            "TPC": 1
+            "Flag": 1
         },
-        "DOUBLES": {
-            "MainE": 1,
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1,
-            "RecoX": 1,
-            "RecoY": 1,
-            "Ind0RecoY": 1,
-            "Ind1RecoY": 1,
-            "Time": 1,
-            "Ind0dT": 1,
-            "Ind1dT": 1,
-            "RecoZ": 1,
-            "Charge": 1
-        },
+        "DOUBLES": {},
         "STRINGS": {},
-        "BOOLS": {
-            "Primary": 1
-        }
+        "BOOLS": {}
     }
 }

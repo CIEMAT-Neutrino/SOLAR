@@ -15,7 +15,8 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 1
+            "SignalParticleE": 1,
+            "SignalParticleK": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -31,7 +32,7 @@
             "AdjClCharge": 1,
             "AdjClMainX": 1,
             "AdjClMainE": 1,
-            "AdjClNHit": 1,
+            "AdjClNHits": 1,
             "AdjClTime": 1,
             "AdjClGen": 1,
             "AdjClR": 1
@@ -48,7 +49,8 @@
             "Matching": -1
         },
         "DOUBLES": {
-            "TNuE": 1,
+            "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "MainE": 1,
             "MainParentE": 1,
             "ElectronE": 0,

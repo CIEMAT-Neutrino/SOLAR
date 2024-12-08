@@ -12,7 +12,7 @@
             "Event": 1
         },
         "DOUBLES": {
-            "TNuE": 1
+            "SignalParticleE": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -51,7 +51,7 @@
             "MainParentPDG": 1
         },
         "DOUBLES": {
-            "TNuE": 1,
+            "SignalParticleE": 1,
             "ElectronE": 0,
             "GammaE": 0,
             "ElectronK": 0,

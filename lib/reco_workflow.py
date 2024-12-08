@@ -91,19 +91,15 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-        run, output, this_new_branches = compute_cluster_time(
+        run, output, this_new_branches = compute_cluster_energy(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
-        new_branches += this_new_branches
-        run, output, this_new_branches = compute_cluster_energy(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
         new_branches += this_new_branches
         run, output, this_new_branches = compute_adjcl_advanced(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    
+
     ### PDS WORKFLOWS
     elif "OPHIT" in workflow:
         run, output, this_new_branches = compute_ophit_basic(

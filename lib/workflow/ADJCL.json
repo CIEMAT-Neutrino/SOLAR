@@ -19,7 +19,7 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "TNuE": 1
+            "SignalParticleE": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -43,14 +43,10 @@
             "AdjClRecoZ": 0,
             "AdjClMainID": 0,
             "AdjClMainPDG": 0,
-            "AdjClMainX": 0,
-            "AdjClMainY": 0,
-            "AdjClMainZ": 0,
-            "AdjOpFlashR": 1,
-            "AdjOpFlashRecoY": 1,
-            "AdjOpFlashRecoZ": 1,
-            "AdjOpFlashMaxPE": 1,
-            "AdjOpFlashPE": 1
+            "AdjClMainE": 1,
+            "AdjClMainX": 1,
+            "AdjClMainY": 1,
+            "AdjClMainZ": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -58,29 +54,22 @@
             "MainPDG": 1,
             "Generator": 1,
             "NHits": 1,
-            "Ind0NHits": 1,
-            "Ind1NHits": 1,
             "AdjClNum": 0,
-            "AdjOpFlashNum": 0,
-            "AdjClNHit": 1
+            "AdjClNHits": 1
         },
         "DOUBLES": {
             "MainE": 1,
-            "TNuE": 1,
-            "TNuX": 1,
-            "TNuY": 1,
-            "TNuZ": 1,
+            "SignalParticleE": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "ElectronE": 0,
             "GammaE": 0,
-            "NeutronP": 0,
-            "VisEnergy": 0,
             "Purity": 1,
             "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1,
             "Time": 1,
-            "Ind0dT": 1,
-            "Ind1dT": 1,
             "Charge": 1
         },
         "STRINGS": {},
