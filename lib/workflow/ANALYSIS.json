@@ -12,7 +12,8 @@
             "Event": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1
+            "SignalParticleE": 1,
+            "SignalParticleK": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -31,7 +32,7 @@
             "AdjClMainX": 1,
             "AdjClMainY": 1,
             "AdjClMainZ": 1,
-            "AdjClNHit": 1,
+            "AdjClNHits": 1,
             "AdjClCharge": 1,
             "AdjClTime": 1,
             "AdjClGen": 1,
@@ -52,6 +53,7 @@
         },
         "DOUBLES": {
             "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "ElectronE": 0,
             "GammaE": 0,
             "ElectronK": 0,

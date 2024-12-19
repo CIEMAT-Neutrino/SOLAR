@@ -10,7 +10,7 @@
             "TruthPart": 1,
             "TSignalPDG": 1,
             "TSignalE": 1,
-            "TSignalP": 1,
+            "TSignalK": 1,
             "TSignalX": 1,
             "TSignalY": 1,
             "TSignalZ": 1,
@@ -30,6 +30,7 @@
         },
         "DOUBLES": {
             "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1

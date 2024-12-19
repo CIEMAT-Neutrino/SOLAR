@@ -58,8 +58,8 @@
             "Ind0RecoY": 1,
             "Ind1RecoY": 1,
             "Time": 1,
-            "Ind0dT": 1,
-            "Ind1dT": 1,
+            "Ind0dTime": 1,
+            "Ind1dTime": 1,
             "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1

@@ -35,6 +35,7 @@
         },
         "DOUBLES": {
             "SignalParticleE": 0,
+            "SignalParticleK": 0,
             "SignalParticleX": 0,
             "SignalParticleY": 0,
             "SignalParticleZ": 0
@@ -47,6 +48,7 @@
             "TruthPart": 0,
             "TSignalE": 0,
             "TSignalP": 0,
+            "TSignalK": 0,
             "TSignalPDG": 0,
             "TSignalX": 0,
             "TSignalY": 0,
@@ -71,6 +73,7 @@
         "DOUBLES": {
             "Purity": 0,
             "SignalParticleE": 0,
+            "SignalParticleK": 0,
             "SignalParticleX": -1e6,
             "SignalParticleY": -1e6,
             "SignalParticleZ": -1e6,

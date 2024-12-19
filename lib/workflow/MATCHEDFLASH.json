@@ -6,17 +6,18 @@
         "BOOLS": {}
     },
     "Truth": {
-        "VECTORS": {
-            "SignalParticleX": 1,
-            "SignalParticleY": 1,
-            "SignalParticleZ": 1
-        },
+        "VECTORS": {},
         "INTEGERS": {
             "Event": 1,
             "Flag": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1
+            "SignalParticleE": 1,
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -49,6 +50,8 @@
         "DOUBLES": {
             "MainE": 1,
             "SignalParticleE": 1,
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
