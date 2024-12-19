@@ -1,11 +1,11 @@
-from src.utils import get_project_root
 
 import sys, inquirer, os, json
-import numpy as np
-from rich import print as rprint
 
+from rich import print as rprint
+from typing import Optional
 from .io_functions import print_colored
 
+from src.utils import get_project_root
 root = get_project_root()
 
 def get_flag_dict(debug = False):
@@ -30,7 +30,7 @@ def get_flag_dict(debug = False):
     return flag_dict
 
 
-def initialize_macro(macro, input_list=["config_file","root_file","debug"], default_dict={}, debug=False):
+def initialize_macro(macro:str, input_list:Optional[list[str]]=["config_file","root_prefix","root_file","debug"], default_dict:Optional[dict]=None, debug:bool=False)->dict[str,str]:
     '''
     This function initializes the macro by reading the input file and the user input.
     
@@ -65,12 +65,17 @@ def initialize_macro(macro, input_list=["config_file","root_file","debug"], defa
                     try:
                         user_input[flag[1].split("--")[1]] = sys.argv[sys.argv.index(arg)+1].split(",")
                         print_colored("Using %s from command line"%flag_dict[flag],"INFO")
+                    
                     except IndexError:
                         print("Please provide argument for flag %s"%flag_dict[flag])
                         exit()
 
     user_input = select_input_file(user_input, debug=debug)
-    user_input = update_user_input(user_input,input_list,debug=debug)
+    config = user_input["config_file"][0].split("/")[0]
+    print_colored("Using config file %s"%config,"INFO")
+    info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+    default_dict["root_prefix"] = info["NAME"]
+    user_input = update_user_input(user_input,input_list,default_dict,debug=debug)
     
     user_input["config_file"] = user_input["config_file"][0]
     for bool_key in ["debug","rewrite","show","trim"]:
@@ -79,7 +84,7 @@ def initialize_macro(macro, input_list=["config_file","root_file","debug"], defa
     return user_input
 
 
-def update_user_input(user_input, new_input_list, debug=False):
+def update_user_input(user_input, new_input_list:Optional[list[str]]=None, default_dict:Optional[dict]=None, debug:bool=False):
     '''
     This function updates the user input by asking the user to provide the missing information.
 
@@ -96,7 +101,14 @@ def update_user_input(user_input, new_input_list, debug=False):
     new_user_input = user_input.copy()
     for key_label in new_input_list:
         if check_key(user_input, key_label) == False:
-            new_user_input[key_label]= input("Please select %s (separated with commas): "%key_label).split(",")
+            if key_label in default_dict.keys():
+                # Use inquirer to ask user for input with default value
+                q1 = [ inquirer.Text(key_label, message="Please select %s"%key_label, default=default_dict[key_label]) ]
+                new_user_input[key_label] = inquirer.prompt(q1)[key_label].split(",")[0]
+            else:
+                # Use inquirer to ask user for input
+                q1 = [ inquirer.Text(key_label, message="Please select %s"%key_label) ]
+                new_user_input[key_label] = inquirer.prompt(q1)[key_label].split(",")[0]
         else:
             # if debug: print("Using %s from user input"%key_label)
             pass
