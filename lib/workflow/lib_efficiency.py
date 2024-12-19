@@ -4,6 +4,9 @@ import numpy as np
 from typing import Optional
 from lib.workflow.functions import remove_branches, get_param_dict
 
+from src.utils import get_project_root
+root = get_project_root()
+
 def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug: bool = False):
     """
     Compute the true efficiency of the events in the run.
@@ -11,17 +14,19 @@ def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], para
     required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", "NHits", "Charge", "Generator"]}
     # New branches
-    new_branches = ["RecoIndex", "RecoMatch",
-                    "ClCount", "HitCount", "TrueIndex"]
+    new_branches = ["RecoIndex", "RecoMatch", "PDSMatch",
+                    "ClusterCount", "HitCount", "TrueIndex"]
     run["Truth"][new_branches[0]] = np.zeros(
         len(run["Truth"]["Event"]), dtype=int)
     run["Truth"][new_branches[1]] = np.zeros(
         len(run["Truth"]["Event"]), dtype=bool)
     run["Truth"][new_branches[2]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=int)
+        len(run["Truth"]["Event"]), dtype=bool)
     run["Truth"][new_branches[3]] = np.zeros(
         len(run["Truth"]["Event"]), dtype=int)
-    run["Reco"][new_branches[4]] = np.zeros(
+    run["Truth"][new_branches[4]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=int)
+    run["Reco"][new_branches[5]] = np.zeros(
         len(run["Reco"]["Event"]), dtype=int)
 
     for config in configs:
@@ -44,13 +49,15 @@ def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], para
             run["Reco"]["NHits"][jdx],
             run["Reco"]["Charge"][jdx],
             run["Reco"]["Generator"][jdx],
+            run["Reco"]["MatchedOpFlashPur"][jdx],
             debug=debug,
         )
-        run["Truth"]["RecoIndex"][idx] = np.asarray(result[0])
-        run["Truth"]["RecoMatch"][idx] = np.asarray(result[1])
-        run["Truth"]["ClCount"][idx] = np.asarray(result[2])
-        run["Truth"]["HitCount"][idx] = np.asarray(result[3])
-        run["Reco"]["TrueIndex"][jdx] = np.asarray(result[4])
+        run["Truth"]["RecoIndex"][idx]    = np.asarray(result[0])
+        run["Truth"]["RecoMatch"][idx]    = np.asarray(result[1])
+        run["Truth"]["PDSMatch"][idx]     = np.asarray(result[2])
+        run["Truth"]["ClusterCount"][idx] = np.asarray(result[3])
+        run["Truth"]["HitCount"][idx]     = np.asarray(result[4])
+        run["Reco"]["TrueIndex"][jdx]     = np.asarray(result[5])
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tTrue efficiency computation \t-> Done!\n"
@@ -65,6 +72,7 @@ def generate_index(
     reco_nhits,
     reco_charge,
     reco_gen,
+    reco_flash,
     debug=False,
 ):
     """
@@ -72,7 +80,8 @@ def generate_index(
     """
     true_index = np.arange(len(true_event), dtype=np.int32)
     true_result = np.zeros(len(true_event), dtype=np.int32) - 1
-    true_match = np.zeros(len(true_event), dtype=np.bool_)
+    true_TPC_match = np.zeros(len(true_event), dtype=np.bool_)
+    true_PDS_match = np.zeros(len(true_event), dtype=np.bool_)
     true_counts = np.zeros(len(true_event), dtype=np.int32)
     true_nhits = np.zeros(len(true_event), dtype=np.int32)
     reco_result = np.zeros(len(reco_event), dtype=np.int32)
@@ -98,8 +107,10 @@ def generate_index(
                 reco_result[i] = int(k)
                 if reco_charge[i] > reco_charge[true_result[k]]:
                     true_result[k] = int(i)
-                true_match[k] = True
+                true_TPC_match[k] = True
                 true_counts[k] += 1
                 true_nhits[k] = true_nhits[k] + reco_nhits[i]
+                if reco_flash[i] > 0:
+                    true_PDS_match[k] = True
                 break
-    return true_result, true_match, true_counts, true_nhits, reco_result
+    return true_result, true_TPC_match, true_PDS_match, true_counts, true_nhits, reco_result
