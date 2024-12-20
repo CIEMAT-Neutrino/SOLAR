@@ -55,7 +55,7 @@ max_energy = 20
 acc = 50
 info = json.load(
     open("../config/" + f"{config}/{config}_config" + ".json", "r"))
-total_energy_filter = run["Reco"]["TNuE"] < max_energy * 1e-3
+total_energy_filter = run["Reco"]["SignalParticleE"] < max_energy * 1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] > 0.9
 geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
 version_filter = np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]

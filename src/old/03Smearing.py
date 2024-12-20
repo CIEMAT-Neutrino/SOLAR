@@ -60,7 +60,7 @@ run = compute_reco_energy(run, configs, debug=user_input["debug"])
 max_energy = 30
 acc = 50
 info = json.load(open("../config/" + f"{config}/{config}_config" + ".json", "r"))
-total_energy_filter = run["Reco"]["TNuE"] < max_energy * 1e-3
+total_energy_filter = run["Reco"]["SignalParticleE"] < max_energy * 1e-3
 # electron_filter     = run["Reco"]["MarleyFrac"][:,0] == 1
 geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
 version_filter = np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]
@@ -79,9 +79,9 @@ list_hist = []
 
 for idx, energy_bin in enumerate(energy_centers):
     neutrino_energy_filter = (
-        run["Reco"]["TNuE"] > 1e-3 * (energy_bin - bin_width / 2)
+        run["Reco"]["SignalParticleE"] > 1e-3 * (energy_bin - bin_width / 2)
     ) * (
-        run["Reco"]["TNuE"] < 1e-3 * (energy_bin + bin_width / 2)
+        run["Reco"]["SignalParticleE"] < 1e-3 * (energy_bin + bin_width / 2)
     )  # Filtering genereted neutrinos in 1GeV energy bin
     filter2 = (filter1) * (neutrino_energy_filter)
     hist, bin_edges = np.histogram(

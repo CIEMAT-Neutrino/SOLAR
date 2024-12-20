@@ -59,7 +59,7 @@ for jdx, config in enumerate(configs):
 
     max_energy = 30
     acc = 50
-    total_energy_filter = run["Reco"]["TNuE"] < max_energy * 1e-3
+    total_energy_filter = run["Reco"]["SignalParticleE"] < max_energy * 1e-3
     # electron_filter     = run["Reco"]["MarleyFrac"][:,0] > 0.9
     geo_filter = np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"][0]
     version_filter = np.asarray(run["Reco"]["Version"]) == info["VERSION"][0]
@@ -104,7 +104,7 @@ for jdx, config in enumerate(configs):
     )
     fig, true_popt, true_perr = get_hist2d_fit(
         run["Reco"]["ElectronE"][filter1],
-        1e3 * run["Reco"]["TNuE"][filter1],
+        1e3 * run["Reco"]["SignalParticleE"][filter1],
         acc,
         fig,
         1,
@@ -141,13 +141,13 @@ for jdx, config in enumerate(configs):
     this_df = reco_df[
         (reco_df["NeutronP"] == 0)
         & (reco_df["Primary"] == True)
-        & (reco_df["TNuE"] < max_energy * 1e-3)
+        & (reco_df["SignalParticleE"] < max_energy * 1e-3)
     ]
     fig.add_trace(
         go.Histogram2d(
             nbinsx=acc,
             nbinsy=acc,
-            y=1e3 * this_df["TNuE"],
+            y=1e3 * this_df["SignalParticleE"],
             x=this_df["Energy"],
             coloraxis="coloraxis",
         ),
@@ -158,7 +158,7 @@ for jdx, config in enumerate(configs):
         go.Histogram2d(
             nbinsx=acc,
             nbinsy=acc,
-            y=1e3 * this_df["TNuE"],
+            y=1e3 * this_df["SignalParticleE"],
             x=this_df["GammaE"],
             coloraxis="coloraxis",
         ),
@@ -169,7 +169,7 @@ for jdx, config in enumerate(configs):
         go.Histogram2d(
             nbinsx=acc,
             nbinsy=acc,
-            y=1e3 * this_df["TNuE"],
+            y=1e3 * this_df["SignalParticleE"],
             x=this_df["TotalAdjClEnergy"],
             coloraxis="coloraxis",
         ),
@@ -180,7 +180,7 @@ for jdx, config in enumerate(configs):
         go.Histogram2d(
             nbinsx=acc,
             nbinsy=acc,
-            y=1e3 * this_df["TNuE"],
+            y=1e3 * this_df["SignalParticleE"],
             x=this_df["VisEnergy"],
             coloraxis="coloraxis",
         ),
@@ -191,7 +191,7 @@ for jdx, config in enumerate(configs):
         go.Histogram2d(
             nbinsx=acc,
             nbinsy=acc,
-            y=1e3 * this_df["TNuE"],
+            y=1e3 * this_df["SignalParticleE"],
             x=this_df["TotalEnergy"],
             coloraxis="coloraxis",
         ),

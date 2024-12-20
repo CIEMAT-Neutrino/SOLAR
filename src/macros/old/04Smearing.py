@@ -30,7 +30,7 @@ true, data, filter_idx = compute_root_workflow(user_input, info, data_filter, wo
 print_colored("-> Found %i electron candidates out of %i events!"%(len(filter_idx),data["Event"].size),"SUCCESS")
 
 for idx,energy_bin in enumerate(energy_centers):
-    neutrino_energy_filter = (data["TNuE"] > (energy_bin - bin_width/2))*(data["TNuE"] < (energy_bin + bin_width/2))                         # Filtering genereted neutrinos in 1GeV energy bin
+    neutrino_energy_filter = (data["SignalParticleE"] > (energy_bin - bin_width/2))*(data["SignalParticleE"] < (energy_bin + bin_width/2))                         # Filtering genereted neutrinos in 1GeV energy bin
     filter = neutrino_energy_filter
     hist, bin_edges = np.histogram(data[info["DEFAULT_ANALYSIS_ENERGY"]][filter],bins=energy_edges)
     hist = hist/np.sum(hist)
