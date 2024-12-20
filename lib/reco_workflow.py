@@ -44,10 +44,6 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-        run, output, this_new_branches = compute_signal_directions(
-            run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
     elif "MARLEY" in workflow:
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
@@ -62,7 +58,15 @@ def compute_reco_workflow(
         )
         new_branches += this_new_branches
     elif "RAW" in workflow:
+        run, output, this_new_branches = compute_true_efficiency(
+            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+        )
+        new_branches += this_new_branches
         run, output, this_new_branches = compute_signal_energies(
+            run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
+        )
+        new_branches += this_new_branches
+        run, output, this_new_branches = compute_particle_energies(
             run, configs, params, trees=["Truth"], rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
@@ -140,6 +144,10 @@ def compute_reco_workflow(
         )
         new_branches += this_new_branches
     elif "MATCHEDFLASH" in workflow:
+        run, output, this_new_branches = compute_true_efficiency(
+            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+        )
+        new_branches += this_new_branches
         run, output, this_new_branches = compute_main_variables(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
