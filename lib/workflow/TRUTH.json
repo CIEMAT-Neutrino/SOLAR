@@ -9,7 +9,6 @@
         "VECTORS": {
             "TruthPart": 1,
             "TSignalPDG": 1,
-            "TSignalE": 1,
             "TSignalK": 1,
             "TSignalX": 1,
             "TSignalY": 1,
@@ -29,7 +28,7 @@
             "OpFlashNum": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1,
+            "SignalParticleP": 1,
             "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
@@ -40,7 +39,7 @@
     },
     "Reco": {
         "VECTORS": {
-            "TSignalE": 1,
+            "TSignalK": 1,
             "TSignalPDG": 1,
             "TSignalMother": 1
         },
@@ -50,7 +49,9 @@
             "NHits": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1,
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
+            "MatchedOpFlashPur": 1,
             "Purity": 1,
             "Generator": 1,
             "Charge": 1

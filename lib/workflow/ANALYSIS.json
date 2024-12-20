@@ -12,8 +12,11 @@
             "Event": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1,
-            "SignalParticleK": 1
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -22,13 +25,12 @@
         "VECTORS": {
             "SignalFrac": 1,
             "TruthPart": 1,
-            "TSignalE": 1,
             "TSignalK": 1,
             "TSignalPDG": 1,
             "TSignalMother": 1,
             "MainParentVertex": 1,
             "MainVertex": 1,
-            "AdjClMainE": 1,
+            "AdjClMainK": 1,
             "AdjClMainX": 1,
             "AdjClMainY": 1,
             "AdjClMainZ": 1,
@@ -52,10 +54,11 @@
             "MainParentPDG": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1,
+            "SignalParticleP": 1,
             "SignalParticleK": 1,
-            "ElectronE": 0,
-            "GammaE": 0,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "ElectronK": 0,
             "GammaK": 0,
             "NeutronK": 0,
@@ -86,9 +89,7 @@
             "MatchedOpFlashPE": 0,
             "MatchedOpFlashR": 0,
             "DriftTime": 0,
-            "MainParentE": 1,
             "MainParentK": 1,
-            "MainE": 1,
             "MainK": 1,
             "RecoX": 1,
             "RecoY": 1,
