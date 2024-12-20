@@ -1,16 +1,21 @@
 import os
 import pickle
 import json
+import plotly.io as pio
+import mplhep
 
+from hist import Hist, Stack
 from itertools import product
 from src.utils import get_project_root
 from scipy.signal import find_peaks
+from sklearn.neighbors import KernelDensity
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_curve, auc, accuracy_score
 from scipy.interpolate import interp1d
 
 # Import all the local functions
 from .reco_workflow import compute_reco_workflow
+from .reco_workflow import compute_true_efficiency
 from .workflow.lib_default import get_default_energies, get_default_nhits
 from .workflow.lib_filter import compute_filtered_run
 from .df_functions import *
@@ -48,5 +53,6 @@ red_energy_edges, red_energy_centers, red_ebin = get_default_energies(
 lowe_energy_edges, lowe_energy_centers, lowe_ebin = get_default_energies(
     root, "LOWE_RECO_ENERGY")
 
+pio.templates.default = "none"
 colors = px.colors.qualitative.Prism
 compare = px.colors.qualitative.Plotly
