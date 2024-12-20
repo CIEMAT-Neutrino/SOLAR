@@ -1,4 +1,5 @@
 import uproot
+import pickle
 import os
 import copy
 import stat
@@ -55,8 +56,21 @@ def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[st
     
     return f"{save_path}/{filename}"
 
+def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdata", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
+    """
+    Save the figure in the path
 
-def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
+    Args:
+        data (pd.DataFrame): figure to save
+        path (str): path to save the figure
+        debug (bool): if True, the debug mode is activated (default: False)
+    """
+    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
+
+    pickle.dump(data, open(f"{filepath}", "wb"))
+
+
+def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdf", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -162,7 +176,7 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
     return 0
 
 
-def root2npy(root_info, user_input, trim=False, debug=False):
+def root2npy(root_info, user_input, trim:bool=False, debug=False):
     """
     Dumper from .root format to npy files. Input are root input file, path and npy outputfile as strings
 
@@ -178,6 +192,10 @@ def root2npy(root_info, user_input, trim=False, debug=False):
     name = root_info["Name"]
     rprint("Converting from: " +
            root_info["Path"] + root_info["Name"] + ".root")
+    # Check if the file exists
+    if not os.path.isfile(root_info["Path"] + root_info["Name"] + ".root"):
+        rprint(f"[red]ERROR: File {root_info['Path'] + root_info['Name'] + '.root'} not found![/red]")
+        return
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"]:
             if root_info["TreeNames"][tree].lower() == "test":
@@ -204,7 +222,7 @@ def root2npy(root_info, user_input, trim=False, debug=False):
                 this_array = f[root_info["Folder"] +
                                "/" + tree][branch].array()
                 if trim != False and debug:
-                    print("Selected trimming value: ", trim)
+                    rprint("Selected trimming value: ", trim)
                 resized_array = resize_subarrays(
                     this_array, 0, trim=trim, debug=debug)
                 save2pnfs(
@@ -214,7 +232,7 @@ def root2npy(root_info, user_input, trim=False, debug=False):
                     debug
                 )
                 if debug:
-                    print(resized_array)
+                    rprint(resized_array)
                 del resized_array
                 del this_array
 
@@ -385,11 +403,11 @@ def get_tree_info(root_file, debug=False):
         for i in root_file.classnames()
         if root_file.classnames()[i] == "TTree"
     ]
-    print_colored(
-        "The input root file has a TDirectory: " + str(directory), color="DEBUG"
+    rprint(
+        f"[magenta]The input root file has a TDirectory: {directory}[/magenta]"
     )
-    print_colored(
-        "The input root file has %i TTrees: " % len(tree) + str(tree), color="DEBUG"
+    rprint(
+        f"[magenta]The input root file has {len(tree)} TTrees: {tree}[/magenta]"
     )
 
     return directory, tree
@@ -408,7 +426,10 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
     Returns:
         output (dict): dictionary with the information of the root file
     """
-
+    # Check if the file exists
+    if not os.path.isfile(path + name + ".root"):
+        rprint(f"[red]ERROR: File {path + name + '.root'} not found![/red]")
+        return
     f = uproot.open(path + name + ".root")
     folder, trees = get_tree_info(f, debug=debug)
 
@@ -637,6 +658,7 @@ def load_multi(
     preset: Optional[str] = None,
     branches: Optional[dict[str, list[str]]] = None,
     generator_swap: bool = False,
+    name_prefix: Optional[str] = None,
     debug: bool = False,
 ) -> tuple[dict, str]:
     """
@@ -661,12 +683,14 @@ def load_multi(
         info = json.load(
             open(f"{root}/config/{config}/{config}_config.json", "r"))
 
-        name = info["NAME"]
+        if name_prefix is None:
+            name_prefix = info["NAME"]
+
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
         
         path = f'{info["PATH"]}/{geo}/{vers}/'
-        filepath = f"{path}{name}"
+        filepath = f"{path}{name_prefix}"
         
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
