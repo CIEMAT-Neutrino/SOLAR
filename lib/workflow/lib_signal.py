@@ -97,8 +97,9 @@ def compute_signal_energies(run, configs, params: Optional[dict] = None, trees=[
             (len(run[tree]["Event"]), len(run[tree][f"T{signal}PDG"][0])), dtype=np.float32)
 
         full_pdg_list = np.unique(run[tree][f"T{signal}PDG"])
-        for non_pdg in [0, 1000120249, 1000140289, 1000190419, 1000210499, 1000220489, 1000130279, 1000360809, 1000360829]:
+        for non_pdg in [0, 1000120249, 1000140289, 1000190419, 1000210499, 1000220489, 1000130279, 1000360809, 1000360829, 1000170379, 1000180389]:
             full_pdg_list = full_pdg_list[full_pdg_list != non_pdg]
+        
         full_mass_dict = {pdg: Particle.from_pdgid(
             pdg).mass for pdg in full_pdg_list}
 
@@ -146,7 +147,7 @@ def compute_particle_energies(run, configs, params: Optional[dict] = None, trees
     required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"],
                          "Reco": ["Event", "Flag", "Geometry", "Version", f"T{signal}PDG", f"T{signal}Mother", f"T{signal}E"]}
     
-    particles_pdg = {"Electron": 11, "Gamma": 22,
+    particles_pdg = {"Electron": 11, "Gamma": 22, "Alpha": 1000020040,
                      "Neutron": 2112, "Neutrino": 12, "Proton": 2212}
     
     particles_mass = {particle: values for particle, values in zip(particles_pdg.keys(
