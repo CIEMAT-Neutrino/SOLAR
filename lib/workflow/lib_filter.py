@@ -101,17 +101,17 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
 
                     if not isinstance(params[param], tuple) and not isinstance(params[param], list):
                         output += f"[red][ERROR]: Filter must be tuple or list, but found {type(params[param])}[/red]"
-                        if debug: print(f"{param}: {params[param]}")
+                        if debug: rprint(f"{param}: {params[param]}")
                         return run, output
                     
                     if len(params[param]) != 2:
                         output += f"[red][ERROR]: Filter must be of length 2![/red]"
-                        if debug: print(f"{param}: {params[param]}")
+                        if debug: rprint(f"{param}: {params[param]}")
                         return run, output
 
                     if param[1] not in run[param[0]].keys():
                         output += f"[red][ERROR]: Branch {param[1]} not found in the run![/red]"
-                        if debug: print(f"{param}: {params[param]}")
+                        if debug: rprint(f"{param}: {params[param]}")
                         return run, output
 
                     if params[param][0] == "bigger":
@@ -138,13 +138,14 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                         jdx = jdx & np.array(
                             [params[param][1] in item for item in run[param[0]][param[1]]])
                     if debug:
-                        output += f"-> {param[1]}: {params[param][0]} {params[param][1]}:\t{np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
-
+                        try:
+                            output += f"-> {param[1]}: {params[param][0]} ({params[param][1][0]:.1f}, {params[param][1][1]:.1f}) -> {np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
+                        except:
+                            output += f"-> {param[1]}: {params[param][0]} {params[param][1]} -> {np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
+                
                 kdx = kdx + jdx
 
         combined_filter = np.where(kdx == True)
-        if debug:
-            print(f"From {len(run[tree][branch_ref[tree]])} events, {np.sum(kdx)} have been selected by filters for {tree} tree.")
         for branch in branch_list:
             try:
                 new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
