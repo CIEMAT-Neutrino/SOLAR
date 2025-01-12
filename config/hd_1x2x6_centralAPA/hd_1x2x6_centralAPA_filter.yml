@@ -4,7 +4,7 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "SignalParticleE":
+                  - "SignalParticleK":
                             - "absbetween": [0, 30]
 
 "CORRECTION":
@@ -14,7 +14,7 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "SignalParticleE":
+                  - "SignalParticleK":
                             - "absbetween": [0, 20]
                   - "NeutronK":
                             - "equal": 0
@@ -26,9 +26,7 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "NHits":
-                            - "bigger": 2
-                  - "SignalParticleE":
+                  - "SignalParticleK":
                             - "absbetween": [0, 20]
                   - "NeutronK":
                             - "equal": 0
@@ -40,10 +38,10 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "NHits":
-                            - "bigger": 2
-                  - "SignalParticleE":
+
+                  - "SignalParticleK":
                             - "absbetween": [0, 20]
+
                   - "NeutronK":
                             - "equal": 0
 
@@ -54,9 +52,8 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "NHits":
-                            - "bigger": 2
-                  - "SignalParticleE":
+
+                  - "SignalParticleK":
                             - "absbetween": [0, 30]
 
 "SMEARING":
@@ -66,9 +63,8 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "NHits":
-                            - "bigger": 2
-                  - "SignalParticleE":
+
+                  - "SignalParticleK":
                             - "absbetween": [0, 30]
 
 "ANALYSIS":
@@ -78,8 +74,6 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-                  - "NHits":
-                            - "bigger": 2
 
 "FIDUCIALIZATION":
         - "Truth": null
