@@ -9,6 +9,7 @@ from itertools import product
 from src.utils import get_project_root
 from scipy.signal import find_peaks
 from sklearn.neighbors import KernelDensity
+from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_curve, auc, accuracy_score
 from scipy.interpolate import interp1d
