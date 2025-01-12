@@ -509,6 +509,7 @@ def compute_event_matching(true, reco, debug=False):
     (
         true["RecoIndex"],
         true["RecoMatch"],
+        true["PDSMatch"],
         true["ClCount"],
         true["HitCount"],
         reco["TrueIndex"],
@@ -520,6 +521,7 @@ def compute_event_matching(true, reco, debug=False):
         reco["NHits"],
         reco["Charge"],
         reco["Generator"],
+        reco["MatchedOpFlashPur"],
         debug=debug,
     )
     return true, reco
