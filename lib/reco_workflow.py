@@ -3,7 +3,7 @@ from rich import print as rprint
 
 from .workflow.lib_main import compute_main_variables
 from .workflow.lib_signal import compute_signal_energies, compute_particle_energies, compute_signal_directions
-from .workflow.lib_efficiency import compute_true_efficiency
+from .workflow.lib_efficiency import compute_true_efficiency, compute_particle_weights
 from .workflow.lib_cluster import compute_cluster_time, compute_electron_cluster, compute_cluster_calibration, compute_cluster_energy, compute_total_energy, compute_reco_energy, compute_energy_calibration
 from .workflow.lib_adjcluster import compute_adjcl_basics, compute_adjcl_advanced
 from .workflow.lib_ophit import compute_ophit_basic, compute_ophit_event
@@ -161,7 +161,11 @@ def compute_reco_workflow(
     elif [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
         trees = ["Reco"]
         clusters = [""]
-        if "ANALYSIS" in workflow:
+        if [ a in workflow for a in ["SMEARING", "ANALYSIS"]].count(True) > 0:
+            run, output, this_new_branches = compute_true_efficiency(
+                run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+            )
+            new_branches += this_new_branches
             run, output, this_new_branches = compute_main_variables(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
@@ -177,7 +181,7 @@ def compute_reco_workflow(
             )
             new_branches += this_new_branches
         # if workflow in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
-        if [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
+        if [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING"]].count(True) > 0:
             run, output, this_new_branches = compute_particle_energies(
                 run, configs, params, trees=trees, rm_branches=rm_branches, output=output, debug=debug
             )
@@ -229,9 +233,13 @@ def compute_reco_workflow(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
+            run, output, this_new_branches = compute_particle_weights(
+                run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+            )
+            new_branches += this_new_branches
 
     rprint(output +
-           f"\n[green]{workflow} workflow completed!\n[/green]")
+           f"[green]{workflow} workflow completed!\n[/green]")
     if debug:
         rprint(f"New branches: {new_branches}")
     return run
