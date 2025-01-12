@@ -132,7 +132,7 @@ def npy2df(run: dict, tree: Optional[str] = None, branches: Optional[list[str]] 
             rprint(df.groupby(["Geometry", "Version", "Name"])[
                 "Event"].count())
         except KeyError:
-            rprint(df.describe())
+            pass
     return df
 
 
