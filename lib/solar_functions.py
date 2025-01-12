@@ -535,7 +535,7 @@ def get_neutrino_cs(bins, interpolation=None, bounds=None, path=f"/pnfs/ciemat.e
 
 
 def get_detected_solar_spectrum(
-    bins, mass=10e9, components=[], interpolation="linear", bounds=(0,0), debug=False
+    bins, mass=1e9, components=[], interpolation="linear", bounds=(0,0), debug=False
 ):
     """
     Get the data for the detected solar spectrum.
