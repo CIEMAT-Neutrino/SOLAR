@@ -1,6 +1,11 @@
 #!/bin/bash
 
 # Important note: This script is meant to be run from the root of the repository!!!
+# Print a worning to the terminal if the script is not run from the root of the repository
+if [ ! -f "src/scripts/setup.sh" ]; then
+    echo "Please run this script from the root of the repository"
+    exit 1
+fi
 
 # Description: Setup the environment for the project
 # source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.22.08/x86_64-centos7-gcc48-opt/bin/thisroot.sh
