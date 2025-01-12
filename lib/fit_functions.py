@@ -595,6 +595,7 @@ def get_hist2d_fit(
         "print": True,
     },
     density=None,
+    nanz: bool = False,
     logz: bool = False,
     zoom: bool = False,
     debug: bool = False,
@@ -621,7 +622,8 @@ def get_hist2d_fit(
     """
     hx, hy, hz = get_hist2d(x, y, per=per, acc=acc,
                             density=density, logz=logz, debug=debug)
-
+    if nanz:
+        hz[hz == 0] = np.nan
     fig.add_trace(
         go.Heatmap(z=hz.T, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
     )
