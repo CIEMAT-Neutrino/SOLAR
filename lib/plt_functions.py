@@ -14,6 +14,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
 from matplotlib.collections import LineCollection
 
+from src.utils import get_project_root
+root = get_project_root()
+
 
 def colored_line(x, y, c, ax, **lc_kwargs):
     """
@@ -77,6 +80,38 @@ def colored_line(x, y, c, ax, **lc_kwargs):
     return ax.add_collection(lc)
 
 
+def find_subplots(fig, debug:bool = False):
+    """
+    Find the number of subplots in a plotly figure
+
+    Args:
+        fig (plotly.graph_objects.Figure): plotly figure
+        debug (bool): True to print debug statements, False otherwise (default: False)
+
+    Returns:
+        rows (int): number of rows
+        cols (int): number of columns
+    """
+    # Find the number of subplots
+    if type(fig) == go.Figure:
+        try:
+            rows, cols = fig._get_subplot_rows_columns()
+            rows, cols = rows[-1], cols[-1]
+            if debug:
+                rprint("[cyan][INFO]: Detected number of subplots: " +
+                    str(rows * cols) + "[/cyan]")
+        
+        except Exception:
+            if debug: rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel![/red]")
+            rows, cols = 1, 1
+   
+    else:
+        rows, cols = 1, 1
+        rprint(f"[red][ERROR]: Unknown figure type! {type(type(fig))}[/red]")
+    
+    return rows, cols
+
+
 def format_coustom_plotly(
     fig: go.Figure,
     title: str = None,
@@ -117,24 +152,8 @@ def format_coustom_plotly(
     if legend == None:
         legend = dict(groupclick="toggleitem", font=dict(size=fontsize-3))
 
-    # Find the number of subplots
-    if type(fig) == go.Figure:
-        try:
-            rows, cols = fig._get_subplot_rows_columns()
-            rows, cols = rows[-1], cols[-1]
-        except Exception:
-            if debug: rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel for type![/red]")
-            rows, cols = 1, 1
-   
-    else:
-        rows, cols = 1, 1
-        rprint(f"[red][ERROR]: unknown figure type! {type(type(fig))}[/red]")
-
-    if debug:
-        rprint("[cyan][INFO]Detected number of subplots: " +
-               str(rows * cols) + "[/cyan]")
-
     if figsize == None:
+        rows, cols = find_subplots(fig, debug=debug)
         figsize = (800 + 400 * (cols - 1), 600 + 200 * (rows - 1))
 
     default_margin = {"color": "white", "margin": (0, 0, 0, 0)}
@@ -218,7 +237,7 @@ def format_coustom_plotly(
     return fig
 
 
-def get_units(var, debug=False):
+def get_units(var:str, debug:bool=False):
     """
     Returns the units of a variable based on the variable name
 
