@@ -70,6 +70,7 @@ def compute_cluster_energy(
     """
     Correct the charge of the events in the run according to the correction file.
     """
+    default_sample = "marley"
     # New branches
     new_branches = ["Correction", "CorrectionFactor"]
     for cluster in clusters:
@@ -88,40 +89,49 @@ def compute_cluster_energy(
     for config in configs:
         info, params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug)
-        idx = np.where(
-            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
-            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
-        )
+        
+        for name in configs[config]:
+            idx = np.where(
+                (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+                * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+                * (np.asarray(run["Reco"]["Name"]) == name)
+            )
 
-        corr_info = json.load(open(
-            f"{root}/config/{config}/Marley/{config}_calib/{config}_electroncharge_correction.json", "r"))
+            try:
+                corr_info = json.load(open(
+                    f"{root}/config/{config}/{name}/{config}_calib/{config}_electroncharge_correction.json", "r"))
+            
+            except FileNotFoundError:
+                output += f"\t***[yellow][WARNING] Correction file not found for {config}. Defaulting to {default_sample}![/yellow]\n"
+                corr_info = json.load(open(
+                    f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_electroncharge_correction.json", "r"))
 
-        drift_popt = [corr_info["CHARGE_AMP"], corr_info["ELECTRON_TAU"]]
-        corr_popt = [corr_info["CORRECTION_AMP"],
-                     corr_info["CORRECTION_DECAY"], corr_info["CORRECTION_CONST"], corr_info["CORRECTION_SIGMOID"]]
+            drift_popt = [corr_info["CHARGE_AMP"], corr_info["ELECTRON_TAU"]]
+            corr_popt = [corr_info["CORRECTION_AMP"],
+                        corr_info["CORRECTION_DECAY"], corr_info["CORRECTION_CONST"], corr_info["CORRECTION_SIGMOID"]]
 
-        for branch, default_branch in zip(["Correction", "AdjClCorrection"], [params["DEFAULT_ENERGY_TIME"], params["DEFAULT_ADJCL_ENERGY_TIME"]]):
+            for branch, default_branch in zip(["Correction", "AdjClCorrection"], [params["DEFAULT_ENERGY_TIME"], params["DEFAULT_ADJCL_ENERGY_TIME"]]):
 
-            run["Reco"][branch] = np.exp(np.abs(run["Reco"][default_branch]) / drift_popt[1])
+                run["Reco"][branch] = np.exp(np.abs(run["Reco"][default_branch]) / drift_popt[1])
 
-        run["Reco"]["CorrectionFactor"][idx] = calibration_func(
-            run["Reco"]["NHits"][idx], *corr_popt)
+            run["Reco"]["CorrectionFactor"][idx] = calibration_func(
+                run["Reco"]["NHits"][idx], *corr_popt)
 
-        for cluster in clusters:
-            run["Reco"][f"Corrected{cluster}Charge"][idx] = run["Reco"][f"{cluster}Charge"][idx] * \
-                run["Reco"]["Correction"][idx]
+            for cluster in clusters:
+                run["Reco"][f"Corrected{cluster}Charge"][idx] = run["Reco"][f"{cluster}Charge"][idx] * \
+                    run["Reco"]["Correction"][idx]
 
-            run["Reco"][f"{cluster}Energy"][idx] = run["Reco"][f"Corrected{cluster}Charge"][idx] / \
-                run["Reco"]["CorrectionFactor"][idx]
+                run["Reco"][f"{cluster}Energy"][idx] = run["Reco"][f"Corrected{cluster}Charge"][idx] / \
+                    run["Reco"]["CorrectionFactor"][idx]
 
-        run["Reco"]["AdjClCorrectedCharge"][idx] = run["Reco"]["AdjClCharge"][idx] * \
-            run["Reco"]["AdjClCorrection"][idx]
+            run["Reco"]["AdjClCorrectedCharge"][idx] = run["Reco"]["AdjClCharge"][idx] * \
+                run["Reco"]["AdjClCorrection"][idx]
 
-        run["Reco"]["AdjClCorrectionFactor"][idx] = corr_popt[0] * np.exp(
-            -run["Reco"]["AdjClNHits"][idx] / corr_popt[1]) + corr_popt[2]
+            run["Reco"]["AdjClCorrectionFactor"][idx] = corr_popt[0] * np.exp(
+                -run["Reco"]["AdjClNHits"][idx] / corr_popt[1]) + corr_popt[2]
 
-        run["Reco"]["AdjClEnergy"][idx] = run["Reco"]["AdjClCorrectedCharge"][idx] / \
-            run["Reco"]["AdjClCorrectionFactor"][idx]
+            run["Reco"]["AdjClEnergy"][idx] = run["Reco"]["AdjClCorrectedCharge"][idx] / \
+                run["Reco"]["AdjClCorrectionFactor"][idx]
 
     run = remove_branches(
         run, rm_branches, new_branches[:-1]+new_vector_branches[:-1], debug=debug
@@ -134,21 +144,29 @@ def compute_cluster_calibration(run, configs: dict[str, list[str]], params: Opti
     """
     Correct the charge of the events in the run according to the correction file.
     """
+    default_sample = "marley"
     new_branches = ["Energy"]
     for config in configs:
         info, params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug)
-        idx = np.where(
-            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
-            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
-        )
+        
+        for name in configs[config]:
+            idx = np.where(
+                (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+                * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+                * (np.asarray(run["Reco"]["Name"]) == name)
+            )
 
-        corr_info = json.load(open(
-            f"{root}/config/{config}/Marley/{config}_calib/{config}_charge_calibration.json", "r"))
+            try:
+                corr_info = json.load(open(
+                    f"{root}/config/{config}/{name}/{config}_calib/{config}_charge_calibration.json", "r"))
+            except FileNotFoundError:
+                corr_info = json.load(open(
+                    f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_charge_calibration.json", "r"))
 
-        corr_popt = [corr_info["SLOPE"], corr_info["INTERCEPT"]]
-        run["Reco"]["Energy"][idx] = run["Reco"]["Energy"][idx] - corr_popt[1] * \
-            corr_popt[0]
+            corr_popt = [corr_info["SLOPE"], corr_info["INTERCEPT"]]
+            run["Reco"]["Energy"][idx] = run["Reco"]["Energy"][idx] - corr_popt[1] * \
+                corr_popt[0]
 
     run = remove_branches(
         run, rm_branches, [], debug=debug
@@ -221,13 +239,13 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             )
 
             # Save the trained model to a file so it can be used later using pickle
-            default_sample = "Marley"
+            default_sample = "marley"
             try:
                 path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
                 open(path, "r")
                 output += f"\t***[cyan]Loading model for {name}[/cyan]\n"
             except FileNotFoundError:
-                output += f"\t***[yellow][WARNING] Model file not found for {name}. Defaulting to Marley![/yellow]\n"
+                output += f"\t***[yellow][WARNING] Model file not found for {name}. Defaulting to {default_sample}![/yellow]\n"
                 path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
 
             with open(path, 'rb') as model_file:
@@ -243,13 +261,15 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             def lower_func(x): return x - discriminant_info["LOWER"]["OFFSET"]
 
             thld = discriminant_info["DISCRIMINANT_THRESHOLD"]
+            try:
+                run["Reco"]["Upper"][idx] = np.asarray(
+                    run["Reco"]["ElectronK"][idx] > run["Reco"]["SignalParticleK"][idx] + thld, dtype=bool)
+                run["Reco"]["Lower"][idx] = np.asarray(
+                    run["Reco"]["ElectronK"][idx] < run["Reco"]["SignalParticleK"][idx] + thld, dtype=bool)
+            except KeyError:
+                pass
 
-            run["Reco"]["Upper"][idx] = np.asarray(
-                run["Reco"]["ElectronK"][idx] > run["Reco"]["SignalParticleE"][idx] + thld, dtype=bool)
-            run["Reco"]["Lower"][idx] = np.asarray(
-                run["Reco"]["ElectronK"][idx] < run["Reco"]["SignalParticleE"][idx] + thld, dtype=bool)
-
-            df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "SignalParticleE", "NHits", "Upper", "Lower"],
+            df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "SignalParticleK", "NHits", "Upper", "Lower"],
                         debug=debug)
 
             df['ML'] = rf_classifier.predict(df[features])
@@ -271,6 +291,7 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
 
 
 def compute_energy_calibration(run, configs, params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug=False):
+    default_sample = "marley"
     new_branches = ["SolarEnergy",
                     "SelectedEnergy", "TotalEnergy"]
 
@@ -297,11 +318,11 @@ def compute_energy_calibration(run, configs, params: Optional[dict] = None, rm_b
             except FileNotFoundError:
                 reco_info = json.load(
                     open(
-                        f"{root}/config/{config}/Marley/{config}_calib/{config}_Marley_energy_calibration.json",
+                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{default_sample}_energy_calibration.json",
                         "r",
                     )
                 )
-                output += f"\t***[yellow][WARNING] Applying default energy calibration from Marley[/yellow]\n"
+                output += f"\t***[yellow][WARNING] Applying default energy calibration from {default_sample}[/yellow]\n"
 
             for energy in ["Solar", "Selected", "Total"]:
                 run["Reco"][f"{energy}Energy"][idx] = (run["Reco"][f"{energy}Energy"][idx] -
@@ -329,9 +350,18 @@ def compute_cluster_time(
     new_vector_branches = ["RandomAdjClX", "RecoAdjClX", "RandomAdjClDriftTime", "RecoAdjClDriftTime"]
 
     for branch in new_branches:
+        # Check if the branch exists
+        if branch in run["Reco"]:
+            output += f"\t***[yellow][WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+        
         run["Reco"][branch] = np.zeros(
             len(run["Reco"]["Event"]), dtype=np.float32)
+    
     for branch in new_vector_branches:
+        # Check if the branch exists
+        if branch in run["Reco"]:
+            output += f"\t***[yellow][WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+        
         run["Reco"][branch] = np.ones(
             (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32
         )
