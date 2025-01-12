@@ -26,6 +26,7 @@
             "TruthPart": 1,
             "TSignalE": 1,
             "TSignalK": 1,
+            "MainParentVertex": 1,
             "MainVertex": 1,
             "TSignalPDG": 1,
             "TSignalMother": 1,
@@ -80,7 +81,14 @@
             "TotalAdjClR": 0,
             "MaxAdjClR": 0,
             "ML": 0,
-            "Discriminant": 0
+            "Discriminant": 0,
+            "MatchedOpFlashTime": 0,
+            "MatchedOpFlashPur": 0,
+            "MatchedOpFlashPE": 0,
+            "MatchedOpFlashR": 0,
+            "RecoX": 1,
+            "RecoY": 1,
+            "RecoZ": 1
         },
         "STRINGS": {},
         "BOOLS": {

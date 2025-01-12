@@ -53,6 +53,7 @@
         },
         "DOUBLES": {
             "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,

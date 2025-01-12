@@ -9,9 +9,11 @@
     },
     "Truth": {
         "INTEGERS": {
-            "Event": 1
+            "Event": 1,
+            "Flag": 1
         },
         "DOUBLES": {
+            "SignalParticleE": 1,
             "SignalParticleP": 1,
             "SignalParticleK": 1,
             "SignalParticleX": 1,
@@ -25,11 +27,13 @@
         "VECTORS": {
             "SignalFrac": 1,
             "TruthPart": 1,
+            "TSignalE": 1,
             "TSignalK": 1,
             "TSignalPDG": 1,
             "TSignalMother": 1,
             "MainParentVertex": 1,
             "MainVertex": 1,
+            "AdjClMainE": 1,
             "AdjClMainK": 1,
             "AdjClMainX": 1,
             "AdjClMainY": 1,
@@ -54,6 +58,7 @@
             "MainParentPDG": 1
         },
         "DOUBLES": {
+            "SignalParticleE": 1,
             "SignalParticleP": 1,
             "SignalParticleK": 1,
             "SignalParticleX": 1,
@@ -86,6 +91,7 @@
             "ML": 0,
             "Discriminant": 0,
             "MatchedOpFlashTime": 0,
+            "MatchedOpFlashPur": 0,
             "MatchedOpFlashPE": 0,
             "MatchedOpFlashR": 0,
             "DriftTime": 0,
