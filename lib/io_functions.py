@@ -1,21 +1,20 @@
-import uproot
-import pickle
 import os
 import copy
-import stat
 import json
+import stat
+import pickle
+import plotly
+import uproot
 import numpy as np
 import pandas as pd
 import awkward as ak
-import yaml
-import plotly
 import plotly.express as px
 import plotly.graph_objs as go
 
 from typing import Optional
 from rich import print as rprint
-from src.utils import get_project_root
 from matplotlib import pyplot as plt
+from src.utils import get_project_root
 
 root = get_project_root()
 
@@ -24,37 +23,38 @@ def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[st
     """
     Prepare the path to save a file.
     """
+    output = ""
     if config is None:
         save_path = path
         filename = f"{filename}.{output}"
     else:
         if name is None:
-            save_path = f"{path}/{config}/"
+            save_path = f"{path}/{config}"
             filename = f"{config}_{filename}.{output}"
         else:
-            save_path = f"{path}/{config}/{name}/"
+            save_path = f"{path}/{config}/{name}"
             filename = f"{config}_{name}_{filename}.{output}"
     try:
-        # Make the directory recursively
         os.makedirs(f"{save_path}")
     
     except FileExistsError:
         if debug:
-            print_colored("DATA STRUCTURE ALREADY EXISTS", "DEBUG")
+            output += f"[cyan][INFO]: Data already exists![/cyan]\n"
 
-    # Check if figure already exists
+    # Check if file already exists
     if os.path.isfile(f"{save_path}/{filename}"):
         if rm:
             os.remove(
                 f"{save_path}/{filename}")
             if debug:
-                rprint(
-                    f"Removed existing figure in: {save_path}/{filename}")
+                output += f"Removed existing file in: {save_path}/{filename}\n"
         else:
-            if debug:
-                rprint("File already exists. Skipping...", "WARNING")
+            output += f"[yellow][WARNING]: Rewrite set to {False}. Skipping...[/yellow]\n"
     
+    if debug: 
+        rprint(output)
     return f"{save_path}/{filename}"
+
 
 def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdata", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
     """
@@ -107,7 +107,7 @@ def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
         fig.write_image(
-            f"{filepath}")
+            f"{filepath}{output}")
         if debug:
             rprint(
                 f"Saved figure in: {filepath}")
@@ -571,9 +571,6 @@ def get_branches(name: str, path: str, debug: bool = False):
     for tree in tree_info["TreeNames"].keys():
         branch_dict[tree_info["TreeNames"][tree]] = tree_info[tree]
 
-    if debug:
-        rprint(branch_dict)
-
     return branch_dict
 
 
@@ -701,10 +698,11 @@ def load_multi(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
                 if debug:
-                    rprint(f"Loaded all branches: {branches_dict}")
+                    rprint(f"[cyan][INFO]: Loaded all branches![/cyan]\n")
+            
             elif preset is not None:
                 if debug:
-                    rprint(f"Loaded preset branches: \n")
+                    rprint(f"[cyan][INFO]: Loaded preset branches![/cyan]\n")
                 branches_dict = get_workflow_branches(
                     trees=tree_labels, workflow=preset, debug=debug
                 )  # Get PRESET branches
@@ -712,7 +710,7 @@ def load_multi(
             else:
                 branches_dict = branches  # Get CUSTOMIZED branches from the input
                 if debug:
-                    rprint(f"Custom branches: {branches_dict}")
+                    rprint(f"[cyan][INFO]: Loaded custom branches![/cyan]\n")
 
             for tree in branches_dict.keys():
                 if len(branches_dict[tree]) == 0:
@@ -725,12 +723,17 @@ def load_multi(
                         for identifiyer_label, identifiyer in zip(
                             ["Name", "Geometry", "Version"], [name, geo, vers]
                         ):
-                            run[tree][identifiyer_label] = [identifiyer] * len(
-                                np.load(
-                                    f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
-                                    allow_pickle=True,
+                            try:
+                                run[tree][identifiyer_label] = [identifiyer] * len(
+                                    np.load(
+                                        f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
+                                        allow_pickle=True,
+                                    )
                                 )
-                            )
+                            except KeyError:
+                                rprint(f"[red][ERROR]: Tree {tree} has no entry in {ref_branch}! Skiping...[/red]")
+                                continue
+
                             run[tree][identifiyer_label] = np.asarray(
                                 run[tree][identifiyer_label], dtype=str)
                     else:
@@ -752,8 +755,6 @@ def load_multi(
                             )
 
                 for key in branches_dict[tree]:
-                    if debug:
-                        print(f"Loading {key} branch")
                     try:
                         branch = np.load(
                             f"{filepath}{name}/{tree}/{key}.npy",
@@ -803,11 +804,7 @@ def load_multi(
 
                     if idx == 0 and jdx == 0:
                         run[tree][key] = branch
-                        if debug:
-                            print(f"Loaded {key} branch")
                     else:
-                        if debug:
-                            print(f"Concatenating {key} branch")
                         try:
                             run[tree][key] = np.concatenate(
                                 (run[tree][key], branch), axis=0
@@ -1073,9 +1070,6 @@ def get_simple_names(names: list[str], debug: bool = False) -> dict:
         else:
             simple_names[name] = name
 
-    if debug:
-        rprint(
-            f"[cyan][INFO] Loaded simple name dictionary: {simple_names}[/cyan]")
     return simple_names
 
 
@@ -1106,8 +1100,5 @@ def get_workflow_branches(trees: list, workflow: Optional[str] = None, debug: bo
                 for branch in f[tree][branch_type]:
                     tree_branch_list.append(branch)
             tree_branches[tree] = tree_branch_list
-
-    if debug:
-        rprint(tree_branches)
 
     return tree_branches
