@@ -4,7 +4,7 @@ from rich import print as rprint
 from .workflow.lib_main import compute_main_variables
 from .workflow.lib_signal import compute_signal_energies, compute_particle_energies, compute_signal_directions
 from .workflow.lib_efficiency import compute_true_efficiency, compute_particle_weights
-from .workflow.lib_cluster import compute_cluster_time, compute_electron_cluster, compute_cluster_calibration, compute_cluster_energy, compute_total_energy, compute_reco_energy, compute_energy_calibration
+from .workflow.lib_cluster import compute_cluster_time, compute_electron_cluster, compute_cluster_calibration, compute_cluster_energy, compute_total_energy, compute_reco_energy, compute_energy_calibration, compute_cluster_recox
 from .workflow.lib_adjcluster import compute_adjcl_basics, compute_adjcl_advanced
 from .workflow.lib_ophit import compute_ophit_basic, compute_ophit_event
 from .workflow.lib_opflash import compute_opflash_basic, compute_opflash_event, compute_opflash_main, compute_opflash_advanced, compute_opflash_matching
@@ -85,6 +85,10 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
+        run, output, this_new_branches = compute_cluster_recox(
+            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+        )
+        new_branches += this_new_branches
     elif "TRACK" in workflow:
         run, output, this_new_branches = compute_signal_directions(
             run, configs, params, trees=["Reco"], rm_branches=rm_branches, output=output, debug=debug
@@ -158,7 +162,7 @@ def compute_reco_workflow(
         new_branches += this_new_branches
 
     ### CALIBRATION AND RECONSTRUCTION WORKFLOWS
-    elif [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
+    elif [ a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS", "TEST"]].count(True) > 0:
         trees = ["Reco"]
         clusters = [""]
         if [ a in workflow for a in ["SMEARING", "ANALYSIS"]].count(True) > 0:
@@ -187,7 +191,7 @@ def compute_reco_workflow(
             )
             new_branches += this_new_branches
         # if workflow in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
-        if [ a in workflow for a in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
+        if [ a in workflow for a in ["CALIBRATION", "DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS", "TEST"]].count(True) > 0:
             # if workflow == "CORRECTION" or workflow == "CALIBRATION":
             if "CORRECTION" in workflow or "CALIBRATION" in workflow:
                 clusters.append("Electron")
@@ -204,7 +208,7 @@ def compute_reco_workflow(
             )
             new_branches += this_new_branches
         # if workflow in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]:
-        if [ a in workflow for a in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS"]].count(True) > 0:
+        if [ a in workflow for a in ["DISCRIMINATION", "RECONSTRUCTION", "SMEARING", "ANALYSIS", "TEST"]].count(True) > 0:
             run, output, this_new_branches = compute_cluster_calibration(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
@@ -230,10 +234,6 @@ def compute_reco_workflow(
         # if workflow in ["SMEARING", "ANALYSIS"]:
         if [ a in workflow for a in ["SMEARING", "ANALYSIS"]].count(True) > 0:
             run, output, this_new_branches = compute_energy_calibration(
-                run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-            )
-            new_branches += this_new_branches
-            run, output, this_new_branches = compute_particle_weights(
                 run, configs, params, rm_branches=rm_branches, output=output, debug=debug
             )
             new_branches += this_new_branches
