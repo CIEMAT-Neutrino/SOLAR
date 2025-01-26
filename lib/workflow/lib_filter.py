@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 from typing import Optional
-
+from rich import print as rprint
 from src.utils import get_project_root
 root = get_project_root()
 
@@ -72,13 +72,14 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
         params = {}
 
     elif params != None and presets != None:
-        output += f"[cyan][INFO] Combining preset {presets} with custom filters[/cyan]"
+        output += f"[cyan][INFO] Combining preset {presets} with custom filters[/cyan]\n"
 
     new_trees = run.keys()
     branch_ref = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
     for tree in new_trees:
         new_run[tree] = {}
         branch_list = list(run[tree].keys())
+        # print(f"Ref. branch for tree {tree} has {len(run[tree][branch_ref[tree]])} entries.")
         idx = np.zeros(len(run[tree][branch_ref[tree]]), dtype=bool)
         kdx = np.zeros(len(run[tree][branch_ref[tree]]), dtype=bool)
 
@@ -87,6 +88,15 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
             info = json.load(
                 open(f"{root}/config/{config}/{config}_config.json", "r"))
             params, output = import_filter_preset(params, config, presets, output, debug)                 
+
+            skip_tree = True
+            for param in params:
+                if param[0] == tree:
+                    skip_tree = False
+                    break
+            if skip_tree:
+                continue
+
             for name in configs[config]:
                 config_filter = (run[tree]["Geometry"] == info["GEOMETRY"]) & (
                     run[tree]["Version"] == info["VERSION"]) & (run[tree]["Name"] == name)
@@ -144,13 +154,17 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                             output += f"-> {param[1]}: {params[param][0]} {params[param][1]} -> {np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
                 
                 kdx = kdx + jdx
-
-        combined_filter = np.where(kdx == True)
-        for branch in branch_list:
-            try:
-                new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
-            except Exception as e:
-                output += f"[red][ERROR] Couldn't filter branch {branch}: {e}[/red]"
+        
+        if skip_tree:
+            new_run[tree] = run[tree]
+        else:
+            combined_filter = np.where(kdx == True)
+            for branch in branch_list:
+                # print(f"Filtering branch {branch} with {len(run[tree][branch])} entries.")
+                try:
+                    new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
+                except Exception as e:
+                    output += f"[red][ERROR] Couldn't filter branch {branch}: {e}[/red]"
 
     return new_run, output
 
