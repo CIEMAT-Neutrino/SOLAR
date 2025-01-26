@@ -19,21 +19,22 @@ from src.utils import get_project_root
 root = get_project_root()
 
 
-def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False):
+def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, filetype: str = "png", debug: bool = False):
     """
     Prepare the path to save a file.
     """
     output = ""
     if config is None:
         save_path = path
-        filename = f"{filename}.{output}"
+        filename = f"{filename}.{filetype}"
+    
     else:
         if name is None:
             save_path = f"{path}/{config}"
-            filename = f"{config}_{filename}.{output}"
+            filename = f"{config}_{filename}.{filetype}"
         else:
             save_path = f"{path}/{config}/{name}"
-            filename = f"{config}_{name}_{filename}.{output}"
+            filename = f"{config}_{name}_{filename}.{filetype}"
     try:
         os.makedirs(f"{save_path}")
     
@@ -56,7 +57,7 @@ def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[st
     return f"{save_path}/{filename}"
 
 
-def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdata", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
+def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdata", rm: bool = False, filetype: str = "pkl", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -65,12 +66,15 @@ def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] 
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
+    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
 
     pickle.dump(data, open(f"{filepath}", "wb"))
+    if debug:
+        rprint(
+            f"Saved data in: {filepath}")
 
 
-def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdf", rm: bool = False, output: str = "pkl", debug: bool = False) -> None:
+def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdf", rm: bool = False, filetype: str = "pkl", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -79,7 +83,7 @@ def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = N
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
+    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
 
     # Check type of figure to select the correct saving method
     if type(df) == pd.DataFrame:
@@ -93,7 +97,7 @@ def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = N
         # fig.savefig(path + ".{output}")
 
 
-def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, output: str = "png", debug: bool = False) -> None:
+def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, filetype: str = "png", debug: bool = False) -> None:
     """
     Save the figure in the path
 
@@ -102,12 +106,12 @@ def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path, config, name, filename, rm, output, debug)
+    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
         fig.write_image(
-            f"{filepath}{output}")
+            f"{filepath}")
         if debug:
             rprint(
                 f"Saved figure in: {filepath}")
@@ -119,7 +123,6 @@ def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str
                 f"Saved figure in: {filepath}")
     else:
         rprint("The input figure is not a known type: ", type(fig))
-        # fig.savefig(path + ".{output}")
 
 
 def print_colored(string, color, bold=False, italic=False, debug=False):
@@ -674,6 +677,7 @@ def load_multi(
         run (dict): dictionary with the loaded data
     """
     output = ""
+    files_notfound = dict()
     run = dict()
     ref_branch = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
     for idx, config in enumerate(configs):
@@ -698,11 +702,12 @@ def load_multi(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
                 if debug:
-                    rprint(f"[cyan][INFO]: Loaded all branches![/cyan]\n")
+                    output += f"[cyan][INFO]: Loaded all branches for {config}: {name}![/cyan]\n"
             
             elif preset is not None:
                 if debug:
-                    rprint(f"[cyan][INFO]: Loaded preset branches![/cyan]\n")
+                    output += f"[cyan][INFO]: Loaded preset branches {config}: {name}![/cyan]\n"
+                
                 branches_dict = get_workflow_branches(
                     trees=tree_labels, workflow=preset, debug=debug
                 )  # Get PRESET branches
@@ -713,6 +718,8 @@ def load_multi(
                     rprint(f"[cyan][INFO]: Loaded custom branches![/cyan]\n")
 
             for tree in branches_dict.keys():
+                # print(f"Loading branches for {tree} tree...")
+                files_notfound[tree] = []
                 if len(branches_dict[tree]) == 0:
                     if debug:
                         output += f"\n[red]No branches found for {tree} tree![/red]"
@@ -730,6 +737,7 @@ def load_multi(
                                         allow_pickle=True,
                                     )
                                 )
+                                # print(f"Loaded {config} events:\t{len(run[tree][identifiyer_label])}\t from {tree} -> {name}")
                             except KeyError:
                                 rprint(f"[red][ERROR]: Tree {tree} has no entry in {ref_branch}! Skiping...[/red]")
                                 continue
@@ -762,7 +770,7 @@ def load_multi(
                         )
                     except FileNotFoundError:
                         if debug:
-                            output += f"\n[red]File {key} not found![/red]"
+                            files_notfound[tree].append(key)
                         continue
 
                     if key == "Generator":
@@ -817,8 +825,11 @@ def load_multi(
                             run[tree][key] = resize_subarrays(
                                 run[tree][key], 0, trim=False, debug=debug
                             )
-                    if key == "Event":
+                    if (key == "Event" and tree != "Config") or (key == "Geometry" and tree == "Config"):
                         output += f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
+
+            if debug and len(files_notfound) > 0:
+                output += f"\n[red]Missing branches: [/red]\n{files_notfound}\n"
 
     if debug:
         for tree in branches_dict.keys():
@@ -826,7 +837,7 @@ def load_multi(
                 output = output + f"\nKeys extracted from the {tree} tree:\n"
                 output = output + str(run[tree].keys())
                 output = output + \
-                    f"\n-> # {tree} entries: %i\n" % len(run[tree]["Event"])
+                    f"\n-> # {tree} entries: %i\n" % len(run[tree][ref_branch[tree]])
             except KeyError:
                 output = output + f"- No {tree} tree found!\n"
 
