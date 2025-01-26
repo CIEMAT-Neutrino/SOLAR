@@ -102,7 +102,7 @@ def compute_cluster_energy(
                     f"{root}/config/{config}/{name}/{config}_calib/{config}_electroncharge_correction.json", "r"))
             
             except FileNotFoundError:
-                output += f"\t***[yellow][WARNING] Correction file not found for {config}. Defaulting to {default_sample}![/yellow]\n"
+                output += f"\t[yellow]***[WARNING] Correction file not found for {config}. Defaulting to {default_sample}![/yellow]\n"
                 corr_info = json.load(open(
                     f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_electroncharge_correction.json", "r"))
 
@@ -112,7 +112,7 @@ def compute_cluster_energy(
 
             for branch, default_branch in zip(["Correction", "AdjClCorrection"], [params["DEFAULT_ENERGY_TIME"], params["DEFAULT_ADJCL_ENERGY_TIME"]]):
 
-                run["Reco"][branch] = np.exp(np.abs(run["Reco"][default_branch]) / drift_popt[1])
+                run["Reco"][branch][idx] = np.exp(np.abs(run["Reco"][default_branch][idx]) / drift_popt[1])
 
             run["Reco"]["CorrectionFactor"][idx] = calibration_func(
                 run["Reco"]["NHits"][idx], *corr_popt)
@@ -201,7 +201,7 @@ def compute_total_energy(run: dict, configs: dict[str, list[str]], params: Optio
 
         if debug:
             output += \
-                f"[cyan]\t***[INFO] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters.[/cyan]\n"
+                f"\t[cyan]***[INFO] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters.[/cyan]\n"
 
         run["Reco"]["SelectedAdjClNum"][idx] = np.sum(selected_filter, axis=1)
         run["Reco"]["SelectedAdjClEnergy"][idx] = np.sum(
@@ -243,9 +243,10 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             try:
                 path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
                 open(path, "r")
-                output += f"\t***[cyan]Loading model for {name}[/cyan]\n"
+                output += f"\t[cyan]***[INFO] Loading model for {name}[/cyan]\n"
+            
             except FileNotFoundError:
-                output += f"\t***[yellow][WARNING] Model file not found for {name}. Defaulting to {default_sample}![/yellow]\n"
+                output += f"\t[yellow]***[WARNING] ML model file not found for {name}. Defaulting to {default_sample}![/yellow]\n"
                 path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
 
             with open(path, 'rb') as model_file:
@@ -272,9 +273,14 @@ def compute_reco_energy(run, configs, params: Optional[dict] = None, rm_branches
             df = npy2df(run, "Reco", branches=features+["Primary", "Generator", "SignalParticleK", "NHits", "Upper", "Lower"],
                         debug=debug)
 
-            df['ML'] = rf_classifier.predict(df[features])
-            df['Discriminant'] = rf_classifier.predict_proba(df[features])[
-                :, 1]
+            try:
+                df['ML'] = rf_classifier.predict(df[features])
+                df['Discriminant'] = rf_classifier.predict_proba(df[features])[
+                    :, 1]
+            except ValueError:
+                print(df[features])
+                raise ValueError
+
             upper_idx = df["Discriminant"] >= discriminant_info["ML_THRESHOLD"]
             lower_idx = df["Discriminant"] < discriminant_info["ML_THRESHOLD"]
 
@@ -313,7 +319,7 @@ def compute_energy_calibration(run, configs, params: Optional[dict] = None, rm_b
                     )
                 )
                 if debug:
-                    output += f"\t***[cyan][INFO] Applying energy calibration from {name}[/cyan]\n"
+                    output += f"\t[cyan]***[INFO] Applying energy calibration from {name}[/cyan]\n"
 
             except FileNotFoundError:
                 reco_info = json.load(
@@ -322,7 +328,7 @@ def compute_energy_calibration(run, configs, params: Optional[dict] = None, rm_b
                         "r",
                     )
                 )
-                output += f"\t***[yellow][WARNING] Applying default energy calibration from {default_sample}[/yellow]\n"
+                output += f"\t[yellow]***[WARNING] Applying default energy calibration from {default_sample}[/yellow]\n"
 
             for energy in ["Solar", "Selected", "Total"]:
                 run["Reco"][f"{energy}Energy"][idx] = (run["Reco"][f"{energy}Energy"][idx] -
@@ -346,13 +352,13 @@ def compute_cluster_time(
     Correct the charge of the events in the run according to the correction file.
     """
     # New branches
-    new_branches = ["RandomX", "RecoX", "RandomDriftTime", "RecoDriftTime"]
-    new_vector_branches = ["RandomAdjClX", "RecoAdjClX", "RandomAdjClDriftTime", "RecoAdjClDriftTime"]
+    new_branches = ["RecoDriftTime"]
+    new_vector_branches = ["AdjCldTime","AdjClRecoDriftTime"]
 
     for branch in new_branches:
         # Check if the branch exists
         if branch in run["Reco"]:
-            output += f"\t***[yellow][WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+            output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
         
         run["Reco"][branch] = np.zeros(
             len(run["Reco"]["Event"]), dtype=np.float32)
@@ -360,7 +366,82 @@ def compute_cluster_time(
     for branch in new_vector_branches:
         # Check if the branch exists
         if branch in run["Reco"]:
-            output += f"\t***[yellow][WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+            output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+        
+        run["Reco"][branch] = np.zeros(
+            (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32
+        )
+
+    for config in configs:
+        info, params, output = get_param_dict(
+            f"{root}/config/{config}/{config}", params, output, debug=debug)
+        
+        idx = np.where(
+            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+            * (np.asarray(run["Reco"]["MatchedOpFlashPE"]) > 0)
+            * (np.asarray(run["Reco"]["RecoX"]) > -1e6)
+        )
+
+        reco_time_array = reshape_array(
+            run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+
+        run["Reco"]["AdjCldTime"][idx] = run["Reco"]["AdjClTime"][idx] - reco_time_array
+
+        if info["GEOMETRY"] == "hd":
+            run["Reco"]["RecoDriftTime"][idx] = run["Reco"]["RecoX"][idx] * \
+                2 * info["EVENT_TICKS"]/info["DETECTOR_SIZE_X"]
+
+            reco_drift_array = reshape_array(
+                run["Reco"]["RecoDriftTime"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+
+            run["Reco"]["AdjClRecoDriftTime"][idx] = run["Reco"]["AdjCldTime"][idx] + \
+                reco_drift_array
+
+        if info["GEOMETRY"] == "vd":
+            run["Reco"]["RecoDriftTime"][idx] = (
+                info["DETECTOR_SIZE_X"] - run["Reco"]["RecoX"][idx]) * 0.5 * info["EVENT_TICKS"] / info["DETECTOR_SIZE_X"]
+
+            reco_drift_array = reshape_array(
+                run["Reco"]["RecoDriftTime"][idx], len(run["Reco"]["AdjClTime"][idx][0]))
+            
+            run["Reco"]["AdjClRecoDriftTime"][idx] = run["Reco"]["AdjCldTime"][idx] + \
+                reco_drift_array
+
+    run = remove_branches(
+        run, rm_branches, new_branches[:-1]+new_vector_branches[:-1], debug=debug
+    )
+    output += f"\tClutser time computation\t-> Done!\n"
+    return run, output, new_branches+new_vector_branches
+
+
+def compute_cluster_estimated_time(
+    run: dict,
+    configs: dict[str, list[str]],
+    params: Optional[dict] = None,
+    rm_branches: bool = False,
+    output: Optional[str] = None,
+    debug: bool = False,
+):
+    """
+    Correct the charge of the events in the run according to the correction file.
+    """
+    # New branches
+    new_branches = ["RandomX", "EstimatedRecoX", "RandomDriftTime", "EstimatedRecoDriftTime"]
+    new_vector_branches = ["RandomAdjClX", "EstimatedRecoAdjClX", "RandomAdjClDriftTime", "EstimatedRecoAdjClDriftTime"]
+
+    for branch in new_branches:
+        # Check if the branch exists
+        if branch in run["Reco"]:
+            output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
+        
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=np.float32)
+    
+    for branch in new_vector_branches:
+        # Check if the branch exists
+        if branch in run["Reco"]:
+            output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
         
         run["Reco"][branch] = np.ones(
             (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])), dtype=np.float32
@@ -397,10 +478,10 @@ def compute_cluster_time(
             run["Reco"]["RandomAdjClX"][idx] = np.random.rand(
                 len(run["Reco"]["Event"][idx]), len(run["Reco"]["AdjClCharge"][0])) * info["DETECTOR_SIZE_X"]
 
-        run["Reco"]["RecoX"][random_idx] = run["Reco"]["RandomX"][random_idx]
-        run["Reco"]["RecoAdjClX"][random_idx] = run["Reco"]["RandomAdjClX"][random_idx]
-        run["Reco"]["RecoX"][default_idx] = run["Reco"]["MainVertex"][default_idx, 0]
-        run["Reco"]["RecoAdjClX"][default_idx] = run["Reco"]["AdjClMainX"][default_idx]
+        run["Reco"]["EstimatedRecoX"][random_idx] = run["Reco"]["RandomX"][random_idx]
+        run["Reco"]["EstimatedRecoAdjClX"][random_idx] = run["Reco"]["RandomAdjClX"][random_idx]
+        run["Reco"]["EstimatedRecoX"][default_idx] = run["Reco"]["MainVertex"][default_idx, 0]
+        run["Reco"]["EstimatedRecoAdjClX"][default_idx] = run["Reco"]["AdjClMainX"][default_idx]
 
         if info["GEOMETRY"] == "hd":
             run["Reco"]["RandomDriftTime"][idx] = run["Reco"]["RandomX"][idx] * \
@@ -420,7 +501,7 @@ def compute_cluster_time(
             output += f"[yellow]--> Applying random correction {100*params['RANDOM_CORRECTION_RATIO']:.1f}% to {branch}[/yellow]"
 
         for branch, (ref, jdx) in product(["DriftTime", "AdjClDriftTime"], zip(["Random", "Truth"], [random_idx, default_idx])):
-            run["Reco"][f"Reco{branch}"][jdx] = run["Reco"][f"{ref}{branch}"][jdx]
+            run["Reco"][f"EstimatedReco{branch}"][jdx] = run["Reco"][f"{ref}{branch}"][jdx]
 
     run = remove_branches(
         run, rm_branches, new_branches[:-1]+new_vector_branches[:-1], debug=debug
@@ -429,7 +510,7 @@ def compute_cluster_time(
     return run, output, new_branches+new_vector_branches
 
 
-def compute_cluter_drift(
+def compute_cluster_recox(
     run: dict, configs: dict[str, list[str]], params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug: bool = False
 ):
     """
