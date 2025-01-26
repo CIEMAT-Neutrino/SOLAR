@@ -80,7 +80,8 @@
             "Time": -1e6,
             "Charge": 0,
             "MainE": 0,
-            "MainParentE": 0
+            "MainParentE": 0,
+            "MatchedOpFlashPur": 0
         },
         "STRINGS": {},
         "BOOLS": {

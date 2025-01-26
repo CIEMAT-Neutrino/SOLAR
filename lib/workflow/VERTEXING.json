@@ -82,7 +82,8 @@
             "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1,
-            "Charge": 1
+            "Charge": 1,
+            "MatchedOpFlashTime": 1
         },
         "STRINGS": {},
         "BOOLS": {

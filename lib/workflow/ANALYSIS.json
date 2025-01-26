@@ -3,7 +3,9 @@
         "INTEGERS": {},
         "DOUBLES": {},
         "STRINGS": {
-            "Geometry": ""
+            "Geometry": 1,
+            "Version": 1,
+            "Name": 1
         },
         "BOOLS": {}
     },
@@ -90,6 +92,7 @@
             "MaxAdjClR": 0,
             "ML": 0,
             "Discriminant": 0,
+            "MatchedOpFlashNHits": 0,
             "MatchedOpFlashTime": 0,
             "MatchedOpFlashPur": 0,
             "MatchedOpFlashPE": 0,
