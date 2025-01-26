@@ -4,6 +4,7 @@ import numpy as np
 
 from typing import Optional
 from itertools import product
+from rich import print as rprint
 from lib.workflow.functions import remove_branches, get_param_dict
 
 from src.utils import get_project_root
@@ -25,48 +26,63 @@ def compute_particle_weights(run: dict[dict], configs: dict[str, list[str]], par
         return np.exp(log_density)
 
     # Define the joint PDF using dimensional independence
-    def evaluate_joint_pdf(p_values, x_values, y_values, z_values, kde_p, kde_x, kde_y, kde_z):
+    def evaluate_joint_pdf(name, p_values, x_values, y_values, z_values, kde_p, kde_x, kde_y, kde_z):
         """Evaluate the joint PDF under the assumption of dimensional independence."""
         pdf_p = evaluate_1d_pdf(kde_p, p_values)
         pdf_x = evaluate_1d_pdf(kde_x, x_values)
         pdf_y = evaluate_1d_pdf(kde_y, y_values)
         pdf_z = evaluate_1d_pdf(kde_z, z_values)
+        
+        rprint(f"[cyan][INFO] Eveluated PDF for {name} with {len(p_values)} events[/cyan]")
         return pdf_p * pdf_x * pdf_y * pdf_z
 
     '''
     Compute the single weights for the events in the run.
     '''
-    new_branches = ["SignalParticleWeight", "SignalParticleCustomWeight"]
+    new_branches = ["SignalParticleWeight"]
     for tree, branch in product(["Truth", "Reco"], new_branches):
-        run[tree][branch] = np.zeros(len(run[tree]["Event"]), dtype=np.float32)
+        run[tree][branch] = np.zeros(len(run[tree]["Event"]), dtype=np.float64)
     
     for config in configs:
         info, params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug)
         
+
         for name in configs[config]:
             if name.lower().startswith("marley"):
                 continue
+            
             exposure = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl", "rb"))
-            kde = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde.pkl", "rb"))
             kde_p = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_p.pkl", "rb"))
             kde_x = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_x.pkl", "rb"))
             kde_y = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_y.pkl", "rb"))
             kde_z = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_z.pkl", "rb"))
+            
             idx = np.where(
                 (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
                 * (np.asarray(run["Truth"]["Name"]) == name)
             )
-            
-            run["Truth"]["SignalParticleWeight"][idx] = evaluate_pdf(kde, run["Truth"]["SignalParticleP"][idx], run["Truth"]["SignalParticleX"][idx], run["Truth"]["SignalParticleY"][idx], run["Truth"]["SignalParticleZ"][idx])
-            run["Truth"]["SignalParticleCustomWeight"][idx] = evaluate_joint_pdf(run["Truth"]["SignalParticleP"][idx], run["Truth"]["SignalParticleX"][idx], run["Truth"]["SignalParticleY"][idx], run["Truth"]["SignalParticleZ"][idx], kde_p, kde_x, kde_y, kde_z)
-            run["Truth"]["SignalParticleWeight"][idx] = exposure["counts"] * run["Truth"]["SignalParticleWeight"][idx] / (np.sum(run["Truth"]["SignalParticleWeight"][idx]) * exposure["exposure"])
-            run["Truth"]["SignalParticleCustomWeight"][idx] = exposure["counts"] * run["Truth"]["SignalParticleCustomWeight"][idx] / (np.sum(run["Truth"]["SignalParticleCustomWeight"][idx]) * exposure["exposure"])
-    
-    run["Reco"]["SignalParticleWeight"][run["Truth"]["RecoIndex"][run["Truth"]["RecoIndex"] > -1]] = run["Truth"]["SignalParticleWeight"][run["Truth"]["RecoIndex"] > -1]
-    run["Reco"]["SignalParticleCustomWeight"][run["Truth"]["RecoIndex"][run["Truth"]["RecoIndex"] > -1]] = run["Truth"]["SignalParticleCustomWeight"][run["Truth"]["RecoIndex"] > -1]
 
+            jdx = np.where(
+                (np.asarray(run["Config"]["Version"]) == info["VERSION"])
+                * (np.asarray(run["Config"]["Name"]) == name)
+            )
+
+            config_tree_weight = 10
+            if name.startswith("neutron"):
+                config_tree_weight = 8*100
+            if name.startswith("gamma"):
+                config_tree_weight = 12*10
+
+            run["Truth"]["SignalParticleWeight"][idx] = evaluate_joint_pdf(name, run["Truth"]["SignalParticleP"][idx], run["Truth"]["SignalParticleX"][idx], run["Truth"]["SignalParticleY"][idx], run["Truth"]["SignalParticleZ"][idx], kde_p, kde_x, kde_y, kde_z)
+            run["Truth"]["SignalParticleWeight"][idx] = exposure["counts"] * len(run["Truth"]["Event"][idx]) / (config_tree_weight*len(run["Config"]["Geometry"][jdx])) * run["Truth"]["SignalParticleWeight"][idx] / (np.sum(run["Truth"]["SignalParticleWeight"][idx]) * exposure["exposure"])
+            
+ 
+    run["Reco"]["SignalParticleWeight"] = run["Truth"]["SignalParticleWeight"][run["Reco"]["TrueIndex"]]
+
+
+    rprint(f"Particle weights computation \t-> Done!")
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tTruth weights computation \t-> Done!\n"
     return run, output, new_branches
@@ -153,30 +169,43 @@ def generate_index(
     reco_result = np.zeros(len(reco_event), dtype=np.int32)
 
     end_j = 0
-    for i in range(1, len(reco_event)):
-        start_j = reco_result[i - 1]
+    start_j = 0
+    for i in range(0, len(reco_event)):
+        # print(f"Reco Event {i-1} of {len(reco_event)}")
+        if i == 0:
+            start_j = 0
+        else:
+            start_j = reco_result[i - 1]
         j = 0
         for z in range(true_index[end_j], true_index[-1] + 1):
-            if reco_event[i + 1] != true_event[z] and reco_flag[i + 1] != true_flag[z]:
+            # print(f"Lopping Over True Event {z} of {len(true_index)}")
+            if reco_event[i + 1] != true_event[z] or reco_flag[i + 1] != true_flag[z]:
                 j = j + 1
             else:
+                # print(f"Match Found at Reco Event {i+1} True Event {z}: {reco_event[i + 1]}, {true_event[z]} and {reco_flag[i + 1]}, {true_flag[z]}")
                 start_j = end_j
                 end_j = end_j + j
                 break
 
-        for k in range(start_j, end_j + 1):
+        for k in range(start_j , end_j + 1):
+            # print(f"Second Looping Over True Event {k} of {len(true_index)}")
             if (
-                reco_event[i] == true_event[k]
-                and reco_flag[i] == true_flag[k]
-                and reco_gen[k] == 1
+                (reco_event[i] == true_event[k]) \
+                * (reco_flag[i] == true_flag[k]) \
+                * (reco_gen[i] == 1)
             ):
                 reco_result[i] = int(k)
-                if reco_charge[i] > reco_charge[true_result[k]]:
-                    true_result[k] = int(i)
+                true_result[k] = int(i)
+
+                # if reco_charge[i] > reco_charge[true_result[k]]:
+                    # true_result[k] = int(i)
+                
                 true_TPC_match[k] = True
                 true_counts[k] += 1
                 true_nhits[k] = true_nhits[k] + reco_nhits[i]
+                
                 if reco_flash[i] > 0:
                     true_PDS_match[k] = True
                 break
+    
     return true_result, true_TPC_match, true_PDS_match, true_counts, true_nhits, reco_result
