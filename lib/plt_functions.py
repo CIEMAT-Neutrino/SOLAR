@@ -259,8 +259,6 @@ def get_units(var:str, debug:bool=False):
     }
     unit = ""
     for unit_key in list(units.keys()):
-        if debug:
-            print("Checking for " + unit_key + " in " + var)
         if var.endswith(unit_key):
             unit = units[unit_key]
             if debug:
