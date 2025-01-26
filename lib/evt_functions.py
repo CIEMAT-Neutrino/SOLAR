@@ -45,7 +45,8 @@ def get_neutrino_positions(run, tree, idx):
     neut[1] = [run[tree]["SignalParticleY"][idx]]
     neut[2] = [run[tree]["SignalParticleZ"][idx]]
     neut_name = [Particle.from_pdgid(12).name]
-    neut_color = get_pdg_color(12)
+    neut_color_dict = get_pdg_color(["12"])
+    neut_color = list(neut_color_dict.values())[0]
     return neut, neut_name, neut_color
 
 
@@ -85,7 +86,8 @@ def get_main_positions(run, tree, idx, reco):
     main_vertex[1] = [run[tree][f"{reco}Y"][idx]]
     main_vertex[2] = [run[tree][f"{reco}Z"][idx]]
     main_name = [Particle.from_pdgid(run[tree]["MainPDG"][idx]).name]
-    main_color = get_pdg_color(int(run[tree]["MainPDG"][idx]))
+    main_color_dict = get_pdg_color([str(run[tree]["MainPDG"][idx])])
+    main_color = list(main_color_dict.values())[0]
     return main_vertex, main_name, main_color
 
 
@@ -99,7 +101,7 @@ def get_adjcl_positions(run, tree, idx, reco, color_dict):
         Particle.from_pdgid(x).name for x in run[tree]["AdjClMainPDG"][idx] if x != 0
     ]
     reco_color = [
-        get_pdg_color(int(run[tree]["AdjClMainPDG"][idx][x]))
+        list(get_pdg_color([str(run[tree]["AdjClMainPDG"][idx][x])]).values())[0]
         if reco_gen[x] == 1
         else color_dict[reco_gen[x]]
         for x in range(len(reco_gen))
@@ -202,16 +204,16 @@ def plot_edep_event(run, configs, idx=None, tracked="Truth", zoom = True, debug=
         # adj, adjcl_name, adjcl_color = get_adjcl_positions(run, tracked, idx, tracked, color_dict)
 
         # fig = add_data_to_event(fig, neut, "0", "Truth", "Neutrino", neut_name, "circle-open", 15, neut_color, {"lw":1})
-        fig = add_data_to_event(fig, ccint, "0", "Truth", "Particles", true_name,"square-open", 15, true_color,{"lw":1})
-        fig = add_data_to_event(fig, edep, "1", "Raw", "EDeps", edep_name,"circle", 100*edep_size, edep_color, {})
+        fig = add_data_to_event(fig, ccint, "0", "Reco", "Particles", true_name,"square-open", 20, true_color, {"lw":2})
+        fig = add_data_to_event(fig, edep, "1", "Raw", "EDeps", edep_name,"circle", 200*edep_size, edep_color, {})
         # fig = add_data_to_event(fig, adj, "1", "Reco", "Adjacent", adjcl_name,"square", 10, adjcl_color)
 
         fig = format_coustom_plotly(fig, figsize=(None, 600), tickformat=(".1f",".1f"))
         
         particle = Particle.from_pdgid(run[tracked]["TSignalPDG"][:,0][idx]).name 
         fig.update_layout(
-            title_text="%s <b>%.2fMeV</b> Cluster: %i"
-            % (particle, run[tracked]["TSignalE"][:,0][idx], idx),
+            title_text="Neutrino <b>%.2f MeV</b> Cluster: %i"
+            % (run[tracked]["SignalParticleE"][idx], idx),
             title_x=0.5,
         )
 
