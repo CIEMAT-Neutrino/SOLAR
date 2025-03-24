@@ -1,4 +1,5 @@
 import json
+import numba
 import pandas as pd
 import numpy as np
 import dask.dataframe as dd
@@ -19,6 +20,86 @@ from .io_functions import (
 
 from src.utils import get_project_root
 root = get_project_root()
+
+
+def rebin_hist(x: np.ndarray, y: np.ndarray, y_error: np.ndarray, rebin: Optional[int]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if isinstance(rebin, int):
+        new_x = [np.mean(x[i:i+rebin]) for i in range(0, len(x), rebin)]
+        new_y = [np.sum(y[i:i+rebin]) for i in range(0, len(y), rebin)]
+        new_y_per_x = [np.sum(y[i:i+rebin])/rebin for i in range(0, len(y), rebin)]
+        new_y_error = [np.sqrt(np.sum(y_error[i:i+rebin]**2)) for i in range(0, len(y_error), rebin)]
+    
+    elif isinstance(rebin, list) or isinstance(rebin, np.ndarray):
+        rebin_centers = [np.mean([rebin[i], rebin[i+1]]) for i in range(len(rebin)-1)]
+        rebin_widths = [rebin[i+1] - rebin[i] for i in range(len(rebin)-1)]
+        new_y = np.zeros(len(rebin_centers))
+        new_y_per_x = np.zeros(len(rebin_centers))
+        new_y_error = np.zeros(len(rebin_centers))
+        
+        for i, value in enumerate(rebin_centers):
+            idx = np.where((x >= rebin[i]) & (x < rebin[i+1]))[0]
+            if rebin[i] > x[-1]:
+                break
+            new_y[i] = np.sum(y[idx[0]:idx[-1]+1])
+            new_y_per_x[i] = np.sum(y[idx[0]:idx[-1]+1])/rebin_widths[i]
+            new_y_error[i] = np.sqrt(np.sum(y_error[idx[0]:idx[-1]+1]**2))
+        new_x = rebin_centers
+    return new_x, new_y, new_y_per_x, new_y_error
+
+
+def rebin_hist2d(x: np.ndarray, y: np.ndarray, z: np.ndarray, rebin: Optional[int]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    '''
+    This function rebins a 2D histogram according to the rebin value/array.
+    The rebin value can be an integer or a list/array with the bin edges.
+        If the rebin value is an integer, the function will rebin the x and y axis of the 2D histogram.
+        -> Changing the number of bins from n*m to n//rebin * m//rebin.
+        If the rebin value is a list/array, the function will rebin the x axis of the 2D histogram according to the bin edges of the rebin list/array.
+        -> Changing the number of bins from n*m to len(rebin) * m.
+    '''
+    if isinstance(rebin, int):
+        new_x = x[:len(x)//rebin*rebin].reshape(-1, rebin).mean(axis=1)
+        new_y = y[:len(y)//rebin*rebin].reshape(-1, rebin).mean(axis=1)
+        new_z = z[:len(x)//rebin*rebin, :len(y)//rebin*rebin].reshape(len(x)//rebin, rebin, len(y)//rebin, rebin).sum(axis=(1, 3))
+        new_z_per_x = new_z / rebin
+
+    elif isinstance(rebin, list) or isinstance(rebin, np.ndarray):
+        rebin_centers = [np.mean([rebin[i], rebin[i+1]]) for i in range(len(rebin)-1)]
+        rebin_widths = [rebin[i+1] - rebin[i] for i in range(len(rebin)-1)]
+        new_z = np.zeros((len(y), len(rebin_centers)))
+        new_z_per_x = np.zeros((len(y), len(rebin_centers)))
+        for i, value in enumerate(rebin_centers):
+            mask = np.logical_and(x >= rebin[i], x < rebin[i+1])
+            new_z[:, i] = np.sum(z[:, mask], axis=1)
+            new_z_per_x = new_z / rebin_widths
+        
+        new_x = rebin_centers
+        new_y = y
+    return new_x, new_y, new_z, new_z_per_x
+
+
+def rebin_df_columns(df: pd.DataFrame, rebin: Optional[int], bins: str = "Energy", counts: str = "Counts", counts_per_energy: str = "Counts/Energy", counts_error: str = "Error") -> pd.DataFrame:
+    new_df = df.copy()
+    if isinstance(rebin, int):
+        bins_array = np.zeros((len(df), int(len(df[counts][0])/rebin)))
+        count_array = np.zeros((len(df), int(len(df[counts][0])/rebin)))
+        count_per_energy_array = np.zeros((len(df), int(len(df[counts][0])/rebin)))
+        count_error_array = np.zeros((len(df), int(len(df[counts_error][0])/rebin)))
+            
+    elif isinstance(rebin, list) or isinstance(rebin, np.ndarray):
+        bins_array = np.zeros((len(df), len(rebin)-1))
+        count_array = np.zeros((len(df), len(rebin)-1))
+        count_per_energy_array = np.zeros((len(df), len(rebin)-1))
+        count_error_array = np.zeros((len(df), len(rebin)-1))
+    
+    for i in range(len(df)):
+        bins_array[i], count_array[i], count_per_energy_array[i], count_error_array[i] = rebin_hist(np.asarray(df[bins][i]), np.asarray(df[counts][i]), np.asarray(df[counts_error][i]), rebin)
+
+    new_df[bins] = pd.Series(bins_array.tolist())
+    new_df[counts] = pd.Series(count_array.tolist())
+    new_df[counts_per_energy] = pd.Series(count_per_energy_array.tolist())
+    new_df[counts_error] = pd.Series(count_error_array.tolist())
+
+    return new_df
 
 
 def explode(df: pd.DataFrame, explode: list[str], keep: Optional[list] = None, debug: bool = False) -> pd.DataFrame:
