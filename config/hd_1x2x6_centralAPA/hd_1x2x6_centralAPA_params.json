@@ -9,10 +9,19 @@
     "MAX_FLASH_PE_RATIO": 0.25,
     "DEFAULT_ANALYSIS_ENERGY": "SolarEnergy",
     "DEFAULT_CHARGE_VARIABLE": "Charge",
-    "DEFAULT_RECOX_TIME": "DriftTime",
-    "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-    "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+    "DEFAULT_RECOX_TIME": "MatchedOpFlashTime",
+    "DEFAULT_ENERGY_TIME": "RecoDriftTime",
+    "DEFAULT_ADJCL_ENERGY_TIME": "AdjClRecoDriftTime",
     "DEFAULT_ADJCLCHARGE_VARIABLE": "AdjCharge",
+    "DEFAULT_SIGNAL_WEIGHT": [
+        "truth"
+    ],
+    "DEFAULT_SIGNAL_AZIMUTH": [
+        "mean"
+    ],
+    "DEFAULT_SIGNAL_DM2": 6.0e-5,
+    "DEFAULT_SIGNAL_SIN13": 0.021,
+    "DEFAULT_SIGNAL_SIN12": 0.303,
     "RANDOM_CORRECTION_RATIO": 0.0,
     "MIN_BKG_R": 25,
     "MAX_BKG_CHARGE": 1000000,
@@ -28,5 +37,6 @@
     "MAX_ENERGY_PER_HIT": 3.5,
     "MIN_ENERGY_PER_HIT": 0,
     "FIDUTIAL_FACTOR": 0.1,
-    "NORM_TO_NUE": false
+    "NORM_TO_NUE": false,
+    "COMPUTE_STANDARD_WEIGHTS": true
 }
