@@ -8,56 +8,82 @@ from rich import print as rprint
 from lib.workflow.functions import remove_branches, get_param_dict
 
 from src.utils import get_project_root
+
 root = get_project_root()
 
 
-def compute_particle_weights(run: dict[dict], configs: dict[str, list[str]], params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug: bool = False):
-    
+def compute_particle_weights(
+    run: dict[dict],
+    configs: dict[str, list[str]],
+    params: Optional[dict] = None,
+    rm_branches: bool = False,
+    output: Optional[str] = None,
+    debug: bool = False,
+):
+
     # Define a function to evaluate the joint PDF
     def evaluate_pdf(kde, p_values, x_values, y_values, z_values):
         """Evaluate the PDF at the given (p, x, y, z) points."""
         query_points = np.vstack([p_values, x_values, y_values, z_values]).T
         log_density = kde.score_samples(query_points)  # Log density
         return np.exp(log_density)  # Convert to actual density
-    
+
     def evaluate_1d_pdf(kde, values):
         """Evaluate 1D PDF from a KDE."""
         log_density = kde.score_samples(values[:, None])  # [:, None] ensures 2D input
         return np.exp(log_density)
 
     # Define the joint PDF using dimensional independence
-    def evaluate_joint_pdf(name, p_values, x_values, y_values, z_values, kde_p, kde_x, kde_y, kde_z):
+    def evaluate_joint_pdf(
+        name, p_values, x_values, y_values, z_values, kde_p, kde_x, kde_y, kde_z
+    ):
         """Evaluate the joint PDF under the assumption of dimensional independence."""
         pdf_p = evaluate_1d_pdf(kde_p, p_values)
         pdf_x = evaluate_1d_pdf(kde_x, x_values)
         pdf_y = evaluate_1d_pdf(kde_y, y_values)
         pdf_z = evaluate_1d_pdf(kde_z, z_values)
-        
-        rprint(f"[cyan][INFO] Eveluated PDF for {name} with {len(p_values)} events[/cyan]")
+
+        rprint(
+            f"[cyan][INFO] Eveluated PDF for {name} with {len(p_values)} events[/cyan]"
+        )
         return pdf_p * pdf_x * pdf_y * pdf_z
 
-    '''
+    """
     Compute the single weights for the events in the run.
-    '''
+    """
+    new_weights = [""]
     new_branches = ["SignalParticleWeight"]
-    for tree, branch in product(["Truth", "Reco"], new_branches):
+    osc_names = {"mean": "Mean", "day": "Day", "night": "Night"}
+    for tree, branch in product(["Truth"], new_branches):
         run[tree][branch] = np.zeros(len(run[tree]["Event"]), dtype=np.float64)
-    
+
     for config in configs:
         info, params, output = get_param_dict(
-            f"{root}/config/{config}/{config}", params, output, debug=debug)
-        
+            f"{root}/config/{config}/{config}", params, output, debug=debug
+        )
 
         for name in configs[config]:
             if name.lower().startswith("marley"):
-                continue
-            
-            exposure = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl", "rb"))
-            kde_p = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_p.pkl", "rb"))
-            kde_x = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_x.pkl", "rb"))
-            kde_y = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_y.pkl", "rb"))
-            kde_z = pickle.load(open(f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_z.pkl", "rb"))
-            
+                new_weights = ["", "b8", "hep"]
+                for new_weight, osc in product(
+                    new_weights, params["DEFAULT_SIGNAL_WEIGHT"]
+                ):
+                    run["Truth"][f"SignalParticleWeight{new_weight}"] = run["Truth"][
+                        "SignalParticleWeight"
+                    ].copy()
+
+                    if new_weight != "":
+                        new_branches.append(f"SignalParticleWeight{new_weight}")
+
+                    if osc == "osc":
+                        for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            run["Truth"][
+                                f"SignalParticleWeight{new_weight}Osc{osc_names[osc_name]}"
+                            ] = run["Truth"]["SignalParticleWeight"].copy()
+                            new_branches.append(
+                                f"SignalParticleWeight{new_weight}Osc{osc_names[osc_name]}"
+                            )
+
             idx = np.where(
                 (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
@@ -70,17 +96,166 @@ def compute_particle_weights(run: dict[dict], configs: dict[str, list[str]], par
             )
 
             config_tree_weight = 10
+            if name.startswith("marley"):
+                config_tree_weight = 10 * 10
             if name.startswith("neutron"):
-                config_tree_weight = 8*100
+                config_tree_weight = 40 * 100
             if name.startswith("gamma"):
-                config_tree_weight = 12*10
+                config_tree_weight = 40 * 100
+            if name.startswith("alpha"):
+                config_tree_weight = 6 * 100
 
-            run["Truth"]["SignalParticleWeight"][idx] = evaluate_joint_pdf(name, run["Truth"]["SignalParticleP"][idx], run["Truth"]["SignalParticleX"][idx], run["Truth"]["SignalParticleY"][idx], run["Truth"]["SignalParticleZ"][idx], kde_p, kde_x, kde_y, kde_z)
-            run["Truth"]["SignalParticleWeight"][idx] = exposure["counts"] * len(run["Truth"]["Event"][idx]) / (config_tree_weight*len(run["Config"]["Geometry"][jdx])) * run["Truth"]["SignalParticleWeight"][idx] / (np.sum(run["Truth"]["SignalParticleWeight"][idx]) * exposure["exposure"])
-            
- 
-    run["Reco"]["SignalParticleWeight"] = run["Truth"]["SignalParticleWeight"][run["Reco"]["TrueIndex"]]
+            exposure = {}
+            if name.lower().startswith("marley"):
+                for (comp, label), osc in product(
+                    zip(["comb", "b8", "hep"], ["", "b8", "hep"]),
+                    params["DEFAULT_SIGNAL_WEIGHT"],
+                ):
+                    exposure[(label, osc)] = dict()
+                    if osc == "osc":
+                        dm2 = f"{params['DEFAULT_SIGNAL_DM2']:.3e}"
+                        sin13 = f"{params['DEFAULT_SIGNAL_SIN13']:.3e}"
+                        sin12 = f"{params['DEFAULT_SIGNAL_SIN12']:.3e}"
+                        for azimuth in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            exposure[(label, osc)][osc_names[azimuth]] = pickle.load(
+                                open(
+                                    f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_exposure_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
+                                    "rb",
+                                )
+                            )
+                            kde_p = pickle.load(
+                                open(
+                                    f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_kde_p_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
+                                    "rb",
+                                )
+                            )
+                            run["Truth"][
+                                f"SignalParticleWeight{label}Osc{osc_names[azimuth]}"
+                            ][idx] = evaluate_1d_pdf(
+                                kde_p, run["Truth"]["SignalParticleP"][idx]
+                            )
 
+                    if osc == "truth":
+                        exposure[(label, osc)]["truth"] = pickle.load(
+                            open(
+                                f"{info['PATH']}/signal/truth/{config}/{config}_{name.split('_')[0]}_{comp}_exposure.pkl",
+                                "rb",
+                            )
+                        )
+                        kde_p = pickle.load(
+                            open(
+                                f"{info['PATH']}/signal/truth/{config}/{config}_{name.split('_')[0]}_{comp}_kde_p.pkl",
+                                "rb",
+                            )
+                        )
+                        run["Truth"][f"SignalParticleWeight{label}"][idx] = (
+                            evaluate_1d_pdf(kde_p, run["Truth"]["SignalParticleP"][idx])
+                        )
+
+            else:
+                exposure[("", "truth")] = dict()
+                exposure[("", "truth")]["truth"] = pickle.load(
+                    open(
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
+                        "rb",
+                    )
+                )
+                kde_p = pickle.load(
+                    open(
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_p.pkl",
+                        "rb",
+                    )
+                )
+                kde_x = pickle.load(
+                    open(
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_x.pkl",
+                        "rb",
+                    )
+                )
+                kde_y = pickle.load(
+                    open(
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_y.pkl",
+                        "rb",
+                    )
+                )
+                kde_z = pickle.load(
+                    open(
+                        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_kde_z.pkl",
+                        "rb",
+                    )
+                )
+                run["Truth"]["SignalParticleWeight"][idx] = evaluate_joint_pdf(
+                    name,
+                    run["Truth"]["SignalParticleP"][idx],
+                    run["Truth"]["SignalParticleX"][idx],
+                    run["Truth"]["SignalParticleY"][idx],
+                    run["Truth"]["SignalParticleZ"][idx],
+                    kde_p,
+                    kde_x,
+                    kde_y,
+                    kde_z,
+                )
+
+            for weight in new_weights:
+                for osc in params["DEFAULT_SIGNAL_WEIGHT"]:
+                    if osc == "osc":
+                        for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            run["Truth"][
+                                f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
+                            ][idx] = (
+                                exposure[(weight, "osc")][osc_names[osc_name]]["counts"]
+                                * len(run["Truth"]["Event"][idx])
+                                / (
+                                    config_tree_weight
+                                    * len(run["Config"]["Geometry"][jdx])
+                                )
+                                * run["Truth"][
+                                    f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
+                                ][idx]
+                                / (
+                                    np.sum(
+                                        run["Truth"][
+                                            f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
+                                        ][idx]
+                                    )
+                                    * exposure[(weight, "osc")][osc_names[osc_name]][
+                                        "exposure"
+                                    ]
+                                )
+                            )
+                    elif osc == "truth":
+                        run["Truth"][f"SignalParticleWeight{weight}"][idx] = (
+                            exposure[(weight, "truth")]["truth"]["counts"]
+                            * len(run["Truth"]["Event"][idx])
+                            / (config_tree_weight * len(run["Config"]["Geometry"][jdx]))
+                            * run["Truth"][f"SignalParticleWeight{weight}"][idx]
+                            / (
+                                np.sum(
+                                    run["Truth"][f"SignalParticleWeight{weight}"][idx]
+                                )
+                                * exposure[(weight, "truth")]["truth"]["exposure"]
+                            )
+                        )
+                    else:
+                        rprint(
+                            f"[red]ERROR: Sigles weight should be 'osc' or 'truth'[/red]"
+                        )
+
+    for weight in new_weights:
+        run["Reco"][f"SignalParticleWeight{weight}"] = run["Truth"][
+            f"SignalParticleWeight{weight}"
+        ][run["Reco"]["TrueIndex"]]
+
+        for osc in params["DEFAULT_SIGNAL_WEIGHT"]:
+            if osc == "osc":
+                for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                    run["Reco"][
+                        f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
+                    ] = run["Truth"][
+                        f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
+                    ][
+                        run["Reco"]["TrueIndex"]
+                    ]
 
     rprint(f"Particle weights computation \t-> Done!")
     run = remove_branches(run, rm_branches, [], debug=debug)
@@ -88,31 +263,49 @@ def compute_particle_weights(run: dict[dict], configs: dict[str, list[str]], par
     return run, output, new_branches
 
 
-def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], params: Optional[dict] = None, rm_branches: bool = False, output: Optional[str] = None, debug: bool = False):
+def compute_true_efficiency(
+    run: dict[dict],
+    configs: dict[str, list[str]],
+    params: Optional[dict] = None,
+    rm_branches: bool = False,
+    output: Optional[str] = None,
+    debug: bool = False,
+):
     """
     Compute the true efficiency of the events in the run.
     """
-    required_branches = {"Truth": ["Event", "Flag", "Geometry", "Version"],
-                         "Reco": ["Event", "Flag", "Geometry", "Version", "NHits", "Charge", "Generator"]}
+    required_branches = {
+        "Truth": ["Event", "Flag", "Geometry", "Version"],
+        "Reco": [
+            "Event",
+            "Flag",
+            "Geometry",
+            "Version",
+            "NHits",
+            "Charge",
+            "Generator",
+        ],
+    }
     # New branches
-    new_branches = ["RecoIndex", "RecoMatch", "PDSMatch",
-                    "ClusterCount", "HitCount", "TrueIndex"]
-    run["Truth"][new_branches[0]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[1]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=bool)
-    run["Truth"][new_branches[2]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=bool)
-    run["Truth"][new_branches[3]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[4]] = np.zeros(
-        len(run["Truth"]["Event"]), dtype=int)
-    run["Reco"][new_branches[5]] = np.zeros(
-        len(run["Reco"]["Event"]), dtype=int)
+    new_branches = [
+        "RecoIndex",
+        "RecoMatch",
+        "PDSMatch",
+        "ClusterCount",
+        "HitCount",
+        "TrueIndex",
+    ]
+    run["Truth"][new_branches[0]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
+    run["Truth"][new_branches[1]] = np.zeros(len(run["Truth"]["Event"]), dtype=bool)
+    run["Truth"][new_branches[2]] = np.zeros(len(run["Truth"]["Event"]), dtype=bool)
+    run["Truth"][new_branches[3]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
+    run["Truth"][new_branches[4]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
+    run["Reco"][new_branches[5]] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
 
     for config in configs:
         info, params, output = get_param_dict(
-            f"{root}/config/{config}/{config}", params, output, debug=debug)
+            f"{root}/config/{config}/{config}", params, output, debug=debug
+        )
         idx = np.where(
             (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
@@ -133,19 +326,19 @@ def compute_true_efficiency(run: dict[dict], configs: dict[str, list[str]], para
             run["Reco"]["MatchedOpFlashPur"][jdx],
             debug=debug,
         )
-        run["Truth"]["RecoIndex"][idx]    = np.asarray(result[0])
-        run["Truth"]["RecoMatch"][idx]    = np.asarray(result[1])
-        run["Truth"]["PDSMatch"][idx]     = np.asarray(result[2])
+        run["Truth"]["RecoIndex"][idx] = np.asarray(result[0])
+        run["Truth"]["RecoMatch"][idx] = np.asarray(result[1])
+        run["Truth"]["PDSMatch"][idx] = np.asarray(result[2])
         run["Truth"]["ClusterCount"][idx] = np.asarray(result[3])
-        run["Truth"]["HitCount"][idx]     = np.asarray(result[4])
-        run["Reco"]["TrueIndex"][jdx]     = np.asarray(result[5])
+        run["Truth"]["HitCount"][idx] = np.asarray(result[4])
+        run["Reco"]["TrueIndex"][jdx] = np.asarray(result[5])
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tTrue efficiency computation \t-> Done!\n"
     return run, output, new_branches
 
 
-@ numba.njit
+@numba.njit
 def generate_index(
     true_event,
     true_flag,
@@ -187,25 +380,32 @@ def generate_index(
                 end_j = end_j + j
                 break
 
-        for k in range(start_j , end_j + 1):
+        for k in range(start_j, end_j + 1):
             # print(f"Second Looping Over True Event {k} of {len(true_index)}")
             if (
-                (reco_event[i] == true_event[k]) \
-                * (reco_flag[i] == true_flag[k]) \
+                (reco_event[i] == true_event[k])
+                * (reco_flag[i] == true_flag[k])
                 * (reco_gen[i] == 1)
             ):
                 reco_result[i] = int(k)
                 true_result[k] = int(i)
 
                 # if reco_charge[i] > reco_charge[true_result[k]]:
-                    # true_result[k] = int(i)
-                
+                # true_result[k] = int(i)
+
                 true_TPC_match[k] = True
                 true_counts[k] += 1
                 true_nhits[k] = true_nhits[k] + reco_nhits[i]
-                
+
                 if reco_flash[i] > 0:
                     true_PDS_match[k] = True
                 break
-    
-    return true_result, true_TPC_match, true_PDS_match, true_counts, true_nhits, reco_result
+
+    return (
+        true_result,
+        true_TPC_match,
+        true_PDS_match,
+        true_counts,
+        true_nhits,
+        reco_result,
+    )
