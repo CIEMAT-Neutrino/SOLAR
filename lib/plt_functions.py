@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import plotly.io as pio
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
@@ -15,7 +16,68 @@ from plotly.subplots import make_subplots
 from matplotlib.collections import LineCollection
 
 from src.utils import get_project_root
+
 root = get_project_root()
+
+pio.templates["DUNE"] = go.layout.Template(
+    layout_annotations=[
+        dict(
+            name="DUNE watermark",
+            text="<b>DUNE</b> Simulation",
+            # textangle=-30,
+            opacity=0.75,
+            font=dict(color="black", size=25),
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=1.0,
+            showarrow=False,
+        )
+    ]
+)
+pio.templates.default = "presentation"
+
+
+def print_watermark(
+    fig, watermark: str = "<b>DUNE</b> Work In Progress", debug: bool = False
+):
+    """
+    Find the number of subplots in a plotly figure
+
+    Args:
+        fig (plotly.graph_objects.Figure): plotly figure
+        debug (bool): True to print debug statements, False otherwise (default: False)
+
+    Returns:
+        rows (int): number of rows
+        cols (int): number of columns
+    """
+    # Find the number of subplots
+    rows, cols = find_subplots(fig, debug=debug)
+
+    # Add annotation inside each subplot
+    for row in range(1, rows + 1):
+        for col in range(1, cols + 1):
+            # If figure is heatmap, add annotation in white color
+
+            fig.add_annotation(
+                dict(
+                    name="DUNE watermark",
+                    text=watermark,
+                    # textangle=-30,
+                    opacity=0.75,
+                    font=dict(color="black", size=25),
+                    xref="x domain",
+                    yref="y domain",
+                    x=0.01,
+                    y=1.0,
+                    showarrow=False,
+                ),
+                row=row,
+                col=col,
+            )
+
+    return fig
 
 
 def colored_line(x, y, c, ax, **lc_kwargs):
@@ -65,8 +127,7 @@ def colored_line(x, y, c, ax, **lc_kwargs):
     #   [(x2_start, y2_start), (x2_mid, y2_mid), (x2_end, y2_end)],
     #   ...
     # ]
-    coord_start = np.column_stack(
-        (x_midpts[:-1], y_midpts[:-1]))[:, np.newaxis, :]
+    coord_start = np.column_stack((x_midpts[:-1], y_midpts[:-1]))[:, np.newaxis, :]
     coord_mid = np.column_stack((x, y))[:, np.newaxis, :]
     coord_end = np.column_stack((x_midpts[1:], y_midpts[1:]))[:, np.newaxis, :]
     segments = np.concatenate((coord_start, coord_mid, coord_end), axis=1)
@@ -80,7 +141,7 @@ def colored_line(x, y, c, ax, **lc_kwargs):
     return ax.add_collection(lc)
 
 
-def find_subplots(fig, debug:bool = False):
+def find_subplots(fig, debug: bool = False):
     """
     Find the number of subplots in a plotly figure
 
@@ -97,35 +158,40 @@ def find_subplots(fig, debug:bool = False):
         try:
             rows, cols = fig._get_subplot_rows_columns()
             rows, cols = rows[-1], cols[-1]
-            if debug:
-                rprint("[cyan][INFO]: Detected number of subplots: " +
-                    str(rows * cols) + "[/cyan]")
-        
+            # if debug:
+            #     rprint("[cyan][INFO] Detected number of subplots: " +
+            #         str(rows * cols) + "[/cyan]")
+
         except Exception:
-            if debug: rprint("[red][ERROR]: Method fig._get_subplot_rows_columns() not availabel![/red]")
+            if debug:
+                rprint(
+                    "[red][ERROR] Method fig._get_subplot_rows_columns() not availabel![/red]"
+                )
             rows, cols = 1, 1
-   
+
     else:
         rows, cols = 1, 1
-        rprint(f"[red][ERROR]: Unknown figure type! {type(type(fig))}[/red]")
-    
+        rprint(f"[red][ERROR] Unknown figure type! {type(type(fig))}[/red]")
+
     return rows, cols
 
 
 def format_coustom_plotly(
     fig: go.Figure,
-    title: str = None,
+    add_units: bool = True,
+    add_watermark: bool = True,
+    bargap: int = 0,
+    figsize: int = None,
+    fontsize: int = 16,
     legend: Optional[dict] = None,
     legend_title: str = None,
-    fontsize: int = 16,
-    figsize: int = None,
-    ranges: tuple = (None, None),
-    matches: tuple = ("x", "y"),
-    tickformat: tuple = (".s", ".s"),
     log: tuple = (False, False),
     margin: dict = {"auto": True},
-    add_units: bool = True,
-    bargap: int = 0,
+    matches: tuple = ("x", "y"),
+    ranges: tuple = (None, None),
+    template: Optional[str] = None,
+    tickformat: tuple = (".s", ".s"),
+    title: str = None,
     debug: bool = False,
 ):
     """
@@ -148,9 +214,23 @@ def format_coustom_plotly(
     Returns:
         fig (plotly.graph_objects.Figure): plotly figure
     """
+    if isinstance(title, str):
+        fig.update_layout(title=title)
 
+    default_legend = dict(
+        groupclick="toggleitem", font=dict(size=fontsize - 3), bgcolor="rgba(0,0,0,0)"
+    )
     if legend == None:
-        legend = dict(groupclick="toggleitem", font=dict(size=fontsize-3))
+        legend = default_legend
+    elif isinstance(legend, dict):
+        # Update legend with default values
+        for key in default_legend.keys():
+            if key not in legend.keys():
+                legend[key] = default_legend[key]
+    else:
+        # Print error message
+        rprint("[red][ERROR] Invalid legend type! Must be a dictionary![/red]")
+        legend = default_legend
 
     if figsize == None:
         rows, cols = find_subplots(fig, debug=debug)
@@ -163,14 +243,14 @@ def format_coustom_plotly(
                 margin[key] = default_margin[key]
 
     fig.update_layout(
-        title=title,
         legend=legend,
-        template="presentation",
+        template=template,
         font=dict(size=fontsize),
         paper_bgcolor=margin["color"],
         bargap=bargap,
         legend_title_text=legend_title,
     )  # font size and template
+
     fig.update_xaxes(
         matches=matches[0],
         showline=True,
@@ -178,8 +258,10 @@ def format_coustom_plotly(
         showgrid=True,
         minor_ticks="inside",
         tickformat=tickformat[0],
-        # range=ranges[0],
     )  # tickformat=",.1s" for scientific notation
+
+    if add_watermark:
+        fig = print_watermark(fig, debug=debug)
 
     if ranges[0] != None:
         fig.update_xaxes(range=ranges[0])
@@ -193,7 +275,6 @@ def format_coustom_plotly(
         showgrid=True,
         minor_ticks="inside",
         tickformat=tickformat[1],
-        # range=ranges[1],
     )  # tickformat=",.1s" for scientific notation
 
     if figsize != None:
@@ -212,10 +293,8 @@ def format_coustom_plotly(
             )
         )
     # Update colorscale to viridis but with white at the bottom
-    colorscale = px.colors.sequential.Turbo[::-1]
-    # colorscale.append("white")
-    colorscale = colorscale[::-1]
-    fig.update_layout(coloraxis={'colorscale': colorscale})
+    colorscale = px.colors.sequential.Turbo
+    fig.update_layout(coloraxis={"colorscale": colorscale})
 
     # Update axis labels to include units
     if add_units:
@@ -233,11 +312,11 @@ def format_coustom_plotly(
             )
         except AttributeError:
             pass
-    
+
     return fig
 
 
-def get_units(var:str, debug:bool=False):
+def get_units(var: str, debug: bool = False):
     """
     Returns the units of a variable based on the variable name
 
@@ -277,90 +356,90 @@ def unicode(x):
         raise TypeError("Input must be a string")
     unicode_greek = {
         "Delta": "\u0394",
-        "mu": "\u03BC",
-        "pi": "\u03C0",
-        "gamma": "\u03B3",
-        "Sigma": "\u03A3",
-        "Lambda": "\u039B",
-        "alpha": "\u03B1",
-        "beta": "\u03B2",
-        "gamma": "\u03B3",
-        "delta": "\u03B4",
-        "epsilon": "\u03B5",
-        "zeta": "\u03B6",
-        "eta": "\u03B7",
-        "theta": "\u03B8",
-        "iota": "\u03B9",
-        "kappa": "\u03BA",
-        "lambda": "\u03BB",
-        "mu": "\u03BC",
-        "nu": "\u03BD",
-        "xi": "\u03BE",
-        "omicron": "\u03BF",
-        "pi": "\u03C0",
-        "rho": "\u03C1",
-        "sigma": "\u03C3",
-        "tau": "\u03C4",
-        "upsilon": "\u03C5",
-        "phi": "\u03C6",
-        "chi": "\u03C7",
-        "psi": "\u03C8",
-        "omega": "\u03C9",
+        "mu": "\u03bc",
+        "pi": "\u03c0",
+        "gamma": "\u03b3",
+        "Sigma": "\u03a3",
+        "Lambda": "\u039b",
+        "alpha": "\u03b1",
+        "beta": "\u03b2",
+        "gamma": "\u03b3",
+        "delta": "\u03b4",
+        "epsilon": "\u03b5",
+        "zeta": "\u03b6",
+        "eta": "\u03b7",
+        "theta": "\u03b8",
+        "iota": "\u03b9",
+        "kappa": "\u03ba",
+        "lambda": "\u03bb",
+        "mu": "\u03bc",
+        "nu": "\u03bd",
+        "xi": "\u03be",
+        "omicron": "\u03bf",
+        "pi": "\u03c0",
+        "rho": "\u03c1",
+        "sigma": "\u03c3",
+        "tau": "\u03c4",
+        "upsilon": "\u03c5",
+        "phi": "\u03c6",
+        "chi": "\u03c7",
+        "psi": "\u03c8",
+        "omega": "\u03c9",
     }
 
     unicode_symbol = {
-        "PlusMinus": "\u00B1",
+        "PlusMinus": "\u00b1",
         "MinusPlus": "\u2213",
-        "Plus": "\u002B",
+        "Plus": "\u002b",
         "Minus": "\u2212",
-        "Equal": "\u003D",
+        "Equal": "\u003d",
         "NotEqual": "\u2260",
         "LessEqual": "\u2264",
         "GreaterEqual": "\u2265",
-        "Less": "\u003C",
-        "Greater": "\u003E",
+        "Less": "\u003c",
+        "Greater": "\u003e",
         "Approximately": "\u2248",
-        "Proportional": "\u221D",
-        "Infinity": "\u221E",
-        "Degree": "\u00B0",
+        "Proportional": "\u221d",
+        "Infinity": "\u221e",
+        "Degree": "\u00b0",
         "Prime": "\u2032",
         "DoublePrime": "\u2033",
         "TriplePrime": "\u2034",
         "QuadruplePrime": "\u2057",
-        "Micro": "\u00B5",
+        "Micro": "\u00b5",
         "PerMille": "\u2030",
         "Permyriad": "\u2031",
         "Minute": "\u2032",
         "Second": "\u2033",
-        "Dot": "\u02D9",
-        "Cross": "\u00D7",
-        "Star": "\u22C6",
-        "Circle": "\u25CB",
-        "Square": "\u25A1",
-        "Diamond": "\u25C7",
-        "Triangle": "\u25B3",
-        "LeftTriangle": "\u22B2",
-        "RightTriangle": "\u22B3",
-        "LeftTriangleEqual": "\u22B4",
-        "RightTriangleEqual": "\u22B5",
-        "LeftTriangleBar": "\u29CF",
-        "RightTriangleBar": "\u29D0",
-        "LeftTriangleEqualBar": "\u29CF",
-        "RightTriangleEqualBar": "\u29D0",
+        "Dot": "\u02d9",
+        "Cross": "\u00d7",
+        "Star": "\u22c6",
+        "Circle": "\u25cb",
+        "Square": "\u25a1",
+        "Diamond": "\u25c7",
+        "Triangle": "\u25b3",
+        "LeftTriangle": "\u22b2",
+        "RightTriangle": "\u22b3",
+        "LeftTriangleEqual": "\u22b4",
+        "RightTriangleEqual": "\u22b5",
+        "LeftTriangleBar": "\u29cf",
+        "RightTriangleBar": "\u29d0",
+        "LeftTriangleEqualBar": "\u29cf",
+        "RightTriangleEqualBar": "\u29d0",
         "LeftRightArrow": "\u2194",
         "UpDownArrow": "\u2195",
         "UpArrow": "\u2191",
         "DownArrow": "\u2193",
         "LeftArrow": "\u2190",
         "RightArrow": "\u2192",
-        "UpArrowDownArrow": "\u21C5",
-        "LeftArrowRightArrow": "\u21C4",
-        "LeftArrowLeftArrow": "\u21C7",
-        "UpArrowUpArrow": "\u21C8",
-        "RightArrowRightArrow": "\u21C9",
-        "DownArrowDownArrow": "\u21CA",
-        "LeftRightVector": "\u294E",
-        "RightUpDownVector": "\u294F",
+        "UpArrowDownArrow": "\u21c5",
+        "LeftArrowRightArrow": "\u21c4",
+        "LeftArrowLeftArrow": "\u21c7",
+        "UpArrowUpArrow": "\u21c8",
+        "RightArrowRightArrow": "\u21c9",
+        "DownArrowDownArrow": "\u21ca",
+        "LeftRightVector": "\u294e",
+        "RightUpDownVector": "\u294f",
         "DownLeftRightVector": "\u2950",
         "LeftUpDownVector": "\u2951",
         "LeftVectorBar": "\u2952",
@@ -384,9 +463,9 @@ def superscript(x):
         x = str(x)
 
     suffix_dict = {
-        "1": "\u00B9",
-        "2": "\u00B2",
-        "3": "\u00B3",
+        "1": "\u00b9",
+        "2": "\u00b2",
+        "3": "\u00b3",
         "4": "\u2074",
         "5": "\u2075",
         "6": "\u2076",
@@ -401,7 +480,7 @@ def superscript(x):
         "t": "ᵗ",
         "d": "ᵈ",
         "a": "ᵃ",
-        "y": "ʸ"
+        "y": "ʸ",
     }
     suffix_string = ""
     for i in range(len(x)):
@@ -436,7 +515,7 @@ def subscript(x):
         "i": "ᵢ",
         "j": "ⱼ",
         "k": "ₖ",
-        "l": "ₗ"
+        "l": "ₗ",
     }
     suffix_string = ""
     for i in range(len(x)):
@@ -476,8 +555,7 @@ def change_hist_color(n, patches, logy=False):
                 "int"
             )  # it MUST be integer# Good old loop. Choose colormap of your taste
             for j in range(len(patches[i])):
-                patches[i][j].set_facecolor(
-                    plt.cm.viridis(n[i][j] / np.max(n)))
+                patches[i][j].set_facecolor(plt.cm.viridis(n[i][j] / np.max(n)))
                 patches[i][j].set_edgecolor("k")
         return patches
 
@@ -570,8 +648,7 @@ def plot_nhit_energy_scan(df, variable, bins=100, density=False):
                 & (df["NHits"] >= nhits)
             ]
 
-            hist, edges = np.histogram(
-                this_df[variable], bins=bins, density=density)
+            hist, edges = np.histogram(this_df[variable], bins=bins, density=density)
             edge_centers = (edges[1:] + edges[:-1]) / 2
             plot_list.append(
                 {
@@ -727,14 +804,12 @@ def histogram_comparison(
     # Calculate the residual between the two histograms & the error
     residual = (bins[0] - bins[1]) / bins[0]
     residual_error = (
-        np.sqrt((bins_error[0] / bins[0]) ** 2 +
-                (bins_error[1] / bins[1]) ** 2)
+        np.sqrt((bins_error[0] / bins[0]) ** 2 + (bins_error[1] / bins[1]) ** 2)
         * residual
     )
     # Calculate the chi2 between the two histograms but only if the bin content is > 0
     chi2 = np.sum(
-        (bins[0][bins[0] != 0] - bins[1]
-         [bins[0] != 0]) ** 2 / bins[0][bins[0] != 0]
+        (bins[0][bins[0] != 0] - bins[1][bins[0] != 0]) ** 2 / bins[0][bins[0] != 0]
     )
 
     # Plot the histograms & the residual

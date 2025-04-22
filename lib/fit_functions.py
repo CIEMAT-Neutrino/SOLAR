@@ -9,7 +9,8 @@ from typing import Optional
 
 from rich import print as rprint
 from scipy.optimize import curve_fit
-np.seterr(divide='ignore', invalid='ignore')
+
+np.seterr(divide="ignore", invalid="ignore")
 
 root = get_project_root()
 energy_edges, energy_centers, ebin = get_default_energies(root)
@@ -17,15 +18,16 @@ nhits = get_default_nhits(root)
 
 
 def calibration_func(x, a, b, c, d):
-    return a*np.exp(-b*x)+c/(1+np.exp(-d*x))
+    return a * np.exp(-b * x) + c / (1 + np.exp(-d * x))
 
 
 def resolution(x, p0, p1, p2, b):
     """
     Resolution function.
     """
-    residuals = np.sqrt(np.power(p2, 2) + np.power(p1 /
-                        np.sqrt(x-b), 2) + np.power(p0 / (x-b), 2))
+    residuals = np.sqrt(
+        np.power(p2, 2) + np.power(p1 / np.sqrt(x - b), 2) + np.power(p0 / (x - b), 2)
+    )
     residuals[np.isnan(residuals)] = 0
     residuals[np.isinf(residuals)] = 0
     return residuals
@@ -44,13 +46,15 @@ def peak(x, coefficients, debug=False):
     """
     # Use the scypy find_peaks function to find the peaks
     from scipy.signal import find_peaks
+
     height = coefficients[0]
     threshold = coefficients[1]
     distance = coefficients[2]
     width = coefficients[3]
     # Find the peaks
     peaks, _ = find_peaks(
-        x, height=height, threshold=threshold, distance=distance, width=width)
+        x, height=height, threshold=threshold, distance=distance, width=width
+    )
     return peaks
 
 
@@ -218,7 +222,9 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         return x, y_max
 
     if fit["spec_type"] == "mean":
-        y_mean = np.sum(y * z, axis=1) / np.sum(z, axis=1)
+        y_mean = np.sum(y * z[z > np.max(z_max) * fit["threshold"]], axis=1) / np.sum(
+            z[z > np.max(z_max) * fit["threshold"]], axis=1
+        )
         return x, y_mean
 
     if fit["spec_type"] == "top":
@@ -266,13 +272,13 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         return x, y_top, y_bottom
 
 
-def plot_hist1d_signal(x, y, signal, fig, idx, debug:bool=False):
+def plot_hist1d_signal(x, y, signal, fig, idx, debug: bool = False):
     """
     Given an x and y array, plot 2 histograms in the same plot according to the signal index.
     """
 
-    x, y = remove_nans_and_infs((x, y), debug=debug)
-    signal = remove_nans_and_infs(signal, debug=debug)
+    x, y, output = remove_nans_and_infs((x, y), debug=debug)
+    signal, output = remove_nans_and_infs(signal, output, debug=debug)
 
     if len(x) != len(y):
         print("x and y arrays are not the same length!")
@@ -287,8 +293,20 @@ def plot_hist1d_signal(x, y, signal, fig, idx, debug:bool=False):
     x_array = generate_bins(100, x, debug=debug)
     y_array = generate_bins(100, y, debug=debug)
 
+    if debug and output != None and output != "":
+        rprint(output)
 
-def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=None, norm: bool=True, density: bool=False, debug: bool=False):
+
+def get_hist1d(
+    x,
+    scan_y=None,
+    scan=None,
+    per: Optional[tuple] = (1, 99),
+    acc=None,
+    norm: bool = True,
+    density: bool = False,
+    debug: bool = False,
+):
     """
     Given an x array, generate a 1D histogram.
 
@@ -305,10 +323,11 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
         x (array): x-axis array.
         y (array): y-axis array.
     """
+    output = ""
     h, x_bins, labels = [], [], []
     if scan_y is None:
         if len(x) > 0:
-            x = remove_nans_and_infs(x, debug=debug)
+            x, this_output = remove_nans_and_infs(x, debug=debug)
             if per is not None:
                 x = remove_outliers(x, per=per, debug=debug)
             if isinstance(acc, int):
@@ -316,20 +335,16 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
             else:
                 x_array = acc
 
-            if debug:
-                print(f"Generating histogram from array: {x_array}")
-
-            h, this_x_bins = np.histogram(
-                x, bins=x_array, density=density)
+            h, this_x_bins = np.histogram(x, bins=x_array, density=density)
 
             if norm:
                 h = h / (np.sum(h))
 
+            output += this_output
             return x_array, h, "Spectrum"
 
         else:
-            if debug:
-                rprint("[red]ERROR: Returning empty array![/red]")
+            output += "[red]ERROR: Returning empty array![/red]"
             return None, None, None
 
     else:
@@ -339,26 +354,31 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
             print("x: ", len(x), "\nscan_y: ", len(scan_y))
             raise ValueError
 
-        x, scan_y = remove_nans_and_infs((x, scan_y), debug=debug)
+        x, scan_y, this_output = remove_nans_and_infs((x, scan_y), debug=debug)
+        output += this_output
+
         if per is not None:
             x, scan_y = remove_outliers((x, scan_y), per=per, debug=debug)
+
         x_array = generate_bins(acc[0], x, debug=debug)
         y_array = generate_bins(acc[1], scan_y, debug=debug)
 
         for idx, scan_value in enumerate(scan):
-            if idx < len(scan)-1:
-                scan_bin = scan[idx+1] - scan[idx]
+            if idx < len(scan) - 1:
+                scan_bin = scan[idx + 1] - scan[idx]
             else:
-                scan_bin = scan[idx] - scan[idx-1]
+                scan_bin = scan[idx] - scan[idx - 1]
 
             scan_filter = np.where(
-                (x >= (scan_value-scan_bin/2)) & (x < (scan_value+scan_bin/2)))
+                (x >= (scan_value - scan_bin / 2)) & (x < (scan_value + scan_bin / 2))
+            )
 
             if scan_y is not None:
                 this_filtered_y = scan_y[scan_filter]
                 try:
                     this_h, this_x_bins = np.histogram(
-                        this_filtered_y, bins=y_array, density=density)
+                        this_filtered_y, bins=y_array, density=density
+                    )
                     labels.append(f"{scan_value}")
                     x_array = y_array
 
@@ -368,7 +388,8 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
             else:
                 this_filtered_x = x[scan_filter]
                 this_h, this_x_bins = np.histogram(
-                    this_filtered_x, bins=x_array, density=density)
+                    this_filtered_x, bins=x_array, density=density
+                )
 
             if norm:
                 this_h = this_h / (np.sum(this_h))
@@ -376,10 +397,21 @@ def get_hist1d(x, scan_y=None, scan=None, per: Optional[tuple] = (1, 99), acc=No
             x_bins.append(x_array)
             h.append(this_h)
 
+        if debug and output != None and output != "":
+            rprint(output)
+
         return x_bins, h, labels
 
 
-def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm: bool = True, acc=100, debug: bool = False) -> tuple:
+def get_variable_scan(
+    x,
+    y,
+    variable: str = "energy",
+    per: tuple = (1, 99),
+    norm: bool = True,
+    acc=100,
+    debug: bool = False,
+) -> tuple:
     """
     Given an x array, generate a 1D histogram.
 
@@ -395,7 +427,7 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
         x (array): x-axis array.
         y (array): y-axis array.
     """
-    x, y = remove_nans_and_infs((x, y), debug=debug)
+    x, y, output = remove_nans_and_infs((x, y), debug=debug)
     if per is not None:
         x, y = remove_outliers((x, y), per=per, debug=debug)
 
@@ -403,7 +435,8 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
     if variable == "energy":
         for energy in energy_centers:
             energy_filter = np.where(
-                (x > (energy-ebin/2)) & (x < (energy+ebin/2)))
+                (x > (energy - ebin / 2)) & (x < (energy + ebin / 2))
+            )
             mean_variable_array.append(np.mean(y[energy_filter]))
             std_variable_array.append(np.std(y[energy_filter]))
         values = energy_centers
@@ -423,7 +456,8 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
             bin_width = values[1] - values[0]
             for value in values:
                 value_filter = np.where(
-                    (x > (value-bin_width/2)) & (x < (value+bin_width/2)))
+                    (x > (value - bin_width / 2)) & (x < (value + bin_width / 2))
+                )
                 mean_variable_array.append(np.mean(y[value_filter]))
                 std_variable_array.append(np.std(y[value_filter]))
         else:
@@ -432,18 +466,23 @@ def get_variable_scan(x, y, variable: str = "energy", per: tuple = (1, 99), norm
             return [0], [0], [0]
 
     array = np.array(mean_variable_array)
-    values, array = remove_nans_and_infs((values, array), debug=debug)
+    values, array, output = remove_nans_and_infs((values, array), output, debug=debug)
     array_error = np.array(std_variable_array)
 
     if norm:
         array = array / np.max(array)
         array_error = array_error / np.max(array)
 
+    if debug:
+        rprint(output)
     return values, array, array_error
 
 
 def fit_hist1d(
-    x, y, fit={"func": "polynomial", "trimm": (1, 1), "print": True}, debug=False
+    x,
+    y,
+    fit={"func": "polynomial", "trimm": (1, 1), "show": True, "print": True},
+    debug=False,
 ):
     """
     Given a 1D histogram, fit a function to the histogram.
@@ -459,8 +498,8 @@ def fit_hist1d(
         func (function): function to fit to histogram.
     """
     # Remove x values at the beginning and end of the array
-    x = x[fit["trimm"][0]: -fit["trimm"][1]]
-    y = y[fit["trimm"][0]: -fit["trimm"][1]]
+    x = x[fit["trimm"][0] : -fit["trimm"][1]]
+    y = y[fit["trimm"][0] : -fit["trimm"][1]]
 
     if fit["func"] == "slope1":
         if fit["print"] and debug:
@@ -471,6 +510,7 @@ def fit_hist1d(
 
         labels = ["Intercept"]
         initial_guess = np.random.randn(1)
+        bounds = ([-np.inf], [np.inf])
 
     if fit["func"] == "linear":
         if fit["print"] and debug:
@@ -480,7 +520,8 @@ def fit_hist1d(
             return linear(x, coefficients, debug=debug)
 
         labels = ["Slope", "Intercept"]
-        initial_guess = np.random.randn(2)
+        initial_guess = [1, 0]
+        bounds = ([0, -np.inf], [10, np.inf])
 
     if fit["func"] == "polynomial":
         if fit["print"] and debug:
@@ -489,9 +530,8 @@ def fit_hist1d(
         def func(x, *coefficients, debug=False):
             return polynomial(x, coefficients, debug=debug)
 
-        initial_guess = np.random.randn(
-            3
-        )  # Provide an initial guess for the polynomial coefficients
+        initial_guess = np.random.randn(3)
+        bounds = ([-np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf])
         labels = len(initial_guess) * ["coef"]
 
     if fit["func"] == "exponential":
@@ -503,6 +543,7 @@ def fit_hist1d(
 
         labels = ["Amplitude", "Tau"]
         initial_guess = (1e2, 1e4)
+        bounds = ([0, 0], [np.inf, np.inf])
 
     if fit["func"] == "exponential_offset":
         if fit["print"] and debug:
@@ -513,6 +554,7 @@ def fit_hist1d(
 
         labels = ["Amplitude", "Tau", "Offset"]
         initial_guess = (1e2, 1e4, 0)
+        bounds = ([0, 0, -np.inf], [np.inf, np.inf, np.inf])
 
     if fit["func"] == "gauss":
         if fit["print"] and debug:
@@ -523,15 +565,32 @@ def fit_hist1d(
 
         labels = ["Amplitude", "Mean", "Sigma"]
         initial_guess = (np.max(y), x[np.argmax(y)], np.std(y))
+        bounds = ([0, -np.inf, 0], [np.inf, np.inf, np.inf])
         # initial_guess = (0,0,0)
 
     # Fitting the polynomial line to the data
-    popt, pcov = curve_fit(func, x, y, p0=initial_guess)
-    perr = np.sqrt(np.diag(pcov))
+    try:
+        popt, pcov = curve_fit(func, x, y, p0=initial_guess, bounds=bounds)
+        perr = np.sqrt(np.diag(pcov))
+
+    except RuntimeError:
+        rprint("[yellow][WARNING] Fit could not be performed with bounds![/yellow]")
+        popt, pcov = curve_fit(func, x, y, p0=initial_guess)
+        perr = np.sqrt(np.diag(pcov))
+
     return func, labels, popt, perr
 
 
-def get_hist2d(x, y, per: tuple = (1, 99), acc=50, norm=True, density=False, logz: bool = False, debug: bool = False):
+def get_hist2d(
+    x,
+    y,
+    per: tuple = (1, 99),
+    acc=50,
+    norm=True,
+    density=False,
+    logz: bool = False,
+    debug: bool = False,
+):
     """
     Given x and y arrays, generate a 2D histogram.
 
@@ -546,7 +605,7 @@ def get_hist2d(x, y, per: tuple = (1, 99), acc=50, norm=True, density=False, log
         z (array): 2D histogram array.
     """
     # Compute percentile for x & y array determination using a numpy fucntion
-    x, y = remove_nans_and_infs((x, y), debug=debug)
+    x, y, output = remove_nans_and_infs((x, y), debug=debug)
     if per is not None:
         x, y = remove_outliers((x, y), per=per, debug=debug)
 
@@ -561,19 +620,22 @@ def get_hist2d(x, y, per: tuple = (1, 99), acc=50, norm=True, density=False, log
 
     try:
         h, x_edges, y_edges = np.histogram2d(
-            x, y, bins=[x_array, y_array], density=density)
+            x, y, bins=[x_array, y_array], density=density
+        )
     except TypeError:
-        h, x_edges, y_edges = np.histogram2d(
-            x, y, density=density)
+        h, x_edges, y_edges = np.histogram2d(x, y, density=density)
 
     if logz:
-        h = np.log(h)
+        h = np.log10(h)
     if norm:
         h = h / (np.sum(h))
     # x, y = (x[1:] + x[:-1]) / 2, (y[1:] + y[:-1]) / 2
     x_centers, y_centers = (x_edges[1:] + x_edges[:-1]) / 2, (
         y_edges[1:] + y_edges[:-1]
     ) / 2
+
+    if debug:
+        rprint(output)
     return x_centers, y_centers, h
 
 
@@ -592,7 +654,7 @@ def get_hist2d_fit(
         "func": "linear",
         "threshold": 0.4,
         "range": (0, 10),
-        "print": True,
+        "show": True,
     },
     density=None,
     nanz: bool = False,
@@ -620,29 +682,50 @@ def get_hist2d_fit(
         popt (array): array with the fit parameters.
         perr (array): array with the fit errors.
     """
-    hx, hy, hz = get_hist2d(x, y, per=per, acc=acc,
-                            density=density, logz=logz, debug=debug)
-    if nanz:
-        hz[hz == 0] = np.nan
-    fig.add_trace(
-        go.Heatmap(z=hz.T, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
+    hx, hy, hz = get_hist2d(
+        x, y, per=per, acc=acc, density=density, logz=logz, debug=debug
     )
+    plot_z = hz.T.copy()
+
+    if nanz:
+        plot_z[plot_z == 0] = np.nan
+    if logz:
+        plot_z = np.log10(plot_z)
+
+    fig.add_trace(
+        go.Heatmap(z=plot_z, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
+    )
+
     if fit["spec_type"] == "intercept":
         popt, perr, labels = [], [], []
         intercepts = find_hist2d_intercept(
-            x, y, acc, irange=fit["range"], threshold=fit["threshold"], show=False, debug=debug)
+            x,
+            y,
+            acc,
+            irange=fit["range"],
+            threshold=fit["threshold"],
+            show=False,
+            debug=debug,
+        )
         array = np.arange(np.min(hx), np.max(hx))
         for b in intercepts:
-            fig.add_trace(go.Scatter(x=array, y=array-b, mode="lines", marker=dict(
-                color=fit["color"], opacity=fit["opacity"])), row=idx[0], col=idx[1])
+            fig.add_trace(
+                go.Scatter(
+                    x=array,
+                    y=array - b,
+                    mode="lines",
+                    marker=dict(color=fit["color"], opacity=fit["opacity"]),
+                ),
+                row=idx[0],
+                col=idx[1],
+            )
             popt = np.concatenate((popt, [-b]))
-            perr = np.concatenate((perr, [10/acc]))
+            perr = np.concatenate((perr, [10 / acc]))
             labels = np.concatenate((labels, ["Intercept"]))
 
     else:
         x_spec, y_spec = spectrum_hist2d(hx, hy, hz, fit=fit, debug=debug)
-        func, labels, popt, perr = fit_hist1d(
-            x_spec, y_spec, fit=fit, debug=debug)
+        func, labels, popt, perr = fit_hist1d(x_spec, y_spec, fit=fit, debug=debug)
 
         fig = plot_hist2d_fit(
             fig=fig,
@@ -657,10 +740,8 @@ def get_hist2d_fit(
         )
 
     if zoom:
-        fig.update_xaxes(range=[np.min(hx), np.max(hx)],
-                         row=idx[0], col=idx[1])
-        fig.update_yaxes(range=[np.min(hy), np.max(hy)],
-                         row=idx[0], col=idx[1])
+        fig.update_xaxes(range=[np.min(hx), np.max(hx)], row=idx[0], col=idx[1])
+        fig.update_yaxes(range=[np.min(hy), np.max(hy)], row=idx[0], col=idx[1])
 
     if fit["print"]:
         debug_text = [
@@ -672,25 +753,32 @@ def get_hist2d_fit(
 
 
 def plot_hist2d_fit(
-    fig, idx, func, popt, perr, x, y, fit={"color": "grey", "opacity": 1}, debug=False
+    fig,
+    idx,
+    func,
+    popt,
+    perr,
+    x,
+    y,
+    fit={"color": "grey", "opacity": 1, "show": False},
+    debug=False,
 ):
     fig.add_trace(
         go.Scatter(
             x=x,
             y=func(x, *popt),
             mode="lines",
-            marker=dict(color=fit["color"],
-                        opacity=fit["opacity"]),
+            marker=dict(color=fit["color"], opacity=fit["opacity"]),
             name="Fit",
         ),
         row=idx[0],
         col=idx[1],
     )
-    if debug:
+    if fit["show"]:
         fig.add_trace(
             go.Scatter(
-                x=x,
-                y=y,
+                x=x[fit["trimm"][0] : -fit["trimm"][1]],
+                y=y[fit["trimm"][0] : -fit["trimm"][1]],
                 mode="markers",
                 marker=dict(color=fit["color"], opacity=fit["opacity"]),
                 name="Spectrum",
@@ -753,8 +841,7 @@ def get_hist1d_fit(
                     mode="lines+markers",
                     line=dict(color=fit["color"], shape="hvh"),
                     name="Fit",
-                    error_y=dict(type="data", array=func(
-                        x, *perr), visible=True),
+                    error_y=dict(type="data", array=func(x, *perr), visible=True),
                 ),
                 row=idx[0],
                 col=idx[1],
@@ -774,7 +861,16 @@ def get_hist1d_fit(
     return fig, popt, perr
 
 
-def find_hist2d_intercept(x, y, acc: int, irange: tuple = (0, 10), threshold: float = .6, slope: float = 1, show=False, debug=False) -> list:
+def find_hist2d_intercept(
+    x,
+    y,
+    acc: int,
+    irange: tuple = (0, 10),
+    threshold: float = 0.6,
+    slope: float = 1,
+    show=False,
+    debug=False,
+) -> list:
     """
     Given x and y arrays, find the intercepts of all crests in the heatmap.
 
@@ -793,8 +889,8 @@ def find_hist2d_intercept(x, y, acc: int, irange: tuple = (0, 10), threshold: fl
     """
     intercepts, counts = [], []
     for idx, b in enumerate(np.linspace(irange[0], irange[1], acc)):
-        bins, bar = np.histogram((y+b)/(slope*x), bins=acc)
-        if 1-1/acc < bar[np.argmax(bins)] < 1+1/acc:
+        bins, bar = np.histogram((y + b) / (slope * x), bins=acc)
+        if 1 - 1 / acc < bar[np.argmax(bins)] < 1 + 1 / acc:
             if len(intercepts) == 0:
                 intercepts.append(b)
                 counts.append(bins[np.argmax(bins)])
@@ -806,8 +902,7 @@ def find_hist2d_intercept(x, y, acc: int, irange: tuple = (0, 10), threshold: fl
                         intercepts[-1] = b
                         counts[-1] = bins[np.argmax(bins)]
                         if show:
-                            plt.step(bar[:-1], bins, where="post",
-                                     label="b = %f" % b)
+                            plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
                     else:
                         if debug:
                             print("Skipping", b, intercepts[-1])
@@ -815,8 +910,7 @@ def find_hist2d_intercept(x, y, acc: int, irange: tuple = (0, 10), threshold: fl
                     intercepts.append(b)
                     counts.append(bins[np.argmax(bins)])
                     if show:
-                        plt.step(bar[:-1], bins, where="post",
-                                 label="b = %f" % b)
+                        plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
 
     if show:
         plt.xlabel(r"($E_{e}$+const) / $E_{\nu}$")
@@ -843,16 +937,15 @@ def get_hist1d_diff(x, y, offset: float = 0, norm: bool = True, debug=False) -> 
         counts: array of counts.
     """
     intercept, counts = [], []
-    for b in np.arange(0, np.max(x-y), 0.1):
-        diagonal_filter = np.where((x > y+b-0.05) * (
-            x < y+b+0.05))
+    for b in np.arange(0, np.max(x - y), 0.1):
+        diagonal_filter = np.where((x > y + b - 0.05) * (x < y + b + 0.05))
         count = len(diagonal_filter[0])
-        intercept.append(b-offset)
+        intercept.append(b - offset)
         counts.append(count)
     intercept = np.array(intercept)
     counts = np.array(counts)
     if norm:
-        count = counts/np.sum(counts)
+        count = counts / np.sum(counts)
 
     return intercept, counts
 
@@ -863,15 +956,24 @@ def generate_bins(acc, x, debug=False):
 
     if type(acc) == int:
         try:
-            if type(x[0]) == float or type(x[0]) == np.float64 or type(x[0]) == np.float32 or type(x[0]) == np.float16:
+            if (
+                type(x[0]) == float
+                or type(x[0]) == np.float64
+                or type(x[0]) == np.float32
+                or type(x[0]) == np.float16
+            ):
                 bin_width = (np.max(x) - np.min(x)) / acc
-                x_array = np.arange(np.min(x), np.max(x)+bin_width, bin_width)
-            elif type(x[0]) == int or type(x[0]) == np.int64 or type(x[0]) == np.int32 or type(x[0]) == np.int16:
-                x_array = np.arange(np.min(x)-acc/2, np.max(x) + 1, acc)
+                x_array = np.arange(np.min(x), np.max(x) + bin_width, bin_width)
+            elif (
+                type(x[0]) == int
+                or type(x[0]) == np.int64
+                or type(x[0]) == np.int32
+                or type(x[0]) == np.int16
+            ):
+                x_array = np.arange(np.min(x) - acc / 2, np.max(x) + 1, acc)
             else:
                 if debug:
-                    rprint(
-                        f"[red]ERROR: x type {type(x[0])} not supported![/red]")
+                    rprint(f"[red]ERROR: x type {type(x[0])} not supported![/red]")
                 return None
 
         except ValueError:
@@ -889,13 +991,14 @@ def generate_bins(acc, x, debug=False):
     else:
         if debug:
             rprint(
-                f"[yellow]WARNING: No known binning type, returning {type(acc)}: {acc}![/yellow]")
+                f"[yellow]WARNING: No known binning type, returning {type(acc)}: {acc}![/yellow]"
+            )
         return acc
 
     return x_array
 
 
-def remove_nans_and_infs(data, debug=False) -> tuple:
+def remove_nans_and_infs(data, output: Optional[bool] = None, debug=False) -> tuple:
     """
     Given an x and y array, remove the values that correspond to inf or nan values.
 
@@ -908,26 +1011,25 @@ def remove_nans_and_infs(data, debug=False) -> tuple:
         x (array): x-axis array.
         y (array): y-axis array.
     """
-    if debug:
-        rprint(
-            f"[cyan]INFO: Removing nans and infs from data of size {len(data)}...[/cyan]")
+    if output is None:
+        output = ""
+
+    # if debug:
+    #     output += f"[cyan]INFO: Removing nans and infs from data of size {len(data)}...[/cyan]"
+
     if len(data) > 2:
         x = data
         initial_len = len(x)
         x = np.asarray(x)
 
-        if debug:
-            rprint(f"[cyan]INFO: Removing outliers from x array...[/cyan]")
-
         if np.any(np.isinf(x)) or np.any(np.isnan(x)):
             x = x[np.where(np.isinf(x) == False)]
             x = x[np.where(np.isnan(x) == False)]
             reduced_len = len(x)
-            if debug:
-                rprint(
-                    f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+            # if debug:
+            #     output += f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]"
 
-        return x
+        return x, output
 
     elif len(data) == 2 and len(data[0]) == len(data[1]):
         x, y = data
@@ -935,8 +1037,8 @@ def remove_nans_and_infs(data, debug=False) -> tuple:
         x = np.asarray(x)
         y = np.asarray(y)
 
-        if debug:
-            rprint(f"[cyan]INFO: Removing outliers from x and y arrays...[/cyan]")
+        # if debug:
+        #     output += f"[cyan]INFO: Removing outliers from x and y arrays...[/cyan]"
 
         if np.any(np.isinf(x)) or np.any(np.isnan(x)):
             x = x[np.where(np.isinf(x) == False)]
@@ -944,9 +1046,9 @@ def remove_nans_and_infs(data, debug=False) -> tuple:
             x = x[np.where(np.isnan(x) == False)]
             y = y[np.where(np.isnan(x) == False)]
             reduced_len = len(x)
+
             if debug:
-                rprint(
-                    f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
+                output += f"[yellow]WARNING: x contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]"
 
         if np.any(np.isinf(y)) or np.any(np.isnan(y)):
             y = y[np.where(np.isinf(y) == False)]
@@ -954,24 +1056,24 @@ def remove_nans_and_infs(data, debug=False) -> tuple:
             y = y[np.where(np.isnan(y) == False)]
             x = x[np.where(np.isnan(y) == False)]
             reduced_len = len(y)
-            if debug:
-                rprint(
-                    f"[yellow]WARNING: y contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]")
 
-        return x, y
+            if debug:
+                output += f"[yellow]WARNING: y contains inf or nan values! Reduced size from {initial_len} to {reduced_len}[/yellow]"
+
+        return x, y, output
 
     elif len(data) == 0:
-        if debug:
-            rprint("[yellow]WARNING: Size 0 data![/yellow]")
-        return data
+        output += "[yellow]WARNING: Size 0 data![/yellow]"
+        return data, output
 
     else:
-        if debug:
-            rprint("[red]ERROR: Could not remove outliers![/red]")
-        return data
+        output += "[red]ERROR: Could not remove outliers![/red]"
+        return data, output
 
 
-def remove_outliers(data: tuple, per: Optional[tuple] = (1, 99), debug: bool = False) -> tuple:
+def remove_outliers(
+    data: tuple, per: Optional[tuple] = (1, 99), debug: bool = False
+) -> tuple:
     """
     Given an x and y array, remove the values that correspond to outliers.
 
@@ -991,14 +1093,11 @@ def remove_outliers(data: tuple, per: Optional[tuple] = (1, 99), debug: bool = F
         x = data
         try:
             lims = np.percentile(x, per, axis=0, keepdims=False)
-            reduced_x = [
-                i
-                for i in x
-                if lims[0] <= i <= lims[1]
-            ]
+            reduced_x = [i for i in x if lims[0] <= i <= lims[1]]
             if debug:
                 rprint(
-                    f'{type(x)} x\n[cyan]INFO: Percentile limits: {str(lims)} reducing array to {100*len(reduced_x)/len(x):.1f}%[/cyan]')
+                    f"[cyan]INFO: Percentile limits: {str(lims)} reducing array to {100*len(reduced_x)/len(x):.1f}%[/cyan]"
+                )
             x = np.asarray(reduced_x)
 
         except:
@@ -1023,7 +1122,8 @@ def remove_outliers(data: tuple, per: Optional[tuple] = (1, 99), debug: bool = F
             ]
             if debug:
                 rprint(
-                    f'{type(x)} x\n{type(y)} {y}\n[cyan]INFO: Percentile limits: {str(lims)} reducing arrays to x:{100*len(reduced_x)/len(x):.1f}% and y:{100*len(reduced_y)/len(y):.1f}%[/cyan]')
+                    f"[cyan]INFO: Percentile limits: {str(lims)} reducing arrays to x:{100*len(reduced_x)/len(x):.1f}% and y:{100*len(reduced_y)/len(y):.1f}%[/cyan]"
+                )
             x, y = np.asarray(reduced_x), np.asarray(reduced_y)
 
         except:

@@ -2,6 +2,7 @@ import numba
 import numpy as np
 
 from typing import Optional
+from itertools import product
 from lib.workflow.functions import remove_branches, get_param_dict, reshape_array
 
 from src.utils import get_project_root
@@ -30,22 +31,31 @@ def compute_adjcl_basics(run, configs, params: Optional[dict] = None, rm_branche
         return [np.sum(arr == i) for i in range(length)]
 
     # New branches
-    new_branches = ["AdjClNum", "TotalAdjClCharge", "MaxAdjClCharge",
-                    "MeanAdjClCharge", "MeanAdjClR", "MeanAdjClTime"]
-    new_vector_branches = ["AdjClSameGenNum",
-                           "TotalAdjClSameGenCharge", "MaxAdjClSameGenCharge", "MeanAdjClSameGenCharge"]
+    new_int_branches = ["AdjClNum", "AdjClSameGenNum"]
+    
+    new_branches = ["TotalAdjClCharge", "MaxAdjClCharge",
+                    "MeanAdjClCharge", "MeanAdjClR", "MeanAdjClTime", "TotalAdjClSameGenCharge", "MaxAdjClSameGenCharge", "MeanAdjClSameGenCharge"]
 
+    radial_limits = np.arange(0, 120, 20)
+    new_radial_int_branches = ["TotalAdjClNum", "TotalAdjClSameGenNum"]
+    new_radial_float_branches = ["TotalAdjClCharge", "TotalAdjClSameGenCharge"]
+
+    
+    for branch in new_int_branches:
+        run["Reco"][branch] = np.zeros(
+            len(run["Reco"]["Event"]), dtype=int)
     for branch in new_branches:
         run["Reco"][branch] = np.zeros(
             len(run["Reco"]["Event"]), dtype=np.float32)
 
-    run["Reco"][new_vector_branches[0]] = np.zeros(
-        len(run["Reco"]["Event"]), dtype=int)
-    for branch in new_vector_branches[1:]:
-        run["Reco"][branch] = np.zeros(
-            len(run["Reco"]["Event"]), dtype=np.float32
-        )
-
+    for limit, branch in product(radial_limits, new_radial_int_branches):
+        run["Reco"][f"{branch}{limit}"] = np.zeros(
+            (len(run["Reco"]["Event"])), dtype=int)
+    
+    for limit, branch in product(radial_limits, new_radial_float_branches):
+        run["Reco"][f"{branch}{limit}"] = np.zeros(
+            (len(run["Reco"]["Event"])), dtype=np.float32)
+    
     run["Reco"]["AdjClGenNum"] = np.apply_along_axis(
         count_occurrences,
         arr=run["Reco"]["AdjClGen"],
@@ -54,6 +64,11 @@ def compute_adjcl_basics(run, configs, params: Optional[dict] = None, rm_branche
     )
 
     run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0, axis=1)
+    # Compute the number of adjacent clusters per radial limit
+    for limit in radial_limits:
+        run["Reco"][f"{new_radial_int_branches[0]}{limit}"] = np.sum(
+            (run["Reco"]["AdjClR"] < limit) * (run["Reco"]["AdjClR"] > 0), axis=1
+        )
 
     for config in configs:
         info, params, output = get_param_dict(
@@ -77,14 +92,31 @@ def compute_adjcl_basics(run, configs, params: Optional[dict] = None, rm_branche
         run["Reco"]["MeanAdjClTime"][idx] = np.mean(
             run["Reco"]["AdjClTime"][idx], axis=1
         )
+
         converted_array = reshape_array(
             run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0]))
 
         gen_idx = converted_array == run["Reco"]["AdjClGen"][idx]
+        
         run["Reco"]["AdjClSameGenNum"][idx] = np.sum(gen_idx, axis=1)
+        for limit in radial_limits:
+            run["Reco"][f"{new_radial_int_branches[1]}{limit}"][idx] = np.sum(
+                (run["Reco"]["AdjClR"][idx] < limit) * (run["Reco"]["AdjClR"][idx] > 0) * gen_idx, axis=1
+            )
+
         run["Reco"]["TotalAdjClSameGenCharge"][idx] = np.sum(
             run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1
         )
+        for limit in radial_limits:
+            rad_idx = (run["Reco"]["AdjClR"][idx] < limit) * (run["Reco"]["AdjClR"][idx] > 0)
+
+            run["Reco"][f"{new_radial_float_branches[1]}{limit}"][idx] = np.sum(
+                run["Reco"]["AdjClCharge"][idx] * gen_idx * rad_idx, axis=1
+            )
+            run["Reco"][f"{new_radial_float_branches[0]}{limit}"][idx] = np.sum(
+                run["Reco"]["AdjClCharge"][idx] * rad_idx, axis=1
+            )
+
         run["Reco"]["MaxAdjClSameGenCharge"][idx] = np.max(
             run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1
         )
@@ -94,7 +126,7 @@ def compute_adjcl_basics(run, configs, params: Optional[dict] = None, rm_branche
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tAdjCl basic computation \t-> Done!\n"
-    return run, output, new_branches+new_vector_branches
+    return run, output, new_branches
 
 
 def compute_adjcl_advanced(run, configs, params: Optional[dict] = None, rm_branches=False, output: Optional[str] = None, debug=False):

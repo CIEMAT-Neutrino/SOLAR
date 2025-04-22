@@ -19,45 +19,91 @@ from src.utils import get_project_root
 root = get_project_root()
 
 
-def prepare_file_save(path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, filetype: str = "png", debug: bool = False):
+def prepare_file_save(
+    path: str,
+    config: Optional[str] = None,
+    name: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    filename: str = "newfigure",
+    rm: bool = False,
+    filetype: str = "png",
+    debug: bool = False,
+):
     """
     Prepare the path to save a file.
     """
     output = ""
-    if config is None:
+    exists = False
+    if config is None and name is None and subfolder is None:
         save_path = path
         filename = f"{filename}.{filetype}"
-    
+
+    elif config is None and name is None and subfolder is not None:
+        save_path = f"{path}/{subfolder}"
+        filename = f"{filename}.{filetype}"
+
+    elif config is None and name is not None and subfolder is None:
+        save_path = f"{path}/{name}"
+        filename = f"{name}_{filename}.{filetype}"
+
+    elif config is None and name is not None and subfolder is not None:
+        save_path = f"{path}/{name}/{subfolder}"
+        filename = f"{name}_{filename}.{filetype}"
+
+    elif config is not None and name is None and subfolder is None:
+        save_path = f"{path}/{config}"
+        filename = f"{config}_{filename}.{filetype}"
+
+    elif config is not None and name is None and subfolder is not None:
+        save_path = f"{path}/{config}/{subfolder}"
+        filename = f"{config}_{filename}.{filetype}"
+
+    elif config is not None and name is not None and subfolder is None:
+        save_path = f"{path}/{config}/{name}"
+        filename = f"{config}_{name}_{filename}.{filetype}"
+
+    elif config is not None and name is not None and subfolder is not None:
+        save_path = f"{path}/{config}/{name}/{subfolder}"
+        filename = f"{config}_{name}_{filename}.{filetype}"
+
     else:
-        if name is None:
-            save_path = f"{path}/{config}"
-            filename = f"{config}_{filename}.{filetype}"
-        else:
-            save_path = f"{path}/{config}/{name}"
-            filename = f"{config}_{name}_{filename}.{filetype}"
+        save_path = f"{path}/{config}/{name}"
+        filename = f"{config}_{name}_{filename}.{filetype}"
+
     try:
         os.makedirs(f"{save_path}")
-    
+
     except FileExistsError:
         if debug:
-            output += f"[cyan][INFO]: Data already exists![/cyan]\n"
+            pass
+            # output += f"[cyan][INFO] Data already exists![/cyan]\n"
 
     # Check if file already exists
     if os.path.isfile(f"{save_path}/{filename}"):
         if rm:
-            os.remove(
-                f"{save_path}/{filename}")
+            os.remove(f"{save_path}/{filename}")
             if debug:
-                output += f"Removed existing file in: {save_path}/{filename}\n"
+                output += f"Removed existing file - "
         else:
-            output += f"[yellow][WARNING]: Rewrite set to {False}. Skipping...[/yellow]\n"
-    
-    if debug: 
-        rprint(output)
-    return f"{save_path}/{filename}"
+            exists = True
+            output += (
+                f"[yellow][WARNING] Rewrite set to {False}. Skipping...[/yellow]\n"
+            )
+
+    return f"{save_path}/{filename}", exists, output
 
 
-def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdata", rm: bool = False, filetype: str = "pkl", debug: bool = False) -> None:
+def save_pkl(
+    data,
+    path: str,
+    config: Optional[str] = None,
+    name: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    filename: str = "newdata",
+    rm: bool = False,
+    filetype: str = "pkl",
+    debug: bool = False,
+) -> None:
     """
     Save the figure in the path
 
@@ -66,15 +112,38 @@ def save_pkl(data, path: str, config: Optional[str] = None, name: Optional[str] 
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
+    filepath, exists, output = prepare_file_save(
+        path=path,
+        config=config,
+        name=name,
+        subfolder=subfolder,
+        filename=filename,
+        rm=rm,
+        filetype=filetype,
+        debug=debug,
+    )
+
+    if exists:
+        if debug:
+            print("File already exists. Skipping...")
+        return
 
     pickle.dump(data, open(f"{filepath}", "wb"))
     if debug:
-        rprint(
-            f"Saved data in: {filepath}")
+        rprint(f"Saved data in: {filepath}")
 
 
-def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newdf", rm: bool = False, filetype: str = "pkl", debug: bool = False) -> None:
+def save_df(
+    df,
+    path: str,
+    config: Optional[str] = None,
+    name: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    filename: str = "newdf",
+    rm: bool = False,
+    filetype: str = "pkl",
+    debug: bool = False,
+) -> None:
     """
     Save the figure in the path
 
@@ -83,21 +152,43 @@ def save_df(df, path: str, config: Optional[str] = None, name: Optional[str] = N
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
+    filepath, exists, output = prepare_file_save(
+        path=path,
+        config=config,
+        name=name,
+        subfolder=subfolder,
+        filename=filename,
+        rm=rm,
+        filetype=filetype,
+        debug=debug,
+    )
 
+    if exists:
+        if debug:
+            print("File already exists. Skipping...")
+        return
     # Check type of figure to select the correct saving method
     if type(df) == pd.DataFrame:
         df.to_pickle(f"{filepath}")
         if debug:
-            rprint(
-                f"Saved dataframe in: {filepath}")
-            
+            rprint(f"Saved dataframe in: {filepath}")
+
     else:
         rprint("The input df is not a known type: ", type(df))
         # fig.savefig(path + ".{output}")
 
 
-def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str] = None, filename: str = "newfigure", rm: bool = False, filetype: str = "png", debug: bool = False) -> None:
+def save_figure(
+    fig,
+    path: str,
+    config: Optional[str] = None,
+    name: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    filename: str = "newfigure",
+    rm: bool = False,
+    filetype: str = "png",
+    debug: bool = False,
+) -> None:
     """
     Save the figure in the path
 
@@ -106,23 +197,35 @@ def save_figure(fig, path: str, config: Optional[str] = None, name: Optional[str
         path (str): path to save the figure
         debug (bool): if True, the debug mode is activated (default: False)
     """
-    filepath = prepare_file_save(path=path, config=config, name=name, filename=filename, rm=rm, filetype=filetype, debug=debug)
+    filepath, exists, output = prepare_file_save(
+        path=path,
+        config=config,
+        name=name,
+        subfolder = subfolder,
+        filename=filename,
+        rm=rm,
+        filetype=filetype,
+        debug=debug,
+    )
+
+    if exists:
+        rprint(output + "File already exists. Skipping...")
+        return
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
-        fig.write_image(
-            f"{filepath}")
-        if debug:
-            rprint(
-                f"Saved figure in: {filepath}")
+        fig.write_image(f"{filepath}")
+        output += f"Saved figure in: {filepath}"
 
     elif type(fig) == plt.Figure:
         fig.savefig(f"{filepath}")
-        if debug:
-            rprint(
-                f"Saved figure in: {filepath}")
+        output += f"Saved figure in: {filepath}"
+
     else:
-        rprint("The input figure is not a known type: ", type(fig))
+        output += f"The input figure is not a known type: {type(fig)}"
+
+    if debug and output != "":
+        rprint(output)
 
 
 def print_colored(string, color, bold=False, italic=False, debug=False):
@@ -179,7 +282,7 @@ def print_colored(string, color, bold=False, italic=False, debug=False):
     return 0
 
 
-def root2npy(root_info, user_input, trim:bool=False, debug=False):
+def root2npy(root_info, user_input, trim: bool = False, debug=False):
     """
     Dumper from .root format to npy files. Input are root input file, path and npy outputfile as strings
 
@@ -193,11 +296,12 @@ def root2npy(root_info, user_input, trim:bool=False, debug=False):
     """
     path = root_info["Path"]
     name = root_info["Name"]
-    rprint("Converting from: " +
-           root_info["Path"] + root_info["Name"] + ".root")
+    rprint("Converting from: " + root_info["Path"] + root_info["Name"] + ".root")
     # Check if the file exists
     if not os.path.isfile(root_info["Path"] + root_info["Name"] + ".root"):
-        rprint(f"[red]ERROR: File {root_info['Path'] + root_info['Name'] + '.root'} not found![/red]")
+        rprint(
+            f"[red]ERROR: File {root_info['Path'] + root_info['Name'] + '.root'} not found![/red]"
+        )
         return
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"]:
@@ -222,17 +326,15 @@ def root2npy(root_info, user_input, trim:bool=False, debug=False):
                 )
 
                 # if "Map" not in branch:
-                this_array = f[root_info["Folder"] +
-                               "/" + tree][branch].array()
+                this_array = f[root_info["Folder"] + "/" + tree][branch].array()
                 if trim != False and debug:
                     rprint("Selected trimming value: ", trim)
-                resized_array = resize_subarrays(
-                    this_array, 0, trim=trim, debug=debug)
+                resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
                 save2pnfs(
                     path + name + "/" + out_folder + "/" + branch + ".npy",
                     user_input,
                     resized_array,
-                    debug
+                    debug,
                 )
                 if debug:
                     rprint(resized_array)
@@ -275,8 +377,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
     except ValueError:
         check_expand = True
         if debug:
-            rprint(
-                f"[yellow]-> Array needs resizing for numpy conversion![/yellow]")
+            rprint(f"[yellow]-> Array needs resizing for numpy conversion![/yellow]")
 
     if check_expand:
         expand = False
@@ -285,7 +386,8 @@ def resize_subarrays(array, value, trim=False, debug=False):
             mean_len = sum(map(len, array)) / len(array)
             if debug:
                 rprint(
-                    f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]")
+                    f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]"
+                )
 
             if max_len != mean_len:
                 expand = True
@@ -298,8 +400,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
             expand = True
 
         if expand:
-            tot_array = resize_subarrays_fixed(
-                array, value, max_len, debug=debug)
+            tot_array = resize_subarrays_fixed(array, value, max_len, debug=debug)
         else:
             tot_array = array
     else:
@@ -326,24 +427,26 @@ def resize_subarrays_fixed(array, value, max_len, debug: bool = False):
     """
     try:
         tot_array = [
-            this_array.tolist()[:max_len]
-            if len(this_array.tolist()) > max_len
-            else this_array.tolist() + [value] * (max_len - len(this_array))
+            (
+                this_array.tolist()[:max_len]
+                if len(this_array.tolist()) > max_len
+                else this_array.tolist() + [value] * (max_len - len(this_array))
+            )
             for this_array in array
         ]
         if debug:
-            rprint(
-                f"[green]-> Successfully resized array to {max_len}[/green]")
+            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
     except AttributeError:
         tot_array = [
-            this_array[:max_len]
-            if len(this_array) > max_len
-            else this_array + [value] * (max_len - len(this_array))
+            (
+                this_array[:max_len]
+                if len(this_array) > max_len
+                else this_array + [value] * (max_len - len(this_array))
+            )
             for this_array in array
         ]
         if debug:
-            rprint(
-                f"[green]-> Successfully resized array to {max_len}[/green]")
+            rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
     except TypeError:
         tot_array = array
         if debug:
@@ -406,12 +509,8 @@ def get_tree_info(root_file, debug=False):
         for i in root_file.classnames()
         if root_file.classnames()[i] == "TTree"
     ]
-    rprint(
-        f"[magenta]The input root file has a TDirectory: {directory}[/magenta]"
-    )
-    rprint(
-        f"[magenta]The input root file has {len(tree)} TTrees: {tree}[/magenta]"
-    )
+    rprint(f"[magenta]The input root file has a TDirectory: {directory}[/magenta]")
+    rprint(f"[magenta]The input root file has {len(tree)} TTrees: {tree}[/magenta]")
 
     return directory, tree
 
@@ -441,8 +540,7 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
         default = input("Continue with default processing? (y/n): ")
         if default.lower() in ["y", "yes"]:
             if len(trees) == 2:
-                rename_default = input(
-                    "Use default tree names (Truth - Reco)? (y/n): ")
+                rename_default = input("Use default tree names (Truth - Reco)? (y/n): ")
                 if rename_default.lower() in ["y", "yes"]:
                     out_folder = ["Truth", "Reco"]
                     input_loop = False
@@ -513,12 +611,15 @@ def get_root_info(name: str, path: str, user_input: dict, debug=False):
                 branches.append(branch)  # save the branch name in a list
 
         # Check if file already exists
-        save2pnfs(f"{path}{name}/{out_folder[i]}/Branches.npy",
-                  user_input, branches, user_input["debug"])
+        save2pnfs(
+            f"{path}{name}/{out_folder[i]}/Branches.npy",
+            user_input,
+            branches,
+            user_input["debug"],
+        )
         output[tree] = np.asarray(branches, dtype=object)
         output["TreeNames"][tree] = out_folder[i]
-        save2pnfs(f"{path}{name}/TTrees.npy", user_input,
-                  output, user_input["debug"])
+        save2pnfs(f"{path}{name}/TTrees.npy", user_input, output, user_input["debug"])
 
     if debug:
         rprint(output)
@@ -568,8 +669,7 @@ def get_branches(name: str, path: str, debug: bool = False):
         branch_dict (dict): dictionary with the branches of the root file
     """
     branch_dict = dict()
-    tree_info = np.load(path + name + "/" + "TTrees.npy",
-                        allow_pickle=True).item()
+    tree_info = np.load(path + name + "/" + "TTrees.npy", allow_pickle=True).item()
 
     for tree in tree_info["TreeNames"].keys():
         branch_dict[tree_info["TreeNames"][tree]] = tree_info[tree]
@@ -591,8 +691,7 @@ def get_branches2use(run, debug=False):
     ]
     if debug:
         print_colored(
-            "\nFounded keys " + str(branches) +
-            " to construct the dictionaries.",
+            "\nFounded keys " + str(branches) + " to construct the dictionaries.",
             "DEBUG",
         )
     return branches
@@ -644,8 +743,7 @@ def remove_processed_branches(root_info, debug=False):
         root_info[tree] = np.delete(root_info[tree], remove_idx)
         if debug:
             print_colored(
-                "New branch list to process for Tree %s: %s" % (
-                    tree, root_info[tree]),
+                "New branch list to process for Tree %s: %s" % (tree, root_info[tree]),
                 color="SUCCESS",
             )
     return root_info
@@ -681,18 +779,17 @@ def load_multi(
     run = dict()
     ref_branch = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
     for idx, config in enumerate(configs):
-        info = json.load(
-            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
 
         if name_prefix is None:
             name_prefix = info["NAME"]
 
         geo = info["GEOMETRY"]
         vers = info["VERSION"]
-        
-        path = f'{info["PATH"]}/{geo}/{vers}/'
+
+        path = f'{info["PATH"]}/data/{geo}/{vers}/'
         filepath = f"{path}{name_prefix}"
-        
+
         bkg_dict, color_dict = get_bkg_config(info)
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
@@ -702,12 +799,12 @@ def load_multi(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
                 if debug:
-                    output += f"[cyan][INFO]: Loaded all branches for {config}: {name}![/cyan]\n"
-            
+                    output += f"[cyan][INFO] Loaded all branches for {config}: {name}![/cyan]\n"
+
             elif preset is not None:
                 if debug:
-                    output += f"[cyan][INFO]: Loaded preset branches {config}: {name}![/cyan]\n"
-                
+                    output += f"[cyan][INFO] Loaded preset branches {config}: {name}![/cyan]\n"
+
                 branches_dict = get_workflow_branches(
                     trees=tree_labels, workflow=preset, debug=debug
                 )  # Get PRESET branches
@@ -715,7 +812,7 @@ def load_multi(
             else:
                 branches_dict = branches  # Get CUSTOMIZED branches from the input
                 if debug:
-                    rprint(f"[cyan][INFO]: Loaded custom branches![/cyan]\n")
+                    rprint(f"[cyan][INFO] Loaded custom branches![/cyan]\n")
 
             for tree in branches_dict.keys():
                 # print(f"Loading branches for {tree} tree...")
@@ -739,11 +836,14 @@ def load_multi(
                                 )
                                 # print(f"Loaded {config} events:\t{len(run[tree][identifiyer_label])}\t from {tree} -> {name}")
                             except KeyError:
-                                rprint(f"[red][ERROR]: Tree {tree} has no entry in {ref_branch}! Skiping...[/red]")
+                                rprint(
+                                    f"[red][ERROR] Tree {tree} has no entry in {ref_branch}! Skiping...[/red]"
+                                )
                                 continue
 
                             run[tree][identifiyer_label] = np.asarray(
-                                run[tree][identifiyer_label], dtype=str)
+                                run[tree][identifiyer_label], dtype=str
+                            )
                     else:
                         for identifiyer_label, identifiyer in zip(
                             ["Name", "Geometry", "Version"], [name, geo, vers]
@@ -782,8 +882,7 @@ def load_multi(
                             run[tree]["GeneratorLabel"] = label_branch
                         else:
                             run[tree]["GeneratorLabel"] = np.concatenate(
-                                (run[tree]["GeneratorLabel"],
-                                    label_branch), axis=0
+                                (run[tree]["GeneratorLabel"], label_branch), axis=0
                             )
                     if generator_swap == True:
                         if key == "Generator":
@@ -791,14 +890,15 @@ def load_multi(
                                 output += f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
                                 mapped_gen = inv_bkg_dict[name]
                                 # branch[branch == 2] = mapped_gen # Map the generator to the correct background
-                                branch[
-                                    :
-                                ] = mapped_gen  # Map the generator to the correct background
+                                branch[:] = (
+                                    mapped_gen  # Map the generator to the correct background
+                                )
 
                         if key == "TruthPart" and name in bkg_dict.values():
                             if debug:
                                 print(
-                                    f"-> Changing the generator for {name} to {inv_bkg_dict[name]}")
+                                    f"-> Changing the generator for {name} to {inv_bkg_dict[name]}"
+                                )
                             mapped_gen = inv_bkg_dict[name]
                             branch = resize_subarrays_fixed(
                                 branch,
@@ -818,14 +918,13 @@ def load_multi(
                                 (run[tree][key], branch), axis=0
                             )
                         except ValueError:
-                            run[tree][key] = (
-                                run[tree][key].tolist() +
-                                branch.tolist()
-                            )
+                            run[tree][key] = run[tree][key].tolist() + branch.tolist()
                             run[tree][key] = resize_subarrays(
                                 run[tree][key], 0, trim=False, debug=debug
                             )
-                    if (key == "Event" and tree != "Config") or (key == "Geometry" and tree == "Config"):
+                    if (key == "Event" and tree != "Config") or (
+                        key == "Geometry" and tree == "Config"
+                    ):
                         output += f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
 
             if debug and len(files_notfound) > 0:
@@ -836,8 +935,9 @@ def load_multi(
             try:
                 output = output + f"\nKeys extracted from the {tree} tree:\n"
                 output = output + str(run[tree].keys())
-                output = output + \
-                    f"\n-> # {tree} entries: %i\n" % len(run[tree][ref_branch[tree]])
+                output = output + f"\n-> # {tree} entries: %i\n" % len(
+                    run[tree][ref_branch[tree]]
+                )
             except KeyError:
                 output = output + f"- No {tree} tree found!\n"
 
@@ -859,7 +959,7 @@ def save_proccesed_variables(run, info={}, force=False, debug=False):
     """
 
     aux = copy.deepcopy(run)
-    path = f'{info["PATH"]}/{info["GEOMETRY"]}/{info["VERSION"]}/{info["NAME"]}/'
+    path = f'{info["PATH"]}/data/{info["GEOMETRY"]}/{info["VERSION"]}/{info["NAME"]}/'
     branches = get_branches2use(
         run, debug=debug
     )  # Load the branches of the TTree not in ['Name', 'Path', 'Labels', 'Colors']
@@ -915,7 +1015,7 @@ def get_bkg_config(info: dict, add_custom: list[str] = None, debug: bool = False
     color_dict = {}
     f = json.load(open(f"{root}/lib/import/generator_order.json", "r"))
     bkg_list = list(f[info["GEOMETRY"]][info["VERSION"]].keys())
-    
+
     if add_custom is not None:
         for custom in add_custom:
             bkg_list.append(custom)
@@ -927,7 +1027,7 @@ def get_bkg_config(info: dict, add_custom: list[str] = None, debug: bool = False
 
     if debug:
         print(f"Loaded background dictionary: {bkg_dict}")
-    
+
     return bkg_dict, color_dict
 
 
@@ -937,8 +1037,7 @@ def get_gen_label(configs: dict[str, list[str]], debug: bool = False) -> dict:
     """
     gen_dict = dict()
     for idx, config in enumerate(configs):
-        info = json.load(
-            open(f"{root}/config/{config}/{config}_config.json", "r"))
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         geo = info["GEOMETRY"]
         version = info["VERSION"]
         for idx, gen in enumerate(get_bkg_config(info, debug=debug)[0].values()):
@@ -965,7 +1064,7 @@ def get_gen_label(configs: dict[str, list[str]], debug: bool = False) -> dict:
 #     return truth_values, reco_values
 
 
-def get_gen_color(names:list[str], debug=False):
+def get_gen_color(names: list[str], debug=False):
     """
     Get the color for each background according to its "simple" name.
 
@@ -998,7 +1097,7 @@ def get_gen_color(names:list[str], debug=False):
             color_dict[name] = "pink"
         elif simple_names_list[name] == "Ar39":
             color_dict[name] = colors[10]
-        elif simple_names_list[name] == "Rn22":
+        elif simple_names_list[name] == "Rn22X":
             color_dict[name] = colors[5]
         elif simple_names_list[name] == "Po210":
             color_dict[name] = colors[0]
@@ -1014,10 +1113,12 @@ def get_gen_color(names:list[str], debug=False):
     return color_dict
 
 
-def get_bkg_weights(info:dict, names:list[str], debug:bool=False) -> dict:
+def get_bkg_weights(info: dict, names: list[str], debug: bool = False) -> dict:
     weights = dict()
     bkg_dict, color_dict = get_bkg_config(info, debug=False)
-    production_weights = json.load(open(f"{root}/lib/import/production_weights.json", "r"))
+    production_weights = json.load(
+        open(f"{root}/lib/import/production_weights.json", "r")
+    )
     custom_weights = production_weights[info["GEOMETRY"]][info["VERSION"]]
     for name in names:
         # Default weights
@@ -1031,21 +1132,23 @@ def get_bkg_weights(info:dict, names:list[str], debug:bool=False) -> dict:
                     weights[(name, bkg)] = custom_weights[bkg]
                 except KeyError:
                     continue
-    
+
     return weights
 
 
 def get_gen_weights(configs: dict[str, list[str]], debug: bool = False) -> dict:
     weights = dict()
     for idx, config in enumerate(configs):
-        info = json.load(open(f"{root}/config/{config}/{name}/{config}_config.json", "r"))
+        info = json.load(
+            open(f"{root}/config/{config}/{name}/{config}_config.json", "r")
+        )
         bkg_dict, color_dict = get_bkg_config(info, debug=False)
         for bkg in bkg_dict.values():
             for names in configs[config]:
                 bkg_weights = get_bkg_weights(info, names)
                 for name in names:
                     weights[(info["GEOMETRY"], name, bkg)] = bkg_weights[(name, bkg)]
-    
+
     return weights
 
 
@@ -1057,6 +1160,8 @@ def get_simple_names(names: list[str], debug: bool = False) -> dict:
             for basic_name in basic_names:
                 if basic_name in name:
                     simple_names[name] = basic_name
+                    if basic_name == "Rn22":
+                        simple_names[name] = "Rn22X"
             if "K42" in name:
                 simple_names[name] = "Ar42"
 
@@ -1084,7 +1189,9 @@ def get_simple_names(names: list[str], debug: bool = False) -> dict:
     return simple_names
 
 
-def get_workflow_branches(trees: list, workflow: Optional[str] = None, debug: bool = False) -> dict[str, list[str]]:
+def get_workflow_branches(
+    trees: list, workflow: Optional[str] = None, debug: bool = False
+) -> dict[str, list[str]]:
     """
     Get the workflow variables from the input file.
 

@@ -87,7 +87,7 @@ def compute_solar_spectrum(
     gen_label_dict = get_gen_label(configs)
     gen_label = gen_label_dict[(info["GEOMETRY"], info["VERSION"], gen)]
     gen_weigths_dict = get_gen_weights(configs, names)
-    nadir = get_nadir_angle(show=False, debug=False)
+    azimuth = get_nadir_angle(show=False, debug=False)
 
     if factor == "SOLAR":
         factor = 40 * 60 * 60 * 24 * 365
@@ -213,9 +213,9 @@ def compute_solar_spectrum(
                 reduced_rows = 0.5 * (reduced_rows_edges[1:] + reduced_rows_edges[:-1])
                 reduced_rows = np.round(reduced_rows, 4)
 
-                # Interpolate nadir data to match ybins
+                # Interpolate azimuth data to match ybins
                 interp_nadir = interpolate.interp1d(
-                    nadir[0], nadir[1], kind="linear", fill_value=0
+                    azimuth[0], azimuth[1], kind="linear", fill_value=0
                 )
                 nadir_y = interp_nadir(reduced_rows)
                 nadir_y = nadir_y / np.sum(nadir_y)
@@ -445,7 +445,7 @@ def plot_solar_spectrum(
     fig,
     idx: int,
     components: list = ["pp", "pep", "b7", "f17", "o15", "n13", "b8", "hep"],
-    weigths: str = "B16-GS98",
+    weights: str = "B16-GS98",
     path: Optional[str] = None,
     debug: bool = False,
 ):
@@ -466,11 +466,11 @@ def plot_solar_spectrum(
     if path == None:
         path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/SOLAR/"
     for source in components:
-        array = read_solar_data(source, path, weigths)
+        array = read_solar_data(source, path, weights)
         if source != "b7":
             fig.add_trace(
                 go.Scatter(
-                    legendgrouptitle_text="Solar Flux",
+                    legendgrouptitle_text="Solar Process",
                     legendgroup=idx,
                     x=array[0],
                     y=array[1],
@@ -503,7 +503,7 @@ def plot_solar_spectrum(
                 col=1 + idx,
                 row=1,
             )
-    # fig.update_layout(title="Solar Neutrino Spectrum",xaxis_title="Energy [MeV]",yaxis_title="Flux [Hz/MeV·cm²]")
+    fig.update_layout(title=f"Solar Neutrino Spectrum ({weights})")
     return fig
 
 
@@ -618,7 +618,7 @@ def plot_detected_solar_spectrum(
                 legendgroup=str(idx),
                 x=bins,
                 y=this_spectrum / (bins[1] - bins[0]),
-                name=source,
+                name=f"CC {source}",
                 line=dict(color=get_solar_colors(source)),
             ),
             col=1 + idx,
@@ -678,6 +678,7 @@ def make_true_solar_plot(bins, components=["b8", "hep"], mass=10e9, osc=True, in
     fig = make_subplots(
         rows=1,
         cols=3,
+        horizontal_spacing=0.1,
         subplot_titles=(
             "True Solar Neutrino Spectrum",
             "X-Section for " + unicode("nu") + " + 40Ar Interaction",

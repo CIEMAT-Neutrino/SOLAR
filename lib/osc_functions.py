@@ -21,26 +21,26 @@ def get_nadir_angle(
     path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/", debug: bool = False
 ) -> list[np.array]:
     """
-    This function can be used to obtain the nadir angle distribution for DUNE.
+    This function can be used to obtain the azimuth angle distribution for DUNE.
 
     Args:
-        path (str): Path to the nadir angle data file (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
+        path (str): Path to the azimuth angle data file (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
         show (bool): If True, show the plot (default: False)
         debug (bool): If True, the debug mode is activated.
 
     Returns:
-        [xnadir_centers,ynadir_centers]: list containing the nadir angle and the PDF.
+        [xnadir_centers,ynadir_centers]: list containing the azimuth angle and the PDF.
     """
-    with uproot.open(path + "nadir.root") as nadir:
+    with uproot.open(path + "nadir.root") as azimuth:
         # Loas pdf histogram
-        pdf = nadir["nadir;1"]
+        pdf = azimuth["nadir;1"]
         pdf_array = pdf.to_hist().to_numpy()
         xbin_edges = pdf_array[1]
         xnadir_centers = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
         ynadir_centers = pdf_array[0]
 
     if debug:
-        print(f"Nadir angle data loaded: xnadir_centers = {xnadir_centers}, ynadir_centers = {ynadir_centers}")
+        print(f"Azimuth angle data loaded: xnadir_centers = {xnadir_centers}, ynadir_centers = {ynadir_centers}")
         print(f"Check for PDF normalization: {np.sum(ynadir_centers)}")
 
     return [xnadir_centers, ynadir_centers]
@@ -48,7 +48,7 @@ def get_nadir_angle(
 
 def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "scatter", debug: bool = False):
     """
-    This function can be used to plot the nadir angle distribution for DUNE.
+    This function can be used to plot the azimuth angle distribution for DUNE.
 
     Args:
         fig (plotly.graph_objects.Figure): Plotly figure.
@@ -59,7 +59,7 @@ def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "s
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
     nadir_data = get_nadir_angle(debug = debug)
-    name = "Nadir Angle PDF"
+    name = "Azimuth Angle PDF"
     
     if norm is not None: 
         nadir_data[1] = nadir_data[1] / (norm*np.max(nadir_data[1]))
@@ -87,7 +87,7 @@ def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "s
             col=idx[1],
         )
     fig.update_xaxes(
-        title_text="Nadir Angle cos(" + unicode("eta") + ")", row=idx[0], col=idx[1]
+        title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=idx[0], col=idx[1]
     )
     fig.update_yaxes(title_text="PDF", row=idx[0], col=idx[1])
 
@@ -118,7 +118,7 @@ def get_oscillation_datafiles(
     Returns:
         (found_dm2,found_sin13,found_sin12): tuple containing the dm2, sin13 and sin12 values of the found oscillation data files.
     """
-    data_files = glob.glob(path + "*_dm2_*_sin13_*_sin12_*")
+    data_files = glob.glob(f"{path}" + "*_dm2_*_sin13_*_sin12_*")
     string_dm2, trash, string_sin13, trash, string_sin12 = zip(
         *[
             tuple(
@@ -373,12 +373,12 @@ def process_oscillation_map(
     df = df1.join(df2).T
 
     if convolve:
-        # Interpolate nadir data to match ybins
-        nadir = interpolate.interp1d(
+        # Interpolate azimuth data to match ybins
+        azimuth = interpolate.interp1d(
             nadir_data[0], nadir_data[1], kind="linear", fill_value="extrapolate"
         )
-        nadir_y = nadir(x=root_nadir_centers)
-        # normalize nadir distribution
+        nadir_y = azimuth(x=root_nadir_centers)
+        # normalize azimuth distribution
         nadir_y = nadir_y / nadir_y.sum()
         df = df.mul(nadir_y, axis=0)
 
@@ -512,7 +512,7 @@ def rebin_df(
             origin="lower",
             color_continuous_scale="turbo",
             title="Oscillation Correction Map",
-            labels=dict(y=f"Nadir Angle {unicode('eta')}", x="TrueEnergy"),
+            labels=dict(y=f"Azimuth Angle {unicode('eta')}", x="TrueEnergy"),
         )
         fig = format_coustom_plotly(fig)
         fig.show()
@@ -575,8 +575,9 @@ def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, factor=1, debug=
     fig = make_subplots(
         rows=1,
         cols=3,
+        horizontal_spacing=0.1,
         subplot_titles=(
-            f"DUNE's FD Yearly Nadir Angle",
+            f"DUNE's FD Yearly Azimuth Angle",
             f"Survival Probability",
             f"Convolved Probability * {factor}",
         ),
@@ -609,13 +610,13 @@ def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, factor=1, debug=
     fig = format_coustom_plotly(
         fig, matches=(None, None), tickformat=(None, None), add_units=False
     )
-    fig.update_xaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=1)
+    fig.update_xaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=1)
     fig.update_yaxes(range=[0.3, 1.09], title_text="Norm.", row=1, col=1)
     
     fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=2)
-    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=2)
+    fig.update_yaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=2)
     
     fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=3)
-    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=3)
+    fig.update_yaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=3)
 
     return fig
