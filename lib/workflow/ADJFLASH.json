@@ -34,7 +34,7 @@
             "AdjOpFlashSTD": 0,
             "AdjOpFlashFast": 0,
             "AdjOpFlashPur": 0,
-            "AdjOpFlashNHit": 1,
+            "AdjOpFlashNHits": 1,
             "AdjOpFlashResidual": 0
         },
         "INTEGERS": {
@@ -48,6 +48,7 @@
         "DOUBLES": {
             "MainE": 1,
             "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,

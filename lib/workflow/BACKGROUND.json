@@ -1,0 +1,35 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {
+            "Geometry": 1
+        },
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "ParticleID": 1,
+            "ParticlePDG": 1,
+            "ParticleLabelID": 1
+        },
+        "DOUBLES": {
+            "ParticleK": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    }
+}

@@ -47,9 +47,7 @@
             "Event": 1,
             "Flag": 1,
             "Generator": 1,
-            "NHits": 1,
-            "AdjClNum": 0,
-            "AdjOpFlashNum": 0
+            "NHits": 1
         },
         "DOUBLES": {
             "SignalParticleE": 1,
@@ -57,20 +55,10 @@
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
-            "ElectronE": 0,
-            "GammaE": 0,
-            "ElectronK": 0,
-            "GammaK": 0,
-            "NeutronK": 0,
-            "VisEnergy": 0,
             "Time": 1,
             "Charge": 1,
-            "ElectronCharge": 0,
-            "Correction": 0,
-            "CorrectedCharge": 0,
-            "CorrectionFactor": 0,
-            "CorrectedChargePerMeV": 0,
-            "Energy": 0
+            "RecoX": 1,
+            "MatchedOpFlashPE": 1
         },
         "STRINGS": {},
         "BOOLS": {
