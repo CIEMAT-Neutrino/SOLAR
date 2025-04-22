@@ -1,81 +1,101 @@
+"TRUTH":
+        - "Config": null
+        - "Truth":
+                  - "Config":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+                  - "SignalParticleK":
+                            - "absbetween": [0, 30]
+        - "Reco": null
+
 "CORRECTION":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "Generator":
-                      - "equal": 1
-              - "SignalParticleE":
-                      - "absbetween": [4, 20]
-              - "NeutronK":
-                      - "equal": 0
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+                  - "SignalParticleK":
+                            - "absbetween": [0, 20]
+                  - "NeutronK":
+                            - "equal": 0
 
 "CALIBRATION":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "Generator":
-                      - "equal": 1
-              - "SignalParticleE":
-                      - "absbetween": [4, 20]
-              - "NeutronK":
-                      - "equal": 0
-              - "NHits":
-                      - "bigger": 2
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+                  - "SignalParticleK":
+                            - "absbetween": [0, 20]
+                  - "NeutronK":
+                            - "equal": 0
 
 "DISCRIMINATION":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "Generator":
-                      - "equal": 1
-              - "SignalParticleE":
-                      - "absbetween": [0, 20]
-              - "NeutronK":
-                      - "equal": 0
-              - "NHits":
-                      - "bigger": 2
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+
+                  - "SignalParticleK":
+                            - "absbetween": [0, 20]
+
+                  - "NeutronK":
+                            - "equal": 0
 
 "RECONSTRUCTION":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "Generator":
-                      - "equal": 1
-              - "SignalParticleE":
-                      - "absbetween": [0, 30]
-              - "NHits":
-                      - "bigger": 2
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+
+                  - "SignalParticleK":
+                            - "absbetween": [0, 30]
 
 "SMEARING":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "Generator":
-                      - "equal": 1
-              - "SignalParticleE":
-                      - "absbetween": [0, 30]
-              - "NHits":
-                      - "bigger": 2
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+
+                  - "SignalParticleK":
+                            - "absbetween": [0, 30]
 
 "ANALYSIS":
-      - "Truth": null
-      - "Reco":
-              - "Primary":
-                      - "equal": true
-              - "NHits":
-                      - "bigger": 2
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  - "Primary":
+                            - "equal": true
+                  - "Generator":
+                            - "equal": 1
+                  - "SignalParticleK":
+                            - "absbetween": [0, 20]
 
 "FIDUCIALIZATION":
-      - "Truth": null
-      - "Reco":
-              - "RecoX":
-                      - "absbetween": [100, 260]
-              - "RecoY":
-                      - "absbetween": [100, 500]
-              - "RecoZ":
-                      - "absbetween": [10, 1390]
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                  #   - "MainParentZ":
+                  #             - "between": [5, 1395]
+                  #   - "MainParentX":
+                  #             - "outside": [-5, 5]
+                  - "RecoX":
+                            - "absbetween": [50, 310]
+                  - "RecoY":
+                            - "absbetween": [50, 550]
+                  - "RecoZ":
+                            - "absbetween": [10, 1390]
