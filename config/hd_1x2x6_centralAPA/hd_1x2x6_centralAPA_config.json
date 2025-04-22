@@ -1,6 +1,6 @@
 {
     "NAME": "SolarNuAna_",
-    "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data",
+    "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR",
     "GEOMETRY": "hd",
     "VERSION": "hd_1x2x6_centralAPA",
     "FULL_DETECTOR_FACTOR": 6,
