@@ -55,6 +55,7 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
     """
+    mask = {}
     new_run = {}
     if type(params) != dict and params != None:
         output += f"[red][ERROR]Params must be a dictionary![/red]"
@@ -110,17 +111,17 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                         continue
 
                     if not isinstance(params[param], tuple) and not isinstance(params[param], list):
-                        output += f"[red][ERROR]: Filter must be tuple or list, but found {type(params[param])}[/red]"
+                        output += f"[red][ERROR] Filter must be tuple or list, but found {type(params[param])}[/red]"
                         if debug: rprint(f"{param}: {params[param]}")
                         return run, output
                     
                     if len(params[param]) != 2:
-                        output += f"[red][ERROR]: Filter must be of length 2![/red]"
+                        output += f"[red][ERROR] Filter must be of length 2![/red]"
                         if debug: rprint(f"{param}: {params[param]}")
                         return run, output
 
                     if param[1] not in run[param[0]].keys():
-                        output += f"[red][ERROR]: Branch {param[1]} not found in the run![/red]"
+                        output += f"[red][ERROR] Branch {param[1]} not found in the run![/red]"
                         if debug: rprint(f"{param}: {params[param]}")
                         return run, output
 
@@ -157,6 +158,7 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
         
         if skip_tree:
             new_run[tree] = run[tree]
+        
         else:
             combined_filter = np.where(kdx == True)
             for branch in branch_list:
@@ -165,8 +167,8 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                     new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
                 except Exception as e:
                     output += f"[red][ERROR] Couldn't filter branch {branch}: {e}[/red]"
-
-    return new_run, output
+        mask[tree] = kdx
+    return new_run, mask, output
 
 
 def add_filter(filters, labels, this_filter, this_label, cummulative, debug=False):
