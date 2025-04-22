@@ -339,7 +339,8 @@ for config in configs:
                     tickformat=".0e",
                     # Reduce number of ticks
                     dtick=1,
-                    range=[np.log10(exposure * 1e-2), np.log10(exposure * 1e5)],
+                    # range=[np.log10(exposure * 1e-2), np.log10(exposure * 1e5)],
+                    range=[0, 8],
                     title=f"Counts per Energy ({exposure:.0f} kT·year·MeV)⁻¹",
                     row=1,
                     col=1,
@@ -371,9 +372,9 @@ for config in configs:
 
                 fig.update_layout(
                     legend_title_text="",
-                    legend=dict(y=0.99, x=0.8, font=dict(size=16)),
+                    legend=dict(y=0.99, x=0.8, font=dict(size=14)),
                     legend2=dict(
-                        y=0.2, x=0.7, font=dict(size=16), bgcolor="rgba(0,0,0,0)"
+                        y=0.2, x=0.76, font=dict(size=14), bgcolor="rgba(0,0,0,0)"
                     ),
                 )
 
@@ -388,7 +389,7 @@ for config in configs:
                     f"{save_path}/{folder.lower()}",
                     config,
                     None,
-                    figure_name,
+                    filename=figure_name,
                     rm=user_input["rewrite"],
                     debug=user_input["debug"],
                 )

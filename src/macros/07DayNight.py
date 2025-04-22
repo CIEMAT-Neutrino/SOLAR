@@ -18,7 +18,7 @@ parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
-    "--folder", type=str, help="The name of the background folder", default="reduced"
+    "--folder", type=str, help="The name of the background folder", default="Reduced"
 )
 parser.add_argument(
     "--signal_uncertanty",
@@ -75,7 +75,7 @@ parser.add_argument(
     default=nhits[::-1][10:],
 )
 parser.add_argument(
-    "--threshold", type=float, help="The threshold for the analysis", default=10.0
+    "--threshold", type=float, help="The threshold for the analysis", default=8.0
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -85,7 +85,6 @@ rprint(args)
 
 config = args.config
 name = args.name
-folder = args.folder
 
 energies = args.energy
 fiducials = args.fiducial
@@ -97,8 +96,6 @@ configs = {config: [name]}
 
 user_input = {
     "exposure": args.exposure,
-    "signal_uncertanty": args.signal_uncertanty,
-    "background_uncertanty": args.background_uncertanty,
     "threshold": args.threshold,
     "rewrite": args.rewrite,
     "debug": args.debug,
@@ -124,7 +121,7 @@ for config in configs:
             ("gamma", "gamma", "black"),
         ]:
             bkg_df = pd.read_pickle(
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_rebin.pkl"
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{args.folder.lower()}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_rebin.pkl"
             )
             plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
 
@@ -180,11 +177,6 @@ for config in configs:
                         signal_day = np.asarray(
                             this_comp_df["Counts"].values[0][thld_idx:]
                         )
-                        all_components = all_components * (
-                            np.asarray(comp_df["Counts"].values[0][thld_idx:]) > 0
-                        )
-
-                        s_error_day = this_comp_df["Error"].values[0][thld_idx:]
 
                         this_comp_df = comp_df.loc[comp_df["Mean"] == "Night"]
                         signal_night = np.asarray(
@@ -196,19 +188,14 @@ for config in configs:
                             background
                             + np.asarray(comp_df["Counts"].values[0])[thld_idx:]
                         )
-                        background_error = (
-                            background_error
-                            + np.asarray(comp_df["Error"].values[0])[thld_idx:]
-                        )
-                        all_components = all_components * (
-                            np.asarray(comp_df["Counts"].values[0])[thld_idx:] > 0
-                        )
 
                 found_sigma2 = False
                 found_sigma3 = False
                 sigma2, sigma3 = 0, 0
-                gaussian_significances = []
-                asimov_significances = []
+                gaussian_significances = [[], [], []]
+                # asimov_significances = [[], [], []]
+                gaussian_error_significances = [[], [], []]
+                # asimov_error_significances = [[], [], []]
                 sigma2s = []
                 sigma3s = []
                 for factor in user_input["exposure"]:
@@ -221,7 +208,7 @@ for config in configs:
                     #     B_hat=np.asarray(factor * background / 2),
                     #     sigma_B=np.asarray(
                     #         factor
-                    #         * user_input["background_uncertanty"]
+                    #         * args.background_uncertanty
                     #         * background
                     #         / 2
                     #     ),
@@ -238,39 +225,76 @@ for config in configs:
                     #         f"[WARNING] Fit failed for {energy_label} with {fiducial} fiducialized, {nhit} nhits and {ophit} ophits {adjcl} adjcl"
                     #     )
                     #     continue
+                    for kdx, model_uncertanty in enumerate([1.13, 1, 0.87]):
+                        ##########################################
+                        # Evaluate the significance with the error
+                        ##########################################
+                        gaussian_error_significance = evaluate_significance(
+                            factor * model_uncertanty * (signal_night - signal_day),
+                            factor * (background / 2 + signal_day),
+                            background_uncertanty=(
+                                1 / ((factor * (background / 2)) ** 0.5)
+                            ),
+                            type="gaussian",
+                        )
+                        gaussian_error_significance = np.nan_to_num(
+                            gaussian_error_significance, nan=0
+                        )
+                        gaussian_error_significance = (
+                            np.sum(np.power(gaussian_error_significance, 2)) ** 0.5
+                        )
+                        gaussian_error_significances[kdx].append(
+                            float(gaussian_error_significance)
+                        )
 
-                    gaussian_significance = evaluate_significance(
-                        factor * all_components * (signal_night - signal_day),
-                        factor * all_components * (background / 2 + signal_day),
-                        # signal_uncertanty=(1 / ((factor * signal_day) ** 0.5)),
-                        background_uncertanty=(
-                            1 / ((factor * (background / 2 + signal_day)) ** 0.5)
-                        ),
-                    )
-                    # Substitute nan values with 0
-                    gaussian_significance = np.nan_to_num(gaussian_significance, nan=0)
-                    gaussian_significance = (
-                        np.sum(np.power(gaussian_significance, 2)) ** 0.5
-                    )
-                    gaussian_significances.append(gaussian_significance)
+                        # asimov_error_significance = evaluate_significance(
+                        #     factor * model_uncertanty * (signal_night - signal_day),
+                        #     factor * (background / 2 + signal_day),
+                        #     background_uncertanty=(
+                        #         1 / ((factor * (background / 2)) ** 0.5)
+                        #     ),
+                        #     type="asimov",
+                        # )
+                        # asimov_error_significance = np.nan_to_num(
+                        #     asimov_error_significance, nan=0
+                        # )
+                        # asimov_error_significance = (
+                        #     np.sum(np.power(asimov_error_significance, 2)) ** 0.5
+                        # )
+                        # asimov_error_significances[kdx].append(
+                        #     float(asimov_error_significance)
+                        # )
 
-                    asimov_significance = evaluate_significance(
-                        factor * all_components * (signal_night - signal_day),
-                        factor * all_components * (background / 2 + signal_day),
-                        # signal_uncertanty=(1 / ((factor * signal_day) ** 0.5)),
-                        background_uncertanty=(
-                            1 / ((factor * (background / 2 + signal_day)) ** 0.5)
-                        ),
-                        type="asimov",
-                    )
-                    # Substitute nan values with 0
-                    asimov_significance = np.nan_to_num(asimov_significance, nan=0)
-                    asimov_significance = (
-                        np.sum(np.power(asimov_significance, 2)) ** 0.5
-                    )
-                    asimov_significances.append(asimov_significance)
-                    # rprint(asimov_significance)
-                    if asimov_significance > 2 and found_sigma2 == False:
+                        #############################################
+                        # Evaluate the significance without the error
+                        #############################################
+                        gaussian_significance = evaluate_significance(
+                            factor * model_uncertanty * (signal_night - signal_day),
+                            factor * (background / 2 + signal_day),
+                            type="gaussian",
+                        )
+                        # Substitute nan values with 0
+                        gaussian_significance = np.nan_to_num(
+                            gaussian_significance, nan=0
+                        )
+                        gaussian_significance = (
+                            np.sum(np.power(gaussian_significance, 2)) ** 0.5
+                        )
+                        gaussian_significances[kdx].append(float(gaussian_significance))
+
+                        # asimov_significance = evaluate_significance(
+                        #     factor * model_uncertanty * (signal_night - signal_day),
+                        #     factor * (background / 2 + signal_day),
+                        #     type="asimov",
+                        # )
+                        # # Substitute nan values with 0
+                        # asimov_significance = np.nan_to_num(asimov_significance, nan=0)
+                        # asimov_significance = (
+                        #     np.sum(np.power(asimov_significance, 2)) ** 0.5
+                        # )
+                        # asimov_significances[kdx].append(float(asimov_significance))
+
+                    if gaussian_significances[1][-1] > 2 and found_sigma2 == False:
                         sigma2 = factor
                         found_sigma2 = True
                         if sigma2 < last_sigma2:
@@ -279,7 +303,7 @@ for config in configs:
                             )
                             last_sigma2 = sigma2
 
-                    if asimov_significance > 3 and found_sigma3 == False:
+                    if gaussian_significances[1][-1] > 3 and found_sigma3 == False:
                         sigma3 = factor
                         found_sigma3 = True
                         if sigma3 < last_sigma3:
@@ -304,15 +328,25 @@ for config in configs:
                         "OpHits": ophit,
                         "AdjCl": adjcl,
                         # "LogL": np.sqrt(chi2),
-                        "Gaussian": gaussian_significances,
-                        "Asimov": asimov_significances,
+                        "ErrorGaussian+Error": gaussian_error_significances[0],
+                        "ErrorGaussian": gaussian_error_significances[1],
+                        "ErrorGaussian-Error": gaussian_error_significances[2],
+                        # "ErrorAsimov+Error": asimov_error_significances[0],
+                        # "ErrorAsimov": asimov_error_significances[1],
+                        # "ErrorAsimov-Error": asimov_error_significances[2],
+                        "Gaussian+Error": gaussian_significances[0],
+                        "Gaussian": gaussian_significances[1],
+                        "Gaussian-Error": gaussian_significances[2],
+                        # "Asimov+Error": asimov_significances[0],
+                        # "Asimov": asimov_significances[1],
+                        # "Asimov-Error": asimov_significances[2],
                     }
                 )
 
         sigmas_df = pd.DataFrame(sigmas)
         save_df(
             sigmas_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{folder}",
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
             config=config,
             name=name,
             filename=f"DayNight_Results",

@@ -22,7 +22,7 @@ parser.add_argument(
     "--reference",
     type=str,
     help="The name of the reference column",
-    choices=["Values", "Gaussian"],
+    choices=["ErrorGaussian", "Gaussian"],
     default="Gaussian",
     required=True,
 )
@@ -41,6 +41,12 @@ parser.add_argument(
     help="The name of the results folder",
     default="Reduced",
     choices=["Reduced", "Nominal"],
+)
+parser.add_argument(
+    "--exposure",
+    type=float,
+    help="The exposure for the analysis",
+    default=100,
 )
 parser.add_argument(
     "--fiducial",
@@ -71,10 +77,12 @@ parser.add_argument(
     default=nhits[::-1][10:],
 )
 parser.add_argument(
-    "--threshold", type=float, help="The threshold for the analysis", default=10.0
+    "--threshold", type=float, help="The threshold for the analysis", default=8.0
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+
+args = parser.parse_args()
 
 analysis = parser.parse_args().analysis
 reference = parser.parse_args().reference
@@ -123,8 +131,8 @@ for config in configs:
             #     ["Highest", "Sigma2", "Sigma3"],
             # ):
             for sigma_name, sigma_label in zip(
-                ["fastest_sigma3"],
-                ["Sigma3"],
+                ["fastest_sigma2"],
+                ["Sigma2"],
             ):
 
                 sigma = pd.read_pickle(
@@ -157,6 +165,7 @@ for config in configs:
 
                 plot_sigmas = plot_sigmas.loc[
                     (plot_sigmas["EnergyLabel"] == energy_label)
+                    * (plot_sigmas["Fiducialized"] == int(ref_plot["Fiducialized"]))
                     * (plot_sigmas["NHits"] == int(ref_plot["NHits"]))
                     * (plot_sigmas["OpHits"] == int(ref_plot["OpHits"]))
                     * (plot_sigmas["AdjCl"] == int(ref_plot["AdjCl"]))
@@ -172,12 +181,9 @@ for config in configs:
                     ),
                 )
 
-                signal_day = np.zeros(len(this_plot_df["Energy"].values[0]))
-                signal_night = np.zeros(len(this_plot_df["Energy"].values[0]))
-                background = np.zeros(len(this_plot_df["Energy"].values[0]))
-
                 for jdx, (
                     component,
+                    component_label,
                     osc,
                     mean,
                     legend_group,
@@ -187,12 +193,13 @@ for config in configs:
                 ) in enumerate(
                     zip(
                         ["Solar", "Solar", "neutron", "gamma"],
+                        ["Solar Day", "Solar Night", "Neutron", "Gamma"],
                         ["Osc", "Osc", "Truth", "Truth"],
                         ["Day", "Night", "Mean", "Mean"],
                         [0, 0, 1, 1],
                         ["Signal", "Signal", "Background", "Background"],
-                        ["grey", "grey", "rgb(15,133,84)", "black"],
-                        ["dash", "solid", "solid", "solid"],
+                        [compare[1], compare[0], "rgb(15,133,84)", "black"],
+                        ["dash", "dash", "solid", "solid"],
                     )
                 ):
 
@@ -204,13 +211,17 @@ for config in configs:
 
                     # If the dataframe is empty, skip the iteration
                     if comp_df.empty:
+                        rprint(
+                            f"[yellow][WARNING] Not found {component_label} for {config} {name} {energy_label}[/yellow]"
+                        )
                         continue
 
+                    # rprint(args.exposure * comp_df["Counts/Energy"].values[0])
                     fig.add_trace(
                         go.Scatter(
                             x=comp_df["Energy"].values[0],
-                            y=comp_df["Counts/Energy"].values[0],
-                            name=component,
+                            y=args.exposure * comp_df["Counts/Energy"].values[0],
+                            name=f"{component_label}",
                             mode="lines",
                             error_y=dict(
                                 type="data",
@@ -219,7 +230,6 @@ for config in configs:
                             line_shape="hvh",
                             line=dict(
                                 color=color,
-                                dash=dash,
                             ),
                             legend="legend",
                             legendgroup=legend_group,
@@ -230,37 +240,61 @@ for config in configs:
                         col=1,
                     )
 
-                for kdx, fiducial in enumerate(plot_sigmas["Fiducialized"].unique()):
-                    plot_sign_fid = plot_sigmas.loc[
-                        plot_sigmas["Fiducialized"] == fiducial
-                    ].copy()
-                    if plot_sign_fid.empty:
-                        continue
-                    elif len(plot_sign_fid) > 1:
-                        plot_sign_fid = plot_sign_fid.loc[
-                            plot_sign_fid[reference] == plot_sign_fid[reference].max()
-                        ]
-                        plot_sign_fid = plot_sign_fid.iloc[0]
-
-                    # rprint(plot_sign_fid)
-                    # rprint(plot_sign_fid["Exposure"])
-                    # rprint(plot_sign_fid[reference])
-                    fig.add_trace(
-                        go.Scatter(
-                            x=plot_sign_fid["Exposure"].values[0],
-                            y=plot_sign_fid[reference].values[0],
-                            name=f"{fiducial:.0f} (cm)",
-                            mode="lines",
-                            line=dict(color=px.colors.qualitative.Prism[kdx]),
-                            legend="legend2",
-                            legendgroup="Fiducal",
-                            legendgrouptitle=dict(text="Fiducial Cut"),
-                            showlegend=True,
-                            # Render the line with better resolution
-                        ),
-                        row=1,
-                        col=2,
+                if plot_sigmas.empty:
+                    rprint(
+                        f"[yellow][WARNING] Not found {sigma_label} for {config} {name} {energy_label}[/yellow]"
                     )
+                    continue
+                if len(plot_sigmas) == 1:
+                    plot_sign_fid = plot_sigmas.copy()
+
+                elif len(plot_sigmas) > 1:
+                    plot_sign_fid = plot_sigmas.loc[
+                        plot_sigmas[reference] == plot_sigmas[reference].max()
+                    ]
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_sign_fid["Exposure"].values[0],
+                        y=plot_sign_fid[reference].values[0],
+                        name=f"{reference}",
+                        mode="lines",
+                        line=dict(color="black"),
+                        legend="legend2",
+                        legendgroup="Significance",
+                        legendgrouptitle=dict(text="Significance"),
+                        showlegend=True,
+                        # Render the line with better resolution
+                    ),
+                    row=1,
+                    col=2,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_sign_fid["Exposure"].values[0],
+                        y=plot_sign_fid[reference + "+Error"].values[0],
+                        mode="lines",
+                        marker=dict(color="#444"),
+                        line=dict(width=0),
+                        showlegend=False,
+                    ),
+                    row=1,
+                    col=2,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_sign_fid["Exposure"].values[0],
+                        y=plot_sign_fid[reference + "-Error"].values[0],
+                        marker=dict(color="#444"),
+                        line=dict(width=0),
+                        mode="lines",
+                        fillcolor="rgba(68, 68, 68, 0.3)",
+                        fill="tonexty",
+                        showlegend=False,
+                    ),
+                    row=1,
+                    col=2,
+                )
 
                 fig = format_coustom_plotly(
                     fig,
@@ -276,8 +310,11 @@ for config in configs:
                     tickformat=".0e",
                     # Reduce number of ticks
                     dtick=1,
-                    range=[1, 4],
-                    title=f"Counts per Energy (kT·year·MeV)⁻¹",
+                    range=[
+                        np.log10(args.exposure * 1e-2),
+                        np.log10(args.exposure * 1e2),
+                    ],
+                    title=f"Counts per Energy ({args.exposure} kT·year·MeV)⁻¹",
                     row=1,
                     col=1,
                 )
@@ -327,9 +364,9 @@ for config in configs:
 
                 fig.update_layout(
                     legend_title_text="",
-                    legend=dict(y=1, x=0.33, font=dict(size=16)),
+                    legend=dict(y=1, x=0.30, font=dict(size=16)),
                     legend2=dict(
-                        y=0.0, x=0.88, font=dict(size=16), bgcolor="rgba(0,0,0,0)"
+                        y=0.0, x=0.84, font=dict(size=16), bgcolor="rgba(0,0,0,0)"
                     ),
                 )
 
@@ -338,7 +375,7 @@ for config in configs:
                     f"{save_path}/{folder.lower()}",
                     config,
                     None,
-                    f"{energy_label}Energy_{analysis}_{sigma_label}",
+                    filename=f"{energy_label}Energy_{analysis}_{sigma_label}_exposure_{args.exposure:.0f}",
                     rm=user_input["rewrite"],
                     debug=user_input["debug"],
                 )

@@ -98,8 +98,8 @@ for config in configs:
         sigmas_df = pd.read_pickle(
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}/{config}/{name}/{config}_{name}_{analysis}_Results.pkl",
         )
-        sigmas_df = sigmas_df.explode(
-            ["Sigma2", "Sigma3", "Exposure", "Gaussian", "Asimov"]
+        sigmas_df = explode(
+            sigmas_df, ["Sigma2", "Sigma3", "Exposure", "Gaussian", "Asimov"]
         )
 
         for energy_label in ["Cluster", "Total", "Selected", "Solar"]:

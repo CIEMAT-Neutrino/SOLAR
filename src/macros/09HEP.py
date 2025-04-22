@@ -86,7 +86,7 @@ parser.add_argument(
     default=100,
 )
 parser.add_argument(
-    "--threshold", type=float, help="The threshold for the analysis", default=16.0
+    "--threshold", type=float, help="The threshold for the analysis", default=10.0
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
