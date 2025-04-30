@@ -182,7 +182,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"{charge}Charge_Correction_2D_Scan",
+            filename=f"{charge}Charge_Correction_2D_Scan",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -275,7 +275,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"{charge}Charge_Correction_Factor",
+            filename=f"{charge}Charge_Correction_Factor",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )

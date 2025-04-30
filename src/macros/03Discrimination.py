@@ -74,9 +74,10 @@ for config in configs:
             data["ElectronK"],
             fig=fig,
             idx=(1, 1),
-            per=(1, 99),
+            per=None,
             acc=acc,
             fit=fit,
+            nanz=True,
             zoom=True,
         )
 
@@ -149,7 +150,7 @@ for config in configs:
         )
 
         for intercept, label, pos in zip(
-            popt_int, ["Upper", "Lower"], ["top left", "top right"]
+            popt_int, ["Upper", "Lower"], ["bottom left", "bottom right"]
         ):
             fig.add_vline(
                 x=-intercept,
@@ -180,7 +181,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"True_Electron_Energy",
+            filename=f"True_Electron_Energy",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -320,7 +321,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"Random_Forest_Score.png",
+            filename=f"Random_Forest_Score",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -346,7 +347,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"Random_Forest_Feature_Importance",
+            filename=f"Random_Forest_Feature_Importance",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -382,7 +383,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"Correlation_Matrix",
+            filename=f"Correlation_Matrix",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -395,12 +396,12 @@ for config in configs:
         df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
         df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
 
-        this_df = df[
-            (df["Primary"] == True)
-            & (df["Generator"] == 1)
-            & (df["NHits"] > 2)
-            & (df["SignalParticleK"] < 20)
-        ]
+        # this_df = df[
+        #     (df["Primary"] == True)
+        #     & (df["Generator"] == 1)
+        #     & (df["NHits"] > 2)
+        #     & (df["SignalParticleK"] < 20)
+        # ]
 
         fig = px.histogram(
             df, x="Discriminant", histnorm="probability", opacity=0.75, color="Label"
@@ -429,14 +430,14 @@ for config in configs:
             save_path,
             config,
             name,
-            f"Discriminant_Calibration_1D",
+            filename=f"Discriminant_Calibration_1D",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
 
-        this_df = df[
-            (df["Primary"] == True) & (df["Generator"] == 1) & (df["NHits"] > 2)
-        ]
+        # this_df = df[
+        #     (df["Primary"] == True) & (df["Generator"] == 1) & (df["NHits"] > 1)
+        # ]
 
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Upper", "Lower"))
         popt_corr = []
@@ -445,11 +446,11 @@ for config in configs:
         fit["spec_type"] = "max"
         for idx, col, label in zip([upper_idx, lower_idx], [1, 2], ["Upper", "Lower"]):
             fig, popt, perr = get_hist2d_fit(
-                this_df["SignalParticleK"][idx],
-                this_df["SolarEnergy"][idx],
+                df["SignalParticleK"][idx],
+                df["SolarEnergy"][idx],
                 fig,
                 idx=(1, col),
-                per=(0, 100),
+                per=None,
                 acc=75,
                 fit=fit,
                 zoom=True,
@@ -466,7 +467,7 @@ for config in configs:
             save_path,
             config,
             name,
-            f"Energy_Calibration_2D",
+            filename=f"Energy_Calibration_2D",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
