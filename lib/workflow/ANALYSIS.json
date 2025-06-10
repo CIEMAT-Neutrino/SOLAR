@@ -35,6 +35,7 @@
             "TSignalMother": 1,
             "MainParentVertex": 1,
             "MainVertex": 1,
+            "EndVertex": 1,
             "AdjClMainE": 1,
             "AdjClMainK": 1,
             "AdjClMainX": 1,

@@ -25,6 +25,7 @@
     "Reco": {
         "VECTORS": {
             "MainVertex": 1,
+            "EndVertex": 1,
             "MainParentVertex": 1,
             "MatchedOpFlashR": 1,
             "MatchedOpFlashPE": 1,

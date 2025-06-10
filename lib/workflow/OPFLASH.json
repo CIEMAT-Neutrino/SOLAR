@@ -34,7 +34,8 @@
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
-            "SignalParticleE": 1
+            "SignalParticleE": 1,
+            "SignalParticleK": 1
         },
         "STRINGS": {},
         "BOOLS": {}
