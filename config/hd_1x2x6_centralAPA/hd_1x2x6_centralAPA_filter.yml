@@ -13,54 +13,65 @@
         - "Config": null
         - "Truth": null
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-                  - "SignalParticleK":
-                            - "absbetween": [0, 20]
-                  - "NeutronK":
-                            - "equal": 0
+                - "Primary":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                        - "equal": 0
+                - "Charge":
+                        - "bigger": 150
 
 "CALIBRATION":
         - "Config": null
         - "Truth": null
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-                  - "SignalParticleK":
-                            - "absbetween": [0, 20]
-                  - "NeutronK":
-                            - "equal": 0
+                - "Primary":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                        - "equal": 0
+                - "CorrectedCharge":
+                        - "bigger": 200
 
 "DISCRIMINATION":
         - "Config": null
         - "Truth": null
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-
-                  - "SignalParticleK":
-                            - "absbetween": [0, 20]
-
-                  - "NeutronK":
-                            - "equal": 0
+                - "Primary":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 20]
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":    
+                        - "equal": 0
+                - "CorrectedCharge":
+                        - "bigger": 200
 
 "RECONSTRUCTION":
         - "Config": null
         - "Truth": null
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-
-                  - "SignalParticleK":
-                            - "absbetween": [0, 30]
+                - "Primary":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "CorrectedCharge":
+                        - "bigger": 200
 
 "SMEARING":
         - "Config": null
@@ -70,7 +81,6 @@
                             - "equal": true
                   - "Generator":
                             - "equal": 1
-
                   - "SignalParticleK":
                             - "absbetween": [0, 30]
 
@@ -83,19 +93,4 @@
                   - "Generator":
                             - "equal": 1
                   - "SignalParticleK":
-                            - "absbetween": [0, 30]
-
-"FIDUCIALIZATION":
-        - "Config": null
-        - "Truth": null
-        - "Reco":
-                  #   - "MainParentZ":
-                  #             - "between": [5, 1395]
-                  #   - "MainParentX":
-                  #             - "outside": [-5, 5]
-                  - "RecoX":
-                            - "absbetween": [50, 310]
-                  - "RecoY":
-                            - "absbetween": [50, 550]
-                  - "RecoZ":
-                            - "absbetween": [10, 1390]
+                            - "absbetween": [0, 20]
