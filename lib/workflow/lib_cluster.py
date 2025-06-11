@@ -4,6 +4,7 @@ import numpy as np
 
 from typing import Optional
 from itertools import product
+from rich import print as rprint
 from lib.workflow.functions import remove_branches, get_param_dict, reshape_array
 from lib.workflow.lib_default import get_default_info
 from lib.fit_functions import calibration_func
@@ -120,7 +121,7 @@ def compute_cluster_energy(
                 )
 
             except FileNotFoundError:
-                output += f"\t[yellow]***[WARNING] Correction file not found for {config}. Defaulting to {default_sample}![/yellow]\n"
+                output += f"\t[yellow]***[WARNING] Correction file not found for {config} {name}. Defaulting to {default_sample}![/yellow]\n"
                 corr_info = json.load(
                     open(
                         f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_electroncharge_correction.json",
@@ -164,14 +165,9 @@ def compute_cluster_energy(
                 run["Reco"]["AdjClCharge"][idx] * run["Reco"]["AdjClCorrection"][idx]
             )
 
-            run["Reco"]["AdjClCorrectionFactor"][idx] = (
-                corr_popt[0] * np.exp(-run["Reco"]["AdjClNHits"][idx] / corr_popt[1])
-                + corr_popt[2]
-            )
-
             run["Reco"]["AdjClEnergy"][idx] = (
                 run["Reco"]["AdjClCorrectedCharge"][idx]
-                / run["Reco"]["AdjClCorrectionFactor"][idx]
+                / corr_info["CHARGE_AMP"]
             )
 
     run = remove_branches(
@@ -212,29 +208,47 @@ def compute_cluster_calibration(
 
             for cluster in clusters:
                 try:
-                    corr_info = pickle.load(
+                    corr_slope = pickle.load(
                         open(
-                            f"{root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_calibration.pkl",
+                            f"{root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            "rb",
+                        )
+                    )
+                    corr_intercept = pickle.load(
+                        open(
+                            f"{root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
 
                 except FileNotFoundError:
-                    corr_info = pickle.load(
+                    rprint(
+                        f"[red][ERROR][/red] Calibration file {root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_calibration.pkl not found. Defaulting to {default_sample}!"
+                    )
+                    corr_slope = pickle.load(
                         open(
-                            f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{cluster.lower()}charge_calibration.pkl",
+                            f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            "rb",
+                        )
+                    )
+                    corr_intercept = pickle.load(
+                        open(
+                            f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
 
-                run["Reco"][f"{cluster}EnergyIntercept"][idx] = corr_info(
+                run["Reco"][f"{cluster}EnergySlope"][idx] = corr_slope(
+                    run["Reco"]["NHits"][idx]
+                )
+                run["Reco"][f"{cluster}EnergyIntercept"][idx] = corr_intercept(
                     run["Reco"]["NHits"][idx]
                 )
 
                 run["Reco"][f"{cluster}Energy"][idx] = (
                     run["Reco"][f"{cluster}Energy"][idx]
                     - run["Reco"][f"{cluster}EnergyIntercept"][idx]
-                )
+                ) / run["Reco"][f"{cluster}EnergySlope"][idx]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tClutser energy computation\t-> Done!\n"
@@ -339,22 +353,35 @@ def compute_reco_energy(
             default_sample = "marley"
             try:
                 path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
-                open(path, "r")
+                with open(path, "rb") as model_file:
+                    rf_classifier = pickle.load(model_file)
+
+            except FileNotFoundError:
+                rprint(
+                    f"[red][ERROR][/red] ML model file {root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl not found. Defaulting to {default_sample}!\n"
+                )
+                path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
+
+                with open(path, "rb") as model_file:
+                    rf_classifier = pickle.load(model_file)
+
+            try:
+                discriminant_info = json.load(
+                    open(
+                        f"{root}/config/{config}/{name}/{config}_calib/{config}_discriminant_calibration.json",
+                        "r",
+                    )
+                )
                 output += f"\t[cyan]***[INFO] Loading model for {name}[/cyan]\n"
 
             except FileNotFoundError:
-                output += f"\t[yellow]***[WARNING] ML model file not found for {name}. Defaulting to {default_sample}![/yellow]\n"
-                path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
-
-            with open(path, "rb") as model_file:
-                rf_classifier = pickle.load(model_file)
-
-            discriminant_info = json.load(
-                open(
-                    f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_discriminant_calibration.json",
-                    "r",
+                discriminant_info = json.load(
+                    open(
+                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_discriminant_calibration.json",
+                        "r",
+                    )
                 )
-            )
+                output += f"\t[yellow]***[WARNING][/yellow] Loading model for {default_sample}\n"
 
             def upper_func(x):
                 return x - discriminant_info["UPPER"]["OFFSET"]
@@ -514,6 +541,11 @@ def compute_cluster_time(
             * (np.asarray(run["Reco"]["MatchedOpFlashPE"]) > 0)
             * (np.asarray(run["Reco"]["RecoX"]) > -1e6)
         )
+
+        # Check if idx is empty
+        if len(idx[0]) == 0:
+            output += f"\t[yellow]***[WARNING] No events found with flash-match information! Skipping drift-time computation.[/yellow]\n"
+            return run, output, new_branches + new_vector_branches
 
         reco_time_array = reshape_array(
             run["Reco"]["Time"][idx], len(run["Reco"]["AdjClTime"][idx][0])
