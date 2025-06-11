@@ -321,6 +321,7 @@ def compute_reco_workflow(
                 "DISCRIMINATION",
                 "RECONSTRUCTION",
                 "SMEARING",
+                "ANALYSIS",
             ]
         ].count(True) > 0:
             run, output, this_new_branches = compute_particle_energies(

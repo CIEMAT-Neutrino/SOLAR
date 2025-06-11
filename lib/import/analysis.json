@@ -38,6 +38,11 @@
         19,
         20
     ],
+    "TRUE_ENERGY_RANGE": [
+        0,
+        30
+    ],
+    "TRUE_ENERGY_BINS": 60,
     "RECO_ENERGY_RANGE": [
         0,
         30

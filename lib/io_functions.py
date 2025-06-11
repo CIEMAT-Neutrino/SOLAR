@@ -1,10 +1,12 @@
 import os
+import csv
 import copy
 import json
 import stat
 import pickle
 import plotly
 import uproot
+import argparse
 import numpy as np
 import pandas as pd
 import awkward as ak
@@ -17,6 +19,39 @@ from matplotlib import pyplot as plt
 from src.utils import get_project_root
 
 root = get_project_root()
+
+
+def str2bool(v):
+    if v.lower() in ("yes", "true", "t", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+# Load the CSV file
+def load_contour_csv(
+    file_path: str, compute_sin: bool = False, deltam_factor: float = 1e-5
+) -> list:
+    data = []
+    with open(file_path, newline="") as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            data.append(row)
+    # Convert the first entry of each row (tan²) to sin²
+    for i in range(len(data)):
+        if compute_sin:
+            data[i][0] = str(float(data[i][0]) / (1 + float(data[i][0])))
+        else:
+            data[i][0] = str(float(data[i][0]))
+
+    # Convert the second entry of each row to 10⁻⁴
+    for i in range(len(data)):
+        data[i][1] = str(float(data[i][1]) * deltam_factor)
+    # rprint("Loaded data from CSV file:")
+    # rprint(data)
+    return data
 
 
 def prepare_file_save(
@@ -87,7 +122,7 @@ def prepare_file_save(
         else:
             exists = True
             output += (
-                f"[yellow][WARNING] Rewrite set to {False}. Skipping...[/yellow]\n"
+                f"[yellow][WARNING][/yellow] Rewrite set to {False}. Skipping...\n"
             )
 
     return f"{save_path}/{filename}", exists, output
@@ -201,7 +236,7 @@ def save_figure(
         path=path,
         config=config,
         name=name,
-        subfolder = subfolder,
+        subfolder=subfolder,
         filename=filename,
         rm=rm,
         filetype=filetype,

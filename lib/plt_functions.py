@@ -5,7 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.colors as colors
+
+# import matplotlib.colors as colors
 import matplotlib.cm as cm
 import plotly.graph_objects as go
 
@@ -14,9 +15,12 @@ from rich import print as rprint
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
 from matplotlib.collections import LineCollection
+from plotly.validators.scatter.marker import SymbolValidator
 
 from src.utils import get_project_root
 
+colors = px.colors.qualitative.Prism
+symbols = SymbolValidator().values
 root = get_project_root()
 
 pio.templates["DUNE"] = go.layout.Template(
@@ -572,6 +576,33 @@ def change_hist_color(n, patches, logy=False):
                 patches[j].set_facecolor(plt.cm.viridis(n[j] / np.max(n)))
             patches[j].set_edgecolor("k")
         return patches
+
+
+# Draw the contour into a plotly figure
+def draw_contour(fig, idx, label, data, color="black", dash="solid"):
+    # Convert the data into a numpy array
+    data = np.array(data).astype(float)
+
+    # Create a contour plot from set of 2d points
+    fig.add_trace(
+        go.Scatter(
+            x=data[:, 0],
+            y=data[:, 1],
+            name=label,
+            mode="lines",
+            line=dict(
+                color=color,
+                width=2,
+                dash=dash,
+            ),
+            line_shape="spline",
+            # marker_symbol=symbols[idx],
+            # marker=dict(size=5, color=color),
+            showlegend=idx == 0,
+        )
+    )
+    # Show the figure
+    return fig
 
 
 def draw_hist_colorbar(fig, n, ax, logy=False, pos="right", size="5%", pad=0.05):

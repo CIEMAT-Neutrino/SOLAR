@@ -166,9 +166,13 @@ class Sensitivity_Fitter:
         # Add penalty terms for the fit
         if self.fSigmaBkg > 0 and self.fSigmaPred > 0:
             chisq += ((A_pred) / self.fSigmaPred) ** 2 + ((A_bkg) / self.fSigmaBkg) ** 2
-        elif self.fSigmaBkg > 0:
+
+        elif self.fSigmaBkg > 0 and self.fSigmaPred <= 0:
+            # print("Only background penalty term")
             chisq += ((A_bkg) / self.fSigmaBkg) ** 2
-        elif self.fSigmaPred > 0:
+
+        elif self.fSigmaPred > 0 and self.fSigmaBkg <= 0:
+            # print("Only signal penalty term")
             chisq += ((A_pred) / self.fSigmaPred) ** 2
 
         return chisq
@@ -185,8 +189,14 @@ class Sensitivity_Fitter:
             rprint(f"[red][ERROR] Unknown input type[/red]")
             return -1, -1, -1
 
-        m.limits["A_pred"] = (initial_A_pred - 10, initial_A_pred + 10)
-        m.limits["A_bkg"] = (initial_A_bkg - 10, initial_A_bkg + 10)
+        m.limits["A_pred"] = (
+            initial_A_pred - 100 * self.fSigmaPred,
+            initial_A_pred + 100 * self.fSigmaPred,
+        )
+        m.limits["A_bkg"] = (
+            initial_A_bkg - 100 * self.fSigmaBkg,
+            initial_A_bkg + 100 * self.fSigmaBkg,
+        )
 
         m.migrad()
 

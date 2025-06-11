@@ -51,6 +51,10 @@ nhits = get_default_nhits(root)
 
 energy_edges, energy_centers, ebin = get_default_energies(root)
 
+true_energy_edges, true_energy_centers, true_ebin = get_default_energies(
+    root, "TRUE_ENERGY"
+)
+
 bkg_energy_edges, bkg_energy_centers, bkg_ebin = get_default_energies(
     root, "BKG_RECO_ENERGY"
 )
@@ -68,17 +72,16 @@ hep_rebin = np.append(hep_rebin, np.arange(10, 20, 1))
 hep_rebin = np.append(hep_rebin, np.arange(20, 32, 2))
 hep_rebin_centers = (hep_rebin[1:] + hep_rebin[:-1]) / 2
 
-sensitivity_rebin = np.arange(0, 10, 5)
-sensitivity_rebin = np.append(sensitivity_rebin, np.arange(10, 16, 1))
-sensitivity_rebin = np.append(sensitivity_rebin, np.arange(16, 20, 2))
-sensitivity_rebin = np.append(sensitivity_rebin, np.arange(20, 30, 5))
+sensitivity_rebin = np.arange(0, 10, 10)
+sensitivity_rebin = np.append(sensitivity_rebin, np.arange(10, 22, 0.5))
+sensitivity_rebin = np.append(sensitivity_rebin, np.arange(22, 32, 2))
 sensitivity_rebin_centers = (sensitivity_rebin[1:] + sensitivity_rebin[:-1]) / 2
 
 daynight_rebin = np.arange(0, 8, 8)
-daynight_rebin = np.append(daynight_rebin, np.arange(8, 16, 0.5))
-daynight_rebin = np.append(daynight_rebin, np.arange(16, 32, 1))
+daynight_rebin = np.append(daynight_rebin, np.arange(8, 32, 1))
 daynight_rebin_centers = (daynight_rebin[1:] + daynight_rebin[:-1]) / 2
 
 pio.templates.default = "none"
+# pio.renderers.default = "svg"
 colors = px.colors.qualitative.Prism
 compare = px.colors.qualitative.Plotly

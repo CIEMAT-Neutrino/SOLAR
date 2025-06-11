@@ -320,7 +320,7 @@ def get_pdg_color(pdgs: list[str], debug:bool=False):
             color_dict[pdg] = default_color_dict[pdg]
         except:
             if debug:
-                output += f"[yellow][WARNING] PDG {pdg} not found in default color dictionary![/yellow]\n"
+                output += f"[yellow][WARNING][/yellow] PDG {pdg} not found in default color dictionary!\n"
             color_dict[pdg] = "grey"
 
     if output != "":
