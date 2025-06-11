@@ -50,7 +50,9 @@ rprint(output)
 data = filtered_run["Reco"]
 
 # Plot the calibration workflow
-acc = 100
+acc = int(len(data["Generator"]) / 200)
+if acc > 100:
+    acc = 100
 fit = {
     "color": "grey",
     "func": "linear",

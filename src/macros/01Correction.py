@@ -44,15 +44,19 @@ rprint(output)
 run = compute_reco_workflow(
     run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
 )
-
 filtered_run, mask, output = compute_filtered_run(
-    run, configs, presets=[user_input["workflow"]], debug=user_input["debug"]
+    run,
+    configs,
+    presets=[user_input["workflow"]],
+    debug=user_input["debug"],
 )
 rprint(output)
 data = filtered_run["Reco"]
 
 # Plot the calibration workflow
-acc = 100
+acc = int(len(data["Generator"]) / 200)
+if acc > 100:
+    acc = 100
 per = (1, 99)
 fit = {
     "color": "grey",
@@ -117,7 +121,14 @@ for config in configs:
 
         z = np.mean(h, axis=0)
         z_max = np.argmax(z)
-        y_min[f"{charge}Charge"] = y[np.argmin(z[:z_max])]
+        try:
+            y_min[f"{charge}Charge"] = y[np.argmin(z[:z_max])]
+        except ValueError:
+            if z_max == 0:
+                y_min[f"{charge}Charge"] = y[np.argmin(z)]
+            else:
+                y_min[f"{charge}Charge"] = 0
+
         y_max[f"{charge}Charge"] = y[np.argmax(z)]
         fig.add_trace(
             go.Scatter(
@@ -191,7 +202,7 @@ for config in configs:
         correction_factor[f"{charge}ChargeError"] = {}
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
             this_filter_idx = np.where(
-                (data["NHits"] == nhit)
+                (data["NHits"] >= nhit)
                 & (
                     data[f"{charge}Charge"] / data["ElectronK"]
                     > y_min[f"{charge}Charge"]
