@@ -1,7 +1,7 @@
 from typing import Optional
 from rich import print as rprint
 
-from .workflow.lib_main import compute_main_variables
+from .workflow.lib_main import compute_main_variables, update_default_values
 from .workflow.lib_signal import (
     compute_signal_energies,
     compute_particle_energies,
@@ -63,17 +63,52 @@ def compute_reco_workflow(
         rprint(f"No workflow selected. Returning same run.\n")
         return run
 
-    ### SIGNAL WORKFLOWS
-    elif "TRUTH" in workflow:
+    if "TRUTH" in workflow:
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
-    elif "MARLEY" in workflow:
+
+    elif "EDEP" in workflow:
+        run, output, this_new_branches = compute_signal_energies(
+            run,
+            configs,
+            params,
+            trees=["Truth"],
+            rm_branches=rm_branches,
+            output=output,
+            debug=debug,
+        )
+
+    else:
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
+        run, output, this_new_branches = update_default_values(
+            run,
+            configs,
+            params=params,
+            rm_branches=rm_branches,
+            output=output,
+            debug=debug,
+        )
+        new_branches += this_new_branches
+        run, output, this_new_branches = compute_main_variables(
+            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
+        )
+        new_branches += this_new_branches
+        run, output, this_new_branches = compute_true_drift(
+            run,
+            configs,
+            params=params,
+            rm_branches=rm_branches,
+            output=output,
+            debug=debug,
+        )
+        new_branches += this_new_branches
+
+    if "MARLEY" in workflow:
         run, output, this_new_branches = compute_signal_energies(
             run,
             configs,
@@ -94,11 +129,8 @@ def compute_reco_workflow(
             debug=debug,
         )
         new_branches += this_new_branches
+
     elif "RAW" in workflow:
-        run, output, this_new_branches = compute_true_efficiency(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
         run, output, this_new_branches = compute_signal_energies(
             run,
             configs,
@@ -120,7 +152,6 @@ def compute_reco_workflow(
         )
         new_branches += this_new_branches
 
-    ### TPC WORKFLOWS
     elif "VERTEXING" in workflow:
         default_workflow_params = {
             "MAX_FLASH_R": None,
@@ -133,10 +164,6 @@ def compute_reco_workflow(
             if key not in params:
                 params[key] = default_workflow_params[key]
 
-        run, output, this_new_branches = compute_main_variables(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
         run, output, this_new_branches = compute_adjcl_basics(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -145,6 +172,7 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
+
     elif "TRACK" in workflow:
         run, output, this_new_branches = compute_signal_directions(
             run,
@@ -156,6 +184,7 @@ def compute_reco_workflow(
             debug=debug,
         )
         new_branches += this_new_branches
+
     elif "ADJCL" in workflow:
         run, output, this_new_branches = compute_adjcl_basics(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
@@ -179,6 +208,7 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
+
     elif "OPFLASH" in workflow:
         run, output, this_new_branches = compute_opflash_basic(
             run,
@@ -204,11 +234,8 @@ def compute_reco_workflow(
             debug=debug,
         )
         new_branches += this_new_branches
+
     elif "ADJFLASH" in workflow:
-        run, output, this_new_branches = compute_main_variables(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
         run, output, this_new_branches = compute_opflash_basic(
             run,
             configs,
@@ -242,15 +269,8 @@ def compute_reco_workflow(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
         new_branches += this_new_branches
+
     elif "MATCHEDFLASH" in workflow:
-        run, output, this_new_branches = compute_true_efficiency(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
-        run, output, this_new_branches = compute_main_variables(
-            run, configs, params, rm_branches=rm_branches, output=output, debug=debug
-        )
-        new_branches += this_new_branches
         run, output, this_new_branches = compute_opflash_matching(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -271,25 +291,6 @@ def compute_reco_workflow(
     ].count(True) > 0:
         trees = ["Reco"]
         clusters = [""]
-        if [a in workflow for a in ["SMEARING", "ANALYSIS"]].count(True) > 0:
-            run, output, this_new_branches = compute_true_efficiency(
-                run,
-                configs,
-                params,
-                rm_branches=rm_branches,
-                output=output,
-                debug=debug,
-            )
-            new_branches += this_new_branches
-            run, output, this_new_branches = compute_main_variables(
-                run,
-                configs,
-                params,
-                rm_branches=rm_branches,
-                output=output,
-                debug=debug,
-            )
-            new_branches += this_new_branches
         if [
             a in workflow for a in ["CORRECTION", "CALIBRATION", "DISCRIMINATION"]
         ].count(True) > 0:
@@ -353,15 +354,6 @@ def compute_reco_workflow(
                 or "DISCRIMINATION" in workflow
             ):
                 clusters.append("Electron")
-            run, output, this_new_branches = compute_true_drift(
-                run,
-                configs,
-                params,
-                rm_branches=rm_branches,
-                output=output,
-                debug=debug,
-            )
-            new_branches += this_new_branches
             run, output, this_new_branches = compute_cluster_time(
                 run,
                 configs,

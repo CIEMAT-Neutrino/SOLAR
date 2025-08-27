@@ -10,6 +10,7 @@
             "TSignalPDG": 1,
             "TSignalE": 1,
             "TSignalP": 1,
+            "TSignalK": 1,
             "TSignalX": 1,
             "TSignalY": 1,
             "TSignalZ": 1,
@@ -30,7 +31,9 @@
             "Flag": 1
         },
         "DOUBLES": {
+            "SignalParticlePDG": 0,
             "SignalParticleE": 0,
+            "SignalParticleK": 0,
             "SignalParticleX": 0,
             "SignalParticleY": 0,
             "SignalParticleZ": 0

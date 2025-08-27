@@ -28,6 +28,7 @@
             "TSignalPDG": 1,
             "TSignalMother": 1,
             "MainVertex": 1,
+            "EndVertex": 1,
             "MainParentVertex": 1,
             "AdjClMotherPDG": 1,
             "AdjClMotherID": 1,
@@ -38,6 +39,7 @@
             "AdjClTime": 1,
             "AdjClNHits": 1,
             "AdjClGen": 1,
+            "AdjClPur": 1,
             "AdjClR": 1
         },
         "INTEGERS": {
@@ -47,12 +49,16 @@
             "NHits": 1
         },
         "DOUBLES": {
+            "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1,
             "Time": 1,
             "Charge": 1,
             "RecoX": 1,
-            "MatchedOpFlashPE": 1
+            "RecoY": 1,
+            "RecoZ": 1,
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashPur": 1
         },
         "STRINGS": {},
         "BOOLS": {

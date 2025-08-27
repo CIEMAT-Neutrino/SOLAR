@@ -23,6 +23,7 @@
             "TruthPart": 1,
             "TSignalE": 1,
             "TSignalK": 1,
+            "MainParentVertex": 1,
             "MainVertex": 1,
             "EndVertex": 1,
             "TSignalPDG": 1,
@@ -42,12 +43,14 @@
             "NHits": 1
         },
         "DOUBLES": {
+            "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1,
             "Time": 1,
             "Charge": 1,
             "RecoX": 1,
-            "MatchedOpFlashPE": 1
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashPur": 1
         },
         "STRINGS": {},
         "BOOLS": {

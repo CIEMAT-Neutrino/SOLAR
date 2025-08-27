@@ -26,6 +26,7 @@
         "VECTORS": {
             "MainVertex": 1,
             "EndVertex": 1,
+            "AdjClTime": 1,
             "MainParentVertex": 1,
             "MatchedOpFlashR": 1,
             "MatchedOpFlashPE": 1,
@@ -38,6 +39,7 @@
             "MatchedOpFlashRecoY": 1,
             "MatchedOpFlashRecoZ": 1,
             "MatchedOpFlashMaxPE": 1,
+            "MatchedOpFlashPlane": 1,
             "MatchedOpFlashResidual": 1
         },
         "INTEGERS": {
@@ -60,7 +62,8 @@
             "RecoX": 1,
             "RecoY": 1,
             "RecoZ": 1,
-            "Charge": 1
+            "Charge": 1,
+            "AdjClMainX": 1
         },
         "STRINGS": {},
         "BOOLS": {

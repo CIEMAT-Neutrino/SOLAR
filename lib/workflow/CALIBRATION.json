@@ -31,8 +31,9 @@
             "TSignalK": 1,
             "TSignalPDG": 1,
             "TSignalMother": 1,
-            "MainVertex": 1,
             "MainParentVertex": 1,
+            "MainVertex": 1,
+            "EndVertex": 1,
             "AdjClMotherPDG": 1,
             "AdjClMotherID": 1,
             "AdjClMainPDG": 1,
@@ -55,10 +56,13 @@
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
-            "Time": 1,
             "Charge": 1,
             "RecoX": 1,
-            "MatchedOpFlashPE": 1
+            "RecoY": 1,
+            "RecoZ": 1,
+            "Time": 1,
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashPur": 1
         },
         "STRINGS": {},
         "BOOLS": {

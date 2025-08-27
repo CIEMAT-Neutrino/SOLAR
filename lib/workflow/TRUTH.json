@@ -41,7 +41,11 @@
         "VECTORS": {
             "TSignalK": 1,
             "TSignalPDG": 1,
-            "TSignalMother": 1
+            "TSignalMother": 1,
+            "MainParentVertex": 1,
+            "MainVertex": 1,
+            "EndVertex": 1,
+            "AdjClTime": 1
         },
         "INTEGERS": {
             "Event": 1,

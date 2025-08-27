@@ -15,6 +15,7 @@
             "Flag": 1
         },
         "DOUBLES": {
+            "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1
         },
@@ -51,6 +52,7 @@
             "Matching": -1
         },
         "DOUBLES": {
+            "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1,
             "MainE": 1,
