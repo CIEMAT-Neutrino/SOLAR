@@ -23,8 +23,8 @@
                         - "equal": 0
                 - "ProtonK":
                         - "equal": 0
-                - "Charge":
-                        - "bigger": 150
+                - "TrueMain":
+                        - "equal": True
 
 "CALIBRATION":
         - "Config": null
@@ -40,8 +40,8 @@
                         - "equal": 0
                 - "ProtonK":
                         - "equal": 0
-                - "CorrectedCharge":
-                        - "bigger": 200
+                - "TrueMain":
+                        - "equal": True
 
 "DISCRIMINATION":
         - "Config": null
@@ -52,13 +52,13 @@
                 - "Generator":
                         - "equal": 1
                 - "SignalParticleK":
-                        - "absbetween": [0, 20]
+                        - "absbetween": [0, 30]
                 - "NeutronK":
                         - "equal": 0
                 - "ProtonK":    
                         - "equal": 0
-                - "CorrectedCharge":
-                        - "bigger": 200
+                - "TrueMain":
+                        - "equal": True
 
 "RECONSTRUCTION":
         - "Config": null
@@ -70,19 +70,21 @@
                         - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
-                - "CorrectedCharge":
-                        - "bigger": 200
+                - "TrueMain":
+                        - "equal": True
 
 "SMEARING":
         - "Config": null
         - "Truth": null
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-                  - "SignalParticleK":
-                            - "absbetween": [0, 30]
+                - "Primary":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "TrueMain":
+                        - "equal": True
 
 "ANALYSIS":
         - "Config": null

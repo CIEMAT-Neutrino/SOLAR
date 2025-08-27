@@ -1,15 +1,34 @@
 {
-    "SIGNAL_FLASH_MAX_TIME": 5,
-    "SIGNAL_FLASH_MIN_TIME": 0,
-    "PRESELECTION_NHITS": 3,
-    "MAX_ADJCL_R": 100,
-    "MAX_ADJCL_TIME": 1200,
-    "MAX_FLASH_R": 200,
-    "MIN_FLASH_PE": 100,
-    "MAX_FLASH_PE_RATIO": 0.25,
+    "CALIBRATION_THRESHOLD": 0.001,
+    "FIRST_CALIBRATION_TRIM": [
+        10,
+        2
+    ],
+    "CALIBRATION_TRIM": [
+        5,
+        5
+    ],
+    "DISCRIMINATION_THRESHOLD": 0.0005,
+    "SAMPLE_FIT": {
+        "ClusterEnergy": "linear",
+        "TotalEnergy": "linear",
+        "SelectedEnergy": "linear",
+        "SolarEnergy": "linear"
+    },
+    "MIN_SAMPLE_TRIM": {
+        "ClusterEnergy": 0.2,
+        "TotalEnergy": 0.0,
+        "SelectedEnergy": 0.0,
+        "SolarEnergy": 0.0
+    },
+    "MAX_SAMPLE_TRIM": {
+        "ClusterEnergy": 0.3,
+        "TotalEnergy": 0.5,
+        "SelectedEnergy": 0.5,
+        "SolarEnergy": 0.5
+    },
     "DEFAULT_ANALYSIS_ENERGY": "SolarEnergy",
     "DEFAULT_CHARGE_VARIABLE": "Charge",
-    "DEFAULT_RECOX_TIME": "MatchedOpFlashTime",
     "DEFAULT_ENERGY_TIME": "RecoDriftTime",
     "DEFAULT_ADJCL_ENERGY_TIME": "AdjClRecoDriftTime",
     "DEFAULT_ADJCLCHARGE_VARIABLE": "AdjCharge",
@@ -19,24 +38,13 @@
     "DEFAULT_SIGNAL_AZIMUTH": [
         "mean"
     ],
-    "DEFAULT_SIGNAL_DM2": 6.0e-5,
+    "DEFAULT_SIGNAL_DM2": 6e-05,
     "DEFAULT_SIGNAL_SIN13": 0.021,
     "DEFAULT_SIGNAL_SIN12": 0.303,
-    "RANDOM_CORRECTION_RATIO": 0.0,
-    "MIN_BKG_R": 25,
-    "MAX_BKG_CHARGE": 1000000,
-    "COMPUTE_MATCHING": true,
+    "MIN_BKG_R": 12.431392097473145,
+    "MAX_BKG_CHARGE": 303.1417968750001,
+    "MAX_BKG_ENERGY": 0.5,
     "MAIN_PDG": 22,
-    "MAX_CL_E": 30,
-    "MIN_CL_E": 5,
-    "MAX_ADJCL_E": 30,
-    "MIN_ADJCL_E": 0,
-    "MAX_MAIN_E": 30,
-    "MIN_MAIN_E": 0,
-    "MAX_DRIFT_FACTOR": 1,
-    "MAX_ENERGY_PER_HIT": 3.5,
-    "MIN_ENERGY_PER_HIT": 0,
-    "FIDUTIAL_FACTOR": 0.1,
     "NORM_TO_NUE": false,
     "COMPUTE_STANDARD_WEIGHTS": true
 }
