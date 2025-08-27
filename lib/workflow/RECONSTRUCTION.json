@@ -49,6 +49,8 @@
             "Time": 1,
             "Charge": 1,
             "RecoX": 1,
+            "RecoY": 1,
+            "RecoZ": 1,
             "MatchedOpFlashPE": 1,
             "MatchedOpFlashPur": 1
         },
