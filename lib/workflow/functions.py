@@ -14,10 +14,16 @@ from lib.fit_functions import calibration_func
 from lib.workflow.lib_default import get_default_info
 
 from src.utils import get_project_root
+
 root = get_project_root()
 
 
-def get_param_dict(config_file: dict, in_params: Optional[dict] = None, output: Optional[str] = None, debug: bool = False):
+def get_param_dict(
+    config_file: dict,
+    in_params: Optional[dict] = None,
+    output: Optional[str] = None,
+    debug: bool = False,
+):
     """
     Get the parameters for the reco workflow from the input files.
     """
@@ -38,12 +44,14 @@ def get_param_dict(config_file: dict, in_params: Optional[dict] = None, output: 
                     # Check if info string is already in the output
                     if info_string not in output:
                         output += info_string
-            else:
+            
+            elif in_params[param] is not None:
                 params[param] = in_params[param]
-                warning_string = f"\t[yellow]***[WARNING] Applying {param}: {in_params[param]} from the input dictionary[/yellow]\n"
+                warning_string = f"\t[yellow]***[WARNING][/yellow] Applying {param}: {in_params[param]} from the input dictionary\n"
                 # Check if warning string is already in the output
                 if warning_string not in output:
                     output += warning_string
+        
         except KeyError:
             pass
 

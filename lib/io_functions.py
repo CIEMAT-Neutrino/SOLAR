@@ -364,6 +364,7 @@ def root2npy(root_info, user_input, trim: bool = False, debug=False):
                 this_array = f[root_info["Folder"] + "/" + tree][branch].array()
                 if trim != False and debug:
                     rprint("Selected trimming value: ", trim)
+
                 resized_array = resize_subarrays(this_array, 0, trim=trim, debug=debug)
                 save2pnfs(
                     path + name + "/" + out_folder + "/" + branch + ".npy",
@@ -405,10 +406,32 @@ def resize_subarrays(array, value, trim=False, debug=False):
     check_expand = False
 
     try:
-        np.asarray(array, dtype=float)
-        check_expand = False
+        array_type = type(array[0])
+        if isinstance(array[0], int):
+            np.array(array, dtype=np.int64)
+        elif isinstance(array[0], float):
+            np.array(array, dtype=np.float32)
+        elif isinstance(array[0], bool):
+            np.array(array, dtype=np.bool_)
+        elif isinstance(array[0], str):
+            np.array(array, dtype=np.str_)
+        elif isinstance(array[0], list):
+            # Check that array is not empty
+            if len(array[0]) > 0:
+                array_type = type(array[0][0])
+                check_expand = True
+            else:
+                array_type = list
+                np.array(array, dtype=object)
+        # elif isinstance(array[0][0], str):
+        #     array_type = type(array[0][0])
+        #     np.array(array, dtype=np.str_)
+
         if debug:
-            rprint(f"[green]-> Array can be converted to numpy array![/green]")
+            rprint(
+                f"[green]-> Array of type {array_type} can be converted to numpy array![/green]"
+            )
+
     except ValueError:
         check_expand = True
         if debug:
@@ -424,7 +447,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
                     f"[cyan]-> Max/Mean length of subarrays {max_len}/{mean_len:.2f}[/cyan]"
                 )
 
-            if max_len != mean_len:
+            if max_len != int(mean_len):
                 expand = True
                 if trim:
                     std_len = np.std(list(map(len, array)))
@@ -435,7 +458,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
             expand = True
 
         if expand:
-            tot_array = resize_subarrays_fixed(array, value, max_len, debug=debug)
+            tot_array = resize_subarrays_fixed(array, value, int(max_len), debug=debug)
         else:
             tot_array = array
     else:
@@ -446,7 +469,7 @@ def resize_subarrays(array, value, trim=False, debug=False):
     return np.asarray(tot_array)
 
 
-def resize_subarrays_fixed(array, value, max_len, debug: bool = False):
+def resize_subarrays_fixed(array, value, max_len: int, debug: bool = False):
     """
     Resize the arrays so that the have the same lenght and numpy can handle them
     The arrays with len < size are filled with 0 until they have selected size
@@ -471,6 +494,7 @@ def resize_subarrays_fixed(array, value, max_len, debug: bool = False):
         ]
         if debug:
             rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
+
     except AttributeError:
         tot_array = [
             (
@@ -482,6 +506,7 @@ def resize_subarrays_fixed(array, value, max_len, debug: bool = False):
         ]
         if debug:
             rprint(f"[green]-> Successfully resized array to {max_len}[/green]")
+
     except TypeError:
         tot_array = array
         if debug:
@@ -834,11 +859,11 @@ def load_multi(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
                 if debug:
-                    output += f"[cyan][INFO] Loaded all branches for {config}: {name}![/cyan]\n"
+                    output += f"[cyan][INFO][/cyan]: Loaded all branches for {config}: {name}!\n"
 
             elif preset is not None:
                 if debug:
-                    output += f"[cyan][INFO] Loaded preset branches {config}: {name}![/cyan]\n"
+                    output += f"[cyan][INFO][/cyan]: Loaded preset branches {config}: {name}!\n"
 
                 branches_dict = get_workflow_branches(
                     trees=tree_labels, workflow=preset, debug=debug
@@ -854,7 +879,7 @@ def load_multi(
                 files_notfound[tree] = []
                 if len(branches_dict[tree]) == 0:
                     if debug:
-                        output += f"\n[red]No branches found for {tree} tree![/red]"
+                        output += f"\n[red]No branches found for {tree} tree![/red]\n"
                     continue
                 else:
                     if idx == 0 and jdx == 0:
@@ -960,7 +985,7 @@ def load_multi(
                     if (key == "Event" and tree != "Config") or (
                         key == "Geometry" and tree == "Config"
                     ):
-                        output += f"\nLoaded {config} events:\t{len(branch)}\t from {tree} -> {name}"
+                        output += f"Loaded {config} events:\t{len(branch)}\t from {tree} -> {name}\n"
 
             if debug and len(files_notfound) > 0:
                 output += f"\n[red]Missing branches: [/red]\n{files_notfound}\n"
