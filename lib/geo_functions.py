@@ -1,6 +1,6 @@
 import plotly.graph_objects as go
 
-def add_geometry_planes(fig, geo, row=None, col=None, debug=False):
+def add_geometry_planes(fig, geo, unzoom:float=1, row=None, col=None, debug=False):
     '''
     Function to add the TPC planes to the 3D plot of a given geometry.
 
@@ -32,7 +32,7 @@ def add_geometry_planes(fig, geo, row=None, col=None, debug=False):
         camera = dict(
             up=dict(x=1, y=0.5, z=0.5),
             center=dict(x=-0.25, y=0, z=0),
-            eye=dict(x=0.25, y=1, z=1))
+            eye=dict(x=0.25 * unzoom, y=1 * unzoom, z=1 * unzoom))  # Unzoom 20%
 
         fig.update_layout(scene_aspectmode='auto',scene_camera=camera)
 
