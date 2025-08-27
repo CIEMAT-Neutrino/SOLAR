@@ -33,13 +33,6 @@ def resolution(x, p0, p1, p2, b):
     return residuals
 
 
-def polinomial(x, *p, debug=False):
-    """
-    Polynomial function.
-    """
-    return np.polyval(p, x)
-
-
 def peak(x, coefficients, debug=False):
     """
     Peak finder function.
@@ -115,23 +108,23 @@ def linear(x, coefficients, debug=False):
     return m * np.asarray(x) + n
 
 
-def fit_hist2d(x, y, z, fit={"func": "polynomial"}, debug=False):
+def quadratic(x, coefficients, debug=False):
+    """
+    Quadratic function.
+    """
+    a = coefficients[0]
+    b = coefficients[1]
+    n = coefficients[2]
+    return a * np.power(x, 2) + b * x + n
+
+
+def fit_hist2d(x, y, z, fit={"func": "exponential"}, debug=False):
     """
     Given a 2D histogram, fit a function to the histogram's cresst.
     """
     if x.shape != z.shape:
         print("\nFlattening 2D histogram...")
         x, y, z = flatten_hist2d(x, y, z, debug=debug)
-
-    if fit["func"] == "polynomial":
-        print("Fitting polynomial...")
-
-        def func(x, *coefficients, debug=False):
-            return z + polynomial(x, coefficients, debug=debug)
-
-        initial_guess = np.random.randn(
-            3
-        )  # Provide an initial guess for the polynomial coefficients
 
     if fit["func"] == "exponential":
         print("Fitting exponential...")
@@ -144,7 +137,6 @@ def fit_hist2d(x, y, z, fit={"func": "polynomial"}, debug=False):
             1e4,
         )  # Provide an initial guess for the exponential coefficients
 
-    # Fitting the polynomial line to the data
     popt, _ = curve_fit(func, x, y, p0=initial_guess)
 
     return popt
@@ -212,64 +204,80 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         print("z.shape: ", z.shape)
         raise ValueError
 
+    if "threshold" not in fit:
+        fit["threshold"] = 0
+
     x = np.asarray(x)
     y = np.asarray(y)
     z = np.asarray(z)
     z_max = np.argmax(z, axis=1)
+    z_max_value = np.max(z, axis=1)
 
     if fit["spec_type"] == "max":
         y_max = y[z_max]
-        return x, y_max
+        # Filter out the values below the threshold
+        x = x[z_max_value > fit["threshold"]]
+        y_max = y_max[z_max_value > fit["threshold"]]
+        sigma = 1 / np.sqrt(z_max_value[z_max_value > fit["threshold"]])
+        return x, y_max, sigma
 
     if fit["spec_type"] == "mean":
         y_mean = np.sum(y * z[z > np.max(z_max) * fit["threshold"]], axis=1) / np.sum(
             z[z > np.max(z_max) * fit["threshold"]], axis=1
         )
-        return x, y_mean
+        sigma = 1 / np.sqrt(np.sum(z[z > np.max(z_max) * fit["threshold"]], axis=1))
+        return x, y_mean, sigma
 
     if fit["spec_type"] == "top":
         # threshold = 0.25
         z_max = np.max(z, axis=1)
         y_top = np.zeros(len(x))
+        sigma_top = np.zeros(len(x))
         for i in range(len(x)):
             for j in range(len(y)):
                 if z[i, j] > z_max[i] * fit["threshold"]:
                     y_top[i] = y[j]
+                    sigma_top[i] = 1 / np.sqrt(z_max[i])
         if debug:
             print("Spectrum arrays (x,y):", x.shape, y_top.shape, sep=" ")
-        return x, y_top
+        return x, y_top, sigma_top
 
     if fit["spec_type"] == "bottom":
         # threshold = 0.20
         z_max = np.max(z, axis=1)
         y_bottom = np.zeros(len(x))
+        sigma_bottom = np.zeros(len(x))
         for i in range(len(x)):
             for j in range(len(y)):
                 if z[i, j] > z_max[i] * fit["threshold"]:
                     y_bottom[i] = y[j]
+                    sigma_bottom[i] = 1 / np.sqrt(z_max[i])
                     break
         if debug:
             print("Spectrum arrays (x,y):", x.shape, y_bottom.shape, sep=" ")
-        return x, y_bottom
+        return x, y_bottom, sigma_bottom
 
     if fit["spec_type"] == "top+bottom":
-        # threshold = 0.35
         z_max = np.max(z, axis=1)
         y_top = np.zeros(len(x))
+        sigma_top = np.zeros(len(x))
         y_bottom = np.zeros(len(x))
+        sigma_bottom = np.zeros(len(x))
         for i in range(len(x)):
             for j in range(len(y)):
                 if z[i, j] > z_max[i] * fit["threshold"]:
                     y_top[i] = y[j]
-        # threshold = 0.35
+                    sigma_top[i] = 1 / np.sqrt(z_max[i])
+
         for i in range(len(x)):
             for j in range(len(y)):
                 if z[i, j] > z_max[i] * fit["threshold"]:
                     y_bottom[i] = y[j]
+                    sigma_bottom[i] = 1 / np.sqrt(z_max[i])
                     break
         if debug:
             print("Spectrum arrays (x,y):", x.shape, y_bottom.shape, sep=" ")
-        return x, y_top, y_bottom
+        return x, (y_top, y_bottom), (sigma_top, sigma_bottom)
 
 
 def plot_hist1d_signal(x, y, signal, fig, idx, debug: bool = False):
@@ -322,9 +330,12 @@ def get_hist1d(
     Returns:
         x (array): x-axis array.
         y (array): y-axis array.
+        sigma (array): sigma array.
+        labels (str): labels.
+        output (str): debug output.
     """
     output = ""
-    h, x_bins, labels = [], [], []
+    h, x_bins, sigma, labels = [], [], [], []
     if scan_y is None:
         if len(x) > 0:
             x, this_output = remove_nans_and_infs(x, debug=debug)
@@ -339,13 +350,13 @@ def get_hist1d(
 
             if norm:
                 h = h / (np.sum(h))
-
+            sigma = 1 / np.sqrt(h)
             output += this_output
-            return x_array, h, "Spectrum"
+            return x_array, h, sigma, "Spectrum", output
 
         else:
             output += "[red]ERROR: Returning empty array![/red]"
-            return None, None, None
+            return None, None, None, None, output
 
     else:
         # Check if scan_y is the same length as x
@@ -390,17 +401,17 @@ def get_hist1d(
                 this_h, this_x_bins = np.histogram(
                     this_filtered_x, bins=x_array, density=density
                 )
+                this_sigma = 1 / np.sqrt(this_h)
 
             if norm:
                 this_h = this_h / (np.sum(this_h))
+                this_sigma = 1 / np.sqrt(this_h)
 
             x_bins.append(x_array)
             h.append(this_h)
+            sigma.append(this_sigma)
 
-        if debug and output != None and output != "":
-            rprint(output)
-
-        return x_bins, h, labels
+        return x_bins, h, sigma, labels, output
 
 
 def get_variable_scan(
@@ -481,8 +492,15 @@ def get_variable_scan(
 def fit_hist1d(
     x,
     y,
-    fit={"func": "polynomial", "trimm": (1, 1), "show": True, "print": True},
-    debug=False,
+    sigma: Optional[np.ndarray] = None,
+    fit: dict = {
+        "bounds": None,
+        "func": "linear",
+        "trimm": (1, 1),
+        "show": True,
+        "print": True,
+    },
+    debug: bool = False,
 ):
     """
     Given a 1D histogram, fit a function to the histogram.
@@ -490,92 +508,127 @@ def fit_hist1d(
     Args:
         x (array): x-axis array.
         y (array): y-axis array.
-        func (str): function to fit to histogram (exponential, polynomial, etc.).
+        func (str): function to fit to histogram (exponential, etc.).
         trimm (tuple[int]): number of bins to remove from the beginning and end of the histogram.
         debug (bool): If True, the debug mode is activated.
 
     Returns:
         func (function): function to fit to histogram.
     """
-    # Remove x values at the beginning and end of the array
-    x = x[fit["trimm"][0] : -fit["trimm"][1]]
-    y = y[fit["trimm"][0] : -fit["trimm"][1]]
+    if "trimm" in fit:
+        # Check that trimming does not reduce the array to zero length
+        if len(x[fit["trimm"][0] : -fit["trimm"][1]]) <= 2:
+            rprint("[red]ERROR: Trimming too much![/red]")
 
-    if fit["func"] == "slope1":
-        if fit["print"] and debug:
-            rprint("Fitting line...")
+        else:
+            # Remove x values at the beginning and end of the array
+            x = x[fit["trimm"][0] : -fit["trimm"][1]]
+            y = y[fit["trimm"][0] : -fit["trimm"][1]]
+            sigma = (
+                sigma[fit["trimm"][0] : -fit["trimm"][1]] if sigma is not None else None
+            )
+
+    # Check if "func" is in the fit dictionary
+    if "func" not in fit:
+        rprint("[yellow]WARNING: Function not specified![/yellow]")
+        return None, None, None, None
+
+    elif fit["func"] == "slope1":
+        # if fit["print"] and debug:
+        #     rprint("Fitting line...")
 
         def func(x, *coefficients, debug=False):
             return slope1(x, coefficients, debug=debug)
 
         labels = ["Intercept"]
         initial_guess = np.random.randn(1)
-        bounds = ([-np.inf], [np.inf])
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([-np.inf], [np.inf])
 
-    if fit["func"] == "linear":
-        if fit["print"] and debug:
-            rprint("Fitting line...")
+    elif fit["func"] == "linear":
+        # if fit["print"] and debug:
+        #     rprint("Fitting line...")
 
         def func(x, *coefficients, debug=False):
             return linear(x, coefficients, debug=debug)
 
         labels = ["Slope", "Intercept"]
         initial_guess = [1, 0]
-        bounds = ([0, -np.inf], [10, np.inf])
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([0, -np.inf], [0, np.inf])
 
-    if fit["func"] == "polynomial":
-        if fit["print"] and debug:
-            rprint("Fitting polynomial...")
+    elif fit["func"] == "quadratic":
+        # if fit["print"] and debug:
+        #     rprint("Fitting quadratic...")
 
         def func(x, *coefficients, debug=False):
-            return polynomial(x, coefficients, debug=debug)
+            return quadratic(x, coefficients, debug=debug)
 
-        initial_guess = np.random.randn(3)
-        bounds = ([-np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf])
-        labels = len(initial_guess) * ["coef"]
+        labels = ["Curvature", "Slope", "Intercept"]
+        initial_guess = [1e-6, 1, -1]
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([1e-10, 1e-10, -np.inf], [np.inf, np.inf, 5])
 
-    if fit["func"] == "exponential":
-        if fit["print"] and debug:
-            rprint("Fitting exponential...")
+    elif fit["func"] == "exponential":
+        # if fit["print"] and debug:
+        #     rprint("Fitting exponential...")
 
         def func(x, *coefficients, debug=False):
             return exp(x, coefficients, debug=debug)
 
         labels = ["Amplitude", "Tau"]
         initial_guess = (1e2, 1e4)
-        bounds = ([0, 0], [np.inf, np.inf])
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([0, 0], [np.inf, np.inf])
 
-    if fit["func"] == "exponential_offset":
-        if fit["print"] and debug:
-            rprint("Fitting exponential...")
+    elif fit["func"] == "exponential_offset":
+        # if fit["print"] and debug:
+        #     rprint("Fitting exponential...")
 
         def func(x, *coefficients, debug=False):
             return exp(x, coefficients, debug=debug)
 
         labels = ["Amplitude", "Tau", "Offset"]
         initial_guess = (1e2, 1e4, 0)
-        bounds = ([0, 0, -np.inf], [np.inf, np.inf, np.inf])
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([0, 0, -np.inf], [np.inf, np.inf, np.inf])
 
-    if fit["func"] == "gauss":
-        if fit["print"] and debug:
-            rprint("Fitting gaussian...")
+    elif fit["func"] == "gauss":
+        # if fit["print"] and debug:
+        #     rprint("Fitting gaussian...")
 
         def func(x, *coefficients, debug=False):
             return gauss(x, coefficients, debug=debug)
 
         labels = ["Amplitude", "Mean", "Sigma"]
         initial_guess = (np.max(y), x[np.argmax(y)], np.std(y))
-        bounds = ([0, -np.inf, 0], [np.inf, np.inf, np.inf])
+        if "bounds" not in fit or fit["bounds"] is None:
+            fit["bounds"] = ([0, -np.inf, 0], [np.inf, np.inf, np.inf])
         # initial_guess = (0,0,0)
 
-    # Fitting the polynomial line to the data
+    else:
+        rprint("[red][ERROR][/red]: Function not recognized![/red]")
+        return None, None, None, None
+
     try:
-        popt, pcov = curve_fit(func, x, y, p0=initial_guess, bounds=bounds)
+        popt, pcov = curve_fit(
+            func,
+            x,
+            y,
+            sigma=sigma,
+            p0=initial_guess,
+            bounds=fit["bounds"],
+            check_finite=True,
+        )
         perr = np.sqrt(np.diag(pcov))
 
-    except RuntimeError:
-        rprint("[yellow][WARNING] Fit could not be performed with bounds![/yellow]")
-        popt, pcov = curve_fit(func, x, y, p0=initial_guess)
+    except ValueError:
+        rprint("[yellow][WARNING][/yellow] ValueError: `sigma` has incorrect shape.")
+        if debug:
+            rprint(
+                f"[cyan][INFO][/cyan]: x = {np.shape(x)}; y = {np.shape(y)}; sigma = {np.shape(sigma)}"
+            )
+        popt, pcov = curve_fit(func, x, y, p0=initial_guess, bounds=fit["bounds"])
         perr = np.sqrt(np.diag(pcov))
 
     return func, labels, popt, perr
@@ -585,10 +638,12 @@ def get_hist2d(
     x,
     y,
     per: tuple = (1, 99),
-    acc=50,
-    norm=True,
-    density=False,
+    acc=None,
+    norm: bool = False,
+    density: bool = False,
+    nanz: bool = False,
     logz: bool = False,
+    zoom: bool = False,
     debug: bool = False,
 ):
     """
@@ -612,21 +667,52 @@ def get_hist2d(
     # Compute the number of bins using the Freedman-Diaconis rule
     # https://en.wikipedia.org/wiki/Freedman%E2%80%93Diaconis_rule
     # acc = 2 * IQR(x) / (n^(1/3))
-    if type(acc) == int:
-        acc = (acc, acc)
+    if acc is None:
+        x_array = generate_bins(50, x, debug=debug)
+        y_array = generate_bins(50, y, debug=debug)
 
-    x_array = generate_bins(acc[0], x, debug=debug)
-    y_array = generate_bins(acc[1], y, debug=debug)
+    elif isinstance(acc, int):
+        x_array = generate_bins(acc, x, debug=debug)
+        y_array = generate_bins(acc, y, debug=debug)
+
+    elif isinstance(acc, tuple):
+        if len(acc) == 1:
+            x_array = generate_bins(acc[0], x, debug=debug)
+            y_array = generate_bins(acc[0], y, debug=debug)
+        elif len(acc) == 2:
+            x_array = generate_bins(acc[0], x, debug=debug)
+            y_array = generate_bins(acc[1], y, debug=debug)
+        else:
+            rprint(
+                "[red]ERROR[/red]: acc must be a string ('x' or 'y'), an int or a tuple of length 1 or 2!"
+            )
+            return None, None, None
+
+    elif isinstance(acc, str):
+        if acc == "y":
+            y_array = generate_bins(50, y, debug=debug)
+            x_array = y_array
+        elif acc == "x":
+            x_array = generate_bins(50, x, debug=debug)
+            y_array = x_array
+
+    else:
+        rprint(
+            "[red]ERROR[/red]: acc must be a string ('x' or 'y'), an int or a tuple of length 1 or 2!"
+        )
+        return None, None, None
 
     try:
         h, x_edges, y_edges = np.histogram2d(
             x, y, bins=[x_array, y_array], density=density
         )
+
     except TypeError:
         h, x_edges, y_edges = np.histogram2d(x, y, density=density)
 
     if logz:
         h = np.log10(h)
+
     if norm:
         h = h / (np.sum(h))
     # x, y = (x[1:] + x[:-1]) / 2, (y[1:] + y[:-1]) / 2
@@ -634,8 +720,19 @@ def get_hist2d(
         y_edges[1:] + y_edges[:-1]
     ) / 2
 
-    if debug:
+    if zoom:
+        last_non_zero_x = np.where(np.any(h != 0, axis=1))[0][-1]
+        last_non_zero_y = np.where(np.any(h != 0, axis=0))[0][-1]
+        x_centers = x_centers[: last_non_zero_x + 1]
+        y_centers = y_centers[: last_non_zero_y + 1]
+        h = h[: last_non_zero_x + 1, : last_non_zero_y + 1]
+
+    if nanz:
+        h = np.where(h == 0, np.nan, h)
+
+    if debug and output != None and output != "":
         rprint(output)
+
     return x_centers, y_centers, h
 
 
@@ -686,18 +783,18 @@ def get_hist2d_fit(
         x, y, per=per, acc=acc, density=density, logz=logz, debug=debug
     )
     plot_z = hz.T.copy()
-
     if nanz:
-        plot_z[plot_z == 0] = np.nan
-    if logz:
-        plot_z = np.log10(plot_z)
+        plot_z = np.where(plot_z == 0, np.nan, plot_z)
 
     fig.add_trace(
         go.Heatmap(z=plot_z, x=hx, y=hy, coloraxis="coloraxis"), row=idx[0], col=idx[1]
     )
 
     if fit["spec_type"] == "intercept":
+        if "range" not in fit:
+            fit["range"] = (0, 10)
         popt, perr, labels = [], [], []
+
         intercepts = find_hist2d_intercept(
             x,
             y,
@@ -724,8 +821,14 @@ def get_hist2d_fit(
             labels = np.concatenate((labels, ["Intercept"]))
 
     else:
-        x_spec, y_spec = spectrum_hist2d(hx, hy, hz, fit=fit, debug=debug)
-        func, labels, popt, perr = fit_hist1d(x_spec, y_spec, fit=fit, debug=debug)
+        x_spec, y_spec, sigma = spectrum_hist2d(hx, hy, hz, fit=fit, debug=debug)
+        if len(x_spec) >= 2:
+            func, labels, popt, perr = fit_hist1d(
+                x_spec, y_spec, sigma, fit=fit, debug=debug
+            )
+        else:
+            rprint("[red]ERROR[/red]: Not enough data points to fit!")
+            return fig, None, None
 
         fig = plot_hist2d_fit(
             fig=fig,
@@ -775,10 +878,14 @@ def plot_hist2d_fit(
         col=idx[1],
     )
     if fit["show"]:
+        if "trimm" in fit:
+            x = x[fit["trimm"][0] : -fit["trimm"][1]]
+            y = y[fit["trimm"][0] : -fit["trimm"][1]]
+
         fig.add_trace(
             go.Scatter(
-                x=x[fit["trimm"][0] : -fit["trimm"][1]],
-                y=y[fit["trimm"][0] : -fit["trimm"][1]],
+                x=x,
+                y=y,
                 mode="markers",
                 marker=dict(color=fit["color"], opacity=fit["opacity"]),
                 name="Spectrum",
@@ -809,7 +916,7 @@ def get_hist1d_fit(
         idx (tuple(int)): (row, col) index of subplot.
             row (int): row of subplot.
             col (int): column of subplot.
-        func (str): function to fit to histogram (exponential, polynomial, etc.).
+        func (str): function to fit to histogram (exponential, etc.).
         trimm (tuple[int]): number of bins to remove from the beginning and end of the histogram.
         debug (bool): If True, the debug mode is activated.
 
@@ -818,8 +925,10 @@ def get_hist1d_fit(
         popt (array): array with the fit parameters.
         perr (array): array with the fit errors.
     """
-    x_list, h_list, labels = get_hist1d(x, per=per, acc=acc, debug=debug)
-    for x, h in zip(x_list, h_list):
+    x_list, h_list, sigma_list, labels, output = get_hist1d(
+        x, per=per, acc=acc, debug=debug
+    )
+    for x, h, sigma in zip(x_list, h_list, sigma_list):
         fig.add_trace(
             go.Bar(x=x, y=h, marker=dict(color="grey"), name="Spectrum"),
             row=idx[0],
@@ -828,7 +937,7 @@ def get_hist1d_fit(
         fig.update_layout(bargap=0)
 
         try:
-            func, labels, popt, perr = fit_hist1d(x, h, fit=fit, debug=debug)
+            func, labels, popt, perr = fit_hist1d(x, h, sigma, fit=fit, debug=debug)
             # Add text to the plot with the fit parameters
             text = ""
             for i in range(len(labels)):
@@ -903,9 +1012,9 @@ def find_hist2d_intercept(
                         counts[-1] = bins[np.argmax(bins)]
                         if show:
                             plt.step(bar[:-1], bins, where="post", label="b = %f" % b)
-                    else:
-                        if debug:
-                            print("Skipping", b, intercepts[-1])
+                    # else:
+                    #     if debug:
+                    #         print("Skipping", b, intercepts[-1])
                 else:
                     intercepts.append(b)
                     counts.append(bins[np.argmax(bins)])
@@ -1094,10 +1203,10 @@ def remove_outliers(
         try:
             lims = np.percentile(x, per, axis=0, keepdims=False)
             reduced_x = [i for i in x if lims[0] <= i <= lims[1]]
-            if debug:
-                rprint(
-                    f"[cyan]INFO: Percentile limits: {str(lims)} reducing array to {100*len(reduced_x)/len(x):.1f}%[/cyan]"
-                )
+            # if debug:
+            #     rprint(
+            #         f"[cyan]INFO: Percentile limits: {str(lims)} reducing array to {100*len(reduced_x)/len(x):.1f}%[/cyan]"
+            #     )
             x = np.asarray(reduced_x)
 
         except:
@@ -1120,10 +1229,10 @@ def remove_outliers(
                 for i, j in zip(x, y)
                 if lims[0][0] <= i <= lims[1][0] and lims[0][1] <= j <= lims[1][1]
             ]
-            if debug:
-                rprint(
-                    f"[cyan]INFO: Percentile limits: {str(lims)} reducing arrays to x:{100*len(reduced_x)/len(x):.1f}% and y:{100*len(reduced_y)/len(y):.1f}%[/cyan]"
-                )
+            # if debug:
+            #     rprint(
+            #         f"[cyan]INFO: Percentile limits: {str(lims)} reducing arrays to x:{100*len(reduced_x)/len(x):.1f}% and y:{100*len(reduced_y)/len(y):.1f}%[/cyan]"
+            #     )
             x, y = np.asarray(reduced_x), np.asarray(reduced_y)
 
         except:
