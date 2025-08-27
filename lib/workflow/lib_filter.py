@@ -5,9 +5,107 @@ import numpy as np
 from typing import Optional
 from rich import print as rprint
 from src.utils import get_project_root
+
 root = get_project_root()
 
-def import_filter_preset(params:dict, config: str, presets: Optional[list[str]], output: Optional[str] = None, debug: bool = False)-> dict:
+
+def convert_compatible_data(data):
+    """
+    Convert data to a YAML-compatible format.
+
+    Args:
+        data: Data to be converted.
+
+    Returns:
+        Converted data in a YAML-compatible format.
+    """
+    if isinstance(data, (str, int, float)):
+        return data
+    elif isinstance(data, (np.int8, np.float16, np.float32, np.float64)):
+        return float(data)
+    elif isinstance(data, (np.int8, np.int16, np.int32, np.int64)):
+        return int(data)
+    elif isinstance(data, np.ndarray):
+        if data.ndim == 1:
+            return data.tolist()
+        else:
+            raise ValueError("Only 1D numpy arrays are supported for YAML conversion.")
+    elif isinstance(data, list):
+        return [convert_compatible_data(item) for item in data]
+    elif isinstance(data, dict):
+        return {
+            convert_compatible_data(k): convert_compatible_data(v)
+            for k, v in data.items()
+        }
+    else:
+        raise TypeError(f"Unsupported type: {type(data)}")
+
+
+def update_yaml_file(file_path: str, data: dict, add: bool = False):
+    """
+    Update a YAML file with new data.
+
+    Args:
+        file_path (str): Path to the YAML file.
+        data (dict): Dictionary containing the data to be updated.
+
+    Returns:
+        None
+    """
+    with open(file_path, "r") as file:
+        # Loop over entries in data. If entry exists in the file, update it.
+        yaml_data = yaml.load(file, Loader=yaml.FullLoader)
+        data = convert_compatible_data(data)
+        for key, value in data.items():
+            if add or key in yaml_data:
+                yaml_data[key] = value
+            if not add and key not in yaml_data:
+                rprint(f"[red][ERROR] Key {key} not found in the YAML file![/red]")
+
+    with open(file_path, "w") as file:
+        yaml.dump(
+            yaml_data,
+            file,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+        rprint(f"[green][INFO] YAML file {file_path} updated successfully![/green]")
+
+
+def update_json_file(file_path: str, data: dict, add: bool = False):
+    """
+    Update a JSON file with new data.
+
+    Args:
+        file_path (str): Path to the JSON file.
+        data (dict): Dictionary containing the data to be updated.
+
+    Returns:
+        None
+    """
+    with open(file_path, "r") as file:
+        # Loop over entries in data. If entry exists in the file, update it.
+        json_data = json.load(file)
+        data = convert_compatible_data(data)
+        for key, value in data.items():
+            if add or key in json_data:
+                json_data[key] = value
+            if not add and key not in json_data:
+                rprint(f"[red][ERROR] Key {key} not found in the JSON file![/red]")
+
+    with open(file_path, "w") as file:
+        json.dump(json_data, file, indent=4)
+        rprint(f"[green][INFO] JSON file {file_path} updated successfully![/green]")
+
+
+def import_filter_preset(
+    params: dict,
+    config: str,
+    presets: Optional[list[str]],
+    output: Optional[str] = None,
+    debug: bool = False,
+) -> dict:
     """
     Import the filter configuration from the yml file.
 
@@ -42,16 +140,26 @@ def import_filter_preset(params:dict, config: str, presets: Optional[list[str]],
                     if list(tree_dict.values())[0] is None:
                         continue
                     else:
-                        for branch_dict in list(tree_dict.values())[0]: 
+                        for branch_dict in list(tree_dict.values())[0]:
                             branch_name = list(branch_dict.keys())[0]
                             filter_key = (tree_name, branch_name)
-                            filter_cut = (list(branch_dict[branch_name][0].keys())[0], list(branch_dict[branch_name][0].values())[0]) 
+                            filter_cut = (
+                                list(branch_dict[branch_name][0].keys())[0],
+                                list(branch_dict[branch_name][0].values())[0],
+                            )
                             params[filter_key] = filter_cut
-    
-    return params, output   
+
+    return params, output
 
 
-def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optional[dict] = None, presets: Optional[list[str]] = None, output: Optional[str] = None, debug: bool = False):
+def compute_filtered_run(
+    run: dict,
+    configs: dict[str, list[str]],
+    params: Optional[dict] = None,
+    presets: Optional[list[str]] = None,
+    output: Optional[str] = None,
+    debug: bool = False,
+):
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
     """
@@ -68,12 +176,14 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
         if debug:
             output += "[yellow][WARNING] No filter applied![/yellow]"
         return run, output
-    
+
     elif params == None and presets != None:
         params = {}
 
     elif params != None and presets != None:
-        output += f"[cyan][INFO] Combining preset {presets} with custom filters[/cyan]\n"
+        output += (
+            f"[cyan][INFO] Combining preset {presets} with custom filters[/cyan]\n"
+        )
 
     new_trees = run.keys()
     branch_ref = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
@@ -86,9 +196,10 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
 
         # Make sure that only the entries that correspond to the correct geometry, version and name are selected
         for config in configs:
-            info = json.load(
-                open(f"{root}/config/{config}/{config}_config.json", "r"))
-            params, output = import_filter_preset(params, config, presets, output, debug)                 
+            info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+            params, output = import_filter_preset(
+                params, config, presets, output, debug
+            )
 
             skip_tree = True
             for param in params:
@@ -99,30 +210,38 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                 continue
 
             for name in configs[config]:
-                config_filter = (run[tree]["Geometry"] == info["GEOMETRY"]) & (
-                    run[tree]["Version"] == info["VERSION"]) & (run[tree]["Name"] == name)
+                config_filter = (
+                    (run[tree]["Geometry"] == info["GEOMETRY"])
+                    & (run[tree]["Version"] == info["VERSION"])
+                    & (run[tree]["Name"] == name)
+                )
                 jdx = idx + config_filter
-        
+
                 if debug:
                     output += f"From {len(run[tree][branch_ref[tree]])} events, {len(jdx)} have been selected by configs for {tree} tree.\n"
-                
+
                 for param in params:
                     if param[0] != tree:
                         continue
 
-                    if not isinstance(params[param], tuple) and not isinstance(params[param], list):
+                    if not isinstance(params[param], tuple) and not isinstance(
+                        params[param], list
+                    ):
                         output += f"[red][ERROR] Filter must be tuple or list, but found {type(params[param])}[/red]"
-                        if debug: rprint(f"{param}: {params[param]}")
+                        if debug:
+                            rprint(f"{param}: {params[param]}")
                         return run, output
-                    
+
                     if len(params[param]) != 2:
                         output += f"[red][ERROR] Filter must be of length 2![/red]"
-                        if debug: rprint(f"{param}: {params[param]}")
+                        if debug:
+                            rprint(f"{param}: {params[param]}")
                         return run, output
 
                     if param[1] not in run[param[0]].keys():
                         output += f"[red][ERROR] Branch {param[1]} not found in the run![/red]"
-                        if debug: rprint(f"{param}: {params[param]}")
+                        if debug:
+                            rprint(f"{param}: {params[param]}")
                         return run, output
 
                     if params[param][0] == "bigger":
@@ -134,37 +253,53 @@ def compute_filtered_run(run: dict, configs: dict[str, list[str]], params: Optio
                     elif params[param][0] == "different":
                         jdx = jdx & (run[param[0]][param[1]] != params[param][1])
                     elif params[param][0] == "between":
-                        jdx = jdx & (run[param[0]][param[1]] > params[param][1][0]) & \
-                                    (run[param[0]][param[1]] < params[param][1][1])
+                        jdx = (
+                            jdx
+                            & (run[param[0]][param[1]] > params[param][1][0])
+                            & (run[param[0]][param[1]] < params[param][1][1])
+                        )
                     elif params[param][0] == "absbetween":
-                        jdx = jdx & (abs(run[param[0]][param[1]]) > params[param][1][0]) & \
-                                    (abs(run[param[0]][param[1]]) < params[param][1][1])
+                        jdx = (
+                            jdx
+                            & (abs(run[param[0]][param[1]]) > params[param][1][0])
+                            & (abs(run[param[0]][param[1]]) < params[param][1][1])
+                        )
                     elif params[param][0] == "outside":
-                        jdx = jdx & ((run[param[0]][param[1]] < params[param][1][0]) + \
-                                    (run[param[0]][param[1]] > params[param][1][1]))
+                        jdx = jdx & (
+                            (run[param[0]][param[1]] < params[param][1][0])
+                            + (run[param[0]][param[1]] > params[param][1][1])
+                        )
                     elif params[param][0] == "absoutside":
-                        jdx = jdx & ((abs(run[param[0]][param[1]]) < params[param][1][0]) + \
-                                    (abs(run[param[0]][param[1]]) > params[param][1][1]))
+                        jdx = jdx & (
+                            (abs(run[param[0]][param[1]]) < params[param][1][0])
+                            + (abs(run[param[0]][param[1]]) > params[param][1][1])
+                        )
                     elif params[param][0] == "contains":
                         jdx = jdx & np.array(
-                            [params[param][1] in item for item in run[param[0]][param[1]]])
+                            [
+                                params[param][1] in item
+                                for item in run[param[0]][param[1]]
+                            ]
+                        )
                     if debug:
                         try:
                             output += f"-> {param[1]}: {params[param][0]} ({params[param][1][0]:.1f}, {params[param][1][1]:.1f}) -> {np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
                         except:
                             output += f"-> {param[1]}: {params[param][0]} {params[param][1]} -> {np.sum(jdx):.1E} ({100*np.sum(jdx)/len(run[tree][branch_ref[tree]]):.1f}%) events\n"
-                
+
                 kdx = kdx + jdx
-        
+
         if skip_tree:
             new_run[tree] = run[tree]
-        
+
         else:
             combined_filter = np.where(kdx == True)
             for branch in branch_list:
                 # print(f"Filtering branch {branch} with {len(run[tree][branch])} entries.")
                 try:
-                    new_run[tree][branch] = np.asarray(run[tree][branch])[combined_filter]
+                    new_run[tree][branch] = np.asarray(run[tree][branch])[
+                        combined_filter
+                    ]
                 except Exception as e:
                     output += f"[red][ERROR] Couldn't filter branch {branch}: {e}[/red]"
         mask[tree] = kdx
@@ -191,7 +326,7 @@ def compute_solarnuana_filters(
     name,
     gen,
     filter_list,
-    params:Optional[dict]=None,
+    params: Optional[dict] = None,
     cummulative=True,
     debug=False,
 ):
@@ -221,14 +356,14 @@ def compute_solarnuana_filters(
     version_filter = np.asarray(run["Reco"]["Version"]) == info["VERSION"]
     name_filter = np.asarray(run["Reco"]["Name"]) == name
     gen_filter = np.asarray(run["Reco"]["Generator"]) == gen
-    base_filter = (geo_filter) * (version_filter) * \
-        (name_filter) * (gen_filter)
+    base_filter = (geo_filter) * (version_filter) * (name_filter) * (gen_filter)
 
     labels.append("All")
     filters.append(base_filter)
 
     info, params, output = get_param_dict(
-        f"{root}/config/{config}/{config}", params, output, debug=debug)
+        f"{root}/config/{config}/{config}", params, output, debug=debug
+    )
     for this_filter in filter_list:
         if this_filter == "Primary":
             primary_filter = run["Reco"]["Primary"] == True
