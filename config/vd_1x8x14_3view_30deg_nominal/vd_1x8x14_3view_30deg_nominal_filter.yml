@@ -1,0 +1,90 @@
+"TRUTH":
+        - "Config": null
+        - "Truth":
+                - "Config":
+                        - "equal": true
+                - "Generator":
+                        - "equal": 1
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+        - "Reco": null
+
+"CORRECTION":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleE":
+                        - "absbetween": [0, 30]
+                - "Generator":
+                        - "equal": 1
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                      - "equal": 0
+                - "TrueMain":
+                        - "equal": True    
+
+"CALIBRATION":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleE":
+                        - "absbetween": [0, 30]
+                - "Generator":
+                        - "equal": 1
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                        - "equal": 0
+                - "TrueMain":
+                        - "equal": True
+
+"DISCRIMINATION":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleE":
+                        - "absbetween": [0, 30]
+                - "Generator":
+                        - "equal": 1
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                        - "equal": 0
+                - "TrueMain":
+                        - "equal": True       
+
+"RECONSTRUCTION":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleE":
+                        - "absbetween": [0, 30]
+                - "Generator":
+                        - "equal": 1
+                - "NeutronK":
+                        - "equal": 0
+                - "ProtonK":
+                        - "equal": 0
+                - "TrueMain":
+                        - "equal": True
+
+"SMEARING":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleE":
+                        - "absbetween": [0, 30]
+                - "Generator":
+                        - "equal": 1
+                - "TrueMain":
+                        - "equal": True
+
+"ANALYSIS":
+        - "Config": null
+        - "Truth": null
+        - "Reco":
+                - "SignalParticleK":
+                        - "absbetween": [0, 20]
+                - "Generator":
+                        - "equal": 1
