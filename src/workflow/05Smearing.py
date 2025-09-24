@@ -4,8 +4,8 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-data_path = f"{root}/data/smearing"
-save_path = f"{root}/images/smearing"
+data_path = f"{root}/data/workflow/smearing"
+save_path = f"{root}/images/workflow/smearing"
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
@@ -20,7 +20,7 @@ parser.add_argument(
     "--config",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default="hd_1x2x6",
 )
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_signal"
@@ -39,7 +39,14 @@ user_input = {"workflow": "SMEARING"}
 run, output = load_multi(configs, preset=user_input["workflow"], debug=args.debug)
 rprint(output)
 run = compute_reco_workflow(
-    run, configs, workflow=user_input["workflow"], debug=args.debug
+    run,
+    configs,
+    params={
+        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
+        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+    },
+    workflow=user_input["workflow"],
+    debug=args.debug,
 )
 
 filtered_run, mask, output = compute_filtered_run(
@@ -51,8 +58,6 @@ data = filtered_run["Reco"]
 output_dict = {}
 fit = {
     "color": "grey",
-    "threshold": 0.3,
-    "trimm": 10,
     "spec_type": "max",
     "print": False,
 }

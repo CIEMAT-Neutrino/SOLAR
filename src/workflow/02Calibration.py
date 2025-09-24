@@ -4,7 +4,7 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-save_path = f"{root}/images/calibration/"
+save_path = f"{root}/images/workflow/calibration"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -17,7 +17,7 @@ parser.add_argument(
     "--config",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default="hd_1x2x6",
 )
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_signal"
@@ -40,7 +40,7 @@ run = compute_reco_workflow(
     configs,
     params={
         "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-        "DEFAULT_ADJCLENERGY_TIME": "TruthAdjClDriftTime",
+        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
     },
     workflow=user_input["workflow"],
     debug=args.debug,
@@ -56,40 +56,48 @@ rprint(output)
 data = filtered_run["Reco"]
 
 # Plot the calibration workflow
-acc = int(len(data["Generator"]) / 200)
-if acc > 100:
-    acc = 100
+per = (1, 99)
 fit = {
     "color": "grey",
-    "threshold": 0.4,
-    "trimm": (int(acc/20), int(acc/3)),
-    "spec_type": "max",
-    "print": False,
-    "show": False,
     "opacity": 1,
+    "print": False,
+    "func": "linear",
+    "show": True,
+    "spec_type": "max",
 }
 
-
+reco_valid = {}
+reco_nhit = {}
 reco_popt = {}
 reco_perr = {}
 data[f"CalibratedEnergy"] = np.zeros(len(data["ElectronK"]))
 data[f"CalibratedElectronEnergy"] = np.zeros(len(data["ElectronK"]))
 for config in configs:
+    info, params, output = get_param_dict(
+        f"{root}/config/{config}/{config}", {}, output, debug=args.debug
+    )
     for name in configs[config]:
-        fit_popt = {}
-        fig = make_subplots(rows=1, cols=1)
 
         for idx, (variable, variable_label) in enumerate(
             zip(["", "Electron"], ["Primary", "Cheated"])
         ):
+            reco_valid[variable] = []
+            reco_nhit[variable] = []
             reco_popt[variable] = {}
             reco_perr[variable] = {}
+            fig = make_subplots(rows=1, cols=1)
+
             for nhit in nhits:
-                if len(data["ElectronK"][data["NHits"] >= nhit]) < 100:
-                    fit_f = nhit - 1
-                    break
-                else:
-                    fit_f = nhit
+                acc = get_default_acc(len(data["ElectronK"][data["NHits"] == nhit]))
+                fit["threshold"] = (
+                    len(data["ElectronK"][data["NHits"] == nhit])
+                    * params["CALIBRATION_THRESHOLD"]
+                )
+
+                if len(data["ElectronK"][data["NHits"] == nhit]) < int(
+                    len(data["ElectronK"]) / 20
+                ):
+                    continue
 
                 this_fig = make_subplots(
                     rows=1,
@@ -102,10 +110,11 @@ for config in configs:
                 )
 
                 x, y, z = get_hist2d(
-                    data["ElectronK"][data["NHits"] >= nhit],
-                    data[f"Corrected{variable}Charge"][data["NHits"] >= nhit],
+                    data["ElectronK"][data["NHits"] == nhit],
+                    data[f"Corrected{variable}Charge"][data["NHits"] == nhit],
                     acc=acc,
                 )
+
                 z[z == 0] = np.nan
                 this_fig.add_trace(
                     go.Heatmap(
@@ -118,15 +127,20 @@ for config in configs:
                     col=1,
                 )
 
-                fit["func"] = "linear"
+                fit["bounds"] = ([0.1, -1], [1.1, 9])
+                if nhit == 1:
+                    fit["trimm"] = params["FIRST_CALIBRATION_TRIM"]
+                else:
+                    fit["trimm"] = params["CALIBRATION_TRIM"]
+
                 this_fig, reco_popt[variable][nhit], reco_perr[variable][nhit] = (
                     get_hist2d_fit(
-                        data["ElectronK"][data["NHits"] >= nhit],
-                        data[f"{variable}Energy"][data["NHits"] >= nhit],
+                        data["ElectronK"][data["NHits"] == nhit],
+                        data[f"{variable}Energy"][data["NHits"] == nhit],
                         this_fig,
                         idx=(1, 2),
-                        per=None,
-                        acc=acc,
+                        per=per,
+                        acc="y",
                         fit=fit,
                         nanz=True,
                         zoom=True,
@@ -134,8 +148,16 @@ for config in configs:
                     )
                 )
 
-                data[f"Calibrated{variable}Energy"][data["NHits"] >= nhit] = (
-                    data[f"{variable}Energy"][data["NHits"] >= nhit]
+                reco_nhit[variable].append(nhit)
+                if reco_popt[variable][nhit] is None:
+                    reco_valid[variable].append(False)
+                    reco_popt[variable][nhit] = [1, 0]
+                    reco_perr[variable][nhit] = [0, 0]
+                else:
+                    reco_valid[variable].append(True)
+
+                data[f"Calibrated{variable}Energy"][data["NHits"] == nhit] = (
+                    data[f"{variable}Energy"][data["NHits"] == nhit]
                     - reco_popt[variable][nhit][1]
                 ) / reco_popt[variable][nhit][0]
 
@@ -143,27 +165,28 @@ for config in configs:
                     [f"{variable}Energy", f"Calibrated{variable}Energy"],
                     ["Corrected", "Calibrated"],
                 ):
-                    # for idx, energy in enumerate(["Energy", "ElectronK"]):
                     res = (
-                        data["ElectronK"][data["NHits"] >= nhit]
-                        - data[energy][data["NHits"] >= nhit]
+                        data["ElectronK"][data["NHits"] == nhit]
+                        - data[energy][data["NHits"] == nhit]
                     )
                     # Find the resolution
                     rms = np.sqrt(np.mean(np.power(res, 2)))
                     rms_error = np.sqrt(np.mean(np.power(res, 2)) / np.sqrt(len(res)))
 
-                    # print(f"-> {label} Energy RMS: {rms:.1f}")
-                    x, y, ref, output = get_hist1d(
+                    res_edges = np.linspace(-5, 10, 50)
+                    res_centers = 0.5 * (res_edges[:-1] + res_edges[1:])
+                    x, y, sigma, ref, output = get_hist1d(
                         x=res,
-                        per=None,
-                        acc=acc,
+                        per=per,
+                        acc=res_edges,
+                        norm=False,
                         density=False,
                         debug=args.debug,
                     )
 
                     this_fig.add_trace(
                         go.Scatter(
-                            x=x,
+                            x=res_centers,
                             y=y,
                             line=dict(shape="hvh"),
                             showlegend=True,
@@ -177,22 +200,22 @@ for config in configs:
                 this_fig = format_coustom_plotly(
                     this_fig,
                     matches=(None, None),
-                    title=f"Reco Cluster - {variable_label} Charge Calibration {config}",
+                    title=f"Primary Cluster - NHit {nhit} - {variable_label} Charge Calibration {config}",
                 )
 
                 this_fig.update_layout(
-                    coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Density")),
-                    legend=dict(x=0.86, y=0.9, traceorder="normal", orientation="v"),
+                    coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Counts")),
+                    legend=dict(x=0.86, y=0.92, traceorder="normal", orientation="v"),
                     barmode="overlay",
                     xaxis1_title="True Electron Energy (MeV)",
                     xaxis2_title="True Electron Energy (MeV)",
                     yaxis1_title="Corrected Charge (ADC x tick)",
                     yaxis2_title="Reco Electron Energy (MeV)",
-                    yaxis3_title="Density",
+                    yaxis3_title="Counts",
                     xaxis3_title="Reco Energy Error (MeV)",
                 )
 
-                if nhit < 4:
+                if nhit % 2 == 1:
                     save_figure(
                         this_fig,
                         save_path,
@@ -205,57 +228,91 @@ for config in configs:
                     if output is not None or output != "":
                         rprint(output)
 
+            reco_popt_nhit = []
             reco_popt_slope = []
-            reco_popt_intercept = []
             reco_perr_slope = []
+            reco_popt_intercept = []
             reco_perr_intercept = []
 
-            for nhit in nhits[:fit_f]:
-                reco_popt_slope.append(reco_popt[variable][nhit][0])
-                reco_popt_intercept.append(reco_popt[variable][nhit][1])
-                reco_perr_slope.append(reco_perr[variable][nhit][0])
-                reco_perr_intercept.append(reco_perr[variable][nhit][1])
-            
-            for popt_label, this_reco_popt, this_reco_perr, dash in zip(["Slope", "Intercept"], [reco_popt_slope, reco_popt_intercept],
-                                             [reco_perr_slope, reco_perr_intercept], ["solid", "dash"]):
+            for jdx, nhit in enumerate(reco_nhit[variable]):
+                if reco_valid[variable][jdx]:
+                    reco_popt_nhit.append(nhit)
+                    reco_popt_slope.append(reco_popt[variable][nhit][0])
+                    reco_popt_intercept.append(reco_popt[variable][nhit][1])
+                    reco_perr_slope.append(reco_perr[variable][nhit][0])
+                    reco_perr_intercept.append(reco_perr[variable][nhit][1])
+
+            for jdx, (
+                popt_label,
+                this_reco_nhit,
+                this_reco_popt,
+                this_reco_perr,
+            ) in enumerate(
+                zip(
+                    ["Slope", "Intercept"],
+                    [reco_popt_nhit, reco_popt_nhit],
+                    [reco_popt_slope, reco_popt_intercept],
+                    [reco_perr_slope, reco_perr_intercept],
+                )
+            ):
                 fig.add_trace(
                     go.Scatter(
-                        x=nhits[:fit_f],
+                        x=this_reco_nhit,
                         y=this_reco_popt,
                         error_y=dict(
                             type="data",
                             array=this_reco_perr,
                             visible=True,
-                            color=compare[idx],
+                            color=compare[jdx],
                         ),
-                        mode="markers+lines",
-                        line_shape="hvh",
-                        line_dash=dash,
+                        mode="markers",
+                        # line_shape="hvh",
                         name=f"{variable_label} {popt_label}",
                         line=dict(
-                            color=compare[idx],
+                            color=compare[jdx],
                         ),
                     ),
                     row=1,
                     col=1,
                 )
 
-            mean_slope = np.mean(reco_popt_slope)
-            mean_intercept = np.mean(reco_popt_intercept)
             slope = interp1d(
-                nhits[:fit_f],
+                reco_popt_nhit,
                 reco_popt_slope,
-                kind="linear",
+                kind="slinear",
                 bounds_error=False,
-                fill_value=mean_slope,
+                fill_value=(reco_popt_slope[0], np.mean(reco_popt_slope[-3:])),
             )
             intercept = interp1d(
-                nhits[:fit_f],
+                reco_popt_nhit,
                 reco_popt_intercept,
-                kind="linear",
+                kind="slinear",
                 bounds_error=False,
-                fill_value=mean_intercept,
+                fill_value=(reco_popt_intercept[0], np.mean(reco_popt_intercept[-3:])),
             )
+
+            # Add extrapolated slope and intercept to the figure
+            for jdx, (func, variable_label) in enumerate(
+                zip(
+                    [slope, intercept],
+                    [f"{variable_label} Slope", f"{variable_label} Intercept"],
+                )
+            ):
+                fig.add_trace(
+                    go.Scatter(
+                        x=nhits[:14],
+                        y=func(nhits[:14]),
+                        mode="lines",
+                        line_shape="spline",
+                        line=dict(
+                            color=compare[jdx],
+                            dash="dot",
+                        ),
+                        showlegend=False,
+                    ),
+                    row=1,
+                    col=1,
+                )
 
             save_pkl(
                 slope,
@@ -277,23 +334,22 @@ for config in configs:
                 debug=args.debug,
             )
 
-        fig = format_coustom_plotly(
-            fig,
-            title=f"Reco Electron Energy Calibration {config}",
-            matches=(None, None),
-            legend_title="Energy Offset (MeV)",
-            legend=dict(x=0.72, y=0.99),
-        )
+            fig = format_coustom_plotly(
+                fig,
+                title=f"Reco Electron Energy Calibration {config}",
+                legend_title="Calibration Variable",
+                legend=dict(x=0.72, y=0.99),
+            )
 
-        fig.update_xaxes(title_text="#Hits in Primary Cluster")
-        fig.update_yaxes(title_text="Offset Value", row=1, col=1)
+            fig.update_xaxes(title_text="#Hits in Primary Cluster")
+            fig.update_yaxes(title_text="Fit Value")
 
-        save_figure(
-            fig,
-            save_path,
-            config,
-            name,
-            filename=f"Charge_Calibration",
-            rm=args.rewrite,
-            debug=args.debug,
-        )
+            save_figure(
+                fig,
+                save_path,
+                config,
+                name,
+                filename=f"{variable}Charge_Calibration",
+                rm=args.rewrite,
+                debug=args.debug,
+            )

@@ -25,6 +25,7 @@ parser.add_argument(
     help="The name of the reference column",
     choices=["Asimov", "Gaussian"],
     default="Asimov",
+    required=True,
 )
 parser.add_argument(
     "--config",

@@ -16,7 +16,6 @@ parser.add_argument(
     help="The name of the reference analysis",
     choices=["DayNight", "HEP"],
     default=None,
-    required=True,
 )
 parser.add_argument(
     "--config",
@@ -35,18 +34,6 @@ parser.add_argument(
     choices=["Reduced", "Nominal"],
 )
 parser.add_argument(
-    "--signal_uncertanty",
-    type=float,
-    help="The signal uncertanty for the analysis",
-    default=0.04,
-)
-parser.add_argument(
-    "--background_uncertanty",
-    type=float,
-    help="The background uncertanty for the analysis",
-    default=0.02,
-)
-parser.add_argument(
     "--exposure",
     type=float,
     help="The exposure for the analysis",
@@ -56,7 +43,14 @@ parser.add_argument(
     "--energy",
     type=str,
     help="The energy for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
+    choices=[
+        "SignalParticleK",
+        "ClusterEnergy",
+        "TotalEnergy",
+        "SelectedEnergy",
+        "SolarEnergy",
+    ],
+    default="ClusterEnergy",
 )
 parser.add_argument(
     "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
@@ -79,9 +73,6 @@ rprint(args)
 config = args.config
 name = args.name
 folder = args.folder
-
-signal_uncertanty = args.signal_uncertanty
-background_uncertanty = args.background_uncertanty
 
 rewrite = args.rewrite
 debug = args.debug
@@ -137,9 +128,10 @@ for config in configs:
     )
 
     for idx, key in enumerate(fastest_sigma):
-        if key[2] not in args.energy:
-            rprint(f"Skipping {key[2]}Energy")
-            continue
+        if args.energy is not None:
+            energy = args.energy
+        else:
+            energy = key[2]
 
         total = np.zeros(len(sensitivity_rebin) - 1)
         total_error = np.zeros(len(sensitivity_rebin) - 1)
@@ -182,14 +174,35 @@ for config in configs:
         )
 
         for bkg in ["alpha", "gamma", "neutron"]:
+            # print(plot_df)
             this_df = plot_df[
                 (plot_df["Component"] == bkg)
-                * (plot_df["EnergyLabel"] == key[2])
+                * (plot_df["EnergyLabel"] == energy)
                 * (plot_df["NHits"] == nhits)
                 * (plot_df["OpHits"] == ophits)
                 * (plot_df["AdjCl"] == adjcl)
                 * (plot_df["Fiducialized"] == fiducial)
             ]
+
+            # Check if this_df is empty and find the variable that is causing it
+            if this_df.empty:
+                rprint(
+                    f"Empty dataframe for {bkg} with fiducial {fiducial}, nhits {nhits}, ophits {ophits}, adjcl {adjcl}"
+                )
+                for column, var in zip(
+                    [
+                        "EnergyLabel",
+                        "NHits",
+                        "OpHits",
+                        "AdjCl",
+                        "Fiducialized",
+                    ],
+                    [energy, nhits, ophits, adjcl, fiducial],
+                ):
+                    if this_df[column].values[0] != var:
+                        rprint(f"{column} is not {var}")
+                continue
+
             x = np.asarray(list(this_df["Energy"].values))
             y = np.asarray(list(this_df["Counts"].values))
             y_error = np.asarray(list(this_df["Error"].values))
@@ -228,7 +241,7 @@ for config in configs:
             f"{info['PATH']}/SENSITIVITY",
             config=config,
             name=f"background",
-            subfolder=f"{folder.lower()}/{key[2]}Energy",
+            subfolder=f"{folder.lower()}/{energy}",
             filename=f"Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
@@ -262,7 +275,7 @@ for config in configs:
 
         fig = format_coustom_plotly(
             fig,
-            title=f"{key[2]}Energy Background {config}",
+            title=f"{energy} Background {config}",
             log=(False, False),
             matches=("x", None),
             tickformat=(".1f", ".0e"),
@@ -289,7 +302,10 @@ for config in configs:
             config=None,
             name=None,
             subfolder=None,
-            filename=f"{folder}_Background_{key[2]}Energy_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            filename=f"{folder}_Background_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
         )
+
+        if args.energy is not None and isinstance(args.energy, str):
+            break

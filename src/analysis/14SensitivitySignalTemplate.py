@@ -20,7 +20,6 @@ parser.add_argument(
     help="The name of the reference analysis",
     choices=["DayNight", "HEP"],
     default="HEP",
-    required=True,
 )
 parser.add_argument(
     "--config",
@@ -39,18 +38,6 @@ parser.add_argument(
     choices=["Reduced", "Nominal"],
 )
 parser.add_argument(
-    "--signal_uncertanty",
-    type=float,
-    help="The signal uncertanty for the analysis",
-    default=0.04,
-)
-parser.add_argument(
-    "--background_uncertanty",
-    type=float,
-    help="The background uncertanty for the analysis",
-    default=0.02,
-)
-parser.add_argument(
     "--exposure",
     type=float,
     help="The exposure for the analysis",
@@ -60,7 +47,14 @@ parser.add_argument(
     "--energy",
     type=str,
     help="The energy for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
+    choices=[
+        "SignalParticleK",
+        "ClusterEnergy",
+        "TotalEnergy",
+        "SelectedEnergy",
+        "SolarEnergy",
+    ],
+    default="ClusterEnergy",
 )
 parser.add_argument(
     "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
@@ -82,10 +76,6 @@ args = parser.parse_args()
 rprint(args)
 
 folder = args.folder
-
-signal_uncertanty = args.signal_uncertanty
-background_uncertanty = args.background_uncertanty
-
 configs = {args.config: [args.name]}
 
 run, output = load_multi(
@@ -145,6 +135,10 @@ for args.config in configs:
             shared_yaxes=True,
             vertical_spacing=0.1,
         )
+        if args.energy is not None:
+            energy = args.energy
+        else:
+            energy = key[2]
         if args.fiducial is not None:
             fiducial = args.fiducial
         else:
@@ -170,9 +164,9 @@ for args.config in configs:
             ophits = int(fastest_sigma[key]["OpHits"])
 
         this_filter = np.where(
-            (run["Reco"]["NHits"] > fastest_sigma[key]["NHits"] - 1)
-            & (run["Reco"]["AdjClNum"] < fastest_sigma[key]["AdjCl"])
-            & (run["Reco"]["MatchedOpFlashNHits"] > fastest_sigma[key]["OpHits"] - 1)
+            (run["Reco"]["NHits"] > nhits - 1)
+            & (run["Reco"]["AdjClNum"] < adjcl)
+            & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
             & (
                 (
                     (run["Reco"]["RecoX"] > -detector_x / 2)
@@ -204,9 +198,9 @@ for args.config in configs:
             f"Selected #Events: {len(this_filter[0])} ({len(this_filter[0])/len(run['Reco']['Event'])*100:.2f}%)"
         )
 
-        title = f"{key[2]}Energy Signal (Fiducial {fiducial} cm / min #NHits {nhits} / max #AdjClusters {adjcl} / min #OpHits {ophits})"
+        title = f"{energy} Signal (Fiducial {fiducial} cm / min #NHits {nhits} / max #AdjClusters {adjcl} / min #OpHits {ophits})"
         h, xedges, yedges = np.histogram2d(
-            run["Reco"][f"{key[2]}Energy"][this_filter],
+            run["Reco"][f"{energy}"][this_filter],
             run["Reco"]["SignalParticleK"][this_filter],
             bins=(energy_edges, energy_edges),
         )
@@ -223,7 +217,7 @@ for args.config in configs:
             col=1,
         )
         h, xedges, yedges = np.histogram2d(
-            run["Reco"][f"{key[2]}Energy"][this_filter],
+            run["Reco"][f"{energy}"][this_filter],
             run["Reco"]["SignalParticleK"][this_filter],
             bins=(energy_edges, energy_edges),
             weights=run["Reco"]["SignalParticleWeight"][this_filter],
@@ -266,9 +260,9 @@ for args.config in configs:
             save_pkl(
                 args.exposure * rebin_z,
                 f"{info['PATH']}/SENSITIVITY",
-                config = args.config,
-                name = f"marley",
-                subfolder=f"{folder.lower()}/{key[2]}Energy",
+                config=args.config,
+                name=f"marley",
+                subfolder=f"{folder.lower()}/{energy}",
                 filename=f"Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
                 rm=args.rewrite,
                 debug=args.test == False,
@@ -318,10 +312,13 @@ for args.config in configs:
         save_figure(
             fig,
             save_path,
-            config = args.config,
-            name = None,
-            subfolder = None,
-            filename = f"Selected_Signal_{key[2]}Energy_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            config=args.config,
+            name=None,
+            subfolder=None,
+            filename=f"Selected_Signal_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
         )
+
+        if args.energy is not None and isinstance(args.energy, str):
+            break

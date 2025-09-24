@@ -4,7 +4,7 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-save_path = f"{root}/images/correction/"
+save_path = f"{root}/images/workflow/correction"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -17,7 +17,7 @@ parser.add_argument(
     "--config",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default="hd_1x2x6",
 )
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_signal"
@@ -54,14 +54,9 @@ rprint(output)
 data = filtered_run["Reco"]
 
 # Plot the calibration workflow
-acc = int(len(data["Generator"]) / 200)
-if acc > 100:
-    acc = 100
 per = (1, 99)
 fit = {
     "color": "grey",
-    "threshold": 0.4,
-    "trimm": (2, 2),
     "spec_type": "max",
     "print": True,
     "opacity": 1,
@@ -89,7 +84,60 @@ for config in configs:
         ########################## Fit Drift Correction #############################
         #############################################################################
 
-        fig = make_subplots(rows=1, cols=2)
+        fig = make_subplots(rows=1, cols=1)
+
+        acc = get_default_acc(len(data["Generator"]))
+
+        # Make a plot that shows the correlation between the neutrino energy and the number of hits in the primary cluster
+        fig = make_subplots(rows=1, cols=1)
+        max_bin = 0
+        for nhit in nhits[:9]:
+            this_filter_idx = np.where((data["NHits"] == nhit))[0]
+            if len(this_filter_idx) < 1000:
+                continue
+
+            hist, bins = np.histogram(
+                data[f"SignalParticleK"][this_filter_idx],
+                bins=true_energy_edges,
+                density=True,
+            )
+            if np.max(hist) > max_bin:
+                max_bin = np.max(hist)
+            fig.add_trace(
+                go.Scatter(
+                    x=true_energy_centers,
+                    y=hist,
+                    mode="lines",
+                    line_shape="hvh",
+                    name=f"{nhit}",
+                    line=dict(color=colors[nhit % len(colors)]),
+                ),
+                row=1,
+                col=1,
+            )
+        fig.update_layout(
+            xaxis_title="True Neutrino Energy (MeV)",
+            yaxis_title="Density",
+        )
+
+        format_coustom_plotly(
+            fig,
+            title=f"True Energy - {config} {name}",
+            legend=dict(x=0.86, y=0.99),
+            legend_title="#Hits",
+            ranges=([4, 30], [0, max_bin * 1.1]),
+            tickformat=(".0f", None),
+            debug=user_input["debug"],
+        )
+        save_figure(
+            fig,
+            save_path,
+            config,
+            name,
+            filename="SignalParticleKineticEnergy_vs_NHits",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
 
         fit["func"] = "exponential"
         fig, corr_popt[f"{charge}Charge"], corr_perr[f"{charge}Charge"] = (
@@ -101,7 +149,7 @@ for config in configs:
                 per=per,
                 acc=acc,
                 fit=fit,
-                density=True,
+                density=False,
                 nanz=True,
                 logz=False,
                 zoom=True,
@@ -109,59 +157,32 @@ for config in configs:
             )
         )
 
-        x, y, h = get_hist2d(
-            np.abs(data[f"{charge}Time"]),
-            data[f"{charge}Charge"] / data["ElectronK"],
-            per=per,
-            norm=False,
-            acc=acc,
-            density=True,
-            debug=False,
+        fig = format_coustom_plotly(
+            fig,
+            title=f"Electron-Lifetime Attenuation - {config} {name}",
+            matches=(None, None),
+            tickformat=(".2f", None),
+            log=(False, False),
+            debug=user_input["debug"],
+        )
+        fig.update_layout(
+            coloraxis=dict(colorbar=dict(title="Counts")),
+            showlegend=False,
+            xaxis_title="Time (tick)",
+            yaxis_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
+            # xaxis2_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
+            # yaxis2_title="Counts",
         )
 
-        z = np.mean(h, axis=0)
-        z_max = np.argmax(z)
-        try:
-            y_min[f"{charge}Charge"] = y[np.argmin(z[:z_max])]
-        except ValueError:
-            if z_max == 0:
-                y_min[f"{charge}Charge"] = y[np.argmin(z)]
-            else:
-                y_min[f"{charge}Charge"] = 0
-
-        y_max[f"{charge}Charge"] = y[np.argmax(z)]
-        fig.add_trace(
-            go.Scatter(
-                x=y,
-                y=z,
-                line=dict(shape="hvh"),
-                showlegend=True,
-                mode="lines",
-            ),
-            row=1,
-            col=2,
+        save_figure(
+            fig,
+            save_path,
+            config,
+            name,
+            filename=f"{charge}Charge_Correction_Hist2D",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
         )
-
-        # Add a vertical line to the minimum
-        for value, pos, shift, label in zip(
-            [y_min[f"{charge}Charge"], y_max[f"{charge}Charge"]],
-            ["bottom left", "top right"],
-            [[-10, 0], [20, -50]],
-            ["Min", "Max"],
-        ):
-            fig.add_vline(
-                x=value,
-                line_width=1,
-                line_dash="dash",
-                annotation_text=f"{label}: {value:.2f}",
-                annotation_position=pos,
-                annotation=dict(
-                    yshift=shift[1],
-                    xshift=shift[0],
-                ),
-                col=2,
-                row=1,
-            )
         # Energy computation
         data["Correction"] = np.exp(
             np.abs(data[f"{charge}Time"]) / corr_popt[f"{charge}Charge"][1]
@@ -170,10 +191,57 @@ for config in configs:
         data[f"Corrected{charge}ChargePerMeV"] = (
             data[f"Corrected{charge}Charge"] / data["ElectronK"]
         )
-
+        # Plot the corrected charge
+        fig = make_subplots(rows=1, cols=2)
+        x, y, h = get_hist2d(
+            data[f"{charge}Time"],
+            data[f"Corrected{charge}ChargePerMeV"],
+            per=per,
+            norm=False,
+            acc=acc,
+            # nanz=True,
+            density=False,
+            debug=False,
+        )
+        fig.add_trace(
+            go.Heatmap(
+                x=x,
+                y=y,
+                # Draw as nan if the value is less than 1
+                z=np.where(h == 0, np.nan, h).T,
+                colorscale="Turbo",
+                colorbar=dict(title="Counts"),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=y,
+                y=np.mean(h.T, axis=1),
+                line=dict(shape="hvh"),
+                showlegend=True,
+                mode="lines",
+            ),
+            row=1,
+            col=2,
+        )
+        fig.add_vline(
+            x=y[np.argmax(np.mean(h.T, axis=1))],
+            line_width=1,
+            line_dash="dash",
+            annotation_text=f"Correction Factor:<br>{y[np.argmax(np.mean(h.T, axis=1))]:.2f} ADC x tick / MeV",
+            annotation_position="top right",
+            annotation=dict(
+                yshift=-50,
+                xshift=20,
+            ),
+            col=2,
+            row=1,
+        )
         fig = format_coustom_plotly(
             fig,
-            title=f"Drift Electron Correction {config}",
+            title=f"Average Drift Electron Correction {config}",
             matches=(None, None),
             tickformat=(".2f", None),
             log=(False, False),
@@ -182,18 +250,17 @@ for config in configs:
         fig.update_layout(
             coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Density")),
             showlegend=False,
-            xaxis_title="Time (tick)",
             yaxis_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
-            xaxis2_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
-            yaxis2_title="Density",
+            xaxis_title="Time (tick)",
+            xaxis2_title="Time (tick)",
+            yaxis2_title="Counts",
         )
-
         save_figure(
             fig,
             save_path,
             config,
             name,
-            filename=f"{charge}Charge_Correction_2D_Scan",
+            filename=f"{charge}Charge_Corrected_Charge",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -201,13 +268,11 @@ for config in configs:
         correction_factor[f"{charge}Charge"] = {}
         correction_factor[f"{charge}ChargeError"] = {}
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
-            this_filter_idx = np.where(
-                (data["NHits"] >= nhit)
-                & (
-                    data[f"{charge}Charge"] / data["ElectronK"]
-                    > y_min[f"{charge}Charge"]
-                )
-            )[0]
+            this_filter_idx = np.where((data["NHits"] == nhit))[0]
+            if len(this_filter_idx) < 1000:
+                continue
+
+            acc = get_default_acc(len(this_filter_idx))
 
             x, y, y_error = get_variable_scan(
                 data[f"Corrected{charge}Charge"][this_filter_idx],
@@ -229,22 +294,19 @@ for config in configs:
         x = np.asarray(list(correction_factor[f"{charge}Charge"].keys()))
         y = np.asarray(list(correction_factor[f"{charge}Charge"].values()))
         y_error = np.asarray(list(correction_factor[f"{charge}ChargeError"].values()))
-        i, j = 0, len(x) - 1
 
         # Make a linear fit of the central values
         initial_guess = [100, 1, 1, 1]
 
         popt[f"{charge}Charge"], pcov[f"{charge}Charge"] = curve_fit(
             correction_func,
-            x[i:j],
-            y[i:j],
+            x,
+            y,
             p0=initial_guess,
-            sigma=y_error[i:j],
+            sigma=y_error,
             bounds=([0, 0, 0, 0], [1e3, 1, 1e3, 1]),
         )
-
         perr[f"{charge}Charge"] = np.sqrt(np.diag(pcov[f"{charge}Charge"]))
-        print(popt[f"{charge}Charge"])
 
         fig = make_subplots(rows=1, cols=1)
         fig.add_trace(
@@ -310,7 +372,6 @@ for config in configs:
                         "CHARGE_AMP_ERROR": perr[f"{charge}Charge"][0],
                         "ELECTRON_TAU": corr_popt[f"{charge}Charge"][1],
                         "ELECTRON_TAU_ERROR": perr[f"{charge}Charge"][1],
-                        "CHARGE_PER_ENERGY_TRIMM": y_min[f"{charge}Charge"],
                         "CORRECTION_AMP": popt[f"{charge}Charge"][0],
                         "CORRECTION_AMP_ERROR": perr[f"{charge}Charge"][0],
                         "CORRECTION_DECAY": popt[f"{charge}Charge"][1],
@@ -323,12 +384,14 @@ for config in configs:
                     f,
                 )
             rprint(
-                f"-> Saved calibration parameters to {root}/config/{config}/{name}/{config}_calib/{config}_{charge.lower()}charge_correction.json"
+                f"Saved calibration parameters to: {root}/config/{config}/{name}/{config}_calib/{config}_{charge.lower()}charge_correction.json"
             )
 
         else:
 
             rprint(
-                f"-> Found {root}/config/{config}/{name}/{config}_calib/{config}_{charge.lower()}charge_correction.json"
+                f"Found {root}/config/{config}/{name}/{config}_calib/{config}_{charge.lower()}charge_correction.json"
             )
-            rprint(f"-> Please set rewrite to True to overwrite the file")
+            rprint(
+                f"[yellow][WARNING][/yellow]: Please set rewrite to True to overwrite the file."
+            )

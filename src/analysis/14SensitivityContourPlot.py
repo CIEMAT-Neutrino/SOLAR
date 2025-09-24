@@ -13,7 +13,6 @@ parser.add_argument(
     help="The name of the reference analysis",
     choices=["DayNight", "HEP"],
     default="HEP",
-    required=True,
 )
 parser.add_argument(
     "--config",
@@ -32,10 +31,29 @@ parser.add_argument(
     choices=["Reduced", "Nominal"],
 )
 parser.add_argument(
+    "--signal_uncertanty",
+    type=float,
+    help="The signal uncertanty for the analysis",
+    default=0.04,
+)
+parser.add_argument(
+    "--background_uncertanty",
+    type=float,
+    help="The background uncertanty for the analysis",
+    default=0.02,
+)
+parser.add_argument(
     "--energy",
     type=str,
     help="The energy for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
+    choices=[
+        "SignalParticleK",
+        "ClusterEnergy",
+        "TotalEnergy",
+        "SelectedEnergy",
+        "SolarEnergy",
+    ],
+    default="ClusterEnergy",
 )
 parser.add_argument(
     "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
@@ -49,6 +67,7 @@ parser.add_argument(
 parser.add_argument(
     "--adjcl", type=int, help="The adjacent cluster cut for the analysis", default=None
 )
+parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
@@ -68,12 +87,15 @@ for config in configs:
         )
     )
     for name, key in product(configs[config], fastest_sigma):
-        if key[2] not in args.energy:
-            continue
+        if args.energy is not None:
+            energy = args.energy
         else:
             energy = key[2]
 
-        data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/reduced/{energy}Energy/results"
+        if args.background:
+            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/reduced/{energy}/results/signal_{100*args.signal_uncertanty:.0f}%_and_background_{100*args.background_uncertanty:.0f}%"
+        else:
+            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/reduced/{energy}/results/signal_{100*args.signal_uncertanty:.0f}%_only"
 
         if args.fiducial is not None:
             fiducial = args.fiducial
@@ -137,7 +159,7 @@ for config in configs:
                 connectgaps=True,
                 coloraxis="coloraxis",
                 contours=dict(start=0, end=contours[-1], size=1),
-                name="(DUNE) Goal",
+                name="DUNE",
                 showlegend=True,
             )
         )
@@ -145,7 +167,7 @@ for config in configs:
         fig = format_coustom_plotly(
             fig,
             # title=f"DUNE Contours for Solar Best Fit ({unicode('Delta')}m²{subscript(21)} {6e-5:.0e} eV²)",
-            title=f"{energy}Energy {config}",
+            title=f"{config} {name} {energy}",
             tickformat=(".2f", ".0e"),
             add_watermark=True,
         )
@@ -168,8 +190,8 @@ for config in configs:
             x1=0.312,
             y1=7.595e-5,
             # opacity=0.2,
-            fillcolor="grey",
-            line_color="grey",
+            fillcolor="black",
+            line_color="black",
             # showlegend=True,
             # name=f"(JUNO) 3{unicode('sigma')}"
         )
@@ -177,24 +199,68 @@ for config in configs:
             go.Scatter(
                 x=[1.5],
                 y=[0.75],
-                name=f"(JUNO) 3{unicode('sigma')}",
-                text=f"(JUNO) 3{unicode('sigma')}",
+                name=f"JUNO (3{unicode('sigma')})",
+                text=f"JUNO (3{unicode('sigma')})",
                 mode="markers",
-                marker=dict(size=12, color="grey"),
+                marker=dict(size=12, color="black"),
             )
         )
+        sno_paths = ["contour1_tan.csv", "contour2_tan.csv", "contour3_tan.csv"]
+        solar_paths = ["contour1.csv", "contour2.csv", "contour3.csv"]
+        kamland_paths = ["contour1.csv", "contour2.csv", "contour3.csv"]
+
+        for file_paths, label, color in zip(
+            [solar_paths, kamland_paths],
+            ["Solar", "KamLAND"],
+            ["blue", "grey"],
+        ):
+            dash_list = ["solid", "dot", "dash"]
+            for idx, file_path in enumerate(file_paths):
+                compute_sin = False
+                deltam_factor = 1e-5
+                folder_path = f"{root}/lib/import/contours/{label}"
+                # Check if the file exists
+                if not os.path.exists(f"{folder_path}/{file_path}"):
+                    print(f"File {folder_path}/{file_path} does not exist.")
+                    sys.exit(1)
+
+                file_name = file_path.split(".")[0]
+
+                if file_path.split(".")[-1] != "csv":
+                    print(f"File {file_path} is not a CSV file.")
+                    sys.exit(1)
+
+                if file_name.split("_")[-1] == "tan":
+                    compute_sin = True
+                    deltam_factor = 1e-4
+
+                # Load the CSV file
+                data = load_contour_csv(
+                    f"{folder_path}/{file_path}",
+                    compute_sin=compute_sin,
+                    deltam_factor=deltam_factor,
+                )
+
+                # Draw the contour
+                fig = draw_contour(fig, idx, label, data, color, dash_list[idx])
+
         # Show legend inside the plot
         fig.update_layout(
             legend=dict(
-                x=0.99,
-                y=0.99,
-                xanchor="right",
-                yanchor="top",
-                title="Legend",
+                x=0.01,
+                y=0.01,
+                # xanchor="left",
+                # yanchor="bottom",
+                title="Contours",
                 orientation="v",
                 font=dict(size=18),
             )
         )
+
+        if args.background:
+            figure_name = f"{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertanty:.0f}_Bkg{100*args.background_uncertanty:.0f}"
+        else:
+            figure_name = f"{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertanty:.0f}"
 
         fig.update_xaxes(title=f"sin²{unicode('theta')}{subscript(12)}")
         fig.update_yaxes(title=f"{unicode('Delta')}m²{subscript(21)} (eV²)")
@@ -203,7 +269,7 @@ for config in configs:
             save_path,
             config,
             name=None,
-            filename=f"{energy}Energy_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Contours",
+            filename=figure_name,
             rm=args.rewrite,
             debug=args.debug,
         )

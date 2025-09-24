@@ -86,20 +86,20 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 
 args = parser.parse_args()
 
-analysis = parser.parse_args().analysis
-config = parser.parse_args().config
-name = parser.parse_args().name
+analysis = args.analysis
+config = args.config
+name = args.name
 
-exposure = parser.parse_args().exposure
-threshold = parser.parse_args().threshold
+exposure = args.exposure
+threshold = args.threshold
 
 configs = {config: [name]}
 
 user_input = {
-    "signal_uncertanty": parser.parse_args().signal_uncertanty,
-    "background_uncertanty": parser.parse_args().background_uncertanty,
-    "rewrite": parser.parse_args().rewrite,
-    "debug": parser.parse_args().debug,
+    "signal_uncertanty": args.signal_uncertanty,
+    "background_uncertanty": args.background_uncertanty,
+    "rewrite": args.rewrite,
+    "debug": args.debug,
 }
 
 
@@ -297,7 +297,7 @@ for config in configs:
             tickformat=(".1f", ".0e"),
             add_units=False,
             legend_title=f"{energy}Energy",
-            title=f"{args.folder} Sample for Solar Neutrino Day-Night Significance",
+            title=f"Day-Night - {args.folder} Sample - {config} {name}",
             matches=("x", None),
         )
         fig.update_yaxes(
@@ -305,7 +305,7 @@ for config in configs:
             tickformat=".0e",
             # Reduce number of ticks
             dtick=1,
-            range=[np.log10(exposure * 1e0), np.log10(exposure * 1e6)],
+            range=[np.log10(exposure * 1e-1), np.log10(exposure * 1e5)],
             # range=[1, 7],
             title=f"Counts per Energy ({exposure:.0f} kT·year·MeV)⁻¹",
             row=1,
@@ -314,7 +314,7 @@ for config in configs:
         fig.update_yaxes(
             tickformat=".0f",
             dtick=1,
-            range=[0, 4.5],
+            # range=[0, 4.5],
             title=f"Significance (σ)",
             row=2,
             col=1,

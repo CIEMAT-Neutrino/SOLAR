@@ -16,7 +16,6 @@ parser.add_argument(
     help="The name of the reference analysis",
     choices=["DayNight", "HEP"],
     default="HEP",
-    required=True,
 )
 parser.add_argument(
     "--config",
@@ -50,7 +49,14 @@ parser.add_argument(
     "--energy",
     type=str,
     help="The energy for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
+    choices=[
+        "SignalParticleK",
+        "ClusterEnergy",
+        "TotalEnergy",
+        "SelectedEnergy",
+        "SolarEnergy",
+    ],
+    default="ClusterEnergy",
 )
 parser.add_argument(
     "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
@@ -67,6 +73,7 @@ parser.add_argument(
 parser.add_argument(
     "--threshold", type=float, help="The threshold for the analysis", default=10.0
 )
+parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
@@ -76,9 +83,6 @@ rprint(args)
 config = args.config
 name = args.name
 configs = {config: [name]}
-
-signal_uncertanty = args.signal_uncertanty
-background_uncertanty = args.background_uncertanty
 
 threshold = args.threshold
 thld = np.where(sensitivity_rebin_centers > threshold)[0][0]
@@ -96,14 +100,15 @@ for config in configs:
     )
 
     for name, key in product(configs[config], fastest_sigma):
-        if key[2] not in args.energy:
-            continue
+        if args.energy is not None:
+            energy = args.energy
         else:
             energy = key[2]
 
         paths = {
-            "signal_path": f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}Energy",
-            "background_path": f"{info['PATH']}/SENSITIVITY/{config}/background/{args.folder.lower()}/{energy}Energy",
+            "signal_path": f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}",
+            "background_path": f"{info['PATH']}/SENSITIVITY/{config}/background/{args.folder.lower()}/{energy}",
+            "alternative_background_path": f"{info['PATH']}/SENSITIVITY/{config}/background/{args.folder.lower()}/ClusterEnergy",
         }
 
         if args.fiducial is not None:
@@ -174,10 +179,16 @@ for config in configs:
             f'{paths["signal_path"]}/{config}_{name}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["REACT_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
         )
         pred2_df = np.nan_to_num(pred2_df, nan=0.0)
-        bkg_df = pd.read_pickle(
-            f'{paths["background_path"]}/{config}_background_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl'
-        )
-        bkg_df = np.nan_to_num(bkg_df, nan=0.0)
+        # try:
+
+        if args.background:
+            bkg_df = pd.read_pickle(
+                f'{paths["background_path"]}/{config}_background_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl'
+            )
+            bkg_df = np.nan_to_num(bkg_df, nan=0.0)
+
+        else:
+            bkg_df = 0 * pred1_df
 
         fake_df_dict = {}
         for dm2, sin13, sin12 in track(
@@ -216,8 +227,8 @@ for config in configs:
                 obs_df[:, thld:],
                 pred1_df[:, thld:],
                 bkg_df[:, thld:],
-                SigmaPred=signal_uncertanty,
-                SigmaBkg=background_uncertanty,
+                SigmaPred=args.signal_uncertanty,
+                SigmaBkg=args.background_uncertanty,
             )
 
             chi2, best_A_pred, best_A_bkg = fitter.Fit(initial_A_pred, initial_A_bkg)
@@ -243,8 +254,8 @@ for config in configs:
                 obs_df[:, thld:],
                 pred2_df[:, thld:],
                 bkg_df[:, thld:],
-                SigmaPred=signal_uncertanty,
-                SigmaBkg=background_uncertanty,
+                SigmaPred=args.signal_uncertanty,
+                SigmaBkg=args.background_uncertanty,
             )
 
             chi2, best_A_pred, best_A_bkg = fitter.Fit(initial_A_pred, initial_A_bkg)
@@ -264,7 +275,11 @@ for config in configs:
             react_df.loc[i] = [params[0], params[1], params[2], chi2]
 
         # Delete files if they already exist
-        path = f'{paths["signal_path"]}/results'
+        if args.background:
+            path = f'{paths["signal_path"]}/results/signal_{100*args.signal_uncertanty:.0f}%_and_background_{100*args.background_uncertanty:.0f}%'
+        else:
+            path = f'{paths["signal_path"]}/results/signal_{100*args.signal_uncertanty:.0f}%_only'
+
         rprint(f"\nSaving data to {path}")
 
         # Create the directory if it does not exist
@@ -304,3 +319,6 @@ for config in configs:
         react_df.to_pickle(
             f"{path}/{name}_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_df.pkl"
         )
+
+        if args.energy is not None:
+            break

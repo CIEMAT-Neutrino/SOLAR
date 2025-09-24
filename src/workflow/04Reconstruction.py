@@ -4,8 +4,8 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-data_path = f"{root}/data/reconstruction/"
-save_path = f"{root}/images/reconstruction/"
+data_path = f"{root}/data/workflow/reconstruction/"
+save_path = f"{root}/images/workflow/reconstruction"
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
@@ -20,7 +20,7 @@ parser.add_argument(
     "--config",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default="hd_1x2x6",
 )
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_signal"
@@ -38,7 +38,14 @@ user_input = {"workflow": "RECONSTRUCTION"}
 
 run, output = load_multi(configs, preset=user_input["workflow"], debug=args.debug)
 run = compute_reco_workflow(
-    run, configs, workflow=user_input["workflow"], debug=args.debug
+    run,
+    configs,
+    params={
+        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
+        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+    },
+    workflow=user_input["workflow"],
+    debug=args.debug,
 )
 
 filtered_run, mask, output = compute_filtered_run(
@@ -47,35 +54,36 @@ filtered_run, mask, output = compute_filtered_run(
 rprint(output)
 data = filtered_run["Reco"]
 
-acc = int(len(data["Generator"]) / 200)
-if acc > 100:
-    acc = 100
+acc = get_default_acc(len(data["Generator"]))
 fit = {
     "color": "grey",
-    "threshold": 0.7,
-    "trimm": (2, 2),
-    "print": True,
-    "show": True,
     "opacity": 0,
+    "print": True,
     "range": (0, 10),
+    "show": True,
 }
 
 for config in configs:
+    info, params, output = get_param_dict(
+        f"{root}/config/{config}/{config}", {}, output, debug=args.debug
+    )
     for name in configs[config]:
         fig = make_subplots(
             rows=2, cols=3, subplot_titles=("Electron", "Gamma", "Electron+Gamma")
         )
 
+        fit["threshold"] = 0.7
+        fit["bounds"] = ([-10], [0])
         fit["spec_type"] = "intercept"
         fig, popt_int, perr_int = get_hist2d_fit(
             data["SignalParticleK"],
             data["ElectronK"],
             fig=fig,
             idx=(1, 1),
-            acc=acc,
+            acc=100,
             fit=fit,
             zoom=True,
-            debug=False,
+            debug=args.debug,
         )
 
         x, y, h = get_hist2d(
@@ -98,6 +106,7 @@ for config in configs:
 
         fit["func"] = "linear"
         fit["spec_type"] = "max"
+        fit["bounds"] = ([0.1, -10], [1.1, 0])
         fig, popt_true, perr_true = get_hist2d_fit(
             data["SignalParticleK"],
             data["GammaK"] + data["ElectronK"],
@@ -106,6 +115,7 @@ for config in configs:
             acc=acc,
             fit=fit,
             zoom=True,
+            debug=args.debug,
         )
 
         x, y, h = get_hist2d(
@@ -113,6 +123,7 @@ for config in configs:
             y=data["Energy"],
             density=True,
             acc=acc,
+            debug=args.debug,
         )
         fig.add_trace(
             go.Heatmap(
@@ -131,6 +142,7 @@ for config in configs:
             y=data["TotalAdjClEnergy"][data["TotalAdjClEnergy"] > 0],
             density=True,
             acc=acc,
+            debug=args.debug,
         )
         fig.add_trace(
             go.Heatmap(
@@ -145,7 +157,7 @@ for config in configs:
         )
 
         fit["spec_type"] = "max"
-        fit["trimm"] = (2, int(acc/4))
+        fit["trimm"] = (2, int(acc / 4))
         fig, total_popt, total_perr = get_hist2d_fit(
             data["SignalParticleK"],
             data["Energy"] + data["TotalAdjClEnergy"],
@@ -154,6 +166,7 @@ for config in configs:
             acc=acc,
             fit=fit,
             zoom=True,
+            debug=args.debug,
         )
 
         fig = format_coustom_plotly(
@@ -190,9 +203,11 @@ for config in configs:
             x=data["ElectronK"],
             y=data["Energy"],
             acc=acc,
-            # density=True,
+            nanz=True,
+            zoom=True,
+            density=True,
         )
-        h = h / h.max()
+        # h = h / h.max()
         fig.add_trace(
             go.Heatmap(
                 x=x,
@@ -208,10 +223,12 @@ for config in configs:
         x, y, h = get_hist2d(
             x=data["GammaK"],
             y=data["TotalAdjClEnergy"],
-            acc=acc,
-            # density=True,
+            acc=(true_energy_edges, true_energy_edges),
+            nanz=True,
+            zoom=True,
+            density=True,
         )
-        h = h / h.max()
+        # h = h / h.max()
         fig.add_trace(
             go.Heatmap(
                 x=x,
@@ -228,9 +245,11 @@ for config in configs:
             x=data["GammaK"] + data["ElectronK"],
             y=data["Energy"] + data["TotalAdjClEnergy"],
             acc=acc,
-            # density=True,
+            nanz=True,
+            zoom=True,
+            density=True,
         )
-        h = h / h.max()
+        # h = h / h.max()
         fig.add_trace(
             go.Heatmap(
                 x=x,
@@ -250,7 +269,7 @@ for config in configs:
         )
         fig.update_xaxes(title_text="True Neutrino Energy (MeV)")
         fig.update_layout(
-            coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Norm")),
+            coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Norm.")),
             showlegend=False,
             xaxis1_title="True Electron Energy (MeV)",
             xaxis2_title="True Gamma Energy (MeV)",
@@ -346,7 +365,6 @@ for config in configs:
             debug=args.debug,
         )
 
-
         fig = make_subplots(
             rows=1,
             cols=4,
@@ -362,12 +380,18 @@ for config in configs:
         for idx, energy in enumerate(
             ["TotalEnergy", "SelectedEnergy", "SolarEnergy", "ClusterEnergy"]
         ):
-            fit["func"] = "linear"
             fit["spec_type"] = "max"
-            fit["trimm"] = (int(acc/20), int(acc/2))
-            if energy == "ClusterEnergy":
-                fit["trimm"] = (int(acc/6), int(acc/2))
-            
+            fit["func"] = params["SAMPLE_FIT"][energy]
+            if fit["func"] == "quadratic":
+                fit["bounds"] = ([-np.inf, -np.inf, -10], [1, 1.1, 10])
+            elif fit["func"] == "linear":
+                fit["bounds"] = ([0.1, -10], [1.1, 10])
+
+            fit["trimm"] = (
+                int(acc * params["MIN_SAMPLE_TRIM"][energy]),
+                int(acc * params["MAX_SAMPLE_TRIM"][energy]),
+            )
+
             fig, total_popt, total_perr = get_hist2d_fit(
                 data["SignalParticleK"],
                 data[energy],
@@ -375,18 +399,31 @@ for config in configs:
                 idx=(1, idx + 1),
                 acc=acc,
                 fit=fit,
+                nanz=True,
                 zoom=True,
                 debug=True,
             )
-            if fit["func"] == "linear":
-                fit_dict[energy] = {"popt": total_popt, "perr": total_perr}
-            if fit["func"] == "slope1":
-                fit_dict[energy] = {"popt": (1, total_popt[0]), "perr": (0, total_perr[0])}
+            if total_popt is None:
+                total_popt = [np.nan] * len(fit["bounds"][0])
+                total_perr = [np.nan] * len(fit["bounds"][0])
 
+            if fit["func"] == "quadratic":
+                fit_dict[energy] = {"popt": total_popt, "perr": total_perr}
+
+            elif fit["func"] == "linear":
+                fit_dict[energy] = {
+                    "popt": (1e-10, *total_popt),
+                    "perr": (1e-10, *total_perr),
+                }
+            elif fit["func"] == "slope1":
+                fit_dict[energy] = {
+                    "popt": (1e-10, 1, total_popt[0]),
+                    "perr": (1e-10, 0, total_perr[0]),
+                }
 
         fig = format_coustom_plotly(
             fig,
-            matches=(None, None),
+            matches=("x", "y"),
             title="Reco Cluster - Neutrino Energy Reconstruction",
         )
         fig.update_xaxes(title_text="True Neutrino Energy (MeV)")
@@ -408,28 +445,36 @@ for config in configs:
         energy_calibrartion_dict = {
             "TRUE": {"ENERGY_AMP": popt_true[0], "INTERSECTION": popt_true[1]},
             "CLUSTER": {
-                "ENERGY_AMP": fit_dict["ClusterEnergy"]["popt"][0],
-                "ENERGY_AMP_ERROR": fit_dict["ClusterEnergy"]["perr"][0],
-                "INTERSECTION": fit_dict["ClusterEnergy"]["popt"][1],
-                "INTERSECTION_ERROR": fit_dict["ClusterEnergy"]["perr"][1],
+                "ENERGY_CURVATURE": fit_dict["ClusterEnergy"]["popt"][0],
+                "ENERGY_CURVATURE_ERROR": fit_dict["ClusterEnergy"]["perr"][0],
+                "ENERGY_AMP": fit_dict["ClusterEnergy"]["popt"][1],
+                "ENERGY_AMP_ERROR": fit_dict["ClusterEnergy"]["perr"][1],
+                "INTERSECTION": fit_dict["ClusterEnergy"]["popt"][2],
+                "INTERSECTION_ERROR": fit_dict["ClusterEnergy"]["perr"][2],
             },
             "SOLAR": {
-                "ENERGY_AMP": fit_dict["SolarEnergy"]["popt"][0],
-                "ENERGY_AMP_ERROR": fit_dict["SolarEnergy"]["perr"][0],
-                "INTERSECTION": fit_dict["SolarEnergy"]["popt"][1],
-                "INTERSECTION_ERROR": fit_dict["SolarEnergy"]["perr"][1],
+                "ENERGY_CURVATURE": fit_dict["SolarEnergy"]["popt"][0],
+                "ENERGY_CURVATURE_ERROR": fit_dict["SolarEnergy"]["perr"][0],
+                "ENERGY_AMP": fit_dict["SolarEnergy"]["popt"][1],
+                "ENERGY_AMP_ERROR": fit_dict["SolarEnergy"]["perr"][1],
+                "INTERSECTION": fit_dict["SolarEnergy"]["popt"][2],
+                "INTERSECTION_ERROR": fit_dict["SolarEnergy"]["perr"][2],
             },
             "SELECTED": {
-                "ENERGY_AMP": fit_dict["SelectedEnergy"]["popt"][0],
-                "ENERGY_AMP_ERROR": fit_dict["SelectedEnergy"]["perr"][0],
-                "INTERSECTION": fit_dict["SelectedEnergy"]["popt"][1],
-                "INTERSECTION_ERROR": fit_dict["SelectedEnergy"]["perr"][1],
+                "ENERGY_CURVATURE": fit_dict["SelectedEnergy"]["popt"][0],
+                "ENERGY_CURVATURE_ERROR": fit_dict["SelectedEnergy"]["perr"][0],
+                "ENERGY_AMP": fit_dict["SelectedEnergy"]["popt"][1],
+                "ENERGY_AMP_ERROR": fit_dict["SelectedEnergy"]["perr"][1],
+                "INTERSECTION": fit_dict["SelectedEnergy"]["popt"][2],
+                "INTERSECTION_ERROR": fit_dict["SelectedEnergy"]["perr"][2],
             },
             "TOTAL": {
-                "ENERGY_AMP": fit_dict["TotalEnergy"]["popt"][0],
-                "ENERGY_AMP_ERROR": fit_dict["TotalEnergy"]["perr"][0],
-                "INTERSECTION": fit_dict["TotalEnergy"]["popt"][1],
-                "INTERSECTION_ERROR": fit_dict["TotalEnergy"]["perr"][1],
+                "ENERGY_CURVATURE": fit_dict["TotalEnergy"]["popt"][0],
+                "ENERGY_CURVATURE_ERROR": fit_dict["TotalEnergy"]["perr"][0],
+                "ENERGY_AMP": fit_dict["TotalEnergy"]["popt"][1],
+                "ENERGY_AMP_ERROR": fit_dict["TotalEnergy"]["perr"][1],
+                "INTERSECTION": fit_dict["TotalEnergy"]["popt"][2],
+                "INTERSECTION_ERROR": fit_dict["TotalEnergy"]["perr"][2],
             },
         }
 
@@ -460,14 +505,24 @@ for config in configs:
         for jdx, energy in enumerate(
             ["TotalEnergy", "SelectedEnergy", "SolarEnergy", "ClusterEnergy"]
         ):
+            # Inverse function of polinomyal with degree 2
+            def inverse_quadratic(x, a, b, c):
+                return (-b + np.sqrt(b**2 - 4 * a * (c - x))) / (2 * a)
 
             h = []
             for idx, ebin in enumerate(true_energy_edges[:-1]):
                 this_filter = (data["SignalParticleK"] > true_energy_edges[idx]) * (
                     data["SignalParticleK"] < true_energy_edges[idx + 1]
                 )
+                # Quadratic function correction
+                a = inverse_quadratic(
+                    data[energy][this_filter],
+                    fit_dict[energy]["popt"][0],
+                    fit_dict[energy]["popt"][1],
+                    fit_dict[energy]["popt"][2],
+                )
                 hist, bins = np.histogram(
-                    (data[energy][this_filter] - fit_dict[energy]["popt"][1]) / fit_dict[energy]["popt"][0],
+                    a,
                     bins=true_energy_edges,
                     density=False,
                 )
@@ -534,13 +589,21 @@ for config in configs:
                 ["TotalEnergy", "SelectedEnergy", "SolarEnergy", "ClusterEnergy"]
             ):
 
-                for idx, energy_bin in enumerate([4, 8, 12, 16, 20]):
+                for idx, energy_bin in enumerate([8, 12, 16, 20]):
                     this_filter = (data["SignalParticleK"] > (energy_bin - 0.5)) * (
                         data["SignalParticleK"]
                         < (energy_bin + 0.5) * (data["NHits"] >= hits)
                     )  # Filtering genereted neutrinos in 1GeV energy bin
 
-                    this_data = (data[energy][this_filter] - fit_dict[energy]["popt"][1]) / fit_dict[energy]["popt"][0]
+                    # this_data = (
+                    #     data[energy][this_filter] - fit_dict[energy]["popt"][1]
+                    # ) / fit_dict[energy]["popt"][0]
+                    this_data = inverse_quadratic(
+                        data[energy][this_filter],
+                        fit_dict[energy]["popt"][0],
+                        fit_dict[energy]["popt"][1],
+                        fit_dict[energy]["popt"][2],
+                    )
 
                     hist, bins = np.histogram(this_data, bins=true_energy_edges)
                     hist = hist / np.sum(hist)
@@ -581,17 +644,15 @@ for config in configs:
 
             fig = format_coustom_plotly(
                 fig,
-                title=f"{energy}",
+                title=f"Neutrino Energy Reconstruction (#NHits > {hits}) - {config}",
                 legend_title="True Energy",
-                ranges=(None, [-0.025, 0.35]),
+                ranges=([4, 30], [-0.025, 0.35]),
             )
             fig.add_vline(
-                x=0,
-                line_width=1,
+                x=30,
+                line_width=0,
                 annotation_text=f"<b>RMS</b>",
-                annotation_position="bottom right",
-                line_dash="dash",
-                line_color="grey",
+                annotation_position="bottom left",
             )
             fig.update_xaxes(title_text="Reco Neutrino Energy (MeV)")
             fig.update_layout(

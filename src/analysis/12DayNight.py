@@ -37,7 +37,7 @@ parser.add_argument(
     nargs="+",
     type=str,
     help="The energy label for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
+    default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
 parser.add_argument(
     "--fiducial",
@@ -106,7 +106,7 @@ user_input = {
 components = ["neutron", "gamma", "Solar"]
 thld_idx = np.where(daynight_rebin_centers > user_input["threshold"])[0][0]
 rprint(
-    f"[INFO] Threshold {user_input['threshold']} found to correspond to index {thld_idx}"
+    f"[cyan][INFO][/cyan] Threshold {user_input['threshold']} found to correspond to index {thld_idx}"
 )
 for config in configs:
     for idx, name in enumerate(configs[config]):
@@ -139,7 +139,7 @@ for config in configs:
                     ophits,
                     adjcls,
                 ),
-                description=f"Looping over analysis cuts for {energy_label}Energy...",
+                description=f"Looping over analysis cuts for {energy_label}...",
                 total=len(fiducials) * len(hits) * len(ophits) * len(adjcls),
             ):
 

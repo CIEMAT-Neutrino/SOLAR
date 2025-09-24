@@ -4,7 +4,7 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-save_path = f"{root}/images/discrimination/"
+save_path = f"{root}/images/workflow/discrimination"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -17,7 +17,7 @@ parser.add_argument(
     "--config",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default="hd_1x2x6",
 )
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_signal"
@@ -25,8 +25,9 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
-config = parser.parse_args().config
-name = parser.parse_args().name
+args = parser.parse_args()
+config = args.config
+name = args.name
 
 configs = {config: [name]}
 
@@ -40,7 +41,14 @@ run, output = load_multi(
     configs, preset=user_input["workflow"], debug=user_input["debug"]
 )
 run = compute_reco_workflow(
-    run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
+    run,
+    configs,
+    params={
+        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
+        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+    },
+    workflow=user_input["workflow"],
+    debug=user_input["debug"],
 )
 
 filtered_run, mask, output = compute_filtered_run(
@@ -50,27 +58,26 @@ rprint(output)
 data = filtered_run["Reco"]
 
 # Plot the calibration workflow
-acc = int(len(data["Generator"]) / 200)
-if acc > 100:
-    acc = 100
+acc = get_default_acc(len(data["Generator"]))
+per = (3, 97)
 fit = {
     "color": "grey",
     "func": "linear",
     "opacity": 0,
-    "print": True,
-    "range": (0, 10),
-    "show": False,
-    "spec_type": "max",
-    "threshold": 0.7,
-    "trimm": (10, 10),
+    "print": False,
+    "show": True,
 }
 for config in configs:
+    info, new_params, output = get_param_dict(
+        f"{root}/config/{config}/{config}", {}, output, debug=args.debug
+    )
     for name in configs[config]:
         fig = make_subplots(
             rows=1, cols=2, subplot_titles=("Electron", "Electron Energy Offset")
         )
 
         fit["spec_type"] = "intercept"
+        fit["threshold"] = 0.4
         fig, popt_int, perr_int = get_hist2d_fit(
             data["SignalParticleK"],
             data["ElectronK"],
@@ -187,7 +194,136 @@ for config in configs:
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
+        if info["BACKGROUND"]:
+            # Create a plot for the adjcl radius and energy distribution to evaluate the best separation between signal and background
+            fig = make_subplots(
+                rows=1,
+                cols=2,
+                subplot_titles=(
+                    "AdjCl Distance Distribution",
+                    "AdjCl Energy Distribution",
+                ),
+            )
+            # Create index for entries != 0 and purity > 0
+            signal_idx = np.where((data["AdjClCharge"] != 0) & (data["AdjClPur"] > 0))
+            background_idx = np.where(
+                (data["AdjClCharge"] != 0) & (data["AdjClPur"] == 0)
+            )
+            # Export the limits to cut on the adjcl radius and energy maximizing the purity
+            signal_over_background_ratio = 0
+            for radius_limit, energy_limit in product(
+                np.arange(1, 100, 2), np.arange(1, 100, 2)
+            ):
+                adjcl_radius_limit = np.percentile(
+                    data["AdjClR"][background_idx], radius_limit
+                )
+                adjcl_energy_limit = np.percentile(
+                    data["AdjClCharge"][background_idx], energy_limit
+                )
+                # Print the number of entries in the signal and background samples that pass the limits
+                selected_signal_idx = np.where(
+                    (data["AdjClR"][signal_idx] < adjcl_radius_limit)
+                    + (data["AdjClCharge"][signal_idx] > adjcl_energy_limit)
+                )
+                selected_background_idx = np.where(
+                    (data["AdjClR"][background_idx] < adjcl_radius_limit)
+                    + (data["AdjClCharge"][background_idx] > adjcl_energy_limit)
+                )
+                if (
+                    len(data["AdjClR"][signal_idx][selected_signal_idx])
+                    / np.sqrt(
+                        len(data["AdjClR"][background_idx][selected_background_idx])
+                    )
+                    > signal_over_background_ratio
+                ):
+                    signal_over_background_ratio = len(
+                        data["AdjClR"][signal_idx][selected_signal_idx]
+                    ) / np.sqrt(
+                        len(data["AdjClR"][background_idx][selected_background_idx])
+                    )
+                    adjcl_radius_limit_best = adjcl_radius_limit
+                    adjcl_energy_limit_best = adjcl_energy_limit
+                    selected_signal_idx_best = selected_signal_idx
+                    selected_background_idx_best = selected_background_idx
 
+            rprint(
+                f"AdjCl Distance Limit: {adjcl_radius_limit_best:.2f} cm, AdjCl Charge Limit: {adjcl_energy_limit_best:.2f} ADC x ticks"
+            )
+            rprint(
+                f"Selected Signal Entries: {100*len(data['AdjClR'][signal_idx][selected_signal_idx_best]) / len(data['AdjClR'][signal_idx]):.2f}% \nSelected Background Entries: {100*len(data['AdjClR'][background_idx][selected_background_idx_best]) / len(data['AdjClR'][background_idx]):.2f}%"
+            )
+
+            for idx in [signal_idx, background_idx]:
+                fig.add_trace(
+                    go.Histogram2dContour(
+                        x=data["AdjClR"][idx].flatten(),
+                        y=data["AdjClCharge"][idx].flatten(),
+                        coloraxis="coloraxis",
+                        colorbar=dict(title="Norm"),
+                        contours=dict(
+                            coloring="heatmap", showlabels=True, labelfont_size=12
+                        ),
+                        zmin=1,
+                        zmax=None,  # Set zmax to None to allow for white regions
+                        colorscale=[
+                            [0, "white"],
+                            [1, "blue"],
+                        ],  # Change 'blue' to your desired color
+                    ),
+                    row=1,
+                    col=1 if idx is signal_idx else 2,
+                )
+            # Draw the limits on the plots
+            fig.add_vline(
+                x=adjcl_radius_limit_best,
+                line_dash="dash",
+                line_color="red",
+                # annotation_text=f"Radius Limit: {adjcl_radius_limit:.2f} cm",
+                # annotation_position="top left",
+            )
+            fig.add_hline(
+                y=adjcl_energy_limit_best,
+                line_dash="dash",
+                line_color="red",
+                # annotation_text=f"Energy Limit: {adjcl_energy_limit:.2f} MeV",
+                # annotation_position="top right",
+            )
+            fig.update_xaxes(title_text="Adj. Cluster Distance (cm)", row=1, col=1)
+            fig.update_yaxes(title_text="Adj. Cluster Charge", row=1, col=1)
+            fig.update_yaxes(title_text="Adj. Cluster Distance (cm)", row=1, col=2)
+            fig = format_coustom_plotly(
+                fig,
+                matches=(None, None),
+                title="Adj. Cluster Charge vs Distance",
+            )
+            save_figure(
+                fig,
+                save_path,
+                config,
+                name,
+                filename=f"AdjCl_Radius_Charge_Distribution",
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )
+
+            new_params = {
+                "MIN_BKG_R": adjcl_radius_limit_best,
+                "MAX_BKG_CHARGE": adjcl_energy_limit_best,
+            }
+            update_json_file(f"{root}/config/{config}/{config}_params.json", new_params)
+
+        else:
+            rprint(f"Production does not contain background. Selecting all adjacent clusters as true signal.")
+
+        run, output, branches = compute_total_energy(
+            run,
+            configs,
+            params=new_params,
+            rm_branches=False,
+            output=output,
+            debug=user_input["debug"],
+        )
+        
         features = get_default_info(root, "ML_FEATURES")
         # Create the dataframe and load the feature branches
         df = npy2df(
@@ -197,9 +333,6 @@ for config in configs:
             + ["Primary", "Generator", "SignalParticleK", "NHits", "Upper", "Lower"],
             debug=user_input["debug"],
         )
-        # List all columns in the dataframe
-        print(df.columns)
-        print(df["TotalAdjClEnergy"])
 
         # Display the dataframe
         A = df[(df["Upper"] == True) + (df["Generator"] != 1)]
@@ -225,10 +358,11 @@ for config in configs:
         rf_classifier.fit(train_df[features], train_df["Label"])
         # Use the trained classifier to predict the labels for the test data
         test_df["ML"] = rf_classifier.predict(test_df[features])
+
         # Print the accuracy of the classifier
-        print(
-            f"Random Forest Accuracy: {accuracy_score(test_df['Label'], test_df['ML']):.2f}"
-        )
+        # print(
+        #     f"Random Forest Accuracy: {accuracy_score(test_df['Label'], test_df['ML']):.2f}"
+        # )
 
         # Check if the path to the model file exists
         if not os.path.exists(f"{root}/config/{config}/{name}/models/"):
@@ -329,7 +463,6 @@ for config in configs:
         )
 
         importance = rf_classifier.feature_importances_
-        print(importance)
         fig = make_subplots(cols=1, rows=1)
         fig.add_trace(
             go.Bar(x=features, y=importance, marker_color="blue", opacity=0.75)
@@ -340,7 +473,7 @@ for config in configs:
             margin={"auto": False, "margin": (100, 100, 100, 150)},
         )
         fig.update_layout(
-            title="Random Forest: Feature Importance",
+            title=f"Random Forest Feature Importance - {config} {name}",
             xaxis_title="Features",
             yaxis_title="Importance",
         )
@@ -368,15 +501,15 @@ for config in configs:
         fig = format_coustom_plotly(
             fig,
             matches=(None, None),
-            title="Correlation Matrix",
+            title=f"Feature Correlation Matrix - {config} {name}",
             figsize=(1200, 1000),
             margin={"auto": False, "margin": (150, 100, 100, 150)},
         )
 
         # Set the title and axis labels
         fig.update_layout(
-            xaxis=dict(title="Features", tickangle=45),
-            yaxis=dict(title="Features", tickangle=315),
+            xaxis=dict(title="", tickangle=45),
+            yaxis=dict(title="", tickangle=315),
         )
 
         # Show the figure
@@ -397,13 +530,6 @@ for config in configs:
         lower_idx = df["Discriminant"] < threshold
         df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
         df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
-
-        # this_df = df[
-        #     (df["Primary"] == True)
-        #     & (df["Generator"] == 1)
-        #     & (df["NHits"] > 2)
-        #     & (df["SignalParticleK"] < 20)
-        # ]
 
         fig = px.histogram(
             df, x="Discriminant", histnorm="probability", opacity=0.75, color="Label"
@@ -437,29 +563,38 @@ for config in configs:
             debug=user_input["debug"],
         )
 
-        # this_df = df[
-        #     (df["Primary"] == True) & (df["Generator"] == 1) & (df["NHits"] > 1)
-        # ]
-
+        popt_corr = {}
+        perr_corr = {}
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Upper", "Lower"))
-        popt_corr = []
-        perr_corr = []
 
         fit["spec_type"] = "max"
+        fit["bounds"] = ([0.1, -1], [1.1, 9])
         for idx, col, label in zip([upper_idx, lower_idx], [1, 2], ["Upper", "Lower"]):
+            fit["threshold"] = (
+                len(df["SignalParticleK"][idx]) * new_params["DISCRIMINATION_THRESHOLD"]
+            )
+            acc = get_default_acc(len(df["SignalParticleK"][idx]))
             fig, popt, perr = get_hist2d_fit(
                 df["SignalParticleK"][idx],
                 df["SolarEnergy"][idx],
                 fig,
                 idx=(1, col),
-                per=None,
-                acc=75,
+                per=per,
+                acc=acc,
                 fit=fit,
+                density=False,
                 zoom=True,
                 debug=user_input["debug"],
             )
-            popt_corr.append(popt)
-            perr_corr.append(perr)
+            if popt is not None:
+                popt_corr[label] = popt
+                perr_corr[label] = perr
+            else:
+                rprint(
+                    f"Could not fit {label} energy calibration. Please check the data."
+                )
+                popt_corr[label] = [0, 0]
+                perr_corr[label] = [0, 0]
 
         fig = format_coustom_plotly(fig, title="ML-Based Neutrino Energy Smearing")
         fig.update_yaxes(title="Reco Energy (MeV)", row=1, col=1)
@@ -487,18 +622,18 @@ for config in configs:
                     "ML_THRESHOLD": threshold,
                     "UPPER": {
                         "OFFSET": popt_int[0],
-                        "ENERGY_AMP": popt_corr[0][0],
-                        "INTERSECTION": popt_corr[0][1],
+                        "ENERGY_AMP": popt_corr["Upper"][0],
+                        "INTERSECTION": popt_corr["Upper"][1],
                     },
                     "LOWER": {
                         "OFFSET": popt_int[1],
-                        "ENERGY_AMP": popt_corr[1][0],
-                        "INTERSECTION": popt_corr[1][1],
+                        "ENERGY_AMP": popt_corr["Lower"][0],
+                        "INTERSECTION": popt_corr["Lower"][1],
                     },
                 },
                 f,
             )
 
         rprint(
-            f"-> Saved reco energy fit parameters to {root}/config/{config}/{name}/{config}_calib/{config}_{name}_discriminant_calibration.json"
+            f"Saved reco energy fit parameters to: {root}/config/{config}/{name}/{config}_calib/{config}_{name}_discriminant_calibration.json"
         )

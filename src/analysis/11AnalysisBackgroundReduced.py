@@ -4,8 +4,8 @@ sys.path.insert(0, "../../")
 
 from lib import *
 
-save_path = f"{root}/images/solar/results/nominal/"
-data_path = f"{root}/data/solar/results/nominal/"
+save_path = f"{root}/images/solar/results/reduced"
+data_path = f"{root}/data/solar/results/reduced"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -38,21 +38,17 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
-config = parser.parse_args().config
-name = parser.parse_args().name
-
-ref_fiducial = parser.parse_args().fiducial
-ref_nhits = parser.parse_args().nhits
-ref_ophits = parser.parse_args().ophits
-ref_adjcl = parser.parse_args().adjcl
-
+args = parser.parse_args()
+config = args.config
+name = args.name
 configs = {config: [name]}
 
 user_input = {
+    "reduction": {"gamma": 3, "neutron": 2, "alpha": 1},
     "directory": {
-        "neutron": "background/nominal",
-        "gamma": "background/nominal",
-        "alpha": "background/nominal",
+        "neutron": "background/reduced",
+        "gamma": "background/reduced",
+        "alpha": "background/reduced",
     },
     "weights": {
         "neutron": ["SignalParticleWeight"],
@@ -102,7 +98,13 @@ for config in configs:
     plot_list = []
     for name, energy in product(
         configs[config],
-        ["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
+        [
+            "SignalParticleK",
+            "ClusterEnergy",
+            "TotalEnergy",
+            "SelectedEnergy",
+            "SolarEnergy",
+        ],
     ):
         fig = make_subplots(rows=1, cols=1, subplot_titles=([energy]))
 
@@ -134,6 +136,20 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        if config == "hd_1x2x6_centralAPA":
+            drift_fiducial_factor = 0
+        elif config == "hd_1x2x6_lateralAPA":
+            drift_fiducial_factor = 1.5
+        elif config == "vd_1x8x14_3view_30deg":
+            drift_fiducial_factor = 1
+        elif config == "vd_1x8x14_3view_30deg_optimistic":
+            drift_fiducial_factor = 1
+        else:
+            rprint(
+                f"[red][ERROR][/red] Unknown config {config} for drift_fiducial_factor"
+            )
+            drift_fiducial_factor = 1
+
         for (
             (idx, this_fiducial),
             this_nhit,
@@ -156,16 +172,24 @@ for config in configs:
             description=f"Iterating over cut configurations for reco {energy}...",
         ):
             if this_fiducial == 0:
-                mask = (run["Reco"]["NHits"] > this_nhit - 1) * (
-                    run["Reco"]["AdjClNum"] < this_adjcl
+                mask = (
+                    (run["Reco"]["SignalParticleZ"] > -info["DETECTOR_GAP_Z"] + 0.5)
+                    * (run["Reco"]["SignalParticleZ"] < info["DETECTOR_SIZE_Z"] + 19.5)
+                    * (run["Reco"]["NHits"] > this_nhit - 1)
+                    * (run["Reco"]["AdjClNum"] < this_adjcl)
                 )
 
             else:
                 mask = (
-                    (run["Reco"]["NHits"] > this_nhit - 1)
+                    (run["Reco"]["SignalParticleZ"] > -info["DETECTOR_GAP_Z"] + 0.5)
+                    * (run["Reco"]["SignalParticleZ"] < info["DETECTOR_SIZE_Z"] + 19.5)
+                    * (run["Reco"]["NHits"] > this_nhit - 1)
                     * (run["Reco"]["AdjClNum"] < this_adjcl)
                     * (run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1)
-                    * (np.absolute(run["Reco"]["RecoX"]) > this_fiducial * 0.1)
+                    * (
+                        np.absolute(run["Reco"]["RecoX"])
+                        > this_fiducial * drift_fiducial_factor
+                    )
                     * (np.absolute(run["Reco"]["RecoX"]) < detector_x / 2)
                     * (np.absolute(run["Reco"]["RecoY"]) > 0)
                     * (
@@ -186,6 +210,7 @@ for config in configs:
 
             idx_mask = np.where(mask == True)
             h, bins = np.histogram(run["Reco"][energy][idx_mask], bins=energy_edges)
+            # Create an array where number of counts > 1
             mc_filter = h > 1
             mc_counts = h.copy()
             h_rel_error = np.sqrt(h) / h
@@ -195,6 +220,7 @@ for config in configs:
                 weights=run["Reco"][weight][idx_mask],
             )
             h *= mc_filter
+            h = h / user_input["reduction"][name]
             h_error = h * h_rel_error
             h_error[np.isnan(h_error)] = 0
 
@@ -221,9 +247,9 @@ for config in configs:
             )
 
             if (
-                this_nhit == ref_nhits
-                and this_ophit == ref_ophits
-                and this_adjcl == ref_adjcl
+                this_nhit == args.nhits
+                and this_ophit == args.ophits
+                and this_adjcl == args.adjcl
                 and weight == "SignalParticleWeight"
             ):
                 fig.add_trace(
@@ -239,7 +265,7 @@ for config in configs:
                     row=1,
                     col=1,
                 )
-                if this_fiducial == ref_fiducial:
+                if this_fiducial == args.fiducial:
                     # Save the energy spectrum to a file for further analysis
                     save_pkl(
                         mask,

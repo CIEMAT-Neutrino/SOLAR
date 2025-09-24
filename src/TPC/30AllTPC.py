@@ -16,11 +16,23 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "--config",
     type=str,
+    nargs="+",
     help="The configuration to load",
-    default="hd_1x2x6",
+    default=[
+        "hd_1x2x6",
+        "hd_1x2x6_centralAPA",
+        "hd_1x2x6_lateralAPA",
+        "vd_1x8x14_3view_30deg",
+        "vd_1x8x14_3view_30deg_nominal",
+        "vd_1x8x14_3view_30deg_optimistic",
+    ],
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley_signal"
+    "--name",
+    type=str,
+    nargs="+",
+    help="The name of the configuration",
+    default=["marley", "marley_official"],
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -28,18 +40,15 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 args = parser.parse_args()
 
 # Run the first script with the arguments
-os.system(
-    f"python3 {root}/src/macros/01Correction.py --config {args.config} --name {args.name}"
-)
-os.system(
-    f"python3 {root}/src/macros/02Calibration.py --config {args.config} --name {args.name}"
-)
-os.system(
-    f"python3 {root}/src/macros/03Discrimination.py --config {args.config} --name {args.name}"
-)
-os.system(
-    f"python3 {root}/src/macros/04Reconstruction.py --config {args.config} --name {args.name}"
-)
-os.system(
-    f"python3 {root}/src/macros/05Smearing.py --config {args.config} --name {args.name}"
-)
+for config, name in track(
+    product(args.config, args.name),
+    description="Running all TPC macros...",
+    total=len(args.config) * len(args.name),
+):
+    # Your processing code here
+    os.system(
+        f"python3 {root}/src/TPC/31Preselection.py --config {config} --name {name}"
+    )
+    os.system(
+        f"python3 {root}/src/TPC/32EnergyResolution.py --config {config} --name {name}"
+    )

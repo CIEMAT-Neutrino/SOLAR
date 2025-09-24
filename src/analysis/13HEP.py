@@ -110,7 +110,7 @@ user_input = {
 components = ["neutron", "gamma", "8B", "hep"]
 thld_idx = np.where(hep_rebin_centers > user_input["threshold"])[0][0]
 rprint(
-    f"[INFO] Threshold {user_input['threshold']} found to correspond to index {thld_idx}"
+    f"[cyan][INFO][/cyan] Threshold {user_input['threshold']} found to correspond to index {thld_idx}"
 )
 for config in configs:
     for jdx, name in enumerate(configs[config]):
