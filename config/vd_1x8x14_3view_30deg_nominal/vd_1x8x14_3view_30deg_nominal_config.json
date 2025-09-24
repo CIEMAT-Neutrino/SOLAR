@@ -3,13 +3,35 @@
     "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR",
     "GEOMETRY": "vd",
     "VERSION": "vd_1x8x14_3view_30deg_nominal",
-    "FULL_DETECTOR_FACTOR": 8,
+    "FULL_DETECTOR_FACTOR": 6,
     "TIMEWINDOW": 0.004,
-    "EVENT_TICKS": 8500,
+    "EVENT_TICKS": 8000,
+    "BACKGROUND": true,
+
+    "DETECTOR_MIN_X": -330,
+    "DETECTOR_MAX_X": 330,
     "DETECTOR_SIZE_X": 660,
+    "DETECTOR_GAP_X": 20,
+    
+    "DETECTOR_MIN_Y": -675,
+    "DETECTOR_MAX_Y": 675,
     "DETECTOR_SIZE_Y": 1350,
-    "DETECTOR_SIZE_Z": 2100,
+    "DETECTOR_GAP_Y": 20,
+    
+    "DETECTOR_MIN_Z": 0,
+    "DETECTOR_MAX_Z": 2100,
+    "DETECTOR_SIZE_Z": 2000,
+    "DETECTOR_GAP_Z": 103,
+    
     "RADIAL_ADJCL_LIMIT": 100,
-    "OPFLASH_PLANES": [-1,0,1,2,3,4],
-    "OPFLASH_RADIUS": [40, 80, 120, 160, 200, 240, 280, 320, 360, 400]
+    
+    "OPFLASH_PLANES": {
+       "-1":"Unknown",
+        "0":"Cathode",
+        "1":"Membrane 1",
+        "2":"Membrane 2",
+        "3":"EndCap 1",
+        "4":"EndCap 2"
+    },
+    "OPFLASH_RADIUS": [20, 40, 60, 80, 100, 120, 140]
 }

@@ -1,22 +1,18 @@
 "TRUTH":
         - "Config": null
         - "Truth":
-                  - "Config":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
-                  - "SignalParticleK":
-                            - "absbetween": [0, 30]
-        - "Reco": null
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+        - "Reco":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
 
 "CORRECTION":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                - "Primary":
-                        - "equal": true
-                - "Generator":
-                        - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "NeutronK":
@@ -28,12 +24,10 @@
 
 "CALIBRATION":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                - "Primary":
-                        - "equal": true
-                - "Generator":
-                        - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "NeutronK":
@@ -45,29 +39,25 @@
 
 "DISCRIMINATION":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                - "Primary":
-                        - "equal": true
-                - "Generator":
-                        - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "NeutronK":
                         - "equal": 0
-                - "ProtonK":
+                - "ProtonK":    
                         - "equal": 0
                 - "TrueMain":
                         - "equal": True
 
 "RECONSTRUCTION":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                - "Primary":
-                        - "equal": true
-                - "Generator":
-                        - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "TrueMain":
@@ -75,12 +65,10 @@
 
 "SMEARING":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                - "Primary":
-                        - "equal": true
-                - "Generator":
-                        - "equal": 1
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "TrueMain":
@@ -88,11 +76,9 @@
 
 "ANALYSIS":
         - "Config": null
-        - "Truth": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
         - "Reco":
-                  - "Primary":
-                            - "equal": true
-                  - "Generator":
-                            - "equal": 1
                   - "SignalParticleK":
                             - "absbetween": [0, 20]
