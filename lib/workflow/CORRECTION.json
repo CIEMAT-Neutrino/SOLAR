@@ -19,7 +19,10 @@
         },
         "DOUBLES": {
             "SignalParticleE": 1,
-            "SignalParticleK": 1
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -76,7 +79,9 @@
             "RecoZ": 1,
             "Charge": 1,
             "ElectronCharge": 0,
-            "MatchedOpFlashPur": 0
+            "MatchedOpFlashPur": 0,
+            "MatchedOpFlashPlane": 0,
+            "MatchedOpFlashPE": 0
         },
         "STRINGS": {},
         "BOOLS": {

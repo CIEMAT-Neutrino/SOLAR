@@ -56,6 +56,7 @@
             "SignalParticleP": 1,
             "SignalParticleK": 1,
             "MatchedOpFlashPur": 1,
+            "MatchedOpFlashPlane": 1,
             "Purity": 1,
             "Generator": 1,
             "Charge": 1

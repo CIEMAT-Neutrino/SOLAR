@@ -7,6 +7,13 @@
     },
     "Truth": {
         "VECTORS": {
+            "TSignalE": 1,
+            "TSignalK": 1,
+            "TSignalPDG": 1,
+            "TSignalMother": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1,
             "OpHitChannel": 1,
             "OpHitFlashID": 1,
             "OpHitNum": 1,
@@ -16,6 +23,7 @@
             "OpHitY": 1,
             "OpHitZ": 1,
             "OpHitTime": 1,
+            "OpFlashPlane": 1,
             "OpFlashPE": 1,
             "OpFlashTime": 1,
             "OpFlashMaxPE": 1,
@@ -43,12 +51,18 @@
         "BOOLS": {}
     },
     "Reco": {
-        "VECTORS": {},
+        "VECTORS": {
+        },
         "INTEGERS": {
             "Event": 1,
-            "Flag": 1
+            "Flag": 1,
+            "Generator": 1,
+            "NHits": 1
         },
-        "DOUBLES": {},
+        "DOUBLES": {
+            "Charge": 1,
+            "MatchedOpFlashPur": 1
+        },
         "STRINGS": {},
         "BOOLS": {}
     }

@@ -85,6 +85,7 @@
             "MaxAdjClR": 0,
             "ML": 0,
             "Discriminant": 0,
+            "MatchedOpFlashPlane": 0,
             "MatchedOpFlashTime": 0,
             "MatchedOpFlashPur": 0,
             "MatchedOpFlashPE": 0,

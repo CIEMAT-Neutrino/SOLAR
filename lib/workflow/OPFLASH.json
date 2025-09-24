@@ -13,6 +13,7 @@
             "TSignalZ": 1,
             "TSignalPDG": 1,
             "OpFlashPE": 1,
+            "OpFlashPlane": 1,
             "OpFlashTime": 1,
             "OpFlashMaxPE": 1,
             "OpFlashSTD": 1,
