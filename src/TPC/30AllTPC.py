@@ -3,9 +3,11 @@
 # It is designed to be run from the command line.
 # It uses the argparse library to handle command line arguments.
 
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
@@ -24,7 +26,6 @@ parser.add_argument(
         "hd_1x2x6_lateralAPA",
         "vd_1x8x14_3view_30deg",
         "vd_1x8x14_3view_30deg_nominal",
-        "vd_1x8x14_3view_30deg_optimistic",
     ],
 )
 parser.add_argument(
@@ -40,15 +41,13 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 args = parser.parse_args()
 
 # Run the first script with the arguments
-for config, name in track(
-    product(args.config, args.name),
-    description="Running all TPC macros...",
-    total=len(args.config) * len(args.name),
-):
-    # Your processing code here
+for config, name in product(args.config, args.name):
     os.system(
-        f"python3 {root}/src/TPC/31Preselection.py --config {config} --name {name}"
+        f"python3 {root}/src/TPC/32ElectronEnergyResolution.py --config {config} --name {name}"
     )
     os.system(
-        f"python3 {root}/src/TPC/32EnergyResolution.py --config {config} --name {name}"
+        f"python3 {root}/src/TPC/33AdjClusters.py --config {config} --name {name}"
+    )
+    os.system(
+        f"python3 {root}/src/TPC/34EnergyResolution.py --config {config} --name {name}"
     )

@@ -1,8 +1,16 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
+
+
+# Inverse function of polinomyal with degree 2
+def inverse_quadratic(x, a, b, c):
+    return (-b + np.sqrt(b**2 - 4 * a * (c - x))) / (2 * a)
+
 
 data_path = f"{root}/data/workflow/reconstruction/"
 save_path = f"{root}/images/workflow/reconstruction"
@@ -41,8 +49,8 @@ run = compute_reco_workflow(
     run,
     configs,
     params={
-        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+        "DEFAULT_ENERGY_TIME": "Time",
+        "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
     },
     workflow=user_input["workflow"],
     debug=args.debug,
@@ -71,7 +79,7 @@ for config in configs:
         fig = make_subplots(
             rows=2, cols=3, subplot_titles=("Electron", "Gamma", "Electron+Gamma")
         )
-
+        neutrino_list = []
         fit["threshold"] = 0.7
         fit["bounds"] = ([-10], [0])
         fit["spec_type"] = "intercept"
@@ -172,7 +180,7 @@ for config in configs:
         fig = format_coustom_plotly(
             fig,
             matches=(None, None),
-            title="Reco Cluster - Neutrino Energy Reconstruction",
+            title=f"Raw Neutrino Energy Reconstruction - {config}",
         )
         fig.update_xaxes(title_text="True Neutrino Energy (MeV)")
         fig.update_layout(
@@ -190,7 +198,7 @@ for config in configs:
             save_path,
             config,
             name,
-            filename=f"True&Reco_Neutrino_Energy",
+            filename=f"Neutrino_Energy",
             rm=args.rewrite,
             debug=args.debug,
         )
@@ -283,7 +291,94 @@ for config in configs:
             save_path,
             config,
             name,
-            filename=f"True&Reco_Daughter_Energy",
+            filename=f"Neutrino_Daughter_Energy",
+            rm=args.rewrite,
+            debug=args.debug,
+        )
+
+        fig = make_subplots(1, 1)
+        # Make a 1D histogram of the reconstructed energy for gammas for the case were GammaE == 4.38 +- 0.1 MeV and compare against the rest
+        this_filter = (
+            (data["GammaK"] > 4.28)
+            * (data["GammaK"] < 4.48)
+            * (data["SelectedAdjClEnergy"] > 0)
+        )
+        hist, bins = np.histogram(
+            data["SelectedAdjClEnergy"][this_filter],
+            bins=np.arange(0, 10, 0.1),
+            range=(0, 10),
+            density=True,
+        )
+        bins = 0.5 * (bins[1:] + bins[:-1])
+        fig.add_trace(
+            go.Scatter(
+                x=bins,
+                y=hist,
+                mode="lines",
+                line_shape="hvh",
+                line=dict(color=compare[0]),
+                name="Fermi (4.38 MeV)",
+            )
+        )
+        hist, bins = np.histogram(
+            data["SelectedAdjClEnergy"][
+                (data["GammaK"] < 4.28)
+                * (data["GammaK"] > 0)
+                * (data["SelectedAdjClEnergy"] > 0)
+            ],
+            bins=np.arange(0, 10, 0.1),
+            range=(0, 10),
+            density=True,
+        )
+        bins = 0.5 * (bins[1:] + bins[:-1])
+        fig.add_trace(
+            go.Scatter(
+                x=bins,
+                y=hist,
+                mode="lines",
+                line_shape="hvh",
+                line=dict(color=compare[1]),
+                line_dash="dash",
+                name="Gamow-Teller (< 4.28 MeV)",
+            )
+        )
+
+        hist, bins = np.histogram(
+            data["SelectedAdjClEnergy"][
+                (data["GammaK"] > 4.48) * (data["SelectedAdjClEnergy"] > 0)
+            ],
+            bins=np.arange(0, 10, 0.1),
+            range=(0, 10),
+            density=True,
+        )
+        bins = 0.5 * (bins[1:] + bins[:-1])
+        fig.add_trace(
+            go.Scatter(
+                x=bins,
+                y=hist,
+                mode="lines",
+                line_shape="hvh",
+                line=dict(color=compare[1]),
+                line_dash="dot",
+                name="Gamow-Teller (> 4.48 MeV)",
+            )
+        )
+
+        fig = format_coustom_plotly(
+            fig,
+            title=f"Reconstructed Gamma Energy for CC Neutrino - {config}",
+            legend=dict(x=0.6, y=0.98),
+            legend_title="Gamma Energy",
+            ranges=([0, 10], [0, None]),
+        )
+        fig.update_xaxes(title_text="Reco Adj. Cluster Energy (MeV)")
+        fig.update_yaxes(title_text="Density")
+        save_figure(
+            fig,
+            save_path,
+            config,
+            name,
+            filename=f"Gamma_Energy",
             rm=args.rewrite,
             debug=args.debug,
         )
@@ -360,7 +455,7 @@ for config in configs:
             save_path,
             config,
             name,
-            filename=f"Reco_Neutrino_Energy_Raw",
+            filename=f"Neutrino_Smearing_Raw",
             rm=args.rewrite,
             debug=args.debug,
         )
@@ -505,24 +600,33 @@ for config in configs:
         for jdx, energy in enumerate(
             ["TotalEnergy", "SelectedEnergy", "SolarEnergy", "ClusterEnergy"]
         ):
-            # Inverse function of polinomyal with degree 2
-            def inverse_quadratic(x, a, b, c):
-                return (-b + np.sqrt(b**2 - 4 * a * (c - x))) / (2 * a)
-
             h = []
+            # Quadratic function correction
+            a = inverse_quadratic(
+                data[energy],
+                fit_dict[energy]["popt"][0],
+                fit_dict[energy]["popt"][1],
+                fit_dict[energy]["popt"][2],
+            )
+            for calibrated in [False, True]:
+                neutrino_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Variable": energy,
+                        "TrueEnergy": data["SignalParticleK"],
+                        "RecoEnergy": a if calibrated else data[energy],
+                        "Calibrated": calibrated,
+                    }
+                )
+
             for idx, ebin in enumerate(true_energy_edges[:-1]):
                 this_filter = (data["SignalParticleK"] > true_energy_edges[idx]) * (
                     data["SignalParticleK"] < true_energy_edges[idx + 1]
                 )
-                # Quadratic function correction
-                a = inverse_quadratic(
-                    data[energy][this_filter],
-                    fit_dict[energy]["popt"][0],
-                    fit_dict[energy]["popt"][1],
-                    fit_dict[energy]["popt"][2],
-                )
                 hist, bins = np.histogram(
-                    a,
+                    a[this_filter],
                     bins=true_energy_edges,
                     density=False,
                 )
@@ -574,6 +678,16 @@ for config in configs:
             debug=args.debug,
         )
 
+        save_df(
+            pd.DataFrame(neutrino_list),
+            data_path,
+            config,
+            name,
+            filename=f"Neutrino_Energy",
+            rm=args.rewrite,
+            debug=args.debug,
+        )
+
         for zdx, hits in enumerate(nhits[:3]):
             fig = make_subplots(
                 rows=1,
@@ -588,6 +702,12 @@ for config in configs:
             for jdx, energy in enumerate(
                 ["TotalEnergy", "SelectedEnergy", "SolarEnergy", "ClusterEnergy"]
             ):
+                this_data = inverse_quadratic(
+                    data[energy],
+                    fit_dict[energy]["popt"][0],
+                    fit_dict[energy]["popt"][1],
+                    fit_dict[energy]["popt"][2],
+                )
 
                 for idx, energy_bin in enumerate([8, 12, 16, 20]):
                     this_filter = (data["SignalParticleK"] > (energy_bin - 0.5)) * (
@@ -595,23 +715,18 @@ for config in configs:
                         < (energy_bin + 0.5) * (data["NHits"] >= hits)
                     )  # Filtering genereted neutrinos in 1GeV energy bin
 
-                    # this_data = (
-                    #     data[energy][this_filter] - fit_dict[energy]["popt"][1]
-                    # ) / fit_dict[energy]["popt"][0]
-                    this_data = inverse_quadratic(
-                        data[energy][this_filter],
-                        fit_dict[energy]["popt"][0],
-                        fit_dict[energy]["popt"][1],
-                        fit_dict[energy]["popt"][2],
+                    hist, bins = np.histogram(
+                        this_data[this_filter], bins=true_energy_edges
                     )
-
-                    hist, bins = np.histogram(this_data, bins=true_energy_edges)
                     hist = hist / np.sum(hist)
 
                     rms = np.sqrt(
                         np.mean(
                             (
-                                (data["SignalParticleK"][this_filter] - this_data)
+                                (
+                                    data["SignalParticleK"][this_filter]
+                                    - this_data[this_filter]
+                                )
                                 / data["SignalParticleK"][this_filter]
                             )
                             ** 2

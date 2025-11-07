@@ -1,10 +1,13 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
 save_path = f"{root}/images/workflow/correction"
+data_path = f"{root}/data/workflow/correction"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -20,20 +23,22 @@ parser.add_argument(
     default="hd_1x2x6",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley_signal"
+    "--name", type=str, help="The name of the configuration", default="marley_official"
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
-config = parser.parse_args().config
-name = parser.parse_args().name
+args = parser.parse_args()
+
+config = args.config
+name = args.name
 
 configs = {config: [name]}
 
 user_input = {
     "workflow": "CORRECTION",
-    "rewrite": parser.parse_args().rewrite,
-    "debug": parser.parse_args().debug,
+    "rewrite": args.rewrite,
+    "debug": args.debug,
 }
 
 
@@ -48,6 +53,7 @@ filtered_run, mask, output = compute_filtered_run(
     run,
     configs,
     presets=[user_input["workflow"]],
+    params={("Reco", "Time"): ("bigger", 500)},
     debug=user_input["debug"],
 )
 rprint(output)
@@ -76,6 +82,9 @@ def correction_func(x, a, b, c, d):
 popt, pcov, perr = {}, {}, {}
 
 for config in configs:
+    info, params, output = get_param_dict(
+        f"{root}/config/{config}/{config}", {}, output, debug=args.debug
+    )
     for name, (charge, charge_label) in product(
         configs[config], zip(["", "Electron"], ["Primary", "Cheated"])
     ):
@@ -91,6 +100,8 @@ for config in configs:
         # Make a plot that shows the correlation between the neutrino energy and the number of hits in the primary cluster
         fig = make_subplots(rows=1, cols=1)
         max_bin = 0
+        df_scan = []
+        df_lifetime = []
         for nhit in nhits[:9]:
             this_filter_idx = np.where((data["NHits"] == nhit))[0]
             if len(this_filter_idx) < 1000:
@@ -98,15 +109,28 @@ for config in configs:
 
             hist, bins = np.histogram(
                 data[f"SignalParticleK"][this_filter_idx],
-                bins=true_energy_edges,
-                density=True,
+                bins=reco_energy_edges[3:],
             )
-            if np.max(hist) > max_bin:
-                max_bin = np.max(hist)
+            density = np.sum(hist) * np.diff(bins)
+            if np.max(hist / density) > max_bin:
+                max_bin = np.max(hist / density)
+
+            df_scan.append(
+                {
+                    "Config": config,
+                    "Name": name,
+                    "#Hits": nhit,
+                    "Values": 0.5 * (bins[1:] + bins[:-1]),
+                    "Density": hist / density,
+                    "Counts": hist,
+                    "Variable": "SignalParticleK",
+                }
+            )
+
             fig.add_trace(
                 go.Scatter(
-                    x=true_energy_centers,
-                    y=hist,
+                    x=0.5 * (bins[1:] + bins[:-1]),
+                    y=hist / density,
                     mode="lines",
                     line_shape="hvh",
                     name=f"{nhit}",
@@ -122,10 +146,13 @@ for config in configs:
 
         format_coustom_plotly(
             fig,
-            title=f"True Energy - {config} {name}",
+            title=f"True Neutrino Energy - {config}",
             legend=dict(x=0.86, y=0.99),
             legend_title="#Hits",
-            ranges=([4, 30], [0, max_bin * 1.1]),
+            ranges=(
+                [4, reco_energy_centers[-1]],
+                [0, max_bin * 1.1],
+            ),
             tickformat=(".0f", None),
             debug=user_input["debug"],
         )
@@ -135,6 +162,17 @@ for config in configs:
             config,
             name,
             filename="SignalParticleKineticEnergy_vs_NHits",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
+        df = pd.DataFrame(df_scan)
+        save_df(
+            df,
+            data_path,
+            config,
+            name,
+            filename="NHit_Distributions",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -159,19 +197,17 @@ for config in configs:
 
         fig = format_coustom_plotly(
             fig,
-            title=f"Electron-Lifetime Attenuation - {config} {name}",
+            title=f"Electron-Lifetime Attenuation - {config}",
             matches=(None, None),
-            tickformat=(".2f", None),
+            tickformat=(".0f", None),
             log=(False, False),
             debug=user_input["debug"],
         )
         fig.update_layout(
             coloraxis=dict(colorbar=dict(title="Counts")),
             showlegend=False,
-            xaxis_title="Time (tick)",
-            yaxis_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
-            # xaxis2_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
-            # yaxis2_title="Counts",
+            xaxis_title="Time (us)",
+            yaxis_title=f"Charge per Energy (ADC x tick / MeV)",
         )
 
         save_figure(
@@ -193,16 +229,35 @@ for config in configs:
         )
         # Plot the corrected charge
         fig = make_subplots(rows=1, cols=2)
-        x, y, h = get_hist2d(
-            data[f"{charge}Time"],
-            data[f"Corrected{charge}ChargePerMeV"],
-            per=per,
-            norm=False,
-            acc=acc,
-            # nanz=True,
-            density=False,
-            debug=False,
-        )
+        for label, values in zip(
+            ["Uncorrected", "Corrected"],
+            [
+                data[f"{charge}Charge"] / data["ElectronK"],
+                data[f"Corrected{charge}ChargePerMeV"],
+            ],
+        ):
+            x, y, h = get_hist2d(
+                data[f"{charge}Time"],
+                values,
+                per=per,
+                norm=False,
+                acc=acc,
+                # nanz=True,
+                density=False,
+                debug=False,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=y,
+                    y=np.mean(h.T, axis=1),
+                    line=dict(shape="hvh"),
+                    showlegend=True,
+                    mode="lines",
+                    name=f"{label}",
+                ),
+                row=1,
+                col=2,
+            )
         fig.add_trace(
             go.Heatmap(
                 x=x,
@@ -215,22 +270,11 @@ for config in configs:
             row=1,
             col=1,
         )
-        fig.add_trace(
-            go.Scatter(
-                x=y,
-                y=np.mean(h.T, axis=1),
-                line=dict(shape="hvh"),
-                showlegend=True,
-                mode="lines",
-            ),
-            row=1,
-            col=2,
-        )
         fig.add_vline(
             x=y[np.argmax(np.mean(h.T, axis=1))],
             line_width=1,
             line_dash="dash",
-            annotation_text=f"Correction Factor:<br>{y[np.argmax(np.mean(h.T, axis=1))]:.2f} ADC x tick / MeV",
+            annotation_text=f"<br>Electron-Lifetime:<br>{1e-3*corr_popt[f'{charge}Charge'][1]:.2f} (ms)<br>Correction Factor:<br>{y[np.argmax(np.mean(h.T, axis=1))]:.2f} (ADC x tick / MeV)",
             annotation_position="top right",
             annotation=dict(
                 yshift=-50,
@@ -241,26 +285,27 @@ for config in configs:
         )
         fig = format_coustom_plotly(
             fig,
-            title=f"Average Drift Electron Correction {config}",
+            title=f"Average Drift Electron Correction - {config}",
+            legend_title="Drift Attenuation",
+            legend=dict(x=0.84, y=0.1),
             matches=(None, None),
-            tickformat=(".2f", None),
+            tickformat=(".0f", None),
             log=(False, False),
             debug=user_input["debug"],
         )
         fig.update_layout(
             coloraxis=dict(colorscale="Turbo", colorbar=dict(title="Density")),
-            showlegend=False,
-            yaxis_title=f"{charge_label} Charge / Energy (ADC x tick / MeV)",
-            xaxis_title="Time (tick)",
-            xaxis2_title="Time (tick)",
+            yaxis_title=f"Charge per Energy (ADC x tick / MeV)",
             yaxis2_title="Counts",
         )
+        fig.update_xaxes(title="Time (us)", col=1)
+        fig.update_xaxes(title="Charge per Energy (ADC x tick / MeV)", col=2)
         save_figure(
             fig,
             save_path,
             config,
             name,
-            filename=f"{charge}Charge_Corrected_Charge",
+            filename=f"Corrected_{charge}Charge",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -289,6 +334,23 @@ for config in configs:
             if np.isnan(mean_y) == False and mean_y > 0:
                 correction_factor[f"{charge}Charge"][nhit] = mean_y
                 correction_factor[f"{charge}ChargeError"][nhit] = std_y
+
+            if nhit < 10:
+                for correct in ["", "Corrected"]:
+                    df_lifetime.append(
+                        {
+                            "Geometry": info["GEOMETRY"],
+                            "Config": config,
+                            "Name": name,
+                            "#Hits": int(nhit),
+                            "Time": data[f"{charge}Time"][this_filter_idx],
+                            "ChargePerEnergy": data[f"{correct}{charge}Charge"][
+                                this_filter_idx
+                            ]
+                            / data["ElectronK"][this_filter_idx],
+                            "Corrected": True if correct == "Corrected" else False,
+                        }
+                    )
 
         # Plot correction factor.values() over correction factor.keys()
         x = np.asarray(list(correction_factor[f"{charge}Charge"].keys()))
@@ -340,7 +402,7 @@ for config in configs:
         fig.update_layout(
             xaxis_title="Number of Hits",
             yaxis_title="Correction Factor (ADC x tick / MeV)",
-            title=f"{charge_label} Correction Factor vs Number of Hits",
+            title=f"{charge_label} Correction Factor - {config}",
         )
         format_coustom_plotly(fig, legend=dict(x=0.7, y=0.99))
         save_figure(
@@ -395,3 +457,28 @@ for config in configs:
             rprint(
                 f"[yellow][WARNING][/yellow]: Please set rewrite to True to overwrite the file."
             )
+
+        # Save the 2D histogram to df so that the columns are Time, rows are Charge, and values are Counts
+        for correct in ["", "Corrected"]:
+            df_lifetime.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "#Hits": None,
+                    "Time": data[f"{charge}Time"],
+                    "ChargePerEnergy": data[f"{correct}{charge}Charge"]
+                    / data["ElectronK"],
+                    "Corrected": True if correct == "Corrected" else False,
+                }
+            )
+        df = pd.DataFrame(df_lifetime)
+        save_df(
+            df,
+            data_path,
+            config,
+            name,
+            filename=f"{charge}Charge_Lifetime_Correction",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )

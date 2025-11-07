@@ -1,6 +1,8 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
@@ -43,8 +45,6 @@ run = compute_reco_workflow(
     run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
 )
 
-reco_df = npy2df(run, "Reco", debug=user_input["debug"])
-
 for config in configs:
     info, params, output = get_param_dict(
         f"{root}/config/{config}/{config}", {}, output, debug=user_input["debug"]
@@ -76,11 +76,11 @@ for config in configs:
                 ),
             ),
         ):
-            per_99 = np.percentile(reco_df[f"{variable}Radius{limit}"], 99)
+            per_99 = np.percentile(run["Reco"][f"{variable}Radius{limit}"], 99)
             hist, bins = np.histogram(
-                reco_df[f"{variable}Radius{limit}"],
+                run["Reco"][f"{variable}Radius{limit}"],
                 bins=(
-                    np.arange(0, np.max(reco_df[f"{variable}Radius{limit}"]) + 1, 1)
+                    np.arange(0, np.max(run["Reco"][f"{variable}Radius{limit}"]) + 1, 1)
                     if y_label == "Num"
                     else np.arange(1.5, per_99, 100)
                 ),
@@ -103,8 +103,8 @@ for config in configs:
                 {
                     "Type": label,
                     "Radius (cm)": f"{limit}",
-                    "Mean": np.mean(reco_df[f"{variable}Radius{limit}"]),
-                    "STD": np.std(reco_df[f"{variable}Radius{limit}"]),
+                    "Mean": np.mean(run["Reco"][f"{variable}Radius{limit}"]),
+                    "STD": np.std(run["Reco"][f"{variable}Radius{limit}"]),
                 }
             )
         fig = format_coustom_plotly(
@@ -136,6 +136,7 @@ for config in configs:
             name,
             filename=f"Signal_AdjOpFlash{y_label}_RadialScan",
             rm=user_input["rewrite"],
+            filetype="txt",
             debug=user_input["debug"],
         )
 
@@ -157,26 +158,28 @@ for config in configs:
                 ),
             ),
         ):
-            if np.percentile(reco_df[f"{variable}"], 99) < 1.5:
+            if np.percentile(run["Reco"][f"{variable}"], 99) < 1.5:
                 print(f"{variable} is empty for {config} - {name}, skipping...")
                 continue
 
             if plane is None:
-                per_99 = np.percentile(reco_df[f"{variable}"], 99)
+                per_99 = np.percentile(run["Reco"][f"{variable}"], 99)
                 hist, bins = np.histogram(
-                    reco_df[f"{variable}"],
+                    run["Reco"][f"{variable}"],
                     bins=(
-                        np.arange(0, np.max(reco_df[f"{variable}"]) + 1, 1)
+                        np.arange(0, np.max(run["Reco"][f"{variable}"]) + 1, 1)
                         if y_label == "Num"
                         else np.arange(1.5, per_99 + 100, 100)
                     ),
                 )
             else:
-                per_99 = np.percentile(reco_df[f"{variable}Plane{plane}"], 99)
+                per_99 = np.percentile(run["Reco"][f"{variable}Plane{plane}"], 99)
                 hist, bins = np.histogram(
-                    reco_df[f"{variable}Plane{plane}"],
+                    run["Reco"][f"{variable}Plane{plane}"],
                     bins=(
-                        np.arange(0, np.max(reco_df[f"{variable}Plane{plane}"]) + 1, 1)
+                        np.arange(
+                            0, np.max(run["Reco"][f"{variable}Plane{plane}"]) + 1, 1
+                        )
                         if y_label == "Num"
                         else np.arange(1.5, per_99 + 100, 100)
                     ),
@@ -200,14 +203,14 @@ for config in configs:
                     "Type": label,
                     "Plane": plane,
                     "Mean": (
-                        np.mean(reco_df[f"{variable}Plane{plane}"])
+                        np.mean(run["Reco"][f"{variable}Plane{plane}"])
                         if plane is not None
-                        else np.mean(reco_df[f"{variable}"])
+                        else np.mean(run["Reco"][f"{variable}"])
                     ),
                     "STD": (
-                        np.std(reco_df[f"{variable}Plane{plane}"])
+                        np.std(run["Reco"][f"{variable}Plane{plane}"])
                         if plane is not None
-                        else np.std(reco_df[f"{variable}"])
+                        else np.std(run["Reco"][f"{variable}"])
                     ),
                 }
             )
@@ -219,7 +222,13 @@ for config in configs:
             title=f"Radial AdjOpFlashNum (Signal vs Background) - {config}",
             log=(False, True),
         )
-        fig.update_xaxes(title_text="Number of Adj. OpFlashes" if y_label == "Num" else "PE of Adj. OpFlashes")
+        fig.update_xaxes(
+            title_text=(
+                "Number of Adj. OpFlashes"
+                if y_label == "Num"
+                else "PE of Adj. OpFlashes"
+            )
+        )
         fig.update_yaxes(title_text="Fraction of Events", row=1, col=1)
         # fig.show()
         save_figure(
@@ -240,6 +249,7 @@ for config in configs:
             name,
             filename=f"Signal_AdjOpFlash{y_label}_PlaneScan",
             rm=user_input["rewrite"],
+            filetype="csv",
             debug=user_input["debug"],
         )
 
@@ -271,18 +281,37 @@ for config in configs:
                     params[f"DEFAULT_{coord}_BIN"] / 2,
                 )
                 for drift in x_axis:
-                    this_reco_df = reco_df[
-                        (
-                            reco_df[x_variable]
-                            > drift - params[f"DEFAULT_{coord}_BIN"] / 2
-                        )
-                        & (
-                            reco_df[x_variable]
-                            < drift + params[f"DEFAULT_{coord}_BIN"] / 2
-                        )
-                    ]
-                    values.append(np.mean(this_reco_df[f"{variable}Radius{limit}"]))
-                    stds.append(np.std(this_reco_df[f"{variable}Radius{limit}"]))
+                    # this_reco_df = reco_df[
+                    #     (
+                    #         reco_df[x_variable]
+                    #         > drift - params[f"DEFAULT_{coord}_BIN"] / 2
+                    #     )
+                    #     & (
+                    #         reco_df[x_variable]
+                    #         < drift + params[f"DEFAULT_{coord}_BIN"] / 2
+                    #     )
+                    # ]
+                    filtered_run, mask, output = compute_filtered_run(
+                        run,
+                        configs,
+                        params={
+                            ("Reco", x_variable): (
+                                "bigger",
+                                drift - params[f"DEFAULT_{coord}_BIN"] / 2,
+                            ),
+                            ("Reco", x_variable): (
+                                "smaller",
+                                drift + params[f"DEFAULT_{coord}_BIN"] / 2,
+                            ),
+                        },
+                        debug=user_input["debug"],
+                    )
+                    values.append(
+                        np.mean(filtered_run["Reco"][f"{variable}Radius{limit}"])
+                    )
+                    stds.append(
+                        np.std(filtered_run["Reco"][f"{variable}Radius{limit}"])
+                    )
 
                 fig.add_trace(
                     go.Scatter(
@@ -343,22 +372,41 @@ for config in configs:
                     params[f"DEFAULT_{coord}_BIN"] / 2,
                 )
                 for drift in x_axis:
-                    this_reco_df = reco_df[
-                        (
-                            reco_df[x_variable]
-                            > drift - params[f"DEFAULT_{coord}_BIN"] / 2
-                        )
-                        & (
-                            reco_df[x_variable]
-                            < drift + params[f"DEFAULT_{coord}_BIN"] / 2
-                        )
-                    ]
+                    # this_reco_df = reco_df[
+                    #     (
+                    #         reco_df[x_variable]
+                    #         > drift - params[f"DEFAULT_{coord}_BIN"] / 2
+                    #     )
+                    #     & (
+                    #         reco_df[x_variable]
+                    #         < drift + params[f"DEFAULT_{coord}_BIN"] / 2
+                    #     )
+                    # ]
+                    filtered_run, mask, output = compute_filtered_run(
+                        run,
+                        configs,
+                        params={
+                            ("Reco", x_variable): (
+                                "bigger",
+                                drift - params[f"DEFAULT_{coord}_BIN"] / 2,
+                            ),
+                            ("Reco", x_variable): (
+                                "smaller",
+                                drift + params[f"DEFAULT_{coord}_BIN"] / 2,
+                            ),
+                        },
+                        debug=user_input["debug"],
+                    )
                     if plane is None:
-                        values.append(np.mean(this_reco_df[f"{variable}"]))
-                        stds.append(np.std(this_reco_df[f"{variable}"]))
+                        values.append(np.mean(filtered_run["Reco"][f"{variable}"]))
+                        stds.append(np.std(filtered_run["Reco"][f"{variable}"]))
                     else:
-                        values.append(np.mean(this_reco_df[f"{variable}Plane{plane}"]))
-                        stds.append(np.std(this_reco_df[f"{variable}Plane{plane}"]))
+                        values.append(
+                            np.mean(filtered_run["Reco"][f"{variable}Plane{plane}"])
+                        )
+                        stds.append(
+                            np.std(filtered_run["Reco"][f"{variable}Plane{plane}"])
+                        )
 
                 fig.add_trace(
                     go.Scatter(

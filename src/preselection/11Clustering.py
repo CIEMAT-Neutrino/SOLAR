@@ -1,11 +1,13 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
-save_path = f"{root}/images/TPC/preselction/"
-data_path = f"{root}/data/TPC/preselection/"
+save_path = f"{root}/images/preselection/clustering"
+data_path = f"{root}/data/preselection/clustering/"
 
 for path in [save_path, data_path]:
     if not os.path.exists(path):
@@ -49,13 +51,21 @@ run, output = load_multi(
     configs, preset=user_input["workflow"], debug=user_input["debug"]
 )
 
+run, mask, output = compute_filtered_run(
+    run,
+    configs,
+    presets=[user_input["workflow"]],
+    debug=user_input["debug"],
+)
+rprint(output)
+
 run = compute_reco_workflow(
     run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
 )
 
 logy = False
 for config in configs:
-    purity_list, completeness_list = [], []
+    df_list = []
     info, params, output = get_param_dict(
         f"{root}/config/{config}/{config}", {}, output, debug=args.debug
     )
@@ -70,7 +80,7 @@ for config in configs:
         for var, bins in zip(
             ["K", "X", "Y", "Z"],
             [
-                red_energy_edges,
+                reco_energy_edges,
                 np.arange(
                     info["DETECTOR_MIN_X"],
                     info["DETECTOR_MAX_X"] + params["DEFAULT_X_BIN"],
@@ -88,19 +98,18 @@ for config in configs:
                 ),
             ],
         ):
-            h, edges = np.histogram(run["Truth"][f"SignalParticle{var}"], bins=bins)
+            h, edges = np.histogram(
+                run["Truth"][f"SignalParticle{var}"],
+                bins=bins,
+            )
             h_ref[var] = h
             edges_ref[var] = edges
 
         for hit in nhits[:9]:
-            draw = True
-            if np.sum(run["Truth"]["HitCount"] == hit) == 0:
-                draw = False
-
             for var, bins in zip(
                 ["K", "X", "Y", "Z"],
                 [
-                    red_energy_edges,
+                    reco_energy_edges,
                     np.arange(
                         info["DETECTOR_MIN_X"],
                         info["DETECTOR_MAX_X"] + params["DEFAULT_X_BIN"],
@@ -123,29 +132,24 @@ for config in configs:
                 ]
                 h, edges = np.histogram(this_data, bins=bins)
                 bin_centers = 0.5 * (edges[1:] + edges[:-1])
-                this_centers = bin_centers[h != 0]
-                this_h_ref = h_ref[var][h != 0]
-                h = h[h != 0]
-
+                efficiency = 100 * h / h_ref[var]
+                efficiency_error = (
+                    100 * np.sqrt(h * (1 - h / h_ref[var])) / h_ref[var]
+                    if np.any(h_ref[var] > 0)
+                    else np.zeros_like(h)
+                )
+                efficiency[np.isnan(efficiency)] = 0
                 eff_list.append(
                     {
-                        "Variable": var,
-                        "TrueEnergy": this_centers,
-                        "Efficiency": h / this_h_ref,
-                        "NHits": hit,
-                        "Draw": draw,
+                        "Config": config,
+                        "Name": name,
+                        "Variable": f"SignalParticle{var}",
+                        "Values": bin_centers,
+                        "Efficiency": efficiency,
+                        "Error": efficiency_error,
+                        "#Hits": hit,
                     }
                 )
-
-            save_pkl(
-                pd.DataFrame(eff_list),
-                data_path,
-                config,
-                name,
-                filename=f"Reco_NHit_Efficiency_{hit}",
-                rm=user_input["rewrite"],
-                debug=user_input["debug"],
-            )
 
             this_reco_data, mask, output = compute_filtered_run(
                 run,
@@ -166,50 +170,59 @@ for config in configs:
             y, bins = np.histogram(
                 this_reco_data["Purity"],
                 bins=x_axis,
-                # range=(0, 1 + 2 * bin_width),
-                density=True,
             )
             purity_dict = {
-                "config": config,
-                "name": name,
+                "Config": config,
+                "Name": name,
                 "#Hits": hit,
-                "Purity": x_centers,
+                "Values": 100 * x_centers,
                 "Counts": y,
-                "label": "Purity",
+                "Density": y / (np.sum(y) * bin_width),
+                "Variable": "Purity",
             }
-            purity_list.append(purity_dict)
+            df_list.append(purity_dict)
+
             y, bins = np.histogram(
                 this_reco_data["ChargeFraction"],
                 bins=x_axis,
-                # range=(0, 1 + 2 * bin_width),
-                density=True,
             )
             completeness_dict = {
-                "config": config,
-                "name": name,
+                "Config": config,
+                "Name": name,
                 "#Hits": hit,
-                "Completeness": x_centers,
+                "Values": 100 * x_centers,
                 "Counts": y,
-                "label": "Completeness",
+                "Density": y / (np.sum(y) * bin_width),
+                "Variable": "Completeness",
             }
-            completeness_list.append(completeness_dict)
+            df_list.append(completeness_dict)
 
         eff_df = pd.DataFrame(eff_list)
-        eff_df = explode(
+        save_pkl(
             eff_df,
-            ["TrueEnergy", "Efficiency"],
-            ["NHits", "Draw", "Variable"],
+            data_path,
+            config,
+            name,
+            filename=f"Preselection_Efficiency",
+            rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
-        if eff_df["Efficiency"].max() < 0.1:
+
+        this_eff_df = explode(
+            eff_df,
+            ["Values", "Efficiency"],
+            ["#Hits", "Variable"],
+            debug=user_input["debug"],
+        )
+        if this_eff_df["Efficiency"].max() < 0.1:
             logy = True
 
         for var in ["K", "X", "Y", "Z"]:
             fig = px.line(
-                eff_df[eff_df["Variable"] == var],
-                x="TrueEnergy",
+                this_eff_df[this_eff_df["Variable"] == f"SignalParticle{var}"],
+                x="Values",
                 y="Efficiency",
-                color="NHits",
+                color="#Hits",
                 color_discrete_sequence=px.colors.qualitative.Prism,
                 line_shape="spline",
                 render_mode="png",
@@ -224,7 +237,7 @@ for config in configs:
                 fig,
                 title=f"Detection Efficiency - {config} {name}",
                 log=(False, logy),
-                ranges=(None, [-0.01, 1.1]),
+                ranges=(None, [0, 110]),
                 legend_title="min #Hits",
                 debug=user_input["debug"],
             )
@@ -234,9 +247,9 @@ for config in configs:
             elif var in ["X", "Y", "Z"]:
                 x_axis_title += f" {var} Coordinate (cm)"
             fig.update_xaxes(title_text=x_axis_title)
-            fig.update_yaxes(title_text="Detection Efficiency")
+            fig.update_yaxes(title_text="Preselection Efficiency (%)")
 
-            fig.add_hline(y=1, line_width=1, line_dash="dash", line_color="black")
+            fig.add_hline(y=100, line_width=1, line_dash="dash", line_color="black")
             save_figure(
                 fig,
                 save_path,
@@ -247,14 +260,14 @@ for config in configs:
                 debug=user_input["debug"],
             )
 
-        for plot_list, df_label in zip(
-            [purity_list, completeness_list], ["Purity", "Completeness"]
-        ):
-            plot_df = explode(pd.DataFrame(plot_list), [df_label, "Counts"])
+        plot_df = pd.DataFrame(df_list)
+        for df_label in ["Purity", "Completeness"]:
+            this_plot_df = plot_df[plot_df["Variable"] == df_label]
+            this_plot_df = explode(this_plot_df, ["Values", "Density", "Counts"])
             fig = px.line(
-                plot_df,
-                x=df_label,
-                y="Counts",
+                this_plot_df,
+                x="Values",
+                y="Density",
                 color="#Hits",
                 line_shape="hvh",
                 color_discrete_sequence=colors,
@@ -281,3 +294,13 @@ for config in configs:
                 rm=user_input["rewrite"],
                 debug=user_input["debug"],
             )
+
+        save_df(
+            plot_df,
+            data_path,
+            config,
+            name,
+            filename=f"Clustering_Efficiency",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )

@@ -1,10 +1,13 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
 save_path = f"{root}/images/workflow/discrimination"
+data_path = f"{root}/data/workflow/discrimination"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -44,8 +47,8 @@ run = compute_reco_workflow(
     run,
     configs,
     params={
-        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+        "DEFAULT_ENERGY_TIME": "Time",
+        "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
     },
     workflow=user_input["workflow"],
     debug=user_input["debug"],
@@ -68,10 +71,25 @@ fit = {
     "show": True,
 }
 for config in configs:
-    info, new_params, output = get_param_dict(
+    info, params, output = get_param_dict(
         f"{root}/config/{config}/{config}", {}, output, debug=args.debug
     )
     for name in configs[config]:
+        selected_list = []
+        true_list = []
+
+        for particle in ["Electron", "Gamma", "Neutron", "Alpha", "Proton", "Neutrino"]:
+            true_list.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "SignalParticleK": data["SignalParticleK"],
+                    "Particle": particle,
+                    "Energy": data[f"{particle}K"],
+                }
+            )
+
         fig = make_subplots(
             rows=1, cols=2, subplot_titles=("Electron", "Electron Energy Offset")
         )
@@ -194,6 +212,7 @@ for config in configs:
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
+        new_params = params.copy()
         if info["BACKGROUND"]:
             # Create a plot for the adjcl radius and energy distribution to evaluate the best separation between signal and background
             fig = make_subplots(
@@ -253,7 +272,7 @@ for config in configs:
                 f"Selected Signal Entries: {100*len(data['AdjClR'][signal_idx][selected_signal_idx_best]) / len(data['AdjClR'][signal_idx]):.2f}% \nSelected Background Entries: {100*len(data['AdjClR'][background_idx][selected_background_idx_best]) / len(data['AdjClR'][background_idx]):.2f}%"
             )
 
-            for idx in [signal_idx, background_idx]:
+            for i, idx in enumerate([signal_idx, background_idx]):
                 fig.add_trace(
                     go.Histogram2dContour(
                         x=data["AdjClR"][idx].flatten(),
@@ -273,6 +292,20 @@ for config in configs:
                     row=1,
                     col=1 if idx is signal_idx else 2,
                 )
+
+                selected_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "AdjClR": data["AdjClR"][idx],
+                        "AdjClCharge": data["AdjClCharge"][idx],
+                        "LimitR": adjcl_radius_limit_best,
+                        "LimitCharge": adjcl_energy_limit_best,
+                        "Signal": i == 0,
+                    }
+                )
+
             # Draw the limits on the plots
             fig.add_vline(
                 x=adjcl_radius_limit_best,
@@ -306,14 +339,15 @@ for config in configs:
                 debug=user_input["debug"],
             )
 
-            new_params = {
-                "MIN_BKG_R": adjcl_radius_limit_best,
-                "MAX_BKG_CHARGE": adjcl_energy_limit_best,
-            }
+            new_params["MIN_BKG_R"] = adjcl_radius_limit_best
+            new_params["MAX_BKG_CHARGE"] = adjcl_energy_limit_best
+
             update_json_file(f"{root}/config/{config}/{config}_params.json", new_params)
 
         else:
-            rprint(f"Production does not contain background. Selecting all adjacent clusters as true signal.")
+            rprint(
+                f"Production does not contain background. Selecting all adjacent clusters as true signal."
+            )
 
         run, output, branches = compute_total_energy(
             run,
@@ -323,7 +357,7 @@ for config in configs:
             output=output,
             debug=user_input["debug"],
         )
-        
+
         features = get_default_info(root, "ML_FEATURES")
         # Create the dataframe and load the feature branches
         df = npy2df(
@@ -531,14 +565,31 @@ for config in configs:
         df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
         df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
 
-        fig = px.histogram(
-            df, x="Discriminant", histnorm="probability", opacity=0.75, color="Label"
-        )
+        fig = make_subplots(rows=1, cols=1)
+        for discriminant_idx, discriminant in enumerate(["Lower", "Upper"]):
+            h, edges = np.histogram(
+                df[df["Label"] == discriminant_idx]["Discriminant"],
+                bins=50,
+                range=(0, 1),
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=(edges[1:] + edges[:-1]) / 2,
+                    y=h / np.sum(h),
+                    mode="lines",
+                    line_shape="hvh",
+                    line=dict(
+                        color=compare[discriminant_idx],
+                        width=2,
+                    ),
+                )
+            )
+
         fig.add_vline(
             threshold,
             line_dash="dot",
             line_color="grey",
-            annotation_text=f" Discriminat Threshold {threshold:.2f}",
+            annotation_text=f"Threshold {threshold:.1f}",
         )
         fig = format_coustom_plotly(
             fig,
@@ -548,8 +599,9 @@ for config in configs:
         )
 
         fig.update_layout(
-            barmode="overlay",
             bargap=0,
+            barmode="overlay",
+            legend_title="Discriminant Label",
             xaxis_title="Discriminant",
             yaxis_title="Probability",
         )
@@ -571,7 +623,7 @@ for config in configs:
         fit["bounds"] = ([0.1, -1], [1.1, 9])
         for idx, col, label in zip([upper_idx, lower_idx], [1, 2], ["Upper", "Lower"]):
             fit["threshold"] = (
-                len(df["SignalParticleK"][idx]) * new_params["DISCRIMINATION_THRESHOLD"]
+                len(df["SignalParticleK"][idx]) * params["DISCRIMINATION_THRESHOLD"]
             )
             acc = get_default_acc(len(df["SignalParticleK"][idx]))
             fig, popt, perr = get_hist2d_fit(
@@ -637,3 +689,16 @@ for config in configs:
         rprint(
             f"Saved reco energy fit parameters to: {root}/config/{config}/{name}/{config}_calib/{config}_{name}_discriminant_calibration.json"
         )
+        for this_list, df_filename in zip(
+            [true_list, selected_list], ["Neutrino_CC_Production", "AdjCl_Selection"]
+        ):
+            save_df(
+                pd.DataFrame(this_list),
+                data_path,
+                config,
+                name,
+                None,
+                filename=df_filename,
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )

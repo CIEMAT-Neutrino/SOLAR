@@ -1,10 +1,13 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
 save_path = f"{root}/images/workflow/calibration"
+data_path = f"{root}/data/workflow/calibration"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -20,7 +23,7 @@ parser.add_argument(
     default="hd_1x2x6",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley_signal"
+    "--name", type=str, help="The name of the configuration", default="marley_official"
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -39,8 +42,8 @@ run = compute_reco_workflow(
     run,
     configs,
     params={
-        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+        "DEFAULT_ENERGY_TIME": "Time",
+        "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
     },
     workflow=user_input["workflow"],
     debug=args.debug,
@@ -81,6 +84,8 @@ for config in configs:
         for idx, (variable, variable_label) in enumerate(
             zip(["", "Electron"], ["Primary", "Cheated"])
         ):
+            df_corrected = []
+            corrected_list = []
             reco_valid[variable] = []
             reco_nhit[variable] = []
             reco_popt[variable] = {}
@@ -197,6 +202,20 @@ for config in configs:
                         col=3,
                     )
 
+                    df_corrected.append(
+                        {
+                            "Geometry": info["GEOMETRY"],
+                            "Config": config,
+                            "Name": name,
+                            "#Hits": nhit,
+                            "RawEnergy": data[energy][data["NHits"] == nhit],
+                            "TrueEnergy": data["ElectronK"][data["NHits"] == nhit],
+                            "RMS": rms,
+                            "RMSError": rms_error,
+                            "Calibrated": label == "Calibrated",
+                        }
+                    )
+
                 this_fig = format_coustom_plotly(
                     this_fig,
                     matches=(None, None),
@@ -255,6 +274,18 @@ for config in configs:
                     [reco_perr_slope, reco_perr_intercept],
                 )
             ):
+                corrected_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Variable": popt_label,
+                        "#Hits": this_reco_nhit,
+                        "FitValue": this_reco_popt,
+                        "Error": this_reco_perr,
+                    }
+                )
+
                 fig.add_trace(
                     go.Scatter(
                         x=this_reco_nhit,
@@ -292,7 +323,7 @@ for config in configs:
             )
 
             # Add extrapolated slope and intercept to the figure
-            for jdx, (func, variable_label) in enumerate(
+            for jdx, (func, fit_label) in enumerate(
                 zip(
                     [slope, intercept],
                     [f"{variable_label} Slope", f"{variable_label} Intercept"],
@@ -308,6 +339,7 @@ for config in configs:
                             color=compare[jdx],
                             dash="dot",
                         ),
+                        name=f"Extrapolated {fit_label}",
                         showlegend=False,
                     ),
                     row=1,
@@ -353,3 +385,21 @@ for config in configs:
                 rm=args.rewrite,
                 debug=args.debug,
             )
+
+            for df_list, df_filename in zip(
+                [corrected_list, df_corrected],
+                [
+                    f"{variable_label}_Calibration_Fit",
+                    f"{variable_label}Energy_Electron_Calibration",
+                ],
+            ):
+                df = pd.DataFrame(df_list)
+                save_df(
+                    df,
+                    data_path,
+                    config,
+                    name,
+                    filename=df_filename,
+                    rm=args.rewrite,
+                    debug=args.debug,
+                )

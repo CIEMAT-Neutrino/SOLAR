@@ -3,9 +3,11 @@
 # It is designed to be run from the command line.
 # It uses the argparse library to handle command line arguments.
 
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 

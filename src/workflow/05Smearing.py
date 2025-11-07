@@ -1,6 +1,8 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
@@ -42,8 +44,8 @@ run = compute_reco_workflow(
     run,
     configs,
     params={
-        "DEFAULT_ENERGY_TIME": "TruthDriftTime",
-        "DEFAULT_ADJCL_ENERGY_TIME": "TruthAdjClDriftTime",
+        "DEFAULT_ENERGY_TIME": "Time",
+        "DEFAULT_ADJCL_ENERGY_TIME": "AdjClTime",
     },
     workflow=user_input["workflow"],
     debug=args.debug,
@@ -105,7 +107,7 @@ for config in configs:
                         "Version": info["VERSION"],
                         "Name": name,
                         "Generator": 1,
-                        "NHits": nhit,
+                        "min #NHits": nhit,
                         "TrueEnergy": energy_bin,
                         "Hist": hist,
                         "Flux": flux,
@@ -146,10 +148,10 @@ for config in configs:
         df = pd.DataFrame(list_hist)
         # display(df)
         fig = px.line(
-            df[df["NHits"] < 4],
+            df[df["min #NHits"] < 4],
             x="TrueEnergy",
             y="RMS",
-            facet_col="NHits",
+            facet_col="min #NHits",
             color="EnergyLabel",
             color_discrete_sequence=compare,
             line_shape="hvh",
@@ -196,7 +198,7 @@ for config in configs:
             ),
         ):
             for k, nhit in enumerate(nhits[:10]):
-                this_df = df[(df["EnergyLabel"] == energy) * (df["NHits"] == nhit)]
+                this_df = df[(df["EnergyLabel"] == energy) * (df["min #NHits"] == nhit)]
 
                 smearing_matrix = pd.DataFrame(
                     list(this_df["Flux" + comp]),

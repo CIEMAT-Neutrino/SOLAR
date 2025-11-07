@@ -13,7 +13,7 @@ from lib import *
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
-    description="Plot the energy distribution of the particles"
+    description="Plot the preselction and efficiency of particle reconstruction"
 )
 parser.add_argument(
     "--config",
@@ -42,12 +42,6 @@ args = parser.parse_args()
 
 # Run the first script with the arguments
 for config, name in product(args.config, args.name):
-    # Your processing code here
-    # os.system(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
-    os.system(f"python3 {root}/src/PDS/22AdjOpFlash.py --config {config} --name {name}")
     os.system(
-        f"python3 {root}/src/PDS/23MatchedOpFlash.py --config {config} --name {name}"
-    )
-    os.system(
-        f"python3 {root}/src/PDS/24MatchedOpFlashEfficiency.py --config {config} --name {name}"
+        f"python3 {root}/src/preselection/11Clustering.py --config {config} --name {name}"
     )

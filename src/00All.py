@@ -7,18 +7,15 @@ import os
 import sys
 
 # Add the absolute path to the lib directory
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 from lib import *
 
 # Define flags for the analysis config and name with the python parser
-parser = argparse.ArgumentParser(
-    description="Plot the energy distribution of the particles"
-)
+parser = argparse.ArgumentParser(description="Run all the workflow")
 parser.add_argument(
     "--config",
     type=str,
-    nargs="+",
     help="The configuration to load",
     default=[
         "hd_1x2x6",
@@ -26,12 +23,12 @@ parser.add_argument(
         "hd_1x2x6_lateralAPA",
         "vd_1x8x14_3view_30deg",
         "vd_1x8x14_3view_30deg_nominal",
+        # "vd_1x8x14_3view_30deg_shielded",
     ],
 )
 parser.add_argument(
     "--name",
     type=str,
-    nargs="+",
     help="The name of the configuration",
     default=["marley", "marley_official"],
 )
@@ -39,15 +36,21 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
 args = parser.parse_args()
+if isinstance(args.config, str):
+    args.config = [args.config]
+if isinstance(args.name, str):
+    args.name = [args.name]
 
 # Run the first script with the arguments
 for config, name in product(args.config, args.name):
-    # Your processing code here
-    # os.system(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
-    os.system(f"python3 {root}/src/PDS/22AdjOpFlash.py --config {config} --name {name}")
     os.system(
-        f"python3 {root}/src/PDS/23MatchedOpFlash.py --config {config} --name {name}"
+        f"python3 {root}/src/workflow/00AllWorkflow.py --config {config} --name {name}"
     )
     os.system(
-        f"python3 {root}/src/PDS/24MatchedOpFlashEfficiency.py --config {config} --name {name}"
+        f"python3 {root}/src/preselection/10AllPreselection.py --config {config} --name {name}"
+    )
+    os.system(f"python3 {root}/src/PDS/20AllPDS.py --config {config} --name {name}")
+    os.system(f"python3 {root}/src/TPC/30AllTPC.py --config {config} --name {name}")
+    os.system(
+        f"python3 {root}/src/vertex/40AllVertex.py --config {config} --name {name}"
     )

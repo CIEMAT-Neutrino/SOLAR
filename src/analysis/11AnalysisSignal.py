@@ -139,7 +139,7 @@ for config in configs:
         if config == "hd_1x2x6_centralAPA":
             drift_fiducial_factor = 0
         elif config == "hd_1x2x6_lateralAPA":
-            drift_fiducial_factor = 1.5
+            drift_fiducial_factor = 1
         elif config == "vd_1x8x14_3view_30deg":
             drift_fiducial_factor = 1
         elif config == "vd_1x8x14_3view_30deg_optimistic":
