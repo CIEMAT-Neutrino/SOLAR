@@ -21,10 +21,11 @@
     
     "DETECTOR_MIN_Z": 0,
     "DETECTOR_MAX_Z": 2100,
-    "DETECTOR_SIZE_Z": 2000,
+    "DETECTOR_SIZE_Z": 2100,
     "DETECTOR_GAP_Z": 103,
 
     "RADIAL_ADJCL_LIMIT": 100,
+    "CLUSTER_RADIUS": [20, 40, 60, 80, 100],
     
     "OPFLASH_PLANES": {
         "-1":"Unknown",
@@ -34,5 +35,6 @@
          "3":"EndCap 1",
          "4":"EndCap 2"
     },
-    "OPFLASH_RADIUS": [20, 40, 60, 80, 100, 120, 140]
+    "OPFLASH_RADIUS": [20, 40, 60, 80, 100, 120, 140],
+    "EXTERNAL_BACKGROUNDS": [26, 27, 28, 29, 30]
 }

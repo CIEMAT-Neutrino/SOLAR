@@ -22,14 +22,15 @@
     "DETECTOR_MIN_Z": 0,
     "DETECTOR_MAX_Z": 1400,
     "DETECTOR_SIZE_Z": 1400,
-    "DETECTOR_GAP_Z": 25,
+    "DETECTOR_GAP_Z": 10,
     
     "RADIAL_ADJCL_LIMIT": 100,
+    "CLUSTER_RADIUS": [20, 40, 60, 80, 100],
     
     "OPFLASH_PLANES": {
         "-1":"Unknown",
-         "0":"Anode 1",
-         "1":"Anode 2"
+         "0":"APA"
     },
-    "OPFLASH_RADIUS": [20, 40, 60, 80, 100, 120, 140]
+    "OPFLASH_RADIUS": [20, 40, 60, 80, 100, 120, 140],
+    "EXTERNAL_BACKGROUNDS": [27, 28 ,29, 30, 31]
 }

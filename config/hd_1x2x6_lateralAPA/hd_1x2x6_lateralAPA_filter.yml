@@ -80,5 +80,7 @@
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
         - "Reco":
-                  - "SignalParticleK":
-                            - "absbetween": [0, 20]
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "TrueMain":
+                        - "equal": True

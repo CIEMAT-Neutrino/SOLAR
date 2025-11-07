@@ -16,16 +16,16 @@
         "SolarEnergy": "linear"
     },
     "MIN_SAMPLE_TRIM": {
-        "ClusterEnergy": 0.2,
-        "TotalEnergy": 0.0,
-        "SelectedEnergy": 0.0,
-        "SolarEnergy": 0.0
+        "ClusterEnergy": 0.3,
+        "TotalEnergy": 0.2,
+        "SelectedEnergy": 0.2,
+        "SolarEnergy": 0.2
     },
     "MAX_SAMPLE_TRIM": {
         "ClusterEnergy": 0.3,
-        "TotalEnergy": 0.5,
-        "SelectedEnergy": 0.5,
-        "SolarEnergy": 0.5
+        "TotalEnergy": 0.3,
+        "SelectedEnergy": 0.3,
+        "SolarEnergy": 0.3
     },
     "DEFAULT_ANALYSIS_ENERGY": "SolarEnergy",
     "DEFAULT_ENERGY_TIME": "RecoDriftTime",
@@ -41,17 +41,17 @@
     "DEFAULT_SIGNAL_DM2": 6e-05,
     "DEFAULT_SIGNAL_SIN13": 0.021,
     "DEFAULT_SIGNAL_SIN12": 0.303,
-    "MIN_BKG_R": 14.090918436050416,
-    "MAX_BKG_CHARGE": 298.0663818359378,
+    "MIN_BKG_R": 13.996735105514526,
+    "MAX_BKG_CHARGE": 301.48773803710935,
     "MAX_BKG_ENERGY": 0.5,
     "MAIN_PDG": 22,
     "NORM_TO_NUE": false,
     "COMPUTE_STANDARD_WEIGHTS": true,
     "DEFAULT_X_BIN": 80,
     "DEFAULT_X_REGION": 165,
-    "DEFAULT_Y_BIN": 50,
+    "DEFAULT_Y_BIN": 75,
     "DEFAULT_Y_REGION": 200,
-    "DEFAULT_Z_BIN": 80,
+    "DEFAULT_Z_BIN": 150,
     "DEFAULT_Z_REGION": 420,
     "DRIFT_FIDUCIAL_FACTOR": 1,
     "X_COORDINATE_SIGNAL_ERROR": 15
