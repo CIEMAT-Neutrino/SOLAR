@@ -8,6 +8,7 @@
     "Truth": {
         "VECTORS": {
             "TSignalPDG": 1,
+            "TSignalK": 1,
             "TSignalE": 1,
             "TSignalP": 1,
             "TSignalX": 1,
@@ -24,7 +25,7 @@
             "Flag": 1
         },
         "DOUBLES": {
-            "SignalParticleE": 1,
+            "SignalParticleK": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1
@@ -33,7 +34,14 @@
         "BOOLS": {}
     },
     "Reco": {
-        "VECTORS": {},
+        "VECTORS": {
+            "MainVertex":1,
+            "EndVertex":1,
+            "MainParentVertex":1,
+            "AdjClTime":1,
+            "AdjClMainX":1,
+            "TSignalK":1
+        },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1,
@@ -42,7 +50,11 @@
         },
         "DOUBLES": {
             "Charge": 1,
-            "SignalParticleE": 1
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "RecoX": 1,
+            "RecoY": 1,
+            "RecoZ": 1
         },
         "STRINGS": {},
         "BOOLS": {

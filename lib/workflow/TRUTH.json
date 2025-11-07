@@ -55,6 +55,9 @@
         "DOUBLES": {
             "SignalParticleP": 1,
             "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "MatchedOpFlashPur": 1,
             "MatchedOpFlashPlane": 1,
             "Purity": 1,

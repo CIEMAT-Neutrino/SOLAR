@@ -20,7 +20,9 @@
         "DOUBLES": {
             "SignalParticleE": 1,
             "SignalParticleK": 1,
-            "SignalParticleX": 1
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -39,10 +41,12 @@
             "AdjClMotherID": 1,
             "AdjClMainPDG": 1,
             "AdjClCharge": 1,
+            "AdjClMainE": 1,
             "AdjClMainX": 1,
             "AdjClNHits": 1,
             "AdjClTime": 1,
             "AdjClGen": 1,
+            "AdjClPur": 1,
             "AdjClR": 1
         },
         "INTEGERS": {

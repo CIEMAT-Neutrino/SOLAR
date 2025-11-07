@@ -33,6 +33,7 @@
             "TSignalZ": 1,
             "TSignalPDG": 1,
             "MainVertex": 0,
+            "EndVertex": 0,
             "MainParentVertex": 0,
             "AdjClR": 0,
             "AdjClNHits": 0,

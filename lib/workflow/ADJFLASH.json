@@ -57,6 +57,7 @@
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
+            "SignalParticleTime": 1,
             "Time": 1,
             "RecoX": 1,
             "RecoY": 1,

@@ -12,7 +12,10 @@
             "TSignalX": 1,
             "TSignalY": 1,
             "TSignalZ": 1,
-            "TSignalPDG": 1
+            "TSignalPDG": 1,
+            "OpFlashPE": 1,
+            "OpFlashPur": 1,
+            "OpFlashPlane": 1
         },
         "INTEGERS": {
             "Event": 1,
@@ -85,6 +88,7 @@
             "RecoY": 1,
             "RecoZ": 1,
             "Charge": 1,
+            "Purity": 1,
             "MatchedOpFlashPlane": 1,
             "MatchedOpFlashTime": 1,
             "MatchedOpFlashPur": 1,

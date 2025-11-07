@@ -32,6 +32,7 @@
             "Flag": 1
         },
         "DOUBLES": {
+            "SignalParticleTime": 1,
             "SignalParticleX": 1,
             "SignalParticleY": 1,
             "SignalParticleZ": 1,

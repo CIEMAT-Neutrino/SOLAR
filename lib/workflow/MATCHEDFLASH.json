@@ -6,7 +6,11 @@
         "BOOLS": {}
     },
     "Truth": {
-        "VECTORS": {},
+        "VECTORS": {
+            "OpFlashPE": 1,
+            "OpFlashPur": 1,
+            "OpFlashPlane": 1
+        },
         "INTEGERS": {
             "Event": 1,
             "Flag": 1

@@ -16,7 +16,10 @@
         },
         "DOUBLES": {
             "SignalParticleE": 1,
-            "SignalParticleK": 1
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -49,6 +52,8 @@
             "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "Time": 1,
             "Charge": 1,
             "RecoX": 1,

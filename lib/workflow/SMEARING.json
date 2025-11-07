@@ -17,7 +17,9 @@
         "DOUBLES": {
             "SignalParticleX": 1,
             "SignalParticleE": 1,
-            "SignalParticleK": 1
+            "SignalParticleK": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
         },
         "STRINGS": {},
         "BOOLS": {}
@@ -52,9 +54,11 @@
             "Matching": -1
         },
         "DOUBLES": {
-            "SignalParticleX": 1,
             "SignalParticleE": 1,
             "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
             "MainE": 1,
             "MainParentE": 1,
             "ElectronE": 0,
