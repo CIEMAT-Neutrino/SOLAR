@@ -24,7 +24,7 @@ def update_default_values(
         output = ""
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -34,27 +34,35 @@ def update_default_values(
         # Check if "RecoX" is in run["Reco"] to avoid KeyError
         if "RecoX" in run["Reco"]:
             # Substitute the values that are -1e6 with the central x coordinate point
-            run["Reco"]["RecoX"][idx] = np.where(
-                (run["Reco"]["RecoX"][idx] == -1e6)
-                * (run["Reco"]["SignalParticleX"][idx] > 0),
-                (
-                    info["DETECTOR_SIZE_X"] / 4
-                    if info["GEOMETRY"] == "hd"
-                    else info["DETECTOR_SIZE_X"] / 2
-                ),
-                run["Reco"]["RecoX"][idx],
-            )
-            run["Reco"]["RecoX"][idx] = np.where(
-                (run["Reco"]["RecoX"][idx] == -1e6)
-                * (run["Reco"]["SignalParticleX"][idx] < 0),
-                (
-                    -info["DETECTOR_SIZE_X"] / 4
-                    if info["GEOMETRY"] == "hd"
-                    else -info["DETECTOR_SIZE_X"] / 2
-                ),
-                run["Reco"]["RecoX"][idx],
-            )
-    output += f"\tUpdate Default Values (RecoX) \t-> Done!\n"
+            output += f"\t***Update Default Values (RecoX) -> {np.sum(run['Reco']['RecoX'][idx] == -1e6) / len(run['Reco']['RecoX'][idx]) * 100:.2f}% of values at default (-1e6)\n"
+            if info["GEOMETRY"] == "hd":
+                run["Reco"]["RecoX"][idx] = np.where(
+                    (run["Reco"]["RecoX"][idx] == -1e6)
+                    * (run["Reco"]["SignalParticleX"][idx] > 0),
+                    (info["DETECTOR_SIZE_X"] / 4),
+                    run["Reco"]["RecoX"][idx],
+                )
+                run["Reco"]["RecoX"][idx] = np.where(
+                    (run["Reco"]["RecoX"][idx] == -1e6)
+                    * (run["Reco"]["SignalParticleX"][idx] < 0),
+                    (-info["DETECTOR_SIZE_X"] / 4),
+                    run["Reco"]["RecoX"][idx],
+                )
+            else:
+                run["Reco"]["RecoX"][idx] = np.where(
+                    run["Reco"]["RecoX"][idx] == -1e6,
+                    0,
+                    run["Reco"]["RecoX"][idx],
+                )
+        # Print percentage of values that are out of the detector range
+        output += f"\t***Update Default Values (RecoY) -> {np.sum((run['Reco']['RecoY'][idx] < info['DETECTOR_MIN_Y']) + (run['Reco']['RecoX'][idx] > info['DETECTOR_MAX_Y'])) / len(run['Reco']['RecoY'][idx]) * 100:.2f}% of values out of range [{info['DETECTOR_MIN_Y']}, {info['DETECTOR_MAX_Y']}]\n"
+        run["Reco"]["RecoY"][idx] = np.where(
+            (run["Reco"]["RecoY"][idx] < info["DETECTOR_MIN_Y"])
+            + (run["Reco"]["RecoY"][idx] > info["DETECTOR_MAX_Y"]),
+            0,
+            run["Reco"]["RecoY"][idx],
+        )
+    output += f"\tUpdate Default Values \t\t-> Done!\n"
 
     return run, output, []
 
@@ -74,7 +82,8 @@ def compute_main_variables(
         output = ""
     required_branches = [
         "MainVertex",
-        "EndVertex" "MainParentVertex",
+        "EndVertex",
+        "MainParentVertex",
         "RecoX",
         "RecoY",
         "RecoZ",
@@ -104,15 +113,13 @@ def compute_main_variables(
         run["Reco"][f"{main_branch}Y"] = y
         run["Reco"][f"{main_branch}Z"] = z
 
-    run["Reco"]["ErrorY"] = abs(run["Reco"]["MainY"] - run["Reco"]["RecoY"])
-    run["Reco"]["ErrorZ"] = abs(run["Reco"]["MainZ"] - run["Reco"]["RecoZ"])
+    run["Reco"]["ErrorY"] = run["Reco"]["MainY"] - run["Reco"]["RecoY"]
+    run["Reco"]["ErrorZ"] = run["Reco"]["MainZ"] - run["Reco"]["RecoZ"]
     run["Reco"]["2DError"] = np.sqrt(
         np.power(run["Reco"]["ErrorZ"], 2) + np.power(run["Reco"]["ErrorY"], 2)
     )
     try:
-        run["Reco"]["ErrorX"] = abs(
-            abs(run["Reco"]["MainX"]) - abs(run["Reco"]["RecoX"])
-        )
+        run["Reco"]["ErrorX"] = run["Reco"]["MainX"] - run["Reco"]["RecoX"]
         run["Reco"]["3DError"] = np.sqrt(
             np.power(run["Reco"]["ErrorZ"], 2)
             + np.power(run["Reco"]["ErrorY"], 2)

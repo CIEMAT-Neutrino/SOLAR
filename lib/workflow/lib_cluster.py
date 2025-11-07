@@ -34,7 +34,7 @@ def compute_electron_cluster(
     run["Reco"]["AdjClNum"] = np.sum(run["Reco"]["AdjClCharge"] != 0, axis=1)
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -63,7 +63,7 @@ def compute_electron_cluster(
         ) / run["Reco"]["ElectronCharge"][idx]
 
     run = remove_branches(run, rm_branches, [], debug=debug)
-    output += f"\tClutser charge computation\t-> Done!\n"
+    output += f"\tCluster charge computation\t-> Done!\n"
     return run, output, new_branches
 
 
@@ -101,7 +101,7 @@ def compute_cluster_energy(
         )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
 
@@ -136,10 +136,15 @@ def compute_cluster_energy(
                 corr_info["CORRECTION_CONST"],
                 corr_info["CORRECTION_SIGMOID"],
             ]
-
+            print(
+                f'Using correction variables: {this_params["DEFAULT_ENERGY_TIME"]}, {this_params["DEFAULT_ADJCL_ENERGY_TIME"]}'
+            )
             for branch, default_branch in zip(
                 ["Correction", "AdjClCorrection"],
-                [params["DEFAULT_ENERGY_TIME"], params["DEFAULT_ADJCL_ENERGY_TIME"]],
+                [
+                    this_params["DEFAULT_ENERGY_TIME"],
+                    this_params["DEFAULT_ADJCL_ENERGY_TIME"],
+                ],
             ):
 
                 run["Reco"][branch][idx] = np.exp(
@@ -166,14 +171,13 @@ def compute_cluster_energy(
             )
 
             run["Reco"]["AdjClEnergy"][idx] = (
-                run["Reco"]["AdjClCorrectedCharge"][idx]
-                / corr_info["CHARGE_AMP"]
+                run["Reco"]["AdjClCorrectedCharge"][idx] / corr_info["CHARGE_AMP"]
             )
 
     run = remove_branches(
         run, rm_branches, new_branches[:-1] + new_vector_branches[:-1], debug=debug
     )
-    output += f"\tClutser energy computation\t-> Done!\n"
+    output += f"\tCluster energy computation\t-> Done!\n"
     return run, output, new_branches + new_vector_branches
 
 
@@ -195,7 +199,7 @@ def compute_cluster_calibration(
         run["Reco"][f"{cluster}{branch}"] = np.zeros(len(run["Reco"]["Event"]))
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
 
@@ -281,7 +285,7 @@ def compute_total_energy(
         run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -293,12 +297,12 @@ def compute_total_energy(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
-        selected_filter = (run["Reco"]["AdjClR"][idx] < params["MIN_BKG_R"]) + (
-            run["Reco"]["AdjClCharge"][idx] > params["MAX_BKG_CHARGE"]
+        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
+            run["Reco"]["AdjClCharge"][idx] > this_params["MAX_BKG_CHARGE"]
         )
 
         if debug:
-            output += f"\t[cyan]***[INFO] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters.[/cyan]\n"
+            output += f"\t***[cyan][INFO][/cyan] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters\n"
 
         run["Reco"]["SelectedAdjClNum"][idx] = np.sum(selected_filter, axis=1)
         run["Reco"]["SelectedAdjClEnergy"][idx] = np.sum(
@@ -339,7 +343,7 @@ def compute_reco_energy(
         run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         for name in configs[config]:
@@ -372,7 +376,7 @@ def compute_reco_energy(
                         "r",
                     )
                 )
-                output += f"\t[cyan]***[INFO] Loading model for {name}[/cyan]\n"
+                output += f"\t***[cyan][INFO][/cyan] Loading model for {name}\n"
 
             except FileNotFoundError:
                 discriminant_info = json.load(
@@ -446,12 +450,16 @@ def compute_energy_calibration(
     output: Optional[str] = None,
     debug=False,
 ):
+    # Inverse function of polinomyal with degree 2
+    def inverse_quadratic(x, a, b, c):
+        return (-b + np.sqrt(b**2 - 4 * a * (c - x))) / (2 * a)
+
     default_sample = "marley"
     new_branches = ["ClusterEnergy", "SolarEnergy", "SelectedEnergy", "TotalEnergy"]
 
     run["Reco"]["ClusterEnergy"] = np.zeros(len(run["Reco"]["Event"]))
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
 
@@ -470,7 +478,7 @@ def compute_energy_calibration(
                     )
                 )
                 if debug:
-                    output += f"\t[cyan]***[INFO] Applying energy calibration from {name}[/cyan]\n"
+                    output += f"\t***[cyan][INFO][/cyan] Applying energy calibration from {name}\n"
 
             except FileNotFoundError:
                 reco_info = json.load(
@@ -481,17 +489,25 @@ def compute_energy_calibration(
                 )
                 output += f"\t[yellow]***[WARNING] Applying default energy calibration from {default_sample}[/yellow]\n"
 
-            for energy in ["Solar", "Selected", "Total"]:
-                run["Reco"][f"{energy}Energy"][idx] = (
-                    run["Reco"][f"{energy}Energy"][idx]
-                    - reco_info[energy.upper()]["INTERSECTION"]
-                ) / reco_info[energy.upper()]["ENERGY_AMP"]
+            for energy, ref_energy in zip(
+                ["Solar", "Selected", "Total", "Cluster"],
+                ["Solar", "Selected", "Total", ""],
+            ):
+                if this_params["SAMPLE_FIT"][f"{energy}Energy"] == "linear":
+                    run["Reco"][f"{energy}Energy"][idx] = (
+                        run["Reco"][f"{ref_energy}Energy"][idx]
+                        - reco_info[energy.upper()]["INTERSECTION"]
+                    ) / reco_info[energy.upper()]["ENERGY_AMP"]
+                    output += f"\t[cyan]***[cyan][INFO][/cyan] Applying linear energy calibration for {energy}Energy\n"
 
-            for energy in ["Cluster"]:
-                run["Reco"][f"{energy}Energy"][idx] = (
-                    run["Reco"][f"Energy"][idx]
-                    - reco_info[energy.upper()]["INTERSECTION"]
-                ) / reco_info[energy.upper()]["ENERGY_AMP"]
+                elif this_params["SAMPLE_FIT"][f"{energy}Energy"] == "quadratic":
+                    run["Reco"][f"{energy}Energy"][idx] = inverse_quadratic(
+                        run["Reco"][f"{ref_energy}Energy"][idx],
+                        reco_info[energy.upper()]["ENERGY_CURVATURE"],
+                        reco_info[energy.upper()]["ENERGY_AMP"],
+                        reco_info[energy.upper()]["INTERSECTION"],
+                    )
+                    output += f"\t***[cyan][INFO][/cyan] Applying quadratic energy calibration for {energy}Energy\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tReco energy calibration \t-> Done!\n"
@@ -510,36 +526,43 @@ def compute_cluster_time(
     Correct the charge of the events in the run according to the correction file.
     """
     # New branches
-    new_branches = ["RecoDriftTime"]
-    new_vector_branches = ["AdjCldTime", "AdjClRecoDriftTime"]
+    new_branches = ["RecoDriftTime", "AverageDriftTime"]
+    new_vector_branches = ["AdjCldTime", "AdjClRecoDriftTime", "AdjClAverageDriftTime"]
 
     for branch in new_branches:
         # Check if the branch exists
         if branch in run["Reco"]:
             output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
 
-        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]), dtype=np.float32)
+        if branch == "AverageDriftTime":
+            run["Reco"][branch] = np.ones(len(run["Reco"]["Event"]), dtype=np.float32)
+        else:
+            run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]), dtype=np.float32)
 
     for branch in new_vector_branches:
         # Check if the branch exists
         if branch in run["Reco"]:
             output += f"\t[yellow]***[WARNING] Branch {branch} already exists! Overwriting... [/yellow]\n"
 
-        run["Reco"][branch] = np.zeros(
-            (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])),
-            dtype=np.float32,
-        )
+        if branch == "AdjClAverageDriftTime":
+            run["Reco"][branch] = np.ones(
+                (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])),
+                dtype=np.float32,
+            )
+        else:
+            run["Reco"][branch] = np.zeros(
+                (len(run["Reco"]["Event"]), len(run["Reco"]["AdjClCharge"][0])),
+                dtype=np.float32,
+            )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
 
         idx = np.where(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
-            * (np.asarray(run["Reco"]["MatchedOpFlashPE"]) > 0)
-            * (np.asarray(run["Reco"]["RecoX"]) > -1e6)
         )
 
         # Check if idx is empty
@@ -555,10 +578,10 @@ def compute_cluster_time(
 
         if info["GEOMETRY"] == "hd":
             run["Reco"]["RecoDriftTime"][idx] = (
-                run["Reco"]["RecoX"][idx]
-                * 2
-                * info["EVENT_TICKS"]
-                / info["DETECTOR_SIZE_X"]
+                np.absolute(run["Reco"]["RecoX"][idx])
+                * info["TIMEWINDOW"]
+                * 1e6
+                / info["DETECTOR_MAX_X"]
             )
 
             reco_drift_array = reshape_array(
@@ -571,9 +594,9 @@ def compute_cluster_time(
 
         if info["GEOMETRY"] == "vd":
             run["Reco"]["RecoDriftTime"][idx] = (
-                (info["DETECTOR_SIZE_X"] - run["Reco"]["RecoX"][idx])
-                * 0.5
-                * info["EVENT_TICKS"]
+                (info["DETECTOR_SIZE_X"] / 2 - run["Reco"]["RecoX"][idx])
+                * info["TIMEWINDOW"]
+                * 1e6
                 / info["DETECTOR_SIZE_X"]
             )
 
@@ -584,6 +607,9 @@ def compute_cluster_time(
             run["Reco"]["AdjClRecoDriftTime"][idx] = (
                 run["Reco"]["AdjCldTime"][idx] + reco_drift_array
             )
+
+        run["Reco"]["AverageDriftTime"][idx] *= 0.5 * info["TIMEWINDOW"] * 1e6
+        run["Reco"]["AdjClAverageDriftTime"][idx] *= 0.5 * info["TIMEWINDOW"] * 1e6
 
     run = remove_branches(
         run, rm_branches, new_branches[:-1] + new_vector_branches[:-1], debug=debug
@@ -635,7 +661,7 @@ def compute_cluster_estimated_time(
         )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -644,9 +670,11 @@ def compute_cluster_estimated_time(
         )
 
         # Divide the filter idx into two groups, one with the random correction and one without
-        random_idx = idx[0][: int(len(idx[0]) * params["RANDOM_CORRECTION_RATIO"])]
+        random_idx = idx[0][: int(len(idx[0]) * this_params["RANDOM_CORRECTION_RATIO"])]
 
-        default_idx = idx[0][int(len(idx[0]) * params["RANDOM_CORRECTION_RATIO"]) :]
+        default_idx = idx[0][
+            int(len(idx[0]) * this_params["RANDOM_CORRECTION_RATIO"]) :
+        ]
 
         if info["GEOMETRY"] == "hd":
             # Create array of flat random values between -DETECTOR_SIZE_X/2 and DETECTOR_SIZE_X/2
@@ -717,8 +745,8 @@ def compute_cluster_estimated_time(
                 / info["DETECTOR_SIZE_X"]
             )
 
-        if params["RANDOM_CORRECTION_RATIO"] > 0:
-            output += f"[yellow]--> Applying random correction {100*params['RANDOM_CORRECTION_RATIO']:.1f}% to {branch}[/yellow]"
+        if this_params["RANDOM_CORRECTION_RATIO"] > 0:
+            output += f"[yellow]--> Applying random correction {100*this_params['RANDOM_CORRECTION_RATIO']:.1f}% to {branch}[/yellow]"
 
         for branch, (ref, jdx) in product(
             ["DriftTime", "AdjClDriftTime"],
@@ -757,7 +785,7 @@ def compute_cluster_recox(
         )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -779,7 +807,7 @@ def compute_cluster_recox(
                 * (tpc_filter)
             )
             run["Reco"]["RecoX"][plus_idx] = (
-                abs(run["Reco"][params["DEFAULT_RECOX_TIME"]][plus_idx])
+                abs(run["Reco"][this_params["DEFAULT_RECOX_TIME"]][plus_idx])
                 * (info["DETECTOR_SIZE_X"] / 2)
                 / info["EVENT_TICKS"]
             )
@@ -791,7 +819,7 @@ def compute_cluster_recox(
                 * (tpc_filter)
             )
             run["Reco"]["RecoX"][mins_idx] = (
-                -abs(run["Reco"][params["DEFAULT_RECOX_TIME"]][mins_idx])
+                -abs(run["Reco"][this_params["DEFAULT_RECOX_TIME"]][mins_idx])
                 * (info["DETECTOR_SIZE_X"] / 2)
                 / info["EVENT_TICKS"]
             )
@@ -815,7 +843,7 @@ def compute_cluster_recox(
 
         if info["GEOMETRY"] == "vd":
             run["Reco"]["RecoX"][idx] = (
-                -abs(run["Reco"][params["DEFAULT_RECOX_TIME"]][idx])
+                -abs(run["Reco"][this_params["DEFAULT_RECOX_TIME"]][idx])
                 * info["DETECTOR_SIZE_X"]
                 / info["EVENT_TICKS"]
                 + info["DETECTOR_SIZE_X"] / 2
@@ -855,7 +883,7 @@ def compute_cluster_adjrecox(
         )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -913,5 +941,5 @@ def compute_cluster_adjrecox(
             ) + converted_array
 
     run = remove_branches(run, rm_branches, ["AdjCldT"], debug=debug)
-    output += f"\tComputed AdjRecoX \t\t\t-> Done!\n"
+    output += f"\tComputed AdjRecoX \t\t-> Done!\n"
     return run, output, new_vector_branches

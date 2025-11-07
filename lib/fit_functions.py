@@ -222,11 +222,22 @@ def spectrum_hist2d(x, y, z, fit={"threshold": 0, "spec_type": "max"}, debug=Fal
         return x, y_max, sigma
 
     if fit["spec_type"] == "mean":
-        y_mean = np.sum(y * z[z > np.max(z_max) * fit["threshold"]], axis=1) / np.sum(
-            z[z > np.max(z_max) * fit["threshold"]], axis=1
+        x_new, y_mean, y_std = [], [], []
+        # z is the 2D histogram of data points. Calculate the weighted mean of y for each x using z as weights
+        for i, col in enumerate(z):
+            if np.sum(col) > fit["threshold"]:
+                x_new.append(x[i])
+                y_mean.append(np.average(y, weights=col))
+                y_std.append(
+                    np.sqrt(
+                        np.average((y - np.average(y, weights=col)) ** 2, weights=col)
+                    )
+                )
+        y_mean = np.array(y_mean)
+        sigma = np.array(y_std) / np.sqrt(
+            np.sum(z, axis=1)[np.sum(z, axis=1) > fit["threshold"]]
         )
-        sigma = 1 / np.sqrt(np.sum(z[z > np.max(z_max) * fit["threshold"]], axis=1))
-        return x, y_mean, sigma
+        return np.asarray(x_new), y_mean, sigma
 
     if fit["spec_type"] == "top":
         # threshold = 0.25

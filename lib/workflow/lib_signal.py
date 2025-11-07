@@ -91,7 +91,7 @@ def compute_signal_directions(
             )
 
         for config in configs:
-            info, params, output = get_param_dict(
+            info, this_params, output = get_param_dict(
                 f"{root}/config/{config}/{config}", params, debug=debug
             )
             idx = np.where(
@@ -174,7 +174,7 @@ def compute_signal_energies(
         ],
     }
 
-    new_branches = [f"TSignalSumE", f"TSignalSumP", f"TSignalSumK"]
+    new_branches = [f"TSignalSumE", f"TSignalSumP", f"TSignalSumK", f"TSignalSumPDG"]
 
     for tree in trees:
         pdg_list = np.unique(
@@ -192,9 +192,12 @@ def compute_signal_energies(
         run[tree][new_branches[2]] = np.zeros(
             (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32
         )
+        run[tree][new_branches[3]] = np.array(pdg_list, dtype=np.int32)[None, :].repeat(
+            len(run[tree]["Event"]), axis=0
+        )
 
     for config in configs:
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -206,40 +209,42 @@ def compute_signal_energies(
             for jdx, pdg in enumerate(pdg_list):
                 run[tree][new_branches[0]][idx][:, jdx] = np.sum(
                     run[tree][f"TSignalE"][idx]
-                    * (run[tree][f"TSignalPDG"][idx] == pdg)
-                    * (run[tree][f"TSignalMother"][idx] == 0),
+                    * (run[tree][f"TSignalMother"][idx] == 0)
+                    * (run[tree][f"TSignalPDG"][idx] == pdg),
                     axis=1,
                 )
                 run[tree][new_branches[1]][idx][:, jdx] = np.sum(
                     run[tree][f"TSignalP"][idx]
-                    * (run[tree][f"TSignalPDG"][idx] == pdg)
-                    * (run[tree][f"TSignalMother"][idx] == 0),
+                    * (run[tree][f"TSignalMother"][idx] == 0)
+                    * (run[tree][f"TSignalPDG"][idx] == pdg),
                     axis=1,
                 )
                 run[tree][new_branches[2]][idx][:, jdx] = np.sum(
                     run[tree][f"TSignalK"][idx]
-                    * (run[tree][f"TSignalPDG"][idx] == pdg)
-                    * (run[tree][f"TSignalMother"][idx] == 0),
+                    * (run[tree][f"TSignalMother"][idx] == 0)
+                    * (run[tree][f"TSignalPDG"][idx] == pdg),
                     axis=1,
                 )
 
-            if params["NORM_TO_NUE"]:
-                # Divide by the energy of the neutrino
-                run[tree][new_branches[0]][idx] = (
-                    run[tree][new_branches[0]][idx]
-                    / run[tree]["SignalParticleE"][idx][:, None]
-                )
-                run[tree][new_branches[1]][idx] = (
-                    run[tree][new_branches[1]][idx]
-                    / run[tree]["SignalParticleP"][idx][:, None]
-                )
-                run[tree][new_branches[2]][idx] = (
-                    run[tree][new_branches[2]][idx]
-                    / run[tree]["SignalParticleK"][idx][:, None]
-                )
+            # if this_params["NORM_TO_NUE"]:
+            #     # Divide by the energy of the neutrino
+            #     run[tree][new_branches[0]][idx] = (
+            #         run[tree][new_branches[0]][idx]
+            #         / run[tree]["SignalParticleE"][idx][:, None]
+            #     )
+            #     run[tree][new_branches[1]][idx] = (
+            #         run[tree][new_branches[1]][idx]
+            #         / run[tree]["SignalParticleP"][idx][:, None]
+            #     )
+            #     run[tree][new_branches[2]][idx] = (
+            #         run[tree][new_branches[2]][idx]
+            #         / run[tree]["SignalParticleK"][idx][:, None]
+            #     )
 
     for tree in trees:
         run = remove_branches(run, rm_branches, [], tree=tree, debug=debug)
+
+    print(run["Truth"]["TSignalK"])
 
     output += f"\tSignal energy computation \t-> Done!\n"
     return run, output, new_branches
@@ -300,7 +305,7 @@ def compute_particle_energies(
         run[tree][f"{particle}K"] = np.zeros(len(run[tree]["Event"]), dtype=np.float32)
 
     for config, tree in product(configs, trees):
-        info, params, output = get_param_dict(
+        info, this_params, output = get_param_dict(
             f"{root}/config/{config}/{config}", params, output, debug=debug
         )
         idx = np.where(
@@ -322,7 +327,7 @@ def compute_particle_energies(
                 axis=1,
             )
 
-            if params["NORM_TO_NUE"]:
+            if this_params["NORM_TO_NUE"]:
                 run[tree][f"{particle}K"][idx] = (
                     run[tree][f"{particle}K"][idx] / run[tree]["SignalParticleE"][idx]
                 )

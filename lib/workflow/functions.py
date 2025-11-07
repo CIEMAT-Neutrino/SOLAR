@@ -40,18 +40,18 @@ def get_param_dict(
         try:
             if in_params[param] is None:
                 if debug:
-                    info_string = f"\t[cyan]***[INFO] Applying {param}: {params[param]} from the config file[/cyan]\n"
+                    info_string = f"\t***[cyan][INFO][/cyan] Applying {param}: {params[param]} from the config file\n"
                     # Check if info string is already in the output
                     if info_string not in output:
                         output += info_string
-            
+
             elif in_params[param] is not None:
                 params[param] = in_params[param]
-                warning_string = f"\t[yellow]***[WARNING][/yellow] Applying {param}: {in_params[param]} from the input dictionary\n"
+                warning_string = f"\t***[yellow][WARNING][/yellow] Applying {param}: {in_params[param]} from the input dictionary\n"
                 # Check if warning string is already in the output
                 if warning_string not in output:
                     output += warning_string
-        
+
         except KeyError:
             pass
 

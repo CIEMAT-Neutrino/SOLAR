@@ -45,47 +45,48 @@ def compute_true_drift(
             run["Reco"]["TruthX"][idx] = abs(run["Reco"]["MainVertex"][idx, 0])
             run["Reco"]["TruthDriftTime"][idx] = (
                 run["Reco"]["TruthX"][idx]
-                * 2
-                * info["EVENT_TICKS"]
-                / info["DETECTOR_SIZE_X"]
+                * info["TIMEWINDOW"]
+                * 1e6  # convert to us
+                / info["DETECTOR_MAX_X"]
             )
 
             run["Reco"]["TruthAdjClX"][idx] = abs(run["Reco"]["AdjClMainX"][idx])
             run["Reco"]["TruthAdjClDriftTime"][idx] = (
                 run["Reco"]["TruthAdjClX"][idx]
-                * 2
-                * info["EVENT_TICKS"]
-                / info["DETECTOR_SIZE_X"]
+                * info["TIMEWINDOW"]
+                * 1e6  # convert to us
+                / info["DETECTOR_MAX_X"]
             )
 
-        if info["GEOMETRY"] == "vd":
+        elif info["GEOMETRY"] == "vd":
             run["Reco"]["TruthX"][idx] = run["Reco"]["MainVertex"][idx, 0]
             run["Reco"]["TruthDriftTime"][idx] = (
                 (info["DETECTOR_SIZE_X"] / 2 - run["Reco"]["TruthX"][idx])
-                * 0.5
-                * info["EVENT_TICKS"]
+                * info["TIMEWINDOW"]
+                * 1e6  # convert to us
                 / info["DETECTOR_SIZE_X"]
             )
 
             run["Reco"]["TruthAdjClX"][idx] = run["Reco"]["AdjClMainX"][idx]
             run["Reco"]["TruthAdjClDriftTime"][idx] = (
                 (info["DETECTOR_SIZE_X"] / 2 - run["Reco"]["TruthAdjClX"][idx])
-                * 0.5
-                * info["EVENT_TICKS"]
+                * info["TIMEWINDOW"]
+                * 1e6  # convert to us
                 / info["DETECTOR_SIZE_X"]
             )
 
-    # Select all values bigger than 1e6 or smaller than 0 and set them to 0
-    run["Reco"]["TruthDriftTime"] = np.where(
-        (run["Reco"]["TruthDriftTime"] > 1e6) | (run["Reco"]["TruthDriftTime"] < 0),
-        0,
-        run["Reco"]["TruthDriftTime"],
-    )
-    run["Reco"]["TruthAdjClDriftTime"] = np.where(
-        (run["Reco"]["TruthAdjClDriftTime"] > 1e6)
-        | (run["Reco"]["TruthAdjClDriftTime"] < 0),
-        0,
-        run["Reco"]["TruthAdjClDriftTime"],
-    )
+        # Select all values bigger than 1e6 or smaller than 0 and set them to 0
+        run["Reco"]["TruthDriftTime"] = np.where(
+            (run["Reco"]["TruthDriftTime"] > info["TIMEWINDOW"] * 1e6)
+            | (run["Reco"]["TruthDriftTime"] < 0),
+            info["TIMEWINDOW"] * 5e5,
+            run["Reco"]["TruthDriftTime"],
+        )
+        run["Reco"]["TruthAdjClDriftTime"] = np.where(
+            (run["Reco"]["TruthAdjClDriftTime"] > info["TIMEWINDOW"] * 1e6)
+            | (run["Reco"]["TruthAdjClDriftTime"] < 0),
+            info["TIMEWINDOW"] * 5e5,
+            run["Reco"]["TruthAdjClDriftTime"],
+        )
     output += f"\tTrue drift time computation \t-> Done!\n"
     return run, output, new_branches + new_vector_branches

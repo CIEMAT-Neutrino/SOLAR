@@ -70,7 +70,7 @@ def update_yaml_file(file_path: str, data: dict, add: bool = False):
             sort_keys=False,
             allow_unicode=True,
         )
-        rprint(f"[green][INFO] YAML file {file_path} updated successfully![/green]")
+        rprint(f"[cyan][INFO][/cyan] YAML file {file_path} updated successfully!")
 
 
 def update_json_file(file_path: str, data: dict, add: bool = False):
@@ -92,11 +92,11 @@ def update_json_file(file_path: str, data: dict, add: bool = False):
             if add or key in json_data:
                 json_data[key] = value
             if not add and key not in json_data:
-                rprint(f"[red][ERROR] Key {key} not found in the JSON file![/red]")
+                rprint(f"[red][ERROR][/red] Key {key} not found in the JSON file!")
 
     with open(file_path, "w") as file:
         json.dump(json_data, file, indent=4)
-        rprint(f"[green][INFO] JSON file {file_path} updated successfully![/green]")
+        rprint(f"[cyan][INFO][/cyan] JSON file {file_path} updated successfully!")
 
 
 def import_filter_preset(
@@ -167,7 +167,7 @@ def compute_filtered_run(
     new_run = {}
     if type(params) != dict and params != None:
         output += f"[red][ERROR]Params must be a dictionary![/red]"
-        return run, output
+        return run, mask, output
 
     if output is None:
         output = ""
@@ -175,14 +175,14 @@ def compute_filtered_run(
     if params == None and presets == None:
         if debug:
             output += "[yellow][WARNING] No filter applied![/yellow]"
-        return run, output
+        return run, mask, output
 
     elif params == None and presets != None:
         params = {}
 
     elif params != None and presets != None:
         output += (
-            f"[cyan][INFO] Combining preset {presets} with custom filters[/cyan]\n"
+            f"[cyan][INFO][/cyan] Combining preset {presets} with custom filters\n"
         )
 
     new_trees = run.keys()
@@ -227,25 +227,36 @@ def compute_filtered_run(
                     if not isinstance(params[param], tuple) and not isinstance(
                         params[param], list
                     ):
-                        output += f"[red][ERROR] Filter must be tuple or list, but found {type(params[param])}[/red]"
+                        output += f"[red][ERROR][/red] Filter must be tuple or list, but found {type(params[param])}\n"
                         if debug:
-                            rprint(f"{param}: {params[param]}")
-                        return run, output
+                            rprint(f"Omitting {param}: {params[param]}")
+                        continue
 
                     if len(params[param]) != 2:
-                        output += f"[red][ERROR] Filter must be of length 2![/red]"
+                        output += f"[red][ERROR][/red] Filter must be of length 2!\n"
                         if debug:
-                            rprint(f"{param}: {params[param]}")
-                        return run, output
+                            rprint(f"Omitting {param}: {params[param]}")
+                        continue
 
                     if param[1] not in run[param[0]].keys():
-                        output += f"[red][ERROR] Branch {param[1]} not found in the run![/red]"
+                        output += f"[red][ERROR][/red] Branch {param[1]} not found in the run!\n"
                         if debug:
-                            rprint(f"{param}: {params[param]}")
-                        return run, output
+                            rprint(f"Omitting {param}: {params[param]}")
+                        continue
 
                     if params[param][0] == "bigger":
-                        jdx = jdx & (run[param[0]][param[1]] > params[param][1])
+                        if isinstance(params[param][1], str):
+                            # Compare two branches entry by entry
+                            jdx = jdx & (
+                                np.where(
+                                    run[param[0]][param[1]]
+                                    > run[param[0]][params[param][1]],
+                                    True,
+                                    False,
+                                )
+                            )
+                        else:
+                            jdx = jdx & (run[param[0]][param[1]] > params[param][1])
                     elif params[param][0] == "smaller":
                         jdx = jdx & (run[param[0]][param[1]] < params[param][1])
                     elif params[param][0] == "equal":

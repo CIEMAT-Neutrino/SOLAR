@@ -95,15 +95,42 @@ def compute_particle_weights(
                 * (np.asarray(run["Config"]["Name"]) == name)
             )
 
-            config_tree_weight = 10
+            config_tree_weight = 10  # Faces * productions * events per production
             if name.startswith("marley"):
-                config_tree_weight = 10 * 10
-            if name.startswith("neutron"):
-                config_tree_weight = 40 * 100
-            if name.startswith("gamma"):
-                config_tree_weight = 40 * 100
-            if name.startswith("alpha"):
-                config_tree_weight = 6 * 100
+                config_tree_weight = 1 * 10 * 10
+
+            elif name.startswith("neutron"):
+                if config == "hd_1x2x6_centralAPA":
+                    config_tree_weight = 4 * 10 * 100
+                elif config == "hd_1x2x6_lateralAPA":
+                    config_tree_weight = 5 * 10 * 100
+                elif config == "vd_1x8x14_3view_30deg_optimistic":
+                    config_tree_weight = 5 * 2 * 20
+                else:
+                    pass
+
+            elif name.startswith("gamma"):
+                if config == "hd_1x2x6_centralAPA":
+                    config_tree_weight = 4 * 10 * 100
+                elif config == "hd_1x2x6_lateralAPA":
+                    config_tree_weight = 5 * 10 * 100
+                elif config == "vd_1x8x14_3view_30deg_optimistic":
+                    config_tree_weight = 5 * 2 * 20
+                else:
+                    pass
+
+            elif name.startswith("alpha"):
+                if config == "hd_1x2x6_centralAPA":
+                    config_tree_weight = 1 * 6 * 100
+                elif config == "hd_1x2x6_lateralAPA":
+                    config_tree_weight = 1 * 6 * 100
+                elif config == "vd_1x8x14_3view_30deg_optimistic":
+                    config_tree_weight = 1 * 1 * 100
+                else:
+                    pass
+
+            else:
+                pass
 
             exposure = {}
             if name.lower().startswith("marley"):
@@ -291,16 +318,30 @@ def compute_true_efficiency(
         "RecoIndex",
         "RecoMatch",
         "PDSMatch",
+        "PDSPlane",
+        "PDSPE",
         "ClusterCount",
         "HitCount",
         "TrueIndex",
+        "TrueMain",
+        "PDSPlane",
+        "PDSPE",
     ]
-    run["Truth"][new_branches[0]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[1]] = np.zeros(len(run["Truth"]["Event"]), dtype=bool)
-    run["Truth"][new_branches[2]] = np.zeros(len(run["Truth"]["Event"]), dtype=bool)
-    run["Truth"][new_branches[3]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Truth"][new_branches[4]] = np.zeros(len(run["Truth"]["Event"]), dtype=int)
-    run["Reco"][new_branches[5]] = np.zeros(len(run["Reco"]["Event"]), dtype=int)
+    run["Truth"][new_branches[0]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.int32)
+    run["Truth"][new_branches[1]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.bool_)
+    run["Truth"][new_branches[2]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.bool_)
+    run["Truth"][new_branches[3]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.int32)
+    run["Truth"][new_branches[4]] = np.zeros(
+        len(run["Truth"]["Event"]), dtype=np.float32
+    )
+    run["Truth"][new_branches[5]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.int16)
+    run["Truth"][new_branches[6]] = np.zeros(len(run["Truth"]["Event"]), dtype=np.int32)
+    run["Reco"][new_branches[7]] = np.zeros(len(run["Reco"]["Event"]), dtype=np.int32)
+    run["Reco"][new_branches[8]] = np.ones(len(run["Reco"]["Event"]), dtype=np.bool_)
+    run["Reco"][new_branches[9]] = np.zeros(len(run["Reco"]["Event"]), dtype=np.int32)
+    run["Reco"][new_branches[10]] = np.zeros(
+        len(run["Reco"]["Event"]), dtype=np.float32
+    )
 
     for config in configs:
         info, params, output = get_param_dict(
@@ -315,23 +356,66 @@ def compute_true_efficiency(
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
 
+        filter_gen = True
+        if info["VERSION"] in ["hd_1x2x6", "vd_1x8x14_3view_30deg"]:
+            rprint(
+                f"[yellow][WARNING][/yellow] Not filtering generator for detection efficiency computation in version {info['VERSION']}"
+            )
+            filter_gen = False
+
         result = generate_index(
             run["Truth"]["Event"][idx],
             run["Truth"]["Flag"][idx],
+            (
+                run["Truth"]["OpFlashPur"][idx]
+                if "OpFlashPur" in run["Truth"]
+                else np.zeros((len(run["Truth"]["Event"][idx]), 1), dtype=np.float32)
+            ),
+            (
+                run["Truth"]["OpFlashPlane"][idx]
+                if "OpFlashPlane" in run["Truth"]
+                else -1 * np.ones((len(run["Truth"]["Event"][idx]), 1), dtype=np.int8)
+            ),
+            (
+                run["Truth"]["OpFlashPE"][idx]
+                if "OpFlashPE" in run["Truth"]
+                else -1e6
+                * np.ones((len(run["Truth"]["Event"][idx]), 1), dtype=np.float32)
+            ),
             run["Reco"]["Event"][jdx],
             run["Reco"]["Flag"][jdx],
             run["Reco"]["NHits"][jdx],
             run["Reco"]["Charge"][jdx],
             run["Reco"]["Generator"][jdx],
-            run["Reco"]["MatchedOpFlashPur"][jdx],
+            (
+                run["Reco"]["MatchedOpFlashPur"][jdx]
+                if "MatchedOpFlashPur" in run["Reco"]
+                else np.zeros(len(run["Reco"]["Event"][jdx]), dtype=np.float32)
+            ),
+            (
+                run["Reco"]["MatchedOpFlashPlane"][jdx]
+                if "MatchedOpFlashPlane" in run["Reco"]
+                else -1 * np.ones(len(run["Reco"]["Event"][jdx]), dtype=np.int8)
+            ),
+            (
+                run["Reco"]["MatchedOpFlashPE"][jdx]
+                if "MatchedOpFlashPE" in run["Reco"]
+                else -1e6 * np.ones(len(run["Reco"]["Event"][jdx]), dtype=np.float32)
+            ),
+            filter_gen=filter_gen,
             debug=debug,
         )
         run["Truth"]["RecoIndex"][idx] = np.asarray(result[0])
         run["Truth"]["RecoMatch"][idx] = np.asarray(result[1])
         run["Truth"]["PDSMatch"][idx] = np.asarray(result[2])
-        run["Truth"]["ClusterCount"][idx] = np.asarray(result[3])
-        run["Truth"]["HitCount"][idx] = np.asarray(result[4])
-        run["Reco"]["TrueIndex"][jdx] = np.asarray(result[5])
+        run["Truth"]["PDSPlane"][idx] = np.asarray(result[3])
+        run["Truth"]["PDSPE"][idx] = np.asarray(result[4])
+        run["Truth"]["ClusterCount"][idx] = np.asarray(result[5])
+        run["Truth"]["HitCount"][idx] = np.asarray(result[6])
+        run["Reco"]["TrueIndex"][jdx] = np.asarray(result[7])
+        run["Reco"]["TrueMain"][jdx] = np.asarray(result[8])
+        run["Reco"]["PDSPlane"] = np.asarray(result[9])
+        run["Reco"]["PDSPE"] = np.asarray(result[10])
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tTrue efficiency computation \t-> Done!\n"
@@ -342,13 +426,19 @@ def compute_true_efficiency(
 def generate_index(
     true_event,
     true_flag,
+    true_flash,
+    true_plane,
+    true_PE,
     reco_event,
     reco_flag,
     reco_nhits,
     reco_charge,
     reco_gen,
     reco_flash,
-    debug=False,
+    reco_plane,
+    reco_PE,
+    filter_gen: bool = True,
+    debug: bool = False,
 ):
     """
     Generate the event index for the true and reco events.
@@ -357,12 +447,18 @@ def generate_index(
     true_result = np.zeros(len(true_event), dtype=np.int32) - 1
     true_TPC_match = np.zeros(len(true_event), dtype=np.bool_)
     true_PDS_match = np.zeros(len(true_event), dtype=np.bool_)
+    true_PDS_plane = -1 * np.ones(len(true_event), dtype=np.int8)
+    true_PDS_PE = np.zeros(len(true_event), dtype=np.float32)
     true_counts = np.zeros(len(true_event), dtype=np.int32)
     true_nhits = np.zeros(len(true_event), dtype=np.int32)
     reco_result = np.zeros(len(reco_event), dtype=np.int32)
+    reco_main = np.ones(len(reco_event), dtype=np.bool_)
+    reco_PDS_plane = -1 * np.ones(len(reco_event), dtype=np.int8)
+    reco_PDS_PE = np.zeros(len(reco_event), dtype=np.float32)
 
     end_j = 0
     start_j = 0
+    assigned_true = []
     for i in range(0, len(reco_event)):
         # print(f"Reco Event {i-1} of {len(reco_event)}")
         if i == 0:
@@ -385,27 +481,47 @@ def generate_index(
             if (
                 (reco_event[i] == true_event[k])
                 * (reco_flag[i] == true_flag[k])
-                * (reco_gen[i] == 1)
+                * (reco_gen[i] == 1 if filter_gen else True)
             ):
                 reco_result[i] = int(k)
+                # Find entry j in true_plane[k] for which true_flash[k][j] > 0 and PE is maximum in true_PE[k]
+                if sum(true_flash[k]) > 0:
+                    reco_PDS_PE[i] = max(true_PE[k][true_flash[k] > 0])
+                    reco_PDS_plane[i] = true_plane[k][
+                        np.argmax(true_PE[k][true_flash[k] > 0])
+                    ]
+                else:
+                    reco_PDS_PE[i] = -1e6
+                    reco_PDS_plane[i] = -1
+
+                if k in assigned_true:
+                    if reco_charge[i] > reco_charge[true_result[reco_result[i]]]:
+                        reco_main[true_result[reco_result[i]]] = False
+                    if reco_charge[i] < reco_charge[true_result[reco_result[i]]]:
+                        reco_main[i] = False
+
+                assigned_true.append(k)
                 true_result[k] = int(i)
-
-                # if reco_charge[i] > reco_charge[true_result[k]]:
-                # true_result[k] = int(i)
-
                 true_TPC_match[k] = True
                 true_counts[k] += 1
                 true_nhits[k] = true_nhits[k] + reco_nhits[i]
 
                 if reco_flash[i] > 0:
                     true_PDS_match[k] = True
+                    true_PDS_plane[k] = reco_plane[i]
+                    true_PDS_PE[k] = reco_PE[i]
                 break
 
     return (
         true_result,
         true_TPC_match,
         true_PDS_match,
+        true_PDS_plane,
+        true_PDS_PE,
         true_counts,
         true_nhits,
         reco_result,
+        reco_main,
+        reco_PDS_plane,
+        reco_PDS_PE,
     )

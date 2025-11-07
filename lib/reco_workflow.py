@@ -80,7 +80,23 @@ def compute_reco_workflow(
             debug=debug,
         )
 
-    else:
+    elif any(
+        work in workflow
+        for work in [
+            "RAW",
+            "VERTEXING",
+            "MARLEY",
+            "ADJCL",
+            "MATCHEDFLASH",
+            "CORRECTION",
+            "CALIBRATION",
+            "DISCRIMINATION",
+            "RECONSTRUCTION",
+            "SMEARING",
+            "ANALYSIS",
+            "TEST",
+        ]
+    ):
         run, output, this_new_branches = compute_true_efficiency(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )
@@ -110,6 +126,16 @@ def compute_reco_workflow(
 
     if "MARLEY" in workflow:
         run, output, this_new_branches = compute_signal_energies(
+            run,
+            configs,
+            params,
+            trees=["Truth"],
+            rm_branches=rm_branches,
+            output=output,
+            debug=debug,
+        )
+        new_branches += this_new_branches
+        run, output, this_new_branches = compute_particle_energies(
             run,
             configs,
             params,
@@ -153,17 +179,6 @@ def compute_reco_workflow(
         new_branches += this_new_branches
 
     elif "VERTEXING" in workflow:
-        default_workflow_params = {
-            "MAX_FLASH_R": None,
-            "MIN_FLASH_PE": None,
-            "RATIO_FLASH_PEvsR": None,
-        }
-        for key in default_workflow_params:
-            if params is None:
-                params = {}
-            if key not in params:
-                params[key] = default_workflow_params[key]
-
         run, output, this_new_branches = compute_adjcl_basics(
             run, configs, params, rm_branches=rm_branches, output=output, debug=debug
         )

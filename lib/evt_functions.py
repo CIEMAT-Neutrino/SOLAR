@@ -219,7 +219,11 @@ def add_data_to_event(
             z=data[2],
             mode="markers",
             marker=dict(
-                size=[min(i * 10, 10) for i in size] if isinstance(size, list) else min(size, 10),
+                size=(
+                    [min(i * 10, 10) for i in size]
+                    if isinstance(size, (list, np.ndarray))
+                    else min(size, 10)
+                ),
                 color=color,
                 cmin=0,
                 cmax=1,
@@ -342,7 +346,9 @@ def plot_edep_event(run, configs, idx=None, tracked="Truth", zoom=True, debug=Fa
         else:
             if debug:
                 print(f"**Event: {int(idx)}")
-                print(f"**Particle K.E.: {run[tracked]['SignalParticleK'][idx]:.2f} MeV")
+                print(
+                    f"**Particle K.E.: {run[tracked]['SignalParticleK'][idx]:.2f} MeV"
+                )
 
         # neut, neut_name, neut_color = get_neutrino_positions(run, tracked, idx)
         ccint, true_name, true_color = get_signal_positions(run, tracked, idx)
@@ -410,11 +416,9 @@ def plot_adjflash_event(
     idx=None,
     tree="Truth",
     tracked="AdjOpFlash",
-    zoom=True,
+    unzoom=True,
     adjopflashsignal: Optional[bool] = None,
-    adjopflashnum: Optional[int] = None,
     adjopflashsize: Optional[int] = None,
-    get_adj_color: bool = False,
     debug: bool = False,
 ):
     specs = [
@@ -438,8 +442,8 @@ def plot_adjflash_event(
                 while (
                     run["Reco"]["Primary"][idx] != True
                     or run["Reco"]["Generator"][idx] != 1
-                    or run["Reco"]["AdjOpFlashNum"][idx] <= adjopflashnum
-                    or abs(run["Reco"]["RecoX"][idx]) > info["DETECTOR_SIZE_X"] / 2
+                    # or run["Reco"]["AdjOpFlashNum"][idx] <= adjopflashnum
+                    # or abs(run["Reco"]["RecoX"][idx]) > info["DETECTOR_SIZE_X"] / 2
                 ):
                     idx = np.random.randint(len(run["Reco"]["Event"]))
 
@@ -497,7 +501,7 @@ def plot_adjflash_event(
 
         fig = format_coustom_plotly(fig, figsize=(None, 600), add_watermark=False)
         fig.update_layout(
-            title_text="Particle K.E.: <b>%.2fMeV</b> Cluster: %i %s"
+            title_text="Particle K.E.: <b>%.2f MeV</b> Cluster: %i %s"
             % (run[tree]["SignalParticleK"][idx], idx, config),
             title_x=0.5,
         )
@@ -511,15 +515,15 @@ def plot_adjflash_event(
             fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
             fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
 
-        fig = add_geometry_planes(fig, info["GEOMETRY"], row=1, col=3)
+        fig = add_geometry_planes(fig, info["GEOMETRY"], unzoom=unzoom, row=1, col=3)
 
-        if zoom:
-            fig.update_xaxes(row=1, col=2, range=[neut[0][0] - 100, neut[0][0] + 100])
-            fig.update_yaxes(row=1, col=2, range=[neut[1][0] - 100, neut[1][0] + 100])
-            fig.update_xaxes(row=1, col=1, range=[neut[2][0] - 100, neut[2][0] + 100])
+        # if zoom:
+        #     fig.update_xaxes(row=1, col=2, range=[neut[0][0] - 100, neut[0][0] + 100])
+        #     fig.update_yaxes(row=1, col=2, range=[neut[1][0] - 100, neut[1][0] + 100])
+        #     fig.update_xaxes(row=1, col=1, range=[neut[2][0] - 100, neut[2][0] + 100])
 
         fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
-        return fig
+        return fig, idx
 
 
 def plot_tpc_event(
@@ -617,7 +621,7 @@ def plot_tpc_event(
 
         fig = format_coustom_plotly(fig, figsize=(None, 600), add_watermark=False)
         fig.update_layout(
-            title_text="Particle K.E.: <b>%.2fMeV</b> Cluster: %i %s"
+            title_text="Particle K.E.: <b>%.2f MeV</b> Cluster: %i %s"
             % (run["Reco"]["SignalParticleK"][idx], idx, config),
             title_x=0.5,
         )
@@ -633,37 +637,6 @@ def plot_tpc_event(
 
         fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f} <br>PDG: %{text}")
 
-        # Add extra legend with color dictionary
-
-        # neutrino_color_dict = get_pdg_color(
-        #     [str(run[tracked]["SignalParticlePDG"][idx])]
-        # )
-        # signal_color_dict = get_pdg_color(
-        #     [str(x) for x in run[tracked]["TSignalPDG"][idx] if x != 0]
-        # )
-        # main_color_dict = get_pdg_color(
-        #     [str(x) for x in run[tracked]["AdjClMainPDG"][idx] if x != 0]
-        # )
-        # main_color_dict["background"] = "black"
-        # # main_color_dict["neutrino"] = "red"
-
-        # color_dict = {**neutrino_color_dict, **signal_color_dict, **main_color_dict}
-        # for key, value in color_dict.items():
-        #     if key != "background":
-        #         key = Particle.from_pdgid(key).name
-        #     fig.add_trace(
-        #         go.Scatter(
-        #             x=[None],
-        #             y=[None],
-        #             mode="markers",
-        #             marker=dict(color=value, symbol="circle"),
-        #             name=key,
-        #             legendgroup="Particle",
-        #             legendgrouptitle_text="Particle Color",
-        #         ),
-        #         row=1,
-        #         col=1,
-        #     )
         fig = add_particle_legend(
             fig,
             run,
@@ -829,12 +802,12 @@ def plot_pds_event(
             "red",
         )
 
-        fig = format_coustom_plotly(fig, figsize=(None, 600))
+        fig = format_coustom_plotly(fig, figsize=(None, 600), add_watermark=False)
         fig.update_layout(
             coloraxis=dict(colorscale=colorscale),
-            title_text="SignalParticleE: <b>%.2fMeV</b> Event: %i FlashID: %i Purity: %.2f"
+            title_text="SignalParticleE: <b>%.2f MeV</b> Event: %i FlashID: %i Purity: %.2f"
             % (
-                run["Reco"]["SignalParticleE"][idx],
+                run[tracked]["SignalParticleE"][idx],
                 idx,
                 flashid,
                 np.sum(np.multiply(ophit_color, ophit_size)) / np.sum(ophit_size),
@@ -844,7 +817,7 @@ def plot_pds_event(
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
         fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
         fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
-        fig = add_geometry_planes(fig, info["GEOMETRY"], row=1, col=3)
+        fig = add_geometry_planes(fig, info["GEOMETRY"], unzoom=2, row=1, col=3)
         fig.update_traces(hovertemplate="X: %{x:.2f} <br>Y: %{y:.2f}")
 
-    return fig
+    return fig, idx

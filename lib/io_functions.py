@@ -15,6 +15,7 @@ import plotly.graph_objs as go
 
 from typing import Optional
 from rich import print as rprint
+from rich.progress import track
 from matplotlib import pyplot as plt
 from src.utils import get_project_root
 
@@ -111,7 +112,6 @@ def prepare_file_save(
     except FileExistsError:
         if debug:
             pass
-            # output += f"[cyan][INFO] Data already exists![/cyan]\n"
 
     # Check if file already exists
     if os.path.isfile(f"{save_path}/{filename}"):
@@ -175,6 +175,8 @@ def save_df(
     name: Optional[str] = None,
     subfolder: Optional[str] = None,
     filename: str = "newdf",
+    decimals: Optional[int] = None,
+    index: bool = False,
     rm: bool = False,
     filetype: str = "pkl",
     debug: bool = False,
@@ -202,15 +204,27 @@ def save_df(
         if debug:
             print("File already exists. Skipping...")
         return
-    # Check type of figure to select the correct saving method
-    if type(df) == pd.DataFrame:
-        df.to_pickle(f"{filepath}")
-        if debug:
-            rprint(f"Saved dataframe in: {filepath}")
 
+    if isinstance(df, pd.DataFrame):
+        pass
     else:
         rprint("The input df is not a known type: ", type(df))
-        # fig.savefig(path + ".{output}")
+
+    if decimals is not None:
+        df = df.round(decimals)
+    else:
+        decimals = 2
+    # Check type of figure to select the correct saving method
+    if filetype == "pkl":
+        df.to_pickle(f"{filepath}")
+    elif filetype == "csv":
+        df.to_csv(f"{filepath}", index=index)
+    elif filetype == "tex":
+        df.to_latex(f"{filepath}", index=index, float_format=f"%.{decimals}f")
+    elif filetype == "txt":
+        df.to_csv(f"{filepath}", index=index, sep="\t", float_format=f"%.{decimals}f")
+    if debug:
+        rprint(f"Saved dataframe in: {filepath}")
 
 
 def save_figure(
@@ -337,7 +351,7 @@ def root2npy(root_info, user_input, trim: bool = False, debug=False):
         rprint(
             f"[red]ERROR: File {root_info['Path'] + root_info['Name'] + '.root'} not found![/red]"
         )
-        return
+        return 1
     with uproot.open(root_info["Path"] + root_info["Name"] + ".root") as f:
         for tree in root_info["TreeNames"]:
             if root_info["TreeNames"][tree].lower() == "test":
@@ -351,7 +365,7 @@ def root2npy(root_info, user_input, trim: bool = False, debug=False):
                 rprint("----------------------")
                 rprint("Dumping file:" + str(path + name))
 
-            for branch in root_info[tree]:
+            for branch in track(root_info[tree], description=f"Processing {tree}..."):
                 if branch not in done_root_info:
                     # To avoid repeating branches
                     done_root_info.append(branch)
@@ -416,16 +430,13 @@ def resize_subarrays(array, value, trim=False, debug=False):
         elif isinstance(array[0], str):
             np.array(array, dtype=np.str_)
         elif isinstance(array[0], list):
-            # Check that array is not empty
             if len(array[0]) > 0:
                 array_type = type(array[0][0])
                 check_expand = True
             else:
-                array_type = list
+                array_type = type(array[0])
                 np.array(array, dtype=object)
-        # elif isinstance(array[0][0], str):
-        #     array_type = type(array[0][0])
-        #     np.array(array, dtype=np.str_)
+                check_expand = True
 
         if debug:
             rprint(
@@ -462,10 +473,25 @@ def resize_subarrays(array, value, trim=False, debug=False):
         else:
             tot_array = array
     else:
-        tot_array = np.asarray(array)
+        if isinstance(array[0], int):
+            try:
+                tot_array = np.asarray(array, dtype=np.int32)
+            except OverflowError:
+                tot_array = np.asarray(array, dtype=np.int64)
+        elif isinstance(array[0], float):
+            try:
+                tot_array = np.asarray(array, dtype=np.float32)
+            except OverflowError:
+                tot_array = np.asarray(array, dtype=np.float64)
+        elif isinstance(array[0], bool):
+            tot_array = np.asarray(array, dtype=np.bool_)
+        else:
+            tot_array = np.asarray(array)
 
     if debug:
-        rprint(f"[green]-> Returning array as type: {type(tot_array)}[/green]")
+        rprint(
+            f"[green]-> Returning array as type[/green]: {type(tot_array)} with shape {np.shape(tot_array)}"
+        )
     return np.asarray(tot_array)
 
 
@@ -512,7 +538,18 @@ def resize_subarrays_fixed(array, value, max_len: int, debug: bool = False):
         if debug:
             rprint(f"[yellow]-> Array is not a list of lists[/yellow]")
 
-    return_array = np.asarray(tot_array)
+    if isinstance(tot_array[0][0], int):
+        try:
+            return_array = np.asarray(tot_array, dtype=np.int32)
+        except OverflowError:
+            return_array = np.asarray(tot_array, dtype=np.int64)
+    elif isinstance(tot_array[0][0], float):
+        try:
+            return_array = np.asarray(tot_array, dtype=np.float32)
+        except OverflowError:
+            return_array = np.asarray(tot_array, dtype=np.float64)
+    else:
+        return_array = np.asarray(tot_array)
     return return_array
 
 
@@ -835,9 +872,12 @@ def load_multi(
         run (dict): dictionary with the loaded data
     """
     output = ""
-    files_notfound = dict()
     run = dict()
-    ref_branch = {"Config": "Geometry", "Truth": "Event", "Reco": "Event"}
+    branches_dict = dict()
+    files_notfound = dict()
+    ref_branch = {"Config": "GEANT4Label", "Truth": "Event", "Reco": "Event"}
+    if name_prefix == "MCParticle_":
+        ref_branch = {"Config": "MCParticlePDG", "Truth": "Event", "Reco": "Event"}
     for idx, config in enumerate(configs):
         info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
 
@@ -859,11 +899,11 @@ def load_multi(
                     name, path=filepath, debug=debug
                 )  # Get ALL the branches
                 if debug:
-                    output += f"[cyan][INFO][/cyan]: Loaded all branches for {config}: {name}!\n"
+                    output += f"[cyan][INFO][/cyan] Loaded all branches for {config}: {name}!\n"
 
             elif preset is not None:
                 if debug:
-                    output += f"[cyan][INFO][/cyan]: Loaded preset branches {config}: {name}!\n"
+                    output += f"[cyan][INFO][/cyan] Loaded preset branches {config}: {name}!\n"
 
                 branches_dict = get_workflow_branches(
                     trees=tree_labels, workflow=preset, debug=debug
@@ -872,7 +912,7 @@ def load_multi(
             else:
                 branches_dict = branches  # Get CUSTOMIZED branches from the input
                 if debug:
-                    rprint(f"[cyan][INFO] Loaded custom branches![/cyan]\n")
+                    rprint(f"[cyan][INFO][/cyan] Loaded custom branches!\n")
 
             for tree in branches_dict.keys():
                 # print(f"Loading branches for {tree} tree...")
@@ -1232,9 +1272,9 @@ def get_simple_names(names: list[str], debug: bool = False) -> dict:
         elif "CPA" in name:
             simple_names[name] = "CPA"
         elif "Cathode" in name:
-            simple_names[name] = "CPA"
+            simple_names[name] = "Cathode"
         elif "CRP" in name:
-            simple_names[name] = "APA"
+            simple_names[name] = "CRP"
         elif "APA" in name:
             simple_names[name] = "APA"
         elif "PDS" in name:

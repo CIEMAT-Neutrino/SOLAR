@@ -162,9 +162,6 @@ def find_subplots(fig, debug: bool = False):
         try:
             rows, cols = fig._get_subplot_rows_columns()
             rows, cols = rows[-1], cols[-1]
-            # if debug:
-            #     rprint("[cyan][INFO] Detected number of subplots: " +
-            #         str(rows * cols) + "[/cyan]")
 
         except Exception:
             if debug:
@@ -222,7 +219,11 @@ def format_coustom_plotly(
         fig.update_layout(title=title)
 
     default_legend = dict(
-        groupclick="toggleitem", font=dict(size=fontsize - 3), bgcolor="rgba(0,0,0,0)"
+        groupclick="toggleitem",
+        font=dict(size=fontsize - 3),
+        bgcolor="rgba(0,0,0,0)",
+        # Change the fontsize of the legendtitle
+        title_font=dict(size=fontsize),
     )
     if legend == None:
         legend = default_legend
@@ -239,6 +240,8 @@ def format_coustom_plotly(
     if figsize == None:
         rows, cols = find_subplots(fig, debug=debug)
         figsize = (800 + 400 * (cols - 1), 600 + 200 * (rows - 1))
+        # if debug:
+        #     rprint(f"Figure size set to {figsize[0]}x{figsize[1]}")
 
     default_margin = {"color": "white", "margin": (0, 0, 0, 0)}
     if margin != None:
