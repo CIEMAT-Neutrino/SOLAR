@@ -38,6 +38,11 @@
         19,
         20
     ],
+    "ENERGY_RANGE": [
+        0,
+        30
+    ],
+    "ENERGY_BINS": 120,
     "TRUE_ENERGY_RANGE": [
         0,
         30
@@ -47,22 +52,22 @@
         0,
         30
     ],
-    "RECO_ENERGY_BINS": 120,
+    "RECO_ENERGY_BINS": 30,
     "BKG_RECO_ENERGY_RANGE": [
         0,
         18
     ],
     "BKG_RECO_ENERGY_BINS": 120,
     "REDUCED_RECO_ENERGY_RANGE": [
-        4,
-        22
+        6,
+        30
     ],
-    "REDUCED_RECO_ENERGY_BINS": 18,
+    "REDUCED_RECO_ENERGY_BINS": 6,
     "LOWE_RECO_ENERGY_RANGE": [
-        0,
-        5
+        5,
+        17
     ],
-    "LOWE_RECO_ENERGY_BINS": 5,
+    "LOWE_RECO_ENERGY_BINS": 6,
     "ML_FEATURES": [
         "NHits",
         "AdjClNum",

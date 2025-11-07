@@ -76,6 +76,10 @@
     "vd": {
         "vd_1x8x14_3view_30deg": {
             "Unknown": 0,
+            "Marley": 1
+        },
+        "vd_1x8x14_3view_30deg_nominal": {
+            "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 26,
             "Kr85LAr": 25,
@@ -108,6 +112,39 @@
             "GammasInCavern": 28
         },
         "vd_1x8x14_3view_30deg_optimistic": {
+            "Unknown": 0,
+            "Marley": 1,
+            "Ar39LAr": 26,
+            "Kr85LAr": 25,
+            "Ar42LAr": 17,
+            "K42From42ArLAr": 16,
+            "Rn222ChainRn222LAr": 19,
+            "Rn222ChainPo218LAr": 20,
+            "Rn222ChainPb214LAr": 21,
+            "Rn222ChainBi214LAr": 22,
+            "Rn222ChainPb210LAr": 23,
+            "Rn220ChainPb212LAr": 24,
+            "K40Cathode": 13,
+            "U238ChainCathode": 14,
+            "Th232ChainCathode": 15,
+            "K40CRP": 3,
+            "U238ChainCRP": 4,
+            "Th232ChainCRP": 5,
+            "Rn222ChainPDS": 2,
+            "K42From42ArCathode": 7,
+            "Rn222ChainFromPo218Cathode": 6,
+            "Rn222ChainFromPb214Cathode": 8,
+            "Rn222ChainFromBi214Cathode": 9,
+            "Rn222ChainFromPb210Cathode": 10,
+            "Rn222ChainFromBi210Cathode": 11,
+            "Rn220ChainFromPb212Cathode": 12,
+            "GammasInCavernwall": 30,
+            "GammasInFoam": 29,
+            "NeutronsInCavernwall": 18,
+            "GammasInCryosta": 27,
+            "GammasInCavern": 28
+        },
+        "vd_1x8x14_3view_30deg_shielded": {
             "Unknown": 0,
             "Marley": 1,
             "Ar39LAr": 26,

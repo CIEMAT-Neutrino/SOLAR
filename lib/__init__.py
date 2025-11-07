@@ -5,6 +5,7 @@ import mplhep
 import argparse
 import plotly.io as pio
 
+# Import savgol_filter
 from hist import Hist, Stack
 from itertools import product
 from src.utils import get_project_root
@@ -14,6 +15,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_curve, auc, accuracy_score
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 from rich.progress import track
 from rich import print as rprint
 
@@ -21,8 +23,13 @@ from rich import print as rprint
 from .reco_workflow import compute_reco_workflow
 from .reco_workflow import compute_true_efficiency
 from .workflow.lib_default import get_default_energies, get_default_nhits
-from .workflow.lib_filter import compute_filtered_run
+from .workflow.lib_filter import (
+    compute_filtered_run,
+    update_yaml_file,
+    update_json_file,
+)
 from .workflow.lib_efficiency import compute_particle_weights
+from .workflow.lib_cluster import compute_total_energy
 from .df_functions import *
 from .fit_functions import *
 from .geo_functions import *
@@ -47,12 +54,36 @@ plt.rcParams.update({"font.size": 15})
 # Load the default values
 root = get_project_root()
 
+
+def get_default_acc(length: int) -> float:
+    """
+    Get the default accuracy value for plotting or analysis.
+
+    Args:
+        length (int): Length of the data array.
+
+    Returns:
+        float: Default accuracy value.
+    """
+    acc = int(length / 100)
+    if acc > 100:
+        acc = 100
+
+    elif acc < 20:
+        acc = 20
+
+    return acc
+
+
 nhits = get_default_nhits(root)
 
 energy_edges, energy_centers, ebin = get_default_energies(root)
 
 true_energy_edges, true_energy_centers, true_ebin = get_default_energies(
     root, "TRUE_ENERGY"
+)
+reco_energy_edges, reco_energy_centers, reco_ebin = get_default_energies(
+    root, "RECO_ENERGY"
 )
 
 bkg_energy_edges, bkg_energy_centers, bkg_ebin = get_default_energies(
@@ -82,6 +113,6 @@ daynight_rebin = np.append(daynight_rebin, np.arange(8, 32, 1))
 daynight_rebin_centers = (daynight_rebin[1:] + daynight_rebin[:-1]) / 2
 
 pio.templates.default = "none"
-# pio.renderers.default = "svg"
+default = px.colors.qualitative.D3
 colors = px.colors.qualitative.Prism
 compare = px.colors.qualitative.Plotly
