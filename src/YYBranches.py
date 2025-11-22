@@ -1,4 +1,7 @@
 import sys
+import argparse
+import numpy as np
+import pandas as pd
 
 sys.path.insert(0, "../")
 
@@ -69,12 +72,18 @@ for tree in args.tree:
         else:
             value = branch_data
             rprint(f"\t{branch}: {type(branch_data).__name__}")
+
+        # BEGIN: scientific_notation
+        if isinstance(value, float) or isinstance(value, np.floating) and value < 1e-2:
+            value = f"{value:.2e}"
+        # END: scientific_notation
+
         df_list.append(
             pd.DataFrame.from_dict(
                 {
                     "Branch": branch,
                     "Value": value,
-                    "Type": type(branch_data).__name__,
+                    "Type": type(value).__name__,
                     "Shape": shape if isinstance(branch_data, np.ndarray) else None,
                     "Dtype": dtype if isinstance(branch_data, np.ndarray) else None,
                 },
