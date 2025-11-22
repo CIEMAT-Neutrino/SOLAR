@@ -339,7 +339,7 @@ def get_units(var: str, debug: bool = False):
         "P": " (MeV) ",
         "K": " (MeV) ",
         "PE": " (PE) ",
-        "Time": " (tick) ",
+        "Time": " (us) ",
         "Energy": " (MeV) ",
         "Charge": " (ADC x tick) ",
     }
