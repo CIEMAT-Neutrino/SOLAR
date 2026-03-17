@@ -2,43 +2,66 @@
         - "Config": null
         - "Truth":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
+
+"PRESELECTION":
+        - "Config": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "between": [0, 30]
+                - "SignalParticleX":
+                        - "absbetween": [0, 329]
+                - "SignalParticleY":
+                        - "absbetween": [0, 674]
+                - "SignalParticleZ":
+                        - "between": [1, 2099]
+        - "Reco":
+                - "SignalParticleK":
+                        - "between": [0, 30]
+                - "SignalParticleX":
+                        - "absbetween": [0, 329]
+                - "SignalParticleY":
+                        - "absbetween": [0, 674]
+                - "SignalParticleZ":
+                        - "between": [1, 2099]
+                - "TrueMain":
+                        - "equal": True
 
 "CORRECTION":
         - "Config": null
         - "Truth":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "NeutronK":
                         - "equal": 0
                 - "ProtonK":
@@ -50,22 +73,22 @@
         - "Config": null
         - "Truth":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "NeutronK":
                         - "equal": 0
                 - "ProtonK":
@@ -77,22 +100,22 @@
         - "Config": null
         - "Truth":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "NeutronK":
                         - "equal": 0
                 - "ProtonK":    
@@ -104,22 +127,22 @@
         - "Config": null
         - "Truth":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
-                        - "absbetween": [0, 30]
+                        - "between": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "TrueMain":
                         - "equal": True
 
@@ -129,20 +152,20 @@
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "TrueMain":
                         - "equal": True
 
@@ -152,19 +175,40 @@
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
         - "Reco":
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
                 - "SignalParticleX":
-                        - "absbetween": [0, 330]
+                        - "absbetween": [0, 329]
                 - "SignalParticleY":
-                        - "absbetween": [0, 675]
+                        - "absbetween": [0, 674]
                 - "SignalParticleZ":
-                        - "between": [0, 2100]
+                        - "between": [1, 2099]
                 - "TrueMain":
                         - "equal": True
+
+"SIGNIFICANCE":
+        - "Config": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "SignalParticleX":
+                        - "absbetween": [0, 329]
+                - "SignalParticleY":
+                        - "absbetween": [0, 674]
+                - "SignalParticleZ":
+                        - "between": [1, 2099]
+        - "Reco":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "SignalParticleX":
+                        - "absbetween": [0, 329]
+                - "SignalParticleY":
+                        - "absbetween": [0, 674]
+                - "SignalParticleZ":
+                        - "between": [1, 2099]

@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-
 def resolution(x, p0, p1, p2, b):
     """
     Resolution function.
@@ -58,14 +57,6 @@ run, output = load_multi(
     configs, preset=user_input["workflow"], debug=user_input["debug"]
 )
 
-filtered_run, mask, output = compute_filtered_run(
-    run,
-    configs,
-    presets=[user_input["workflow"]],
-    debug=user_input["debug"],
-)
-rprint(output)
-
 RMS_data = []
 for label, params in zip(
     ["True", "Reco", "None"],
@@ -82,7 +73,7 @@ for label, params in zip(
     ],
 ):
     this_run = compute_reco_workflow(
-        filtered_run,
+        run,
         configs,
         params=params,
         workflow=user_input["workflow"],
@@ -93,6 +84,8 @@ for label, params in zip(
         this_run,
         configs,
         params={("Reco", "TrueMain"): ("equal", True)},
+        presets=[user_input["workflow"]],
+        signal = "marley" in args.name,
         debug=user_input["debug"],
     )
     rprint(output)
@@ -298,6 +291,8 @@ for label, params in zip(
                     "RMS": RMS[fit_init:data_end],
                     "RMSError": RMS_error[fit_init:data_end],
                     "FitFunction": resolution,
+                    "FitFunctionLabel": f"Calorimetric Energy Resolution",
+                    "FitFunctionFormula": "sqrt(p2^2 + (p1/sqrt(x - b))^2 + (p0/(x - b))^2)",
                     "Params": fit_params,
                     "ParamsLabels": ["p0", "p1", "p2", "b"],
                     "ParamsFormat": [".1f", ".0e", ".2f", ".1f"],
@@ -337,12 +332,12 @@ for label, params in zip(
                     debug=user_input["debug"],
                 )
 
-    save_pkl(
-        RMS_data,
-        data_path,
-        config,
-        name,
-        filename=f"Electron_Energy_Resolution",
-        rm=user_input["rewrite"],
-        debug=user_input["debug"],
-    )
+save_pkl(
+    RMS_data,
+    data_path,
+    config,
+    name,
+    filename=f"Electron_Energy_Resolution",
+    rm=user_input["rewrite"],
+    debug=user_input["debug"],
+)

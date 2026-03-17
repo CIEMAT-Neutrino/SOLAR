@@ -1,9 +1,12 @@
-import sys, json
+import os
+import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 from lib import *
 
-from lib.osc_functions import get_oscillation_datafiles
+from lib.lib_osc import get_oscillation_datafiles
 
 save_path = f"{root}/images/solar/fit"
 
@@ -18,7 +21,7 @@ parser.add_argument(
     "--reference",
     type=str,
     help="The name of the reference analysis",
-    choices=["DayNight", "HEP"],
+    choices=["DayNight", "SENSITIVITY", "HEP"],
     default="HEP",
 )
 parser.add_argument(
@@ -34,8 +37,8 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the results folder",
-    default="Reduced",
-    choices=["Reduced", "Nominal"],
+    default="Nominal",
+    choices=["Reduced", "Truncated", "Nominal"],
 )
 parser.add_argument(
     "--exposure",
@@ -54,10 +57,7 @@ parser.add_argument(
         "SelectedEnergy",
         "SolarEnergy",
     ],
-    default="ClusterEnergy",
-)
-parser.add_argument(
-    "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
+    default="SolarEnergy",
 )
 parser.add_argument(
     "--nhits", type=int, help="The nhit cut for the analysis", default=None
@@ -66,7 +66,7 @@ parser.add_argument(
     "--ophits", type=int, help="The ophit cut for the analysis", default=None
 )
 parser.add_argument(
-    "--adjcl", type=int, help="The adjacent cluster cut for the analysis", default=None
+    "--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None
 )
 parser.add_argument("--test", action=argparse.BooleanOptionalAction)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -78,28 +78,36 @@ rprint(args)
 folder = args.folder
 configs = {args.config: [args.name]}
 
+for path in [save_path]:
+    if not os.path.exists(f"{path}/{args.folder.lower()}"):
+        os.makedirs(f"{path}/{args.folder.lower()}")
+
 run, output = load_multi(
     configs,
-    preset="ANALYSIS",
+    preset="SIGNIFICANCE",
     branches={"Config": ["Geometry"]},
     debug=args.debug,
 )
 rprint(output)
-run = compute_reco_workflow(run, configs, workflow="ANALYSIS", debug=args.debug)
-run, output, this_new_branches = compute_particle_weights(
+run = compute_reco_workflow(
     run,
     configs,
-    {"DEFAULT_SIGNAL_WEIGHT": ["truth"]},
-    rm_branches=True,
-    output=output,
-    debug=args.debug,
-)
+    params={
+        "DEFAULT_SIGNAL_WEIGHT": ["truth", "osc"],
+        "DEFAULT_SIGNAL_AZIMUTH": ["mean", "day", "night"],
+        "PARTICLE_TYPE": "signal",
+        "PARTICLE_WEIGHTING": "volume",
+    } if "marley" in args.name else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"},
+    workflow="SIGNIFICANCE",
+    rm_branches=False,
+    debug=args.debug)
 
-for args.config in configs:
+for config in configs:
     info = json.loads(
-        open(f"{root}/config/{args.config}/{args.config}_config.json").read()
+        open(f"{root}/config/{config}/{config}_config.json").read()
     )
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
+    fiducials = json.loads(open(f"{root}/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
 
     (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
         dm2=None,
@@ -115,14 +123,15 @@ for args.config in configs:
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
     detector_z = info["DETECTOR_SIZE_Z"] + 2 * info["DETECTOR_GAP_Z"]
 
-    fastest_sigma = pickle.load(
-        open(
-            f"{info['PATH']}/{args.reference.upper()}/{folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_highest_{args.reference}.pkl",
-            "rb",
+    if args.nhits is None or args.adjcls is None or args.ophits is None:
+        fastest_sigma = pickle.load(
+            open(
+                f"{info['PATH']}/{args.reference.upper()}/{args.folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_highest_{args.reference}.pkl",
+                "rb",
+            )
         )
-    )
 
-    for idx, key in enumerate(fastest_sigma):
+    for idx, key in enumerate(fastest_sigma if args.nhits is None or args.adjcls is None or args.ophits is None else [{(args.config, args.name, args.energy):None}]):
         fig = make_subplots(
             rows=1,
             cols=3,
@@ -139,11 +148,6 @@ for args.config in configs:
             energy = args.energy
         else:
             energy = key[2]
-        if args.fiducial is not None:
-            fiducial = args.fiducial
-        else:
-            rprint(f"Using optimized fiducial cut {fastest_sigma[key]['Fiducialized']}")
-            fiducial = int(fastest_sigma[key]["Fiducialized"])
 
         if args.nhits is not None:
             nhits = args.nhits
@@ -151,8 +155,8 @@ for args.config in configs:
             rprint(f"Using optimized nhits {fastest_sigma[key]['NHits']}")
             nhits = int(fastest_sigma[key]["NHits"])
 
-        if args.adjcl is not None:
-            adjcl = args.adjcl
+        if args.adjcls is not None:
+            adjcl = args.adjcls
         else:
             rprint(f"Using optimized adjcl {fastest_sigma[key]['AdjCl']}")
             adjcl = int(fastest_sigma[key]["AdjCl"])
@@ -164,33 +168,37 @@ for args.config in configs:
             ophits = int(fastest_sigma[key]["OpHits"])
 
         this_filter = np.where(
-            (run["Reco"]["NHits"] > nhits - 1)
+            (run["Reco"]["SignalParticleSurface"] >= 0 if args.name.split("_")[0] in ["gamma", "neutron"] else 1)
+            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.name.split("_")[0] in ["gamma", "neutron"]) else 1)
+            & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
+            & (run["Reco"]["MatchedOpFlashPE"] > 0)
             & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
             & (
-                (
-                    (run["Reco"]["RecoX"] > -detector_x / 2)
-                    & (run["Reco"]["RecoX"] < -0.1 * fiducial)
-                )
-                + (
-                    (run["Reco"]["RecoX"] > 0.1 * fiducial)
-                    & (run["Reco"]["RecoX"] < detector_x / 2)
-                )
+                np.absolute(run["Reco"]["RecoX"])
+                > fiducials[config][energy]["FiducialX"]
+                if config == "hd_1x2x6_lateralAPA"
+                else np.absolute(run["Reco"]["RecoX"])
+                < detector_x / 2
+                - fiducials[config][energy]["FiducialX"] 
+                if config == "hd_1x2x6_centralAPA"
+                else run["Reco"]["RecoX"]
+                < detector_x / 2
+                - fiducials[config][energy]["FiducialX"]
             )
             & (
-                (
-                    (run["Reco"]["RecoY"] > -detector_y / 2)
-                    & (run["Reco"]["RecoY"] < -fiducial)
-                )
-                + (
-                    (run["Reco"]["RecoY"] > fiducial)
-                    & (run["Reco"]["RecoY"] < detector_y / 2)
-                )
+                np.absolute(run["Reco"]["RecoY"])
+                < detector_y / 2 - fiducials[config][energy]["FiducialY"]
             )
-            & (run["Reco"]["RecoZ"] > fiducial - info["DETECTOR_GAP_Z"])
             & (
-                run["Reco"]["RecoZ"]
-                < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial
+                (run["Reco"]["RecoZ"]
+                > fiducials[config][energy]["FiducialZ"] - info["DETECTOR_GAP_Z"]) if args.folder == "Nominal" else 1
+            )
+            & (
+                (run["Reco"]["RecoZ"]
+                < info["DETECTOR_SIZE_Z"]
+                + info["DETECTOR_GAP_Z"]
+                - fiducials[config][energy]["FiducialZ"]) if args.folder == "Nominal" else 1
             )
         )
 
@@ -198,7 +206,7 @@ for args.config in configs:
             f"Selected #Events: {len(this_filter[0])} ({len(this_filter[0])/len(run['Reco']['Event'])*100:.2f}%)"
         )
 
-        title = f"{energy} Signal (Fiducial {fiducial} cm / min #NHits {nhits} / max #AdjClusters {adjcl} / min #OpHits {ophits})"
+        title = f"{energy} Signal (min #NHits {nhits} / max #AdjClusters {adjcl} / min #OpHits {ophits})"
         h, xedges, yedges = np.histogram2d(
             run["Reco"][f"{energy}"][this_filter],
             run["Reco"]["SignalParticleK"][this_filter],
@@ -216,12 +224,15 @@ for args.config in configs:
             row=1,
             col=1,
         )
-        h, xedges, yedges = np.histogram2d(
-            run["Reco"][f"{energy}"][this_filter],
-            run["Reco"]["SignalParticleK"][this_filter],
-            bins=(energy_edges, energy_edges),
-            weights=run["Reco"]["SignalParticleWeight"][this_filter],
-        )
+        for weight in ["B8", "hep", ""]:
+            h, xedges, yedges = np.histogram2d(
+                run["Reco"][f"{energy}"][this_filter],
+                run["Reco"]["SignalParticleK"][this_filter],
+                bins=(energy_edges, energy_edges),
+                weights=run["Reco"][f"SignalParticleWeight{weight.lower()}"][this_filter],
+            )
+            print(f"# of weighted events (counts) {(weight if weight != '' else 'solar')}: {np.sum(h):.2f}")
+
         h[args.exposure * h < 1] = np.nan
         fig.add_trace(
             go.Heatmap(
@@ -263,7 +274,7 @@ for args.config in configs:
                 config=args.config,
                 name=f"marley",
                 subfolder=f"{folder.lower()}/{energy}",
-                filename=f"Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
+                filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
                 rm=args.rewrite,
                 debug=args.test == False,
             )
@@ -311,11 +322,11 @@ for args.config in configs:
 
         save_figure(
             fig,
-            save_path,
+            f"{save_path}/{args.folder.lower()}",
             config=args.config,
             name=None,
             subfolder=None,
-            filename=f"Selected_Signal_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            filename=f"Selected_Signal_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
         )

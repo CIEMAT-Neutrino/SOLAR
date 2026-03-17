@@ -7,6 +7,17 @@
                 - "SignalParticleK":
                         - "absbetween": [0, 30]
 
+"PRESELECTION":
+        - "Config": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+        - "Reco":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+                - "TrueMain":
+                        - "equal": True
+
 "CORRECTION":
         - "Config": null
         - "Truth":
@@ -84,3 +95,12 @@
                         - "absbetween": [0, 30]
                 - "TrueMain":
                         - "equal": True
+
+"SIGNIFICANCE":
+        - "Config": null
+        - "Truth":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]
+        - "Reco":
+                - "SignalParticleK":
+                        - "absbetween": [0, 30]

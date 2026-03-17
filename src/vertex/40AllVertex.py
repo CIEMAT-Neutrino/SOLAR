@@ -48,8 +48,8 @@ for config, name in product(args.config, args.name):
     )
     os.system(f"python3 {root}/src/vertex/42Vertex.py --config {config} --name {name}")
     os.system(
-        f"python3 {root}/src/vertex/43FiducialEfficiency.py --config {config} --name {name}"
+        f"python3 {root}/src/vertex/43Fiducial.py --config {config} --name {name}"
     )
     os.system(
-        f"python3 {root}/src/vertex/44ReconstructionEfficiency.py --config {config} --name {name}"
+        f"python3 {root}/src/vertex/44Reconstruction.py --config {config} --name {name}"
     )

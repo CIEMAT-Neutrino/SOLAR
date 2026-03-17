@@ -1,10 +1,13 @@
-import sys, json
+import os
+import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 from lib import *
 
-from lib.root_functions import Sensitivity_Fitter
-from lib.osc_functions import get_oscillation_datafiles
+from lib.lib_root import Sensitivity_Fitter
+from lib.lib_osc import get_oscillation_datafiles
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
@@ -14,8 +17,8 @@ parser.add_argument(
     "--reference",
     type=str,
     help="The name of the reference analysis",
-    choices=["DayNight", "HEP"],
-    default=None,
+    choices=["DayNight", "SENSITIVITY", "HEP"],
+    default="HEP",
 )
 parser.add_argument(
     "--config",
@@ -30,8 +33,8 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the results folder",
-    default="Reduced",
-    choices=["Reduced", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal"],
+    default="Nominal",
 )
 parser.add_argument(
     "--exposure",
@@ -50,10 +53,7 @@ parser.add_argument(
         "SelectedEnergy",
         "SolarEnergy",
     ],
-    default="ClusterEnergy",
-)
-parser.add_argument(
-    "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
+    default="SolarEnergy",
 )
 parser.add_argument(
     "--nhits", type=int, help="The nhit cut for the analysis", default=None
@@ -62,7 +62,7 @@ parser.add_argument(
     "--ophits", type=int, help="The ophit cut for the analysis", default=None
 )
 parser.add_argument(
-    "--adjcl", type=int, help="The adjacent cluster cut for the analysis", default=None
+    "--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -72,7 +72,6 @@ rprint(args)
 
 config = args.config
 name = args.name
-folder = args.folder
 
 rewrite = args.rewrite
 debug = args.debug
@@ -81,21 +80,21 @@ configs = {config: [name]}
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
+    fiducials = json.loads(open(f"{root}/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
 
     for name in configs[config]:
         df_list = []
-        signal_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/nominal/SENSITIVITY/{config}/{name}/{config}_{name}_rebin.pkl"
-        )
-        df_list.append(signal_df)
+        # signal_df = pd.read_pickle(
+        #     f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/{args.reference}/{config}/{name}/{config}_{name}_rebin.pkl"
+        # )
+        # df_list.append(signal_df)
         for bkg, bkg_label in [
-            ("alpha", "alpha"),
             ("neutron", "neutron"),
             ("gamma", "gamma"),
         ]:
             bkg_df = pd.read_pickle(
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/SENSITIVITY/{config}/{bkg}/{config}_{bkg}_rebin.pkl"
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{args.folder.lower()}/SENSITIVITY/{config}/{bkg}/{config}_{bkg}_rebin.pkl"
             )
             df_list.append(bkg_df)
 
@@ -120,14 +119,15 @@ for config in configs:
             f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
         )
 
-    fastest_sigma = pickle.load(
-        open(
-            f"{info['PATH']}/{args.reference.upper()}/{folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_highest_{args.reference}.pkl",
-            "rb",
+    if args.nhits is None or args.adjcls is None or args.ophits is None:
+        fastest_sigma = pickle.load(
+            open(
+                f"{info['PATH']}/{args.reference.upper()}/{args.folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_highest_{args.reference}.pkl",
+                "rb",
+            )
         )
-    )
 
-    for idx, key in enumerate(fastest_sigma):
+    for idx, key in enumerate(fastest_sigma if args.nhits is None or args.adjcls is None or args.ophits is None else [{(args.config, args.name, args.energy):None}]):
         if args.energy is not None:
             energy = args.energy
         else:
@@ -136,20 +136,14 @@ for config in configs:
         total = np.zeros(len(sensitivity_rebin) - 1)
         total_error = np.zeros(len(sensitivity_rebin) - 1)
 
-        if args.fiducial is not None:
-            fiducial = args.fiducial
-        else:
-            rprint(f"Using optimized fiducial cut {fastest_sigma[key]['Fiducialized']}")
-            fiducial = int(fastest_sigma[key]["Fiducialized"])
-
         if args.nhits is not None:
             nhits = args.nhits
         else:
             rprint(f"Using optimized nhits {fastest_sigma[key]['NHits']}")
             nhits = int(fastest_sigma[key]["NHits"])
 
-        if args.adjcl is not None:
-            adjcl = args.adjcl
+        if args.adjcls is not None:
+            adjcl = args.adjcls
         else:
             rprint(f"Using optimized adjcl {fastest_sigma[key]['AdjCl']}")
             adjcl = int(fastest_sigma[key]["AdjCl"])
@@ -168,26 +162,27 @@ for config in configs:
             subplot_titles=(
                 [
                     "Background Components",
-                    f"Fiducial {fiducial:.0f} (cm), min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}",
+                    f"min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}",
                 ]
             ),
         )
 
-        for bkg in ["alpha", "gamma", "neutron"]:
+        for bkg in ["gamma", "neutron"]:
             # print(plot_df)
             this_df = plot_df[
                 (plot_df["Component"] == bkg)
-                * (plot_df["EnergyLabel"] == energy)
+                * (plot_df["EnergyLabel"] == energy.split("Energy")[0])
                 * (plot_df["NHits"] == nhits)
                 * (plot_df["OpHits"] == ophits)
                 * (plot_df["AdjCl"] == adjcl)
-                * (plot_df["Fiducialized"] == fiducial)
             ]
-
+            
+            print(this_df.explode("Counts").groupby(["Component", "Oscillation", "Mean"])["Counts"].sum())
+            
             # Check if this_df is empty and find the variable that is causing it
             if this_df.empty:
                 rprint(
-                    f"Empty dataframe for {bkg} with fiducial {fiducial}, nhits {nhits}, ophits {ophits}, adjcl {adjcl}"
+                    f"Empty dataframe for {bkg} with nhits {nhits}, ophits {ophits}, adjcl {adjcl}"
                 )
                 for column, var in zip(
                     [
@@ -195,9 +190,8 @@ for config in configs:
                         "NHits",
                         "OpHits",
                         "AdjCl",
-                        "Fiducialized",
                     ],
-                    [energy, nhits, ophits, adjcl, fiducial],
+                    [energy.split("Energy")[0], nhits, ophits, adjcl],
                 ):
                     if this_df[column].values[0] != var:
                         rprint(f"{column} is not {var}")
@@ -220,12 +214,14 @@ for config in configs:
                 row=1,
                 col=1,
             )
-            total = total + y
+            # print(total)
+            # print(y)
+            total = total + np.array(y)
             total_error = total_error + y_error**2
 
         # Total is an array of size len(rebin)-1. Create a new 2d hist of size len(rebin)-1 x len(oscillation_df) by stacking total
         bkg_hist = np.tile(total / len(oscillation_df), (len(oscillation_df), 1))
-
+        # print(bkg_hist)
         nadir = get_nadir_angle()
         interp_nadir = interp1d(*nadir)
         rebin_nadir = interp_nadir(oscillation_df.index)
@@ -241,8 +237,8 @@ for config in configs:
             f"{info['PATH']}/SENSITIVITY",
             config=config,
             name=f"background",
-            subfolder=f"{folder.lower()}/{energy}",
-            filename=f"Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            subfolder=f"{args.folder.lower()}/{energy}",
+            filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
         )
@@ -298,11 +294,11 @@ for config in configs:
 
         save_figure(
             fig,
-            f"{root}/images/solar/fit/{folder.lower()}",
+            f"{root}/images/solar/fit/{args.folder.lower()}",
             config=None,
             name=None,
             subfolder=None,
-            filename=f"{folder}_Background_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            filename=f"{args.folder}_Background_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.debug,
         )

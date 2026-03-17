@@ -9,11 +9,6 @@ from lib import *
 save_path = f"{root}/images/vertex/smearing"
 data_path = f"{root}/data/vertex/smearing"
 
-
-def gaussian(x, a, b, c):
-    return a * np.exp(-0.5 * ((x - b) / c) ** 2)
-
-
 for path in [save_path, data_path]:
     if not os.path.exists(path):
         os.makedirs(path)
@@ -65,6 +60,7 @@ run, mask, output = compute_filtered_run(
         ("Reco", "SignalParticleK"): ("smaller", 30),
         ("Reco", "TrueMain"): ("equal", True),
     },
+    signal="marley" in args.name,
     debug=user_input["debug"],
 )
 rprint(output)
@@ -134,23 +130,32 @@ for config in configs:
             #################### Cumulative Distribution Function #######################
             #############################################################################
 
-            for energy in red_energy_centers:
-                hx, edges = np.histogram(
-                    this_reco_df[
-                        (this_reco_df["SignalParticleK"] > (energy - 1))
-                        & (this_reco_df["SignalParticleK"] < energy + 1)
-                    ][error],
-                    bins=np.linspace(0, 100, 1000),
-                )
+            for energy in np.concatenate([np.array([None]), red_energy_centers]):
+                if energy is None:
+                    hx, edges = np.histogram(
+                        this_reco_df[error],
+                        bins=np.linspace(0, 100, 1000),
+                    )
+                    STD = np.std(this_reco_df[error])
+
+                else:
+                    hx, edges = np.histogram(
+                        this_reco_df[
+                            (this_reco_df["SignalParticleK"] > (energy - 1))
+                            & (this_reco_df["SignalParticleK"] < energy + 1)
+                        ][error],
+                        bins=np.linspace(0, 100, 1000),
+                    )
+
+                    STD = np.std(
+                        this_reco_df[
+                            (this_reco_df["SignalParticleK"] > (energy - 1))
+                            & (this_reco_df["SignalParticleK"] < energy + 1)
+                        ][error]
+                    )
+
                 hx = hx / np.sum(hx)
                 cdfx = np.cumsum(hx)
-
-                STD = np.std(
-                    this_reco_df[
-                        (this_reco_df["SignalParticleK"] > (energy - 1))
-                        & (this_reco_df["SignalParticleK"] < energy + 1)
-                    ][error]
-                )
 
                 cumsum_list.append(
                     {

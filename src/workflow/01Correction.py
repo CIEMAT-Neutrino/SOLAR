@@ -1,10 +1,48 @@
 import os
 import sys
+import json
+import argparse
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import plotly.io as pio
+
+from itertools import product
+from scipy.optimize import curve_fit
+from plotly.subplots import make_subplots
+from rich import print as rprint
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-from lib import *
+from lib import (
+    root,
+    load_multi,
+    compute_reco_workflow,
+    compute_filtered_run,
+    get_param_dict,
+    get_default_acc,
+    get_hist2d,
+    get_hist2d_fit,
+    get_variable_scan,
+    format_coustom_plotly,
+    save_figure,
+    save_df,
+    get_project_root,
+    get_default_nhits,
+    get_default_energies,
+)
+
+root = get_project_root()
+nhits = get_default_nhits(root)
+reco_energy_edges, reco_energy_centers, reco_ebin = get_default_energies(
+    root, "RECO_ENERGY"
+)
+
+pio.templates.default = "none"
+colors = px.colors.qualitative.Prism
 
 save_path = f"{root}/images/workflow/correction"
 data_path = f"{root}/data/workflow/correction"
@@ -98,81 +136,121 @@ for config in configs:
         acc = get_default_acc(len(data["Generator"]))
 
         # Make a plot that shows the correlation between the neutrino energy and the number of hits in the primary cluster
-        fig = make_subplots(rows=1, cols=1)
-        max_bin = 0
-        df_scan = []
-        df_lifetime = []
-        for nhit in nhits[:9]:
-            this_filter_idx = np.where((data["NHits"] == nhit))[0]
-            if len(this_filter_idx) < 1000:
-                continue
+        df_hits, df_scan = [], []
+        for variable in ["SignalParticleK", "ElectronK"]:
+            fig = make_subplots(rows=1, cols=1)
+            max_bin = 0
+            df_fit = []
+            df_lifetime = []
 
-            hist, bins = np.histogram(
-                data[f"SignalParticleK"][this_filter_idx],
-                bins=reco_energy_edges[3:],
-            )
-            density = np.sum(hist) * np.diff(bins)
-            if np.max(hist / density) > max_bin:
-                max_bin = np.max(hist / density)
-
-            df_scan.append(
+            df_hits.append(
                 {
                     "Config": config,
                     "Name": name,
-                    "#Hits": nhit,
-                    "Values": 0.5 * (bins[1:] + bins[:-1]),
-                    "Density": hist / density,
-                    "Counts": hist,
-                    "Variable": "SignalParticleK",
+                    "#Hits": data["NHits"].astype(int),
+                    "Purity": data["Purity"],
+                    "Energy": data[variable],
+                    "Variable": variable,
                 }
             )
 
-            fig.add_trace(
-                go.Scatter(
-                    x=0.5 * (bins[1:] + bins[:-1]),
-                    y=hist / density,
-                    mode="lines",
-                    line_shape="hvh",
-                    name=f"{nhit}",
-                    line=dict(color=colors[nhit % len(colors)]),
+            for nhit in nhits[:9]:
+                this_filter_idx = np.where((data["NHits"] == nhit))[0]
+                if len(this_filter_idx) < 100:
+                    continue
+
+                hist, bins = np.histogram(
+                    data[variable][this_filter_idx],
+                    bins=(
+                        reco_energy_edges[3:]
+                        if variable == "SignalParticleK"
+                        else reco_energy_edges
+                    ),
+                )
+                density = np.sum(hist) * np.diff(bins)
+                if np.max(hist / density) > max_bin:
+                    max_bin = np.max(hist / density)
+
+                df_scan.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "#Hits": nhit,
+                        "Values": 0.5 * (bins[1:] + bins[:-1]),
+                        "Density": hist / density,
+                        "Counts": hist,
+                        "Variable": variable,
+                    }
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=0.5 * (bins[1:] + bins[:-1]),
+                        y=hist / density,
+                        mode="lines",
+                        line_shape="hvh",
+                        name=f"{nhit}",
+                        line=dict(color=colors[nhit % len(colors)]),
+                    ),
+                    row=1,
+                    col=1,
+                )
+
+            fig.update_layout(
+                xaxis_title=(
+                    "True Neutrino Energy (MeV)"
+                    if variable == "SignalParticleK"
+                    else "True Electron Energy (MeV)"
                 ),
-                row=1,
-                col=1,
+                yaxis_title="Density",
             )
-        fig.update_layout(
-            xaxis_title="True Neutrino Energy (MeV)",
-            yaxis_title="Density",
-        )
 
-        format_coustom_plotly(
-            fig,
-            title=f"True Neutrino Energy - {config}",
-            legend=dict(x=0.86, y=0.99),
-            legend_title="#Hits",
-            ranges=(
-                [4, reco_energy_centers[-1]],
-                [0, max_bin * 1.1],
-            ),
-            tickformat=(".0f", None),
-            debug=user_input["debug"],
-        )
-        save_figure(
-            fig,
-            save_path,
-            config,
-            name,
-            filename="SignalParticleKineticEnergy_vs_NHits",
-            rm=user_input["rewrite"],
-            debug=user_input["debug"],
-        )
+            format_coustom_plotly(
+                fig,
+                title=(
+                    f"True Neutrino Energy - {config}"
+                    if variable == "SignalParticleK"
+                    else f"True Electron Energy (MeV) - {config}"
+                ),
+                legend=dict(x=0.86, y=0.99),
+                legend_title="#Hits",
+                ranges=(
+                    (
+                        [4, reco_energy_centers[-1]]
+                        if variable == "SignalParticleK"
+                        else [0, reco_energy_centers[-1]]
+                    ),
+                    [0, max_bin * 1.1],
+                ),
+                tickformat=(".0f", None),
+                debug=user_input["debug"],
+            )
+            save_figure(
+                fig,
+                save_path,
+                config,
+                name,
+                filename=f"{variable}_vs_NHits",
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )
 
-        df = pd.DataFrame(df_scan)
         save_df(
-            df,
+            pd.DataFrame(df_scan),
             data_path,
             config,
             name,
             filename="NHit_Distributions",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
+        save_df(
+            pd.DataFrame(df_hits),
+            data_path,
+            config,
+            name,
+            filename="Cluster_Distributions",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
@@ -203,6 +281,7 @@ for config in configs:
             log=(False, False),
             debug=user_input["debug"],
         )
+
         fig.update_layout(
             coloraxis=dict(colorbar=dict(title="Counts")),
             showlegend=False,
@@ -370,6 +449,30 @@ for config in configs:
         )
         perr[f"{charge}Charge"] = np.sqrt(np.diag(pcov[f"{charge}Charge"]))
 
+        df_fit.append(
+            {
+                "Geometry": info["GEOMETRY"],
+                "Config": config,
+                "Name": name,
+                "Clustering": charge,
+                "Values": x,
+                "Factor": y,
+                "FactorError": y_error,
+                "FitFunction": correction_func,
+                "FitFunctionLabel": f"Exponential + Sigmoid",
+                "FitFunctionFormula": f"a * exp(-b * x) + c / (1 + exp(-d * x))",
+                "Params": popt[f"{charge}Charge"],
+                "ParamsLabels": [
+                    "Amplitude",
+                    "Decay",
+                    "Constant",
+                    "Sigmoid",
+                ],
+                "ParamsFormat": [".0f", ".1f", ".0f", ".1f"],
+                "ParamsError": perr[f"{charge}Charge"],
+            }
+        )
+
         fig = make_subplots(rows=1, cols=1)
         fig.add_trace(
             go.Scatter(
@@ -479,6 +582,16 @@ for config in configs:
             config,
             name,
             filename=f"{charge}Charge_Lifetime_Correction",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
+        save_df(
+            pd.DataFrame(df_fit),
+            data_path,
+            config,
+            name,
+            filename=f"{charge}Charge_Correction_Factor",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )

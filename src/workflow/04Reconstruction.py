@@ -80,6 +80,7 @@ for config in configs:
             rows=2, cols=3, subplot_titles=("Electron", "Gamma", "Electron+Gamma")
         )
         neutrino_list = []
+        gamma_list = []
         fit["threshold"] = 0.7
         fit["bounds"] = ([-10], [0])
         fit["spec_type"] = "intercept"
@@ -298,71 +299,53 @@ for config in configs:
 
         fig = make_subplots(1, 1)
         # Make a 1D histogram of the reconstructed energy for gammas for the case were GammaE == 4.38 +- 0.1 MeV and compare against the rest
-        this_filter = (
-            (data["GammaK"] > 4.28)
-            * (data["GammaK"] < 4.48)
-            * (data["SelectedAdjClEnergy"] > 0)
-        )
-        hist, bins = np.histogram(
-            data["SelectedAdjClEnergy"][this_filter],
-            bins=np.arange(0, 10, 0.1),
-            range=(0, 10),
-            density=True,
-        )
-        bins = 0.5 * (bins[1:] + bins[:-1])
-        fig.add_trace(
-            go.Scatter(
-                x=bins,
-                y=hist,
-                mode="lines",
-                line_shape="hvh",
-                line=dict(color=compare[0]),
-                name="Fermi (4.38 MeV)",
-            )
-        )
-        hist, bins = np.histogram(
-            data["SelectedAdjClEnergy"][
-                (data["GammaK"] < 4.28)
-                * (data["GammaK"] > 0)
-                * (data["SelectedAdjClEnergy"] > 0)
-            ],
-            bins=np.arange(0, 10, 0.1),
-            range=(0, 10),
-            density=True,
-        )
-        bins = 0.5 * (bins[1:] + bins[:-1])
-        fig.add_trace(
-            go.Scatter(
-                x=bins,
-                y=hist,
-                mode="lines",
-                line_shape="hvh",
-                line=dict(color=compare[1]),
-                line_dash="dash",
-                name="Gamow-Teller (< 4.28 MeV)",
-            )
-        )
+        filters = [
+            (
+                (data["GammaK"] > 4.28) & (data["GammaK"] < 4.48),
+                "Fermi (4.38 MeV)",
+                compare[0],
+                "solid",
+            ),
+            (
+                (data["GammaK"] < 4.28) & (data["GammaK"] > 0),
+                "Gamow-Teller (< 4.28 MeV)",
+                compare[1],
+                "dash",
+            ),
+            ((data["GammaK"] > 4.48), "Gamow-Teller (> 4.48 MeV)", compare[1], "dash"),
+        ]
 
-        hist, bins = np.histogram(
-            data["SelectedAdjClEnergy"][
-                (data["GammaK"] > 4.48) * (data["SelectedAdjClEnergy"] > 0)
-            ],
-            bins=np.arange(0, 10, 0.1),
-            range=(0, 10),
-            density=True,
-        )
-        bins = 0.5 * (bins[1:] + bins[:-1])
-        fig.add_trace(
-            go.Scatter(
-                x=bins,
-                y=hist,
-                mode="lines",
-                line_shape="hvh",
-                line=dict(color=compare[1]),
-                line_dash="dot",
-                name="Gamow-Teller (> 4.48 MeV)",
+        for condition, label, color, dash in filters:
+            hist, bins = np.histogram(
+                data["SelectedAdjClEnergy"][
+                    condition & (data["SelectedAdjClEnergy"] > 0)
+                ],
+                bins=np.arange(0, 10, 0.1),
+                range=(0, 10),
+                density=True,
             )
-        )
+            bins = 0.5 * (bins[1:] + bins[:-1])
+            fig.add_trace(
+                go.Scatter(
+                    x=bins,
+                    y=hist,
+                    mode="lines",
+                    line_shape="hvh",
+                    line=dict(color=color, dash=dash),
+                    name=label,
+                )
+            )
+
+            gamma_list.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Transition": label,
+                    "TrueEnergy": data["GammaK"][condition],
+                    "RecoEnergy": data["SelectedAdjClEnergy"][condition],
+                }
+            )
 
         fig = format_coustom_plotly(
             fig,
@@ -376,6 +359,16 @@ for config in configs:
         save_figure(
             fig,
             save_path,
+            config,
+            name,
+            filename=f"Gamma_Energy",
+            rm=args.rewrite,
+            debug=args.debug,
+        )
+
+        save_df(
+            pd.DataFrame(gamma_list),
+            data_path,
             config,
             name,
             filename=f"Gamma_Energy",

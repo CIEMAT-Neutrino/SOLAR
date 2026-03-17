@@ -1,0 +1,81 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {
+            "OpFlashPE": 1,
+            "OpFlashPur": 1,
+            "OpFlashPlane": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {
+            "SignalParticleE": 1,
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {
+            "MainVertex": 1,
+            "EndVertex": 1,
+            "AdjClTime": 1,
+            "MainParentVertex": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "MainPDG": 1,
+            "Generator": 1,
+            "NHits": 1,
+            "TPC": 1,
+            "MatchedOpHitAmplitude": 1
+        },
+        "DOUBLES": {
+            "MainE": 1,
+            "SignalParticleE": 1,
+            "SignalParticleP": 1,
+            "SignalParticleK": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
+            "Time": 1,
+            "RecoX": 1,
+            "RecoY": 1,
+            "RecoZ": 1,
+            "Charge": 1,
+            "AdjClMainX": 1,
+            "MatchedOpFlashWaveformTime": 1,
+            "MatchedOpFlashR": 1,
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashSTD": 1,
+            "MatchedOpFlashPur": 1,
+            "MatchedOpFlashNHits": 1,
+            "MatchedOpFlashTime": 1,
+            "MatchedOpFlashFast": 1,
+            "MatchedOpFlashRecoX": 1,
+            "MatchedOpFlashRecoY": 1,
+            "MatchedOpFlashRecoZ": 1,
+            "MatchedOpFlashMaxPE": 1,
+            "MatchedOpFlashPlane": 1,
+            "MatchedOpFlashResidual": 1,
+            "MatchedOpFlashWaveform": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {
+            "Primary": 1,
+            "MatchedOpFlashWaveformValid": 1
+        }
+    }
+}

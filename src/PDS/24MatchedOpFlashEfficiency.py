@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/PDS/matchedopflash/"
-save_data = f"{root}/data/PDS/matchedopflash/"
+save_path = f"{root}/images/PDS/matchedopflash"
+save_data = f"{root}/data/PDS/matchedopflash"
 
 for path in [save_path, save_data]:
     if not os.path.exists(path):
@@ -49,16 +49,10 @@ run = compute_reco_workflow(
 efficiency_plot = []
 
 
-def fill_plot_list(
-    efficiency_plot,
+def compute_efficiency(
     this_filtered_run,
-    name,
-    plot,
-    energy,
-    coord_x,
-    coord_y,
-    coord_z,
-    plane,
+    matching_type,
+    plane
 ):
     if plane is None or plane == -1:
         true_match = np.sum(this_filtered_run["Truth"]["PDSMatch"])
@@ -112,51 +106,46 @@ def fill_plot_list(
         true = np.nan
         true_error = np.nan
 
-    efficiency_plot.append(
-        {
-            "Name": name,
-            "Plot": plot,
-            "Type": "MatchedOpFlash",
-            "Energy": energy,
-            "X": coord_x,
-            "Y": coord_y,
-            "Z": coord_z,
-            "Plane": plane,
-            "Efficiency": rate,
-            "Error": rate_error,
-            "PE": rate_PE,
-        }
-    )
-    efficiency_plot.append(
-        {
-            "Name": name,
-            "Plot": plot,
-            "Type": "TPC_Cluster",
-            "Energy": energy,
-            "X": coord_x,
-            "Y": coord_y,
-            "Z": coord_z,
-            "Plane": plane,
-            "Efficiency": tpc,
-            "Error": tpc_error,
-            "PE": tpc_PE,
-        }
-    )
-    efficiency_plot.append(
-        {
-            "Name": name,
-            "Plot": plot,
-            "Type": "Neutrino",
-            "Energy": energy,
-            "X": coord_x,
-            "Y": coord_y,
-            "Z": coord_z,
-            "Plane": plane,
-            "Efficiency": true,
-            "Error": true_error,
-            "PE": true_PE,
-        }
-    )
+    if matching_type == "MatchedOpFlash":
+        return rate, rate_error, rate_PE
+    elif matching_type == "TPC_Cluster":
+        return tpc, tpc_error, tpc_PE
+    elif matching_type == "Neutrino":
+        return true, true_error, true_PE
+
+def fill_plot_list(
+    efficiency_plot,
+    this_filtered_run,
+    name,
+    plot,
+    energy,
+    variable,
+    coord,
+    plane,
+):  
+    coord = 2 * info[f"DETECTOR_MAX_{variable}"] - coord if (
+        config == "hd_1x2x6_lateralAPA" and variable == "X") else (
+        coord + info[f"DETECTOR_MAX_{variable}"]
+        if (info["GEOMETRY"] == "vd" and variable == "X")
+        else coord)
+    
+    for matching_type in ["MatchedOpFlash", "TPC_Cluster", "Neutrino"]:
+        rate, rate_error, rate_PE = compute_efficiency(this_filtered_run, matching_type, plane)
+
+        efficiency_plot.append(
+            {
+                "Name": name,
+                "Plot": plot,
+                "Type": matching_type,
+                "Energy": energy,
+                "Variable": variable,
+                "Coordinate": coord,
+                "Plane": plane,
+                "Efficiency": rate,
+                "Error": rate_error,
+                "PE": rate_PE,
+            }
+        )
 
 
 for config in configs:
@@ -231,16 +220,15 @@ for config in configs:
                         name,
                         "Energy Scan",
                         energy,
-                        coord_x=coord if coord_label == "X" else None,
-                        coord_y=coord if coord_label == "Y" else None,
-                        coord_z=coord if coord_label == "Z" else None,
+                        coord_label,
+                        coord,
                         plane=None,
                     )
 
-        for energy, coord in product(red_energy_centers, ["X", "Y", "Z"]):
+        for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z"]):
             for value in np.arange(
-                info[f"DETECTOR_MIN_{coord}"] + params[f"DEFAULT_{coord}_BIN"] / 2,
-                info[f"DETECTOR_MAX_{coord}"] + params[f"DEFAULT_{coord}_BIN"] / 2,
+                0 if info["GEOMETRY"] == "hd" and coord == "X" else info[f"DETECTOR_MIN_{coord}"],
+                info[f"DETECTOR_MAX_{coord}"] + params[f"DEFAULT_{coord}_BIN"],
                 params[f"DEFAULT_{coord}_BIN"],
             ):
                 this_drift_run, mask, output = compute_filtered_run(
@@ -262,14 +250,14 @@ for config in configs:
                             ],
                         ),
                         ("Truth", f"SignalParticle{coord}"): (
-                            "between",
+                            "absbetween" if coord == "X" and info["GEOMETRY"] == "hd" else "between",
                             [
                                 value - params[f"DEFAULT_{coord}_BIN"] / 2,
                                 value + params[f"DEFAULT_{coord}_BIN"] / 2,
                             ],
                         ),
                         ("Reco", f"SignalParticle{coord}"): (
-                            "between",
+                            "absbetween" if coord == "X" and info["GEOMETRY"] == "hd" else "between",
                             [
                                 value - params[f"DEFAULT_{coord}_BIN"] / 2,
                                 value + params[f"DEFAULT_{coord}_BIN"] / 2,
@@ -285,9 +273,8 @@ for config in configs:
                     name,
                     f"{coord} Scan",
                     energy,
-                    value if coord == "X" else None,
-                    value if coord == "Y" else None,
-                    value if coord == "Z" else None,
+                    coord,
+                    value,
                     None,
                 )
 
@@ -346,8 +333,7 @@ for config in configs:
                     name,
                     "Plane Scan",
                     energy,
-                    None,
-                    None,
+                    "Plane",
                     None,
                     plane,
                 )
@@ -355,10 +341,9 @@ for config in configs:
         for plane in [int(x) for x in info["OPFLASH_PLANES"].keys()]:
             for coord_label in ["X", "Y", "Z"]:
                 for coord in np.arange(
-                    info[f"DETECTOR_MIN_{coord_label}"]
-                    + params[f"DEFAULT_{coord_label}_BIN"] / 2,
+                    0 if info["GEOMETRY"] == "hd" and coord_label == "X" else info[f"DETECTOR_MIN_{coord_label}"],
                     info[f"DETECTOR_MAX_{coord_label}"]
-                    + params[f"DEFAULT_{coord_label}_BIN"] / 2,
+                    + params[f"DEFAULT_{coord_label}_BIN"],
                     params[f"DEFAULT_{coord_label}_BIN"],
                 ):
                     if plane == -1:
@@ -367,21 +352,21 @@ for config in configs:
                             configs,
                             params={
                                 ("Truth", f"SignalParticle{coord_label}"): (
-                                    "between",
+                                    "absbetween" if coord_label == "X" and info["GEOMETRY"] == "hd" else "between",
                                     [
                                         coord
-                                        - params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        - params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                         coord
-                                        + params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        + params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                     ],
                                 ),
                                 ("Reco", f"SignalParticle{coord_label}"): (
-                                    "between",
+                                    "absbetween" if coord_label == "X" and info["GEOMETRY"] == "hd" else "between",
                                     [
                                         coord
-                                        - params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        - params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                         coord
-                                        + params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        + params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                     ],
                                 ),
                             },
@@ -394,21 +379,21 @@ for config in configs:
                             configs,
                             params={
                                 ("Truth", f"SignalParticle{coord_label}"): (
-                                    "between",
+                                    "absbetween" if coord_label == "X" and info["GEOMETRY"] == "hd" else "between",
                                     [
                                         coord
-                                        - params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        - params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                         coord
-                                        + params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        + params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                     ],
                                 ),
                                 ("Reco", f"SignalParticle{coord_label}"): (
-                                    "between",
+                                    "absbetween" if coord_label == "X" and info["GEOMETRY"] == "hd" else "between",
                                     [
                                         coord
-                                        - params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        - params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                         coord
-                                        + params[f"DEFAULT_{coord_label}_REGION"] / 2,
+                                        + params[f"DEFAULT_{coord_label}_BIN"] / 2,
                                     ],
                                 ),
                                 ("Reco", "MatchedOpFlashPlane"): ("equal", plane),
@@ -422,13 +407,15 @@ for config in configs:
                         name,
                         "Plane Scan",
                         energy,
-                        coord_x=coord if coord_label == "X" else None,
-                        coord_y=coord if coord_label == "Y" else None,
-                        coord_z=coord if coord_label == "Z" else None,
+                        coord_label,
+                        coord,
                         plane=plane,
                     )
 
         efficiency_df = pd.DataFrame(efficiency_plot)
+        efficiency_df["Geometry"] = info["GEOMETRY"]
+        efficiency_df["Config"] = config
+        efficiency_df["Name"] = name
         efficiency_df = efficiency_df.replace({None: np.nan})
         print(efficiency_df)
         for matching_type in ["MatchedOpFlash", "TPC_Cluster", "Neutrino"]:
@@ -447,7 +434,7 @@ for config in configs:
                 save_data,
                 config,
                 name,
-                filename=f"{matching_type}_Efficiency_Energy_Scan",
+                filename=f"{matching_type}_Efficiency_Drift_Scan",
                 rm=user_input["rewrite"],
                 debug=user_input["debug"],
             )
@@ -457,20 +444,17 @@ for config in configs:
                 * (efficiency_df["Type"] == matching_type)
             ]
             save_df(
-                this_drift_df,
+                this_energy_df,
                 save_data,
                 config,
                 name,
-                filename=f"{matching_type}_Efficiency_Drift_Scan",
+                filename=f"{matching_type}_Efficiency_Energy_Scan",
                 rm=user_input["rewrite"],
                 debug=user_input["debug"],
             )
             this_plane_df = efficiency_df[
                 (efficiency_df["Name"] == name)
                 * (efficiency_df["Plot"] == "Plane Scan")
-                * (efficiency_df["X"].isna())
-                * (efficiency_df["Y"].isna())
-                * (efficiency_df["Z"].isna())
                 * (efficiency_df["Type"] == matching_type)
             ]
             save_df(
@@ -483,10 +467,13 @@ for config in configs:
                 debug=user_input["debug"],
             )
             for jdx, energy in enumerate(np.unique(this_drift_df["Energy"])):
-                this_efficiency_df = this_drift_df[this_drift_df["Energy"] == energy]
+                this_efficiency_df = this_drift_df[
+                    (this_drift_df["Energy"] == energy)
+                    * (this_drift_df["Variable"] == "X")
+                ]
                 fig.add_trace(
                     go.Scatter(
-                        x=this_efficiency_df["X"],
+                        x=this_efficiency_df["Coordinate"],
                         y=this_efficiency_df["Efficiency"],
                         legendgroup=0,
                         legendgrouptitle=dict(
@@ -501,8 +488,15 @@ for config in configs:
                     col=1,
                 )
 
-            for kdx, drift in enumerate(np.unique(this_energy_df["X"])):
-                this_efficiency_df = this_energy_df[this_energy_df["X"] == drift]
+            for kdx, drift in enumerate(
+                np.unique(
+                    this_energy_df["Coordinate"][this_energy_df["Variable"] == "X"]
+                )
+            ):
+                this_efficiency_df = this_energy_df[
+                    (this_energy_df["Coordinate"] == drift)
+                    * (this_energy_df["Variable"] == "X")
+                ]
                 fig.add_trace(
                     go.Scatter(
                         x=this_efficiency_df["Energy"],
@@ -521,7 +515,10 @@ for config in configs:
                     col=2,
                 )
             for pdx, plane in enumerate(np.unique(this_plane_df["Plane"])):
-                this_efficiency_df = this_plane_df[this_plane_df["Plane"] == plane]
+                this_efficiency_df = this_plane_df[
+                    (this_plane_df["Plane"] == plane)
+                    * (this_plane_df["Variable"] == "Plane")
+                ]
                 fig.add_trace(
                     go.Scatter(
                         x=this_efficiency_df["Energy"],
@@ -576,9 +573,16 @@ for config in configs:
                     ),
                 )
                 for jdx, coord in enumerate(["X", "Y", "Z"]):
-                    for kdx, value in enumerate(np.unique(this_energy_df[coord])):
+                    for kdx, value in enumerate(
+                        np.unique(
+                            this_energy_df["Coordinate"][
+                                this_energy_df["Variable"] == coord
+                            ]
+                        )
+                    ):
                         this_efficiency_df = this_energy_df[
-                            this_energy_df[coord] == value
+                            (this_energy_df["Coordinate"] == value)
+                            * (this_energy_df["Variable"] == coord)
                         ]
                         fig.add_trace(
                             go.Scatter(
@@ -599,6 +603,7 @@ for config in configs:
                         )
                 if variable == "Efficiency":
                     fig.add_hline(100, line=dict(color="grey", dash="dash"))
+
                 fig = format_coustom_plotly(
                     fig,
                     log=(False, False),
@@ -647,7 +652,7 @@ for config in configs:
                         ]
                         fig.add_trace(
                             go.Scatter(
-                                x=this_efficiency_df[coord],
+                                x=this_efficiency_df["Coordinate"],
                                 y=this_efficiency_df[variable],
                                 legendgroup=jdx,
                                 legendgrouptitle=dict(
@@ -711,11 +716,12 @@ for config in configs:
                             * (efficiency_df["Plot"] == f"Plane Scan")
                             * (efficiency_df["Type"] == matching_type)
                             * (efficiency_df["Plane"] == int(plane))
+                            * (efficiency_df["Variable"] == coord)
                         ]
 
                         fig.add_trace(
                             go.Scatter(
-                                x=this_plane_df[coord],
+                                x=this_plane_df["Coordinate"],
                                 y=this_plane_df[variable],
                                 legendgroup=jdx,
                                 legendgrouptitle=dict(
@@ -765,3 +771,13 @@ for config in configs:
                     rm=user_input["rewrite"],
                     debug=user_input["debug"],
                 )
+
+        save_df(
+            efficiency_df,
+            save_data,
+            config,
+            name,
+            filename="OpFlash_Efficiency",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )

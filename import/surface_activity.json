@@ -1,0 +1,187 @@
+{
+    "hd_1x2x6_lateralAPA": {
+        "0": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux_APA_HD1x2x6_400mmLAr_attenuated", 0.0254278],
+            "foam_gamma": ["FDfoamGammasAtLArFlux_APA_HD1x2x6_400mmLAr_attenuated", 0.0010171],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons_APA_HD1x2x6_400mmLAr_attenuated", 0.00000013384],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux_APA_HD1x2x6_400mmLAr_attenuated", 0.00000003424],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000099313]
+        },
+        "1": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "2": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "3": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "4": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        }
+    },
+    "hd_1x2x6_centralAPA": {
+        "0": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0]
+        },
+        "1": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "2": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "3": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "4": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        }
+    },
+    "vd_1x8x14_3view_30deg_nominal": {
+        "0": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "1": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "2": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "3": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        },
+        "4": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 1.05104],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.0000005439],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.00000026996]
+        }
+    },
+    "vd_1x8x14_3view_30deg_optimistic": {
+        "0": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0.3503466],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.000000271961],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000839656]
+        },
+        "1": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0.3503466],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.000000271961],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000839656]
+        },
+        "2": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0.3503466],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.000000271961],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000839656]
+        },
+        "3": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0.3503466],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.000000271961],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000839656]
+        },
+        "4": {
+            "cavernwall_gamma": ["FDcavernGammasAtLArFlux", 0.3503466],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.0000016793],
+            "cavern_gamma": ["FDcavernNGammasAtLArFlux", 0.000000271961],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.000000839656]
+        }
+    },
+    "vd_1x8x14_3view_30deg_shielded": {
+        "0": {
+            "cavernwall_gamma": ["FDcavernGammasAtCRP28cm_60cmH2O_shield", 0.070069],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.000000033586],
+            "cavern_gamma": ["CavernNGammasAtLArFlux_60cmH2O_shield", 0.00000003626],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.0000000053992]
+        },
+        "1": {
+            "cavernwall_gamma": ["FDcavernGammasAtCRP28cm_60cmH2O_shield", 0.070069],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.000000033586],
+            "cavern_gamma": ["CavernNGammasAtLArFlux_60cmH2O_shield", 0.00000003626],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.0000000053992]
+        },
+        "2": {
+            "cavernwall_gamma": ["FDcavernGammasAtCRP28cm_60cmH2O_shield", 0.070069],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.000000033586],
+            "cavern_gamma": ["CavernNGammasAtLArFlux_60cmH2O_shield", 0.00000003626],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.0000000053992]
+        },
+        "3": {
+            "cavernwall_gamma": ["FDcavernGammasAtCRP28cm_60cmH2O_shield", 0.070069],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.000000033586],
+            "cavern_gamma": ["CavernNGammasAtLArFlux_60cmH2O_shield", 0.00000003626],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.0000000053992]
+        },
+        "4": {
+            "cavernwall_gamma": ["FDcavernGammasAtCRP28cm_60cmH2O_shield", 0.070069],
+            "foam_gamma": ["FDfoamGammasAtLArFlux", 0.0441274],
+            "cryostat_gamma": ["FDcryostatNGammasAtLArFluxFromCavernNeutrons", 0.000000033586],
+            "cavern_gamma": ["CavernNGammasAtLArFlux_60cmH2O_shield", 0.00000003626],
+            "cavern_neutron": ["FDcavernNeutronsAtLArFlux", 0.0000000053992]
+        }
+    }
+}

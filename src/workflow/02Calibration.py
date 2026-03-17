@@ -80,7 +80,6 @@ for config in configs:
         f"{root}/config/{config}/{config}", {}, output, debug=args.debug
     )
     for name in configs[config]:
-
         for idx, (variable, variable_label) in enumerate(
             zip(["", "Electron"], ["Primary", "Cheated"])
         ):
@@ -99,9 +98,10 @@ for config in configs:
                     * params["CALIBRATION_THRESHOLD"]
                 )
 
-                if len(data["ElectronK"][data["NHits"] == nhit]) < int(
-                    len(data["ElectronK"]) / 20
-                ):
+                if len(data["ElectronK"][data["NHits"] == nhit]) < 1000:
+                    rprint(
+                        f"Skipping NHit {nhit} due to low statistics ({len(data['ElectronK'][data['NHits'] == nhit])})"
+                    )
                     continue
 
                 this_fig = make_subplots(
@@ -202,20 +202,6 @@ for config in configs:
                         col=3,
                     )
 
-                    df_corrected.append(
-                        {
-                            "Geometry": info["GEOMETRY"],
-                            "Config": config,
-                            "Name": name,
-                            "#Hits": nhit,
-                            "RawEnergy": data[energy][data["NHits"] == nhit],
-                            "TrueEnergy": data["ElectronK"][data["NHits"] == nhit],
-                            "RMS": rms,
-                            "RMSError": rms_error,
-                            "Calibrated": label == "Calibrated",
-                        }
-                    )
-
                 this_fig = format_coustom_plotly(
                     this_fig,
                     matches=(None, None),
@@ -246,6 +232,39 @@ for config in configs:
                     )
                     if output is not None or output != "":
                         rprint(output)
+
+            for nhit, (energy, label) in product(
+                np.arange(1, 9),
+                zip(
+                    [f"Raw{variable}Energy", f"Calibrated{variable}Energy"],
+                    ["Raw", "Calibrated"],
+                ),
+            ):
+                df_corrected.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "#Hits": int(nhit),
+                        "Threshold": None,
+                        "RawEnergy": data[energy][data["NHits"] == nhit],
+                        "TrueEnergy": data["ElectronK"][data["NHits"] == nhit],
+                        "Calibrated": label == "Calibrated",
+                    }
+                )
+
+                df_corrected.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "#Hits": None,
+                        "Threshold": int(nhit),
+                        "RawEnergy": data[energy][data["NHits"] >= nhit],
+                        "TrueEnergy": data["ElectronK"][data["NHits"] >= nhit],
+                        "Calibrated": label == "Calibrated",
+                    }
+                )
 
             reco_popt_nhit = []
             reco_popt_slope = []

@@ -1,0 +1,18 @@
+{
+    "hd": {
+        "-1": "CPA",
+        "0": "APA",
+        "1": "Top",
+        "2": "Bottom",
+        "3": "FrontCap",
+        "4": "EndCap"
+    },
+    "vd": {
+        "-1": "Cathode",
+        "0": "Anode",
+        "1": "Membrane 1",
+        "2": "Membrane 2",
+        "3": "FrontCap",
+        "4": "EndCap"
+    }
+}

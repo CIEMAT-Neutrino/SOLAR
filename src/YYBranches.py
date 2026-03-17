@@ -3,9 +3,12 @@ import argparse
 import numpy as np
 import pandas as pd
 
+from rich import print as rprint
+
 sys.path.insert(0, "../")
 
-from lib import *
+# from lib import *
+from lib.lib_io import load_multi
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(

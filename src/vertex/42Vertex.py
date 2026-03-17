@@ -11,7 +11,11 @@ data_path = f"{root}/data/vertex/resolution"
 
 
 def gaussian(x, a, b, c):
-    return a * np.exp(-0.5 * ((x - b) / c) ** 2)
+    return a * np.exp(-0.5 * ((x - b) / abs(c)) ** 2)
+
+
+def exponential_decay(x, a, b, c):
+    return a * np.exp(-abs(x) / abs(c)) - b
 
 
 for path in [save_path, data_path]:
@@ -62,20 +66,21 @@ run, mask, output = compute_filtered_run(
     run,
     configs,
     presets=["ANALYSIS"],
+    signal="marley" in args.name,
     debug=user_input["debug"],
 )
 rprint(output)
 
 reco_df = npy2df(run, "Reco", debug=False)
 
-sigma_list = []
+hist_list, purity_list, sigma_list = [], [], []
+
 for config in configs:
     info, params, output = get_param_dict(
         f"{root}/config/{config}/{config}", {}, output, debug=args.debug
     )
     for name in configs[config]:
         max_hist = 0
-        hist_list, purity_list = [], []
         info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         this_reco_df = reco_df[
             (reco_df["Geometry"] == info["GEOMETRY"])
@@ -90,29 +95,51 @@ for config in configs:
             #############################################################################
             ########################### Vertexing Error Plot ############################
             #############################################################################
-            init = 30  # Initial array value for the gaussian fit
-            fnal = 50  # Final array value for the gaussian fit
 
             hx, edges = np.histogram(
-                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > 0],
+                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > 0.5],
                 bins=np.arange(-20, 20.5, 0.5),
-                density=True,
+                density=False,
             )
-
-            try:
+            if "marley" in name.lower():
+                try:
+                    fit_function = "Gaussian"
+                    popt, pcov = curve_fit(
+                        gaussian,
+                        0.5 * (edges[1:] + edges[:-1]),
+                        hx,
+                        p0=[np.max(hx), 0, 2],
+                        sigma=1 / np.sqrt(hx),
+                    )
+                except:
+                    rprint("Gaussian fit failed, trying exponential decay fit")
+                    fit_function = "Exponential"
+                    popt, pcov = curve_fit(
+                        exponential_decay,
+                        0.5 * (edges[1:] + edges[:-1]),
+                        hx,
+                        p0=[np.max(hx), 0, 2],
+                        sigma=1 / np.sqrt(hx),
+                        bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
+                    )
+            else:
+                rprint("Gaussian fit failed, trying exponential decay fit")
+                fit_function = "Exponential"
                 popt, pcov = curve_fit(
-                    gaussian,
-                    0.5 * (edges[1:] + edges[:-1])[init:fnal],
-                    hx[init:fnal],
-                    p0=[1, 0, 5],
-                    # sigma=1/np.sqrt(hx_counts[init:fnal])
+                    exponential_decay,
+                    0.5 * (edges[1:] + edges[:-1]),
+                    hx,
+                    p0=[np.max(hx), 0, 2],
+                    sigma=1 / np.sqrt(hx),
+                    bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
                 )
-                perr = np.sqrt(np.diag(pcov))
-                fit_y = gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
-            except:
-                popt = [0, 0, np.nan]
-                perr = [0, 0, np.nan]
-                fit_y = np.zeros(len(hx))
+
+            fit_y = (
+                gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
+                if fit_function == "Gaussian"
+                else exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
+            )
+            perr = np.sqrt(np.diag(pcov))
 
             # Find percentage of events within 1, 2 and 3 sigma
             sigma1 = len(
@@ -133,10 +160,6 @@ for config in configs:
                     & (this_reco_df[error] < (popt[1] + 5 * popt[2]))
                 ]
             ) / len(this_reco_df[error])
-            # rprint(
-            #     f"-> {config} {name} {coord} Vertexing Resolution: {popt[2]:.2f} +/- {perr[2]:.2f} cm"
-            #     + f" ({100*sigma1:.1f}%, {100*sigma2:.1f}%, {100*sigma3:.1f}%) within 1, 3 and 5 sigma"
-            # )
 
             # Make a 2D histogram of the purity vs the error
             if coord == "X":
@@ -144,18 +167,20 @@ for config in configs:
                 drift_sample_error = []
                 for idx, (purity_label, purity_idx) in enumerate(
                     zip(
-                        ["No-Match", "Low-Purity", "High-Purity"],
+                        ["No-Match", "Background", "Low-Purity", "High-Purity"],
                         [
                             (this_reco_df["MatchedOpFlashPur"] <= 0)
                             * (this_reco_df["MatchedOpFlashPE"] <= 0),
-                            (this_reco_df["MatchedOpFlashPur"] <= 0)
-                            * (this_reco_df["MatchedOpFlashPE"] > 0),
-                            this_reco_df["MatchedOpFlashPur"] > 0,
+                            (this_reco_df["MatchedOpFlashPur"] == 0)
+                            * (this_reco_df["MatchedOpFlashPE"] >= 0),
+                            (this_reco_df["MatchedOpFlashPur"] > 0)
+                            * (this_reco_df["MatchedOpFlashPur"] <= 0.5),
+                            this_reco_df["MatchedOpFlashPur"] > 0.5,
                         ],
                     )
                 ):
                     drift_sample.append(np.sum(purity_idx) / len(this_reco_df))
-                    drift_sample_error = (
+                    drift_sample_error.append(
                         np.sqrt(np.sum(purity_idx)) / len(this_reco_df)
                         if np.sum(purity_idx) > 0
                         else 0
@@ -163,34 +188,52 @@ for config in configs:
                     h, this_edges = np.histogram(
                         this_reco_df[error][purity_idx],
                         density=False,
-                        bins=edges,
+                        bins=np.arange(
+                            -info["DETECTOR_MAX_X"], info["DETECTOR_MAX_X"], 0.5
+                        ),
                     )
-                    if np.sum(h) > 100:
-                        purity_list.append(
-                            {
-                                "Geometry": info["GEOMETRY"],
-                                "Config": config,
-                                "Name": name,
-                                "Coordinate": coord,
-                                "Label": purity_label,
-                                "Counts": np.sum(h),
-                                "Density": np.asarray(h)
-                                / np.sum(h)
-                                / (this_edges[1] - this_edges[0]),
-                                "DensityError": np.sqrt(h)
-                                / np.sum(h)
-                                / (this_edges[1] - this_edges[0]),
-                                "Values": 0.5 * (edges[1:] + edges[:-1]),
-                                "FitFunction": gaussian,
-                                "Params": popt,
-                                "ParamsError": perr,
-                                "ParamsLabels": ["Amp.", "Mean", "Sigma"],
-                                "ParamsFormat": [".1f", ".1f", ".2f"],
-                            }
-                        )
+                    purity_list.append(
+                        {
+                            "Geometry": info["GEOMETRY"],
+                            "Config": config,
+                            "Name": name,
+                            "Coordinate": coord,
+                            "Label": purity_label,
+                            "Percentage": 100 * drift_sample[-1],
+                            "PercentageError": 100 * drift_sample_error[-1],
+                            "Counts": h,
+                            "CountsError": np.sqrt(h),
+                            "Density": np.asarray(h)
+                            / np.sum(h)
+                            / (this_edges[1] - this_edges[0]),
+                            "DensityError": np.sqrt(h)
+                            / np.sum(h)
+                            / (this_edges[1] - this_edges[0]),
+                            "Values": 0.5 * (this_edges[1:] + this_edges[:-1]),
+                            "FitFunction": (
+                                gaussian
+                                if fit_function == "Gaussian"
+                                else exponential_decay
+                            ),
+                            "FitFunctionLabel": fit_function,
+                            "FitFunctionFormula": (
+                                r"A \exp\left(-\frac{(x - \mu)^2}{2 \sigma^2}\right)"
+                                if fit_function == "Gaussian"
+                                else r"A \exp\left(-\frac{|x|}{\tau}\right) - B"
+                            ),
+                            "Params": popt,
+                            "ParamsError": perr,
+                            "ParamsLabels": (
+                                ["Amp.", "Mean", "Sigma"]
+                                if fit_function == "Gaussian"
+                                else ["Amp.", "Offset", "DecayConst"]
+                            ),
+                            "ParamsFormat": [".1f", ".1f", ".2f"],
+                        }
+                    )
                     # Print the drift sample percentages
                     rprint(
-                        f"-> {config} {name} {coord} Vertexing Purity Sample: {purity_label} -> {100*drift_sample[idx]:.2f}% +/- {100*drift_sample_error:.2f}%"
+                        f"{purity_label}\t-> {100*drift_sample[idx]:.2f}% +/- {100*drift_sample_error[idx]:.2f}%"
                     )
 
             h, edges = np.histogram(
@@ -201,29 +244,36 @@ for config in configs:
             h_total, edges_total = np.histogram(
                 this_reco_df[error],
                 bins=np.arange(
-                    info[f"DETECTOR_MIN_{coord}"],
-                    info[f"DETECTOR_MAX_{coord}"] + 20,
-                    20,
+                    (
+                        info[f"DETECTOR_MIN_{coord}"]
+                        if coord != "Z"
+                        else -info[f"DETECTOR_MAX_{coord}"]
+                    ),
+                    info[f"DETECTOR_MAX_{coord}"] + 10,
+                    10,
                 ),
                 density=True,
             )
 
             hist_list.append(
                 {
-                    "Sample": "All",
+                    "Config": config,
+                    "Name": name,
                     "Energy": None,
                     "Coordinate": coord,
                     "Error": np.asarray(h),
                     "Values": 0.5 * (edges[1:] + edges[:-1]),
-                    "Amplitude": popt[0],
-                    "Center": popt[1],
-                    "Sigma": (popt[2] if np.sum(hx) > 0 else np.nan),
-                    "SigmaError": (perr[2] if np.sum(hx) > 0 else np.nan),
-                    "Mean": np.mean(this_reco_df[error]),
-                    "Median": np.median(this_reco_df[error]),
-                    "STD": np.std(this_reco_df[error]),
-                    "STDError": np.std(this_reco_df[error])
-                    / np.sqrt(len(this_reco_df[error])),
+                    "Sigma": popt[2],
+                    "SigmaError": perr[2],
+                    "FitFunctionLabel": fit_function,
+                    "Params": popt,
+                    "ParamsError": perr,
+                    "ParamsLabels": (
+                        ["Amp.", "Mean", "Sigma"]
+                        if fit_function == "Gaussian"
+                        else ["Amp.", "Offset", "DecayConst"]
+                    ),
+                    "ParamsFormat": [".1f", ".1f", ".2f"],
                 }
             )
 
@@ -239,7 +289,8 @@ for config in configs:
                     "ZoomBins": np.asarray(0.5 * (edges[1:] + edges[:-1])),
                     "NoMatch": 100 * drift_sample[0],
                     "Background": 100 * drift_sample[1],
-                    "Signal": 100 * drift_sample[2],
+                    "LowPurity": 100 * drift_sample[2],
+                    "HighPurity": 100 * drift_sample[3],
                     "Sigma": popt[2],
                     "SigmaError": perr[2],
                     "Sigma1": sigma1,
@@ -256,48 +307,87 @@ for config in configs:
             if np.max(h) > max_hist:
                 max_hist = np.max(h)
 
-            for energy in red_energy_centers:
+            for energy in lowe_energy_centers:
                 this_energy_df = this_reco_df[
                     (this_reco_df["SignalParticleK"] > (energy - 1))
                     & (this_reco_df["SignalParticleK"] < energy + 1)
                 ]
                 hx, edges = np.histogram(
-                    this_energy_df[error][(this_energy_df["MatchedOpFlashPur"] > 0.1)],
-                    bins=np.arange(-25, 25.5, 0.5),
+                    (
+                        this_energy_df[error][
+                            (this_energy_df["MatchedOpFlashPur"] > 0.5)
+                        ]
+                        if coord == "X"
+                        else this_energy_df[error]
+                    ),
+                    bins=np.arange(-20, 20.5, 0.5),
                     density=True,
                 )
 
-                # Fit a Gaussian to the histogram
-                try:
+                # Check that data exists for the fit
+                if len(this_energy_df) < 50 or np.sum(hx) == 0:
+                    continue
+
+                if "marley" in name.lower():
+                    # Fit a Gaussian to the histogram
+                    try:
+                        fit_function = "Gaussian"
+                        popt, pcov = curve_fit(
+                            gaussian,
+                            0.5 * (edges[1:] + edges[:-1]),
+                            hx,
+                            p0=[np.max(hx), 0, 5],
+                            # sigma=1/np.sqrt(hx_counts)
+                        )
+                        fit_y = gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
+
+                    except:
+                        rprint("Gaussian fit failed, trying exponential decay fit")
+                        fit_function = "Exponential"
+                        popt, pcov = curve_fit(
+                            exponential_decay,
+                            0.5 * (edges[1:] + edges[:-1]),
+                            hx,
+                            p0=[np.max(hx), 0, 5],
+                            # sigma=1/np.sqrt(hx_counts),
+                            bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
+                        )
+                        fit_y = exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
+
+                else:
+                    fit_function = "Exponential"
                     popt, pcov = curve_fit(
-                        gaussian,
-                        0.5 * (edges[1:] + edges[:-1])[init:fnal],
-                        hx[init:fnal],
-                        p0=[1, 0, 5],
-                        # sigma=1/np.sqrt(hx_counts[init:fnal])
+                        exponential_decay,
+                        0.5 * (edges[1:] + edges[:-1]),
+                        hx,
+                        p0=[np.max(hx), 0, 5],
+                        # sigma=1/np.sqrt(hx_counts),
+                        bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
                     )
-                    perr = np.sqrt(np.diag(pcov))
-                    fit_y = gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
-                except:
-                    popt = [0, 0, np.nan]
-                    perr = [0, 0, np.nan]
-                    fit_y = np.zeros(len(hx))
+                    fit_y = exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
+
+                perr = np.sqrt(np.diag(pcov))
 
                 hist_list.append(
                     {
-                        "Sample": f"{energy}",
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
                         "Energy": energy,
                         "Coordinate": coord,
                         "Error": np.asarray(hx),
                         "Values": 0.5 * (edges[1:] + edges[:-1]),
-                        "Center": popt[1],
-                        "Sigma": (popt[2] if np.sum(hx) > 0 else np.nan),
-                        "SigmaError": (perr[2] if np.sum(hx) > 0 else np.nan),
-                        "Mean": np.mean(this_energy_df[error]),
-                        "Median": np.median(this_energy_df[error]),
-                        "STD": np.std(this_energy_df[error]),
-                        "STDError": np.std(this_energy_df[error])
-                        / np.sqrt(len(this_energy_df[error])),
+                        "Sigma": popt[2],
+                        "SigmaError": perr[2],
+                        "FitFunctionLabel": fit_function,
+                        "Params": popt,
+                        "ParamsError": perr,
+                        "ParamsLabels": (
+                            ["Amp.", "Mean", "Sigma"]
+                            if fit_function == "Gaussian"
+                            else ["Amp.", "Offset", "DecayConst"]
+                        ),
+                        "ParamsFormat": [".1f", ".1f", ".2f"],
                     }
                 )
 
@@ -312,7 +402,7 @@ for config in configs:
             ["X", "Y", "Z"],
         ):
 
-            this_df = df[(df["Coordinate"] == coord) & (df["Sample"] == "All")]
+            this_df = df[(df["Coordinate"] == coord) & (df["Energy"].isna())]
             # print(this_df)
             fig.add_trace(
                 go.Scatter(
@@ -321,7 +411,8 @@ for config in configs:
                     mode="lines",
                     line_shape="hvh",
                     line=dict(color=default[j], width=2),
-                    name=f"{coord} Sigma: {this_df['Sigma'].values[0]:.1f} cm",
+                    # Select the second entry in params which is the sigma
+                    name=f"{coord} Sigma: {this_df['Params'].values[0][2]:.2f} cm",
                 ),
                 row=1,
                 col=1,
@@ -357,35 +448,8 @@ for config in configs:
             ["X", "Y", "Z"],
         ):
 
-            this_df = df[(df["Coordinate"] == coord) & (df["Sample"] == "All")]
-            # Add a double exponential decay fit to the histogram
-            # try:
-            #     popt, pcov = curve_fit(
-            #         lambda x, a, b: a * np.exp(-np.abs(x) / b),
-            #         this_df["Values"],
-            #         this_df["Error"],
-            #         p0=[1, 0.1],
-            #     )
-            #     fit_y = popt[0] * np.exp(-np.abs(this_df["Values"]) / popt[1])
-            # except:
-            #     rprint("Could not fit double exponential decay to histogram")
-            #     fit_y = np.zeros(len(this_df["Values"]))
-            #     popt = [0, 0]
+            this_df = df[(df["Coordinate"] == coord) & (df["Energy"].isna())]
 
-            # fit_x = np.linspace(-20, 20, 1000)
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=fit_x,
-            #         y=popt[0] * np.exp(-np.abs(fit_x) / popt[1]),
-            #         mode="lines",
-            #         line_shape="spline",
-            #         line=dict(color="red", dash="dash"),
-            #         showlegend=False,
-            #     ),
-            #     row=1,
-            #     col=1,
-            # )
-            # print(this_df)
             fig.add_trace(
                 go.Scatter(
                     x=this_df["Values"],
@@ -421,46 +485,105 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        fig = make_subplots(rows=1, cols=3)
+        for j, coord in zip(
+            range(3),
+            ["X", "Y", "Z"],
+        ):
+            if coord == "X":
+                this_reco_matrix = {
+                    "Config": config,
+                    "Name": name,
+                    f"{coord}": this_reco_df[f"SignalParticle{coord}"],
+                    f"Error{coord}": this_reco_df[f"Error{coord}"],
+                    "Energy": this_reco_df["SignalParticleK"],
+                    "Matched": this_reco_df["MatchedOpFlashPE"] > 0,
+                }
+                save_pkl(
+                    pd.DataFrame(this_reco_matrix),
+                    data_path,
+                    config,
+                    name,
+                    None,
+                    filename= f"Vertex_Matrix_{coord}",
+                    rm=user_input["rewrite"],
+                    debug=user_input["debug"],
+                )
+
+            h, x, y = np.histogram2d(
+                this_reco_df[f"SignalParticle{coord}"],
+                this_reco_df[f"Error{coord}"],
+                bins=[100, 100],
+                density=True,
+            )
+
+            fig.add_trace(
+                go.Heatmap(
+                    x=x,
+                    y=y,
+                    z=np.log10(h.T),
+                    coloraxis="coloraxis",
+                ),
+                row=1,
+                col=j + 1,
+            )
+
+        fig = format_coustom_plotly(
+            fig,
+            matches=(None, None),
+            title=f"Error Heatmap - {config}",
+            add_watermark=False,
+        )
+
+        # Add title to colorbar
+        fig.update_coloraxes(colorbar=dict(title="log(Density)"))
+
+        for j, coord in enumerate(["X", "Y", "Z"]):
+            fig.update_yaxes(title_text="Reco - True (cm)", row=1, col=1 + j)
+            fig.update_xaxes(title_text=f"True {coord} (cm)", row=1, col=1 + j)
+
+        save_figure(
+            fig,
+            save_path,
+            config,
+            name,
+            filename=f"Vertex_Matrix",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
         # Make a plot of the error vs purity heatmaps
         purity_df = pd.DataFrame(purity_list)
-        this_purity_df = explode(purity_df, ["Density", "DensityError", "Values"])
-        this_purity_df["DensityError"] = this_purity_df["DensityError"].astype(float)
-        this_purity_df["Density"] = this_purity_df["Density"].astype(float)
-        this_purity_df["Values"] = this_purity_df["Values"].astype(float)
+        cols = ["Counts", "CountsError", "Density", "DensityError", "Values"]
+        this_purity_df = explode(purity_df, cols)
+        for col in cols:
+            this_purity_df[col] = this_purity_df[col].astype(float)
 
         fig = make_subplots(rows=1, cols=1)
-
+        maxy = 0
         for k, purity_label in enumerate(this_purity_df["Label"].unique()[::-1]):
             this_df = this_purity_df[
                 (this_purity_df["Coordinate"] == "X")
                 & (this_purity_df["Label"] == purity_label)
             ]
 
-            fig.add_trace(
-                go.Scatter(
-                    x=this_df["Values"],
-                    y=this_df["Density"],
-                    error_y=dict(type="data", array=this_df["DensityError"]),
-                    mode="lines+markers",
-                    line_shape="hvh",
-                    line=dict(color=default[k], width=2),
-                    name=f"{purity_label}",
-                ),
-                row=1,
-                col=1,
-            )
-            # Add gaussian fit for the high purity sample
             if purity_label == "High-Purity":
-                df_x = df[(df["Coordinate"] == "X") & (df["Sample"] == "All")]
+                df_x = df[(df["Coordinate"] == "X") & (df["Energy"].isna())]
                 popt = [
-                    df_x["Amplitude"].values[0],
-                    df_x["Center"].values[0],
-                    df_x["Sigma"].values[0],
+                    df_x["Params"].values[0][0],
+                    df_x["Params"].values[0][1],
+                    df_x["Params"].values[0][2],
                 ]
                 fig.add_trace(
                     go.Scatter(
                         x=0.5 * (edges[1:] + edges[:-1]),
-                        y=gaussian(0.5 * (edges[1:] + edges[:-1]), *popt),
+                        y=(
+                            gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
+                            if df_x["FitFunctionLabel"].values[0] == "Gaussian"
+                            else exponential_decay(
+                                0.5 * (edges[1:] + edges[:-1]), *popt
+                            )
+                        ),
                         mode="lines",
                         line_shape="spline",
                         line=dict(color="red", dash="dash"),
@@ -469,30 +592,56 @@ for config in configs:
                     row=1,
                     col=1,
                 )
+            if np.max(this_df["Counts"]) > maxy:
+                maxy = np.max(this_df["Counts"])
+
+            fig.add_trace(
+                go.Scatter(
+                    x=this_df["Values"],
+                    y=this_df["Counts"],
+                    error_y=dict(type="data", array=this_df["CountsError"]),
+                    mode="lines+markers",
+                    line_shape="hvh",
+                    line=dict(color=default[k], width=2),
+                    name=f"{purity_label}: {this_df['Percentage'].values[0]:.1f}%",
+                ),
+                row=1,
+                col=1,
+            )
+            # Add gaussian fit for the high purity sample
 
         # fig.update_layout(legend_title_text="Energy (MeV)")
+        fig.update_xaxes(title_text="Vertex X True - Reco (cm)")
+        fig.update_yaxes(title_text="Counts")
         fig = format_coustom_plotly(
             fig,
             # add_watermark=False,
             title=f"X Error vs OpFlash Purity - {config}",
-            legend=dict(x=0.74, y=0.99),
+            legend=dict(x=0.72, y=0.99),
             legend_title="Matched OpFlash",
             log=(False, True),
             tickformat=(None, ".1s"),
-            ranges=([-20, 20], [-4, 1]),
+            ranges=(None, [0, np.log10(1.5 * maxy)]),
         )
-        fig.update_xaxes(title_text="Vertex X True - Reco (cm)")
-        fig.update_yaxes(title_text="Density")
-        save_figure(
-            fig,
-            save_path,
-            config,
-            name,
-            None,
-            filename=f"Vertex_Error_Purity",
-            rm=user_input["rewrite"],
-            debug=user_input["debug"],
-        )
+
+        for rangex in (None, [-20, 20]):
+            if rangex is not None:
+                fig.update_xaxes(range=rangex)
+
+            save_figure(
+                fig,
+                save_path,
+                config,
+                name,
+                None,
+                filename=(
+                    f"Vertex_Error_Purity"
+                    if rangex is None
+                    else f"Vertex_Error_Purity_Zoom"
+                ),
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )
 
         fig = make_subplots(rows=1, cols=1)
         for j, coord in zip(
@@ -500,14 +649,16 @@ for config in configs:
             ["X", "Y", "Z"],
         ):
 
-            this_df = df[(df["Coordinate"] == coord) & (df["Sample"] != "All")]
+            this_df = df[(df["Coordinate"] == coord) & (~df["Energy"].isna())]
             fig.add_trace(
                 go.Scatter(
                     x=this_df["Energy"],
-                    y=this_df["Sigma"],
-                    error_y=dict(type="data", array=this_df["SigmaError"]),
+                    y=this_df["Params"].apply(lambda x: x[2]),
+                    error_y=dict(
+                        type="data", array=this_df["ParamsError"].apply(lambda x: x[2])
+                    ),
                     mode="lines+markers",
-                    line_shape="hvh",
+                    line_shape="spline",
                     line=dict(color=default[j % len(default)], width=2),
                     name=f"{coord}",
                 ),
@@ -537,9 +688,13 @@ for config in configs:
             debug=user_input["debug"],
         )
         # Save the sigma list to a dataframe
-        sigma_df = pd.DataFrame(sigma_list)
         for filename, df in zip(
-            ["Purity_Match_Resolution", "Vertex_Resolution"], [purity_df, sigma_df]
+            ["Resolution", "Purity_Match_Resolution", "Vertex_Resolution"],
+            [
+                pd.DataFrame(hist_list),
+                pd.DataFrame(purity_list),
+                pd.DataFrame(sigma_list),
+            ],
         ):
             save_df(
                 df=df,

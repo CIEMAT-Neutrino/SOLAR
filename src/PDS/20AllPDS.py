@@ -43,8 +43,8 @@ args = parser.parse_args()
 # Run the first script with the arguments
 for config, name in product(args.config, args.name):
     # Your processing code here
-    # os.system(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
-    os.system(f"python3 {root}/src/PDS/22AdjOpFlash.py --config {config} --name {name}")
+    os.system(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
+    # os.system(f"python3 {root}/src/PDS/22AdjOpFlash.py --config {config} --name {name}")
     os.system(
         f"python3 {root}/src/PDS/23MatchedOpFlash.py --config {config} --name {name}"
     )

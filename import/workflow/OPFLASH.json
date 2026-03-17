@@ -1,0 +1,65 @@
+{
+    "Config": {
+        "INTEGERS": {},
+        "DOUBLES": {},
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Truth": {
+        "VECTORS": {
+            "TSignalE": 1,
+            "TSignalX": 1,
+            "TSignalY": 1,
+            "TSignalZ": 1,
+            "TSignalPDG": 1,
+            "OpFlashPE": 1,
+            "OpFlashPlane": 1,
+            "OpFlashTime": 1,
+            "OpFlashMaxPE": 1,
+            "OpFlashSTD": 1,
+            "OpFlashFast": 1,
+            "OpFlashPur": 1,
+            "OpFlashR": 1,
+            "OpFlashNHits": 1,
+            "OpFlashID": 1,
+            "OpFlashX": 1,
+            "OpFlashY": 1,
+            "OpFlashZ": 1,
+            "OpFlashResidual": 1
+        },
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {
+            "SignalParticleTime": 1,
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
+            "SignalParticleE": 1,
+            "SignalParticleK": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    },
+    "Reco": {
+        "VECTORS": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1
+        },
+        "DOUBLES": {
+            "SignalParticleX": 1,
+            "SignalParticleY": 1,
+            "SignalParticleZ": 1,
+            "MatchedOpFlashPE": 1,
+            "MatchedOpFlashPlane": 1,
+            "Generator": 1,
+            "NHits": 1,
+            "Charge": 1,
+            "Time": 1
+        },
+        "STRINGS": {},
+        "BOOLS": {}
+    }
+}

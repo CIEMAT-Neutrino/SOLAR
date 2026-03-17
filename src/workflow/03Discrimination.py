@@ -77,6 +77,8 @@ for config in configs:
     for name in configs[config]:
         selected_list = []
         true_list = []
+        discriminant_list = []
+        importance_list = []
 
         for particle in ["Electron", "Gamma", "Neutron", "Alpha", "Proton", "Neutrino"]:
             true_list.append(
@@ -248,18 +250,15 @@ for config in configs:
                     (data["AdjClR"][background_idx] < adjcl_radius_limit)
                     + (data["AdjClCharge"][background_idx] > adjcl_energy_limit)
                 )
-                if (
-                    len(data["AdjClR"][signal_idx][selected_signal_idx])
-                    / np.sqrt(
-                        len(data["AdjClR"][background_idx][selected_background_idx])
-                    )
-                    > signal_over_background_ratio
-                ):
-                    signal_over_background_ratio = len(
-                        data["AdjClR"][signal_idx][selected_signal_idx]
-                    ) / np.sqrt(
-                        len(data["AdjClR"][background_idx][selected_background_idx])
-                    )
+                # Compute the charge weighted signal over background ratio to choose the best limits
+                weighted_signal_over_background = np.sum(
+                    data["AdjClCharge"][signal_idx][selected_signal_idx]
+                ) / np.sqrt(
+                    np.sum(data["AdjClCharge"][background_idx][selected_background_idx])
+                )
+
+                if weighted_signal_over_background > signal_over_background_ratio:
+                    signal_over_background_ratio = weighted_signal_over_background
                     adjcl_radius_limit_best = adjcl_radius_limit
                     adjcl_energy_limit_best = adjcl_energy_limit
                     selected_signal_idx_best = selected_signal_idx
@@ -300,6 +299,9 @@ for config in configs:
                         "Name": name,
                         "AdjClR": data["AdjClR"][idx],
                         "AdjClCharge": data["AdjClCharge"][idx],
+                        "AdjClNum": np.sum(
+                            data["AdjClR"] < adjcl_radius_limit_best, axis=1
+                        ),
                         "LimitR": adjcl_radius_limit_best,
                         "LimitCharge": adjcl_energy_limit_best,
                         "Signal": i == 0,
@@ -497,6 +499,17 @@ for config in configs:
         )
 
         importance = rf_classifier.feature_importances_
+
+        importance_list.append(
+            {
+                "Geometry": info["GEOMETRY"],
+                "Config": config,
+                "Name": name,
+                "Feature": features,
+                "Importance": importance,
+            }
+        )
+
         fig = make_subplots(cols=1, rows=1)
         fig.add_trace(
             go.Bar(x=features, y=importance, marker_color="blue", opacity=0.75)
@@ -567,11 +580,28 @@ for config in configs:
 
         fig = make_subplots(rows=1, cols=1)
         for discriminant_idx, discriminant in enumerate(["Lower", "Upper"]):
+            discriminant_list.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Label": discriminant,
+                    "Discriminant": df[df["Label"] == discriminant_idx]["Discriminant"],
+                    "Efficiency": np.sum(df["Label"] == discriminant_idx) / len(df),
+                    "Purity": np.sum(
+                        (df["Label"] == discriminant_idx)
+                        & (df["ML"] == discriminant_idx)
+                    )
+                    / np.sum(df["ML"] == discriminant_idx),
+                }
+            )
+
             h, edges = np.histogram(
                 df[df["Label"] == discriminant_idx]["Discriminant"],
                 bins=50,
                 range=(0, 1),
             )
+
             fig.add_trace(
                 go.Scatter(
                     x=(edges[1:] + edges[:-1]) / 2,
@@ -690,7 +720,13 @@ for config in configs:
             f"Saved reco energy fit parameters to: {root}/config/{config}/{name}/{config}_calib/{config}_{name}_discriminant_calibration.json"
         )
         for this_list, df_filename in zip(
-            [true_list, selected_list], ["Neutrino_CC_Production", "AdjCl_Selection"]
+            [true_list, selected_list, importance_list, discriminant_list],
+            [
+                "Neutrino_CC_Production",
+                "AdjCl_Selection",
+                "Random_Forest_Importance",
+                "Cluster_Discriminant",
+            ],
         ):
             save_df(
                 pd.DataFrame(this_list),

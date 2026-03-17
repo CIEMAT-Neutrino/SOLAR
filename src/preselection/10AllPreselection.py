@@ -43,5 +43,11 @@ args = parser.parse_args()
 # Run the first script with the arguments
 for config, name in product(args.config, args.name):
     os.system(
-        f"python3 {root}/src/preselection/11Clustering.py --config {config} --name {name}"
+        f"python3 {root}/src/preselection/11Production.py --config {config} --name {name}"
+    )
+    os.system(
+        f"python3 {root}/src/preselection/12Efficiency.py --config {config} --name {name}"
+    )
+    os.system(
+        f"python3 {root}/src/preselection/13Clustering.py --config {config} --name {name}"
     )

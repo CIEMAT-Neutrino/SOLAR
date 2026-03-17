@@ -1,12 +1,17 @@
+import os
 import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
 save_path = f"{root}/images/day-night"
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
+data_path = f"{root}/data/analysis/day-night"
+
+for this_path in [save_path, data_path]:
+    if not os.path.exists(this_path):
+        os.makedirs(this_path)
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
@@ -39,8 +44,8 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the results folder",
-    default="Reduced",
-    choices=["Reduced", "Nominal"],
+    default="Nominal",
+    choices=["Reduced", "Truncated", "Nominal"],
 )
 parser.add_argument(
     "--exposure",
@@ -50,15 +55,10 @@ parser.add_argument(
 )
 parser.add_argument(
     "--energy",
+    nargs="+",
     type=str,
     help="The energy for the analysis",
-    default=["Cluster", "Total", "Selected", "Solar"],
-)
-parser.add_argument(
-    "--fiducial",
-    type=int,
-    help="The min niht cut for the analysis",
-    default=None,
+    default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
 parser.add_argument(
     "--nhits",
@@ -73,7 +73,7 @@ parser.add_argument(
     default=None,
 )
 parser.add_argument(
-    "--adjcl",
+    "--adjcls",
     type=int,
     help="The max adjcl cut for the analysis",
     default=None,
@@ -82,8 +82,18 @@ parser.add_argument(
     "--threshold", type=float, help="The threshold for the analysis", default=8.0
 )
 parser.add_argument(
-    "--fd_factor_true", action=argparse.BooleanOptionalAction, default=True
+    "--signal_uncertainty",
+    type=float,
+    help="The signal uncertainty for the analysis",
+    default=0.04,
 )
+parser.add_argument(
+    "--background_uncertainty",
+    type=float,
+    help="The background uncertainty for the analysis",
+    default=0.02,
+)
+parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
@@ -103,6 +113,9 @@ user_input = {
     "debug": args.debug,
 }
 
+day_night_counts = []
+day_night_significance = []
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     sigma_label = "highest"
@@ -112,10 +125,13 @@ for config in configs:
             "rb",
         )
     )
-    for idx, (name, key) in enumerate(product(configs[config], sigma)):
+
+    for idx, (name, energy, key) in enumerate(
+        product(configs[config], args.energy, sigma)
+    ):
         df_list = []
         signal_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/nominal/DAYNIGHT/{config}/{name}/{config}_{name}_rebin.pkl"
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
         )
         df_list.append(signal_df)
         for bkg, bkg_label in [
@@ -123,20 +139,15 @@ for config in configs:
             ("gamma", "gamma"),
         ]:
             bkg_df = pd.read_pickle(
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_rebin.pkl"
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_{energy}_Rebin.pkl"
             )
             df_list.append(bkg_df)
 
         plot_df = pd.concat(df_list, ignore_index=True)
 
         sigmas_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}/{config}/{name}/{config}_{name}_{analysis}_Results.pkl",
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{analysis}_Results.pkl",
         )
-
-        if key[2] not in args.energy:
-            continue
-        else:
-            energy = key[2]
 
         try:
             ref_plot = sigma[(config, name, energy)]
@@ -146,20 +157,14 @@ for config in configs:
             )
             continue
 
-        if args.fiducial is not None:
-            fiducial = args.fiducial
-        else:
-            rprint(f"Using optimized fiducial cut {sigma[key]['Fiducialized']}")
-            fiducial = int(sigma[key]["Fiducialized"])
-
         if args.nhits is not None:
             nhits = args.nhits
         else:
             rprint(f"Using optimized nhits {sigma[key]['NHits']}")
             nhits = int(sigma[key]["NHits"])
 
-        if args.adjcl is not None:
-            adjcl = args.adjcl
+        if args.adjcls is not None:
+            adjcl = args.adjcls
         else:
             rprint(f"Using optimized adjcl {sigma[key]['AdjCl']}")
             adjcl = int(sigma[key]["AdjCl"])
@@ -171,25 +176,29 @@ for config in configs:
             ophits = int(sigma[key]["OpHits"])
 
         rprint(
-            f"Evaluating {sigma_label} for Fiducial {fiducial:.0f} (cm), min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}"
+            f"Evaluating {sigma_label} for min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}"
         )
 
         this_plot_df = plot_df.loc[
-            (plot_df["EnergyLabel"] == energy)
-            * (plot_df["Fiducialized"] == fiducial)
-            * (plot_df["NHits"] == nhits)
+            # (plot_df["EnergyLabel"] == energy)
+            (plot_df["NHits"] == nhits)
             * (plot_df["OpHits"] == ophits)
             * (plot_df["AdjCl"] == adjcl)
         ].copy()
+
+        print(
+            this_plot_df.explode("Counts")
+            .groupby(["Component", "Oscillation", "Mean"])["Counts"]
+            .sum()
+        )
 
         plot_sigmas = sigmas_df.loc[
             (sigmas_df["Config"] == config) * (sigmas_df["Name"] == name)
         ].copy()
 
         plot_sigmas = plot_sigmas.loc[
-            (plot_sigmas["EnergyLabel"] == energy)
-            * (plot_sigmas["Fiducialized"] == fiducial)
-            * (plot_sigmas["NHits"] == nhits)
+            # (plot_sigmas["EnergyLabel"] == energy)
+            (plot_sigmas["NHits"] == nhits)
             * (plot_sigmas["OpHits"] == ophits)
             * (plot_sigmas["AdjCl"] == adjcl)
         ].copy()
@@ -199,7 +208,7 @@ for config in configs:
             rows=1,
             cols=2,
             subplot_titles=(
-                f"Fiducial {fiducial:.0f} (cm), min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}",
+                f"min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}",
                 "Significance",
             ),
         )
@@ -243,12 +252,12 @@ for config in configs:
             fig.add_trace(
                 go.Scatter(
                     x=comp_df["Energy"].values[0],
-                    y=args.exposure * comp_df["Counts/Energy"].values[0],
+                    y=args.exposure * np.array(comp_df["Counts/Energy"].values[0]),
                     name=f"{component_label}",
                     mode="lines",
                     error_y=dict(
                         type="data",
-                        array=comp_df["Error"].values[0],
+                        array=args.exposure * np.array(comp_df["Error"].values[0]),
                     ),
                     line_shape="hvh",
                     line=dict(
@@ -263,26 +272,55 @@ for config in configs:
                 col=1,
             )
 
+            day_night_counts.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Exposure": args.exposure,
+                    "Component": component_label,
+                    "Energy": comp_df["Energy"].values[0],
+                    "Counts": np.array(comp_df["Counts/Energy"].values[0]),
+                    "CountsError": np.array(comp_df["Error"].values[0]),
+                }
+            )
+
         if plot_sigmas.empty:
             rprint(
                 f"[yellow][WARNING] Not found {sigma_label} for {config} {name} {energy}[/yellow]"
             )
             continue
-        if len(plot_sigmas) == 1:
-            plot_sign_fid = plot_sigmas.copy()
 
-        elif len(plot_sigmas) > 1:
+        plot_sign_fid = plot_sigmas.copy()
+
+        if len(plot_sigmas) > 1:
+            print(plot_sigmas[reference])
+            print(plot_sigmas[reference].max())
             plot_sign_fid = plot_sigmas.loc[
                 plot_sigmas[reference] == plot_sigmas[reference].max()
             ]
 
-        fd_factor = 1
-        if args.fd_factor_true:
-            fd_factor = 0.5
+        day_night_significance.append(
+            {
+                "Geometry": info["GEOMETRY"],
+                "Config": config,
+                "Name": name,
+                "Exposure": plot_sign_fid["Exposure"].values[0],
+                "Significance": plot_sign_fid[reference].values[0],
+                "SignificanceError+": np.subtract(
+                    plot_sign_fid[reference + "+Error"].values[0],
+                    plot_sign_fid[reference].values[0],
+                ),
+                "SignificanceError-": np.subtract(
+                    plot_sign_fid[reference].values[0],
+                    plot_sign_fid[reference + "-Error"].values[0],
+                ),
+            }
+        )
 
         fig.add_trace(
             go.Scatter(
-                x=fd_factor * plot_sign_fid["Exposure"].values[0],
+                x=plot_sign_fid["Exposure"].values[0],
                 y=plot_sign_fid[reference].values[0],
                 name=f"{reference}",
                 mode="lines",
@@ -298,7 +336,7 @@ for config in configs:
         )
         fig.add_trace(
             go.Scatter(
-                x=fd_factor * plot_sign_fid["Exposure"].values[0],
+                x=plot_sign_fid["Exposure"].values[0],
                 y=plot_sign_fid[reference + "+Error"].values[0],
                 mode="lines",
                 marker=dict(color="#444"),
@@ -310,7 +348,7 @@ for config in configs:
         )
         fig.add_trace(
             go.Scatter(
-                x=fd_factor * plot_sign_fid["Exposure"].values[0],
+                x=plot_sign_fid["Exposure"].values[0],
                 y=plot_sign_fid[reference + "-Error"].values[0],
                 marker=dict(color="#444"),
                 line=dict(width=0),
@@ -327,7 +365,7 @@ for config in configs:
             fig,
             tickformat=(".1f", ".0e"),
             add_units=False,
-            legend_title=f"{energy}Energy",
+            legend_title=f"{energy}",
             title=f"Day-Night - {folder} Sample - {config} {name}",
             matches=(None, None),
         )
@@ -338,15 +376,15 @@ for config in configs:
             # Reduce number of ticks
             dtick=1,
             range=[
-                np.log10(args.exposure * 1e-2),
-                np.log10(args.exposure * 1e2),
+                np.log10(args.exposure * 1e-3),
+                np.log10(args.exposure * 1e4),
             ],
             title=f"Counts per Energy ({args.exposure} kT·year·MeV)⁻¹",
             row=1,
             col=1,
         )
         fig.update_xaxes(
-            range=[4, 20],
+            range=[6.75, 26],
             title=f"Reconstructed Neutrino Energy (MeV)",
             row=1,
             col=1,
@@ -359,14 +397,10 @@ for config in configs:
             row=1,
             col=2,
         )
-        exposure_title = f"HD Exposure (kT·year)"
-        range = [-10, 100]
-        if args.fd_factor_true:
-            exposure_title = f"Phase I Exposure (kT·year)"
-            range = [-5, 50]
+        exposure_title = f"Exposure (kT·year)"
 
         fig.update_xaxes(
-            range=range,
+            range=[-10, args.exposure],
             zeroline=False,
             title=exposure_title,
             row=1,
@@ -401,16 +435,44 @@ for config in configs:
             legend2=dict(y=0.0, x=0.84, font=dict(size=16), bgcolor="rgba(0,0,0,0)"),
         )
 
-        fd_factor_title = "HD"
-        if args.fd_factor_true:
-            fd_factor_title = "Phase_I"
+        figure_name = f"{energy}_DayNight_Exposure"
+
+        if (
+            args.nhits is not None
+            and args.ophits is not None
+            and args.adjcls is not None
+        ):
+            figure_name += (
+                f"_NHits{args.nhits:.0f}_OpHits{args.ophits:.0f}_AdjCl{args.adjcls:.0f}"
+            )
+
+        if args.threshold is not None:
+            figure_name += f"_Threshold_{args.threshold:.0f}"
+
+        if args.stacked:
+            figure_name += "_Stacked"
 
         save_figure(
             fig,
             f"{save_path}/{folder.lower()}",
             config,
             None,
-            filename=f"{energy}Energy_{analysis}_{sigma_label}_exposure_{args.exposure:.0f}_{fd_factor_title}",
+            filename=figure_name,
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
+
+        for df, df_name in zip(
+            [pd.DataFrame(day_night_counts), pd.DataFrame(day_night_significance)],
+            ["DayNight_Counts", "DayNight_Significance"],
+        ):
+            save_df(
+                df,
+                data_path,
+                config,
+                name,
+                subfolder=args.folder.lower(),
+                filename=df_name,
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )

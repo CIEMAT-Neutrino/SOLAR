@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/TPC/adjcluster/"
-data_path = f"{root}/data/TPC/adjcluster/"
+save_path = f"{root}/images/TPC/adjcluster"
+data_path = f"{root}/data/TPC/adjcluster"
 
 for path in [save_path, data_path]:
     if not os.path.exists(path):
@@ -44,6 +44,15 @@ run, output = load_multi(
 run = compute_reco_workflow(
     run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
 )
+filtered_run, mask, output = compute_filtered_run(
+    run,
+    configs,
+    params={("Reco", "TrueMain"): ("equal", True)},
+    presets=[user_input["workflow"]],
+    signal = "marley" in args.name,
+    debug=user_input["debug"],
+)
+rprint(output)
 
 for config in configs:
     branches = []
@@ -67,7 +76,7 @@ for config in configs:
             enumerate(info["CLUSTER_RADIUS"]),
             enumerate(
                 zip(
-                    ["Signal", "Intrinsic Bkg.", "External Bkg."],
+                    ["Signal", "Intrinsic", "External"],
                     [
                         "TotalAdjClSameGenNum",
                         "TotalAdjClIntrinsicBkgNum",
@@ -76,20 +85,25 @@ for config in configs:
                 )
             ),
         ):
-            per_99 = np.percentile(reco_df[f"{variable}{limit}"], 99)
             hist, bins = np.histogram(
                 reco_df[f"{variable}{limit}"],
-                bins=(
-                    np.arange(0, np.max(reco_df[f"{variable}{limit}"]) + 1, 1)
-                    if variable.endswith("Num")
-                    else np.arange(1.5, per_99, 100)
-                ),
+                bins=(np.arange(-0.5, np.max(reco_df[f"{variable}{limit}"]) + 0.5, 1)),
             )
-            hist = hist / np.sum(hist)
+            density = hist / np.sum(hist)
+            table_list.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Variable": label,
+                    "Distance": f"{limit}",
+                    "AdjClNum": reco_df[f"{variable}{limit}"],
+                }
+            )
             fig.add_trace(
                 go.Scatter(
-                    x=bins,
-                    y=hist,
+                    x=(bins[1:] + bins[:-1]) / 2,
+                    y=density,
                     mode="lines+markers",
                     line_shape="spline",
                     marker_symbol=["circle", "square", "diamond"][idx],
@@ -117,16 +131,7 @@ for config in configs:
                         name=label,
                     )
                 )
-            table_list.append(
-                {
-                    "Type": label,
-                    "Distance": f"{limit}",
-                    "Mean": np.mean(reco_df[f"{variable}{limit}"]),
-                    "Error": np.std(reco_df[f"{variable}{limit}"])
-                    / np.sqrt(len(reco_df[f"{variable}{limit}"])),
-                    "STD": np.std(reco_df[f"{variable}{limit}"]),
-                }
-            )
+
         fig = format_coustom_plotly(
             fig,
             title=f"AdjClusters - {config}",
@@ -154,9 +159,8 @@ for config in configs:
             config,
             name,
             decimals=3,
-            filename="Signal_AdjClusters",
+            filename="Adjacent_Cluster_Counts",
             rm=user_input["rewrite"],
-            filetype="txt",
             debug=user_input["debug"],
         )
 
@@ -181,21 +185,33 @@ for config in configs:
 
         df_list = []
         for variable in explode_branches:
-            fig = make_subplots(rows=1, cols=1)
             this_df = reco_df[reco_df["TotalAdjClCharge"] > 0]
             this_adjcl_df = reco_adjcl_df[(reco_adjcl_df["AdjClCharge"] > 0)]
 
-            this_df_marley = this_adjcl_df[(this_adjcl_df["AdjClPur"] > 0)]
-            this_df_externals = this_adjcl_df[
-                (this_adjcl_df["AdjClPur"] == 0)
-                * (this_adjcl_df["AdjClGen"].isin(info["EXTERNAL_BACKGROUNDS"]))
-            ]
-            this_df_intrinsic = this_adjcl_df[
-                (this_adjcl_df["AdjClPur"] == 0)
-                * (~this_adjcl_df["AdjClGen"].isin(info["EXTERNAL_BACKGROUNDS"]))
-            ]
+            conditions = {
+                "Signal": {
+                    "Signal": this_adjcl_df[this_adjcl_df["AdjClPur"] > 0],
+                    "External": this_adjcl_df[
+                        (this_adjcl_df["AdjClPur"] == 0)
+                        * (this_adjcl_df["AdjClGen"].isin(info["EXTERNAL_BACKGROUNDS"]))
+                    ],
+                    "Intrinsic": this_adjcl_df[
+                        (this_adjcl_df["AdjClPur"] == 0)
+                        * (
+                            ~this_adjcl_df["AdjClGen"].isin(
+                                info["EXTERNAL_BACKGROUNDS"]
+                            )
+                        )
+                    ],
+                }
+            }
 
-            bins = np.arange(0, np.max(this_adjcl_df[variable]), 1)
+            bins = np.arange(0, np.max(this_adjcl_df[variable]), 1) if np.max(this_adjcl_df[variable]) < 1e6 else np.arange(0, np.percentile(this_adjcl_df[variable], 99), 1)
+            if variable == "AdjClPur":
+                bins = np.arange(0, np.max(this_adjcl_df[variable]) + 1, 1)
+                if len(bins) < 2:
+                    bins = np.arange(0, 2, 1)
+
             if variable == "AdjClPur":
                 bins = np.linspace(0, 1, 100)
 
@@ -203,67 +219,45 @@ for config in configs:
                 bins = np.arange(0.1, 10, 0.05)
 
             if variable == "AdjClNHits":
-                bins = np.arange(0.5, np.max(this_adjcl_df[variable]), 1)
-
-            hist_marley, edges = np.histogram(
-                this_df_marley[variable], bins=bins, density=False
-            )
-            hist_marley = hist_marley / len(this_df)
-            hist_external_bkg, edges = np.histogram(
-                this_df_externals[variable], bins=bins, density=False
-            )
-            hist_external_bkg = hist_external_bkg / len(this_df)
-            hist_intrinsic_bkg, edges = np.histogram(
-                this_df_intrinsic[variable], bins=bins, density=False
-            )
-            hist_intrinsic_bkg = hist_intrinsic_bkg / len(this_df)
-
-            edge_centers = (edges[1:] + edges[:-1]) / 2
+                bins = np.arange(0, np.max(this_adjcl_df[variable]) + 1, 1)
 
             plot_list = []
-            plot_list.append(
-                {
-                    "Geometry": info["GEOMETRY"],
-                    "Config": config,
-                    "Name": name,
-                    "Variable": variable,
-                    "Values": edge_centers,
-                    "Counts": hist_marley,
-                    "Density": hist_marley
-                    / (np.sum(hist_marley) * (edges[1] - edges[0])),
-                    "Signal": "Signal",
-                }
-            )
-            plot_list.append(
-                {
-                    "Geometry": info["GEOMETRY"],
-                    "Config": config,
-                    "Name": name,
-                    "Variable": variable,
-                    "Values": edge_centers,
-                    "Counts": hist_external_bkg,
-                    "Density": hist_external_bkg
-                    / (np.sum(hist_external_bkg) * (edges[1] - edges[0])),
-                    "Signal": "External",
-                }
-            )
-            plot_list.append(
-                {
-                    "Geometry": info["GEOMETRY"],
-                    "Config": config,
-                    "Name": name,
-                    "Variable": variable,
-                    "Values": edge_centers,
-                    "Counts": hist_intrinsic_bkg,
-                    "Density": hist_intrinsic_bkg
-                    / (np.sum(hist_intrinsic_bkg) * (edges[1] - edges[0])),
-                    "Signal": "Intrinsic",
-                }
-            )
+            for key, df in conditions["Signal"].items():
+                hist, edges = np.histogram(df[variable], bins=bins, density=False)
+                hist = hist / len(this_df)
+                edge_centers = (edges[1:] + edges[:-1]) / 2
 
+                if len(df[variable]) == 0:
+                    continue
+
+                plot_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Variable": variable,
+                        "Values": edge_centers,
+                        "Counts": hist,
+                        "CountsError": np.sqrt(hist),
+                        "Density": (
+                            hist / (np.sum(hist) * (edges[1] - edges[0]))
+                            if len(edges) > 1
+                            else 0
+                        ),
+                        "DensityError": (
+                            np.sqrt(hist) / (np.sum(hist) * (edges[1] - edges[0]))
+                            if len(edges) > 1
+                            else 0
+                        ),
+                        "Signal": key.capitalize(),
+                    }
+                )
+
+            df_list += plot_list
             plot_df = pd.DataFrame(plot_list)
             this_plot_df = plot_df.explode(["Values", "Counts", "Density"])
-            df_list += plot_list
+
+            fig = make_subplots(rows=1, cols=1)
             for idx, signal in enumerate(["Signal", "Intrinsic", "External"]):
                 fig.add_trace(
                     go.Scatter(
@@ -324,7 +318,7 @@ for config in configs:
             data_path,
             config,
             name,
-            filename=f"AdjCluster_Distributions",
+            filename=f"Adjacent_Cluster_Distributions",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )

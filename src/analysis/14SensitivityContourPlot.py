@@ -1,6 +1,9 @@
-import sys, json
+import os
+import sys
 
-sys.path.insert(0, "../../")
+# Add the absolute path to the lib directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 from lib import *
 
 # Define flags for the analysis config and name with the python parser
@@ -27,19 +30,19 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the results folder",
-    default="Reduced",
-    choices=["Reduced", "Nominal"],
+    default="Nominal",
+    choices=["Reduced", "Truncated", "Nominal"],
 )
 parser.add_argument(
-    "--signal_uncertanty",
+    "--signal_uncertainty",
     type=float,
-    help="The signal uncertanty for the analysis",
+    help="The signal uncertainty for the analysis",
     default=0.04,
 )
 parser.add_argument(
-    "--background_uncertanty",
+    "--background_uncertainty",
     type=float,
-    help="The background uncertanty for the analysis",
+    help="The background uncertainty for the analysis",
     default=0.02,
 )
 parser.add_argument(
@@ -53,10 +56,7 @@ parser.add_argument(
         "SelectedEnergy",
         "SolarEnergy",
     ],
-    default="ClusterEnergy",
-)
-parser.add_argument(
-    "--fiducial", type=int, help="The fiducial cut for the analysis", default=None
+    default="SolarEnergy",
 )
 parser.add_argument(
     "--nhits", type=int, help="The nhit cut for the analysis", default=None
@@ -65,7 +65,7 @@ parser.add_argument(
     "--ophits", type=int, help="The ophit cut for the analysis", default=None
 )
 parser.add_argument(
-    "--adjcl", type=int, help="The adjacent cluster cut for the analysis", default=None
+    "--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -75,33 +75,30 @@ args = parser.parse_args()
 configs = {args.config: [args.name]}
 rprint(args)
 
-save_path = f"{root}/images/sensitivity"
+save_path = f"{root}/images/sensitivity/{args.folder.lower()}"
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    analysis_info = json.load(open(f"{root}/lib/import/analysis.json", "r"))
+    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
 
-    fastest_sigma = pickle.load(
-        open(
-            f"{info['PATH']}/{args.reference.upper()}/{args.folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_fastest_sigma3_{args.reference}.pkl",
-            "rb",
+    if args.nhits is None or args.adjcls is None or args.ophits is None:
+        fastest_sigma = pickle.load(
+            open(
+                f"{info['PATH']}/{args.reference.upper()}/{args.folder.lower()}/{args.config}/{args.name}/{args.config}_{args.name}_highest_{args.reference}.pkl",
+                "rb",
+            )
         )
-    )
-    for name, key in product(configs[config], fastest_sigma):
+
+    for name, key in product(configs[config], fastest_sigma if args.nhits is None or args.adjcls is None or args.ophits is None else [{(args.config, args.name, args.energy):None}]):
         if args.energy is not None:
             energy = args.energy
         else:
             energy = key[2]
 
         if args.background:
-            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/reduced/{energy}/results/signal_{100*args.signal_uncertanty:.0f}%_and_background_{100*args.background_uncertanty:.0f}%"
+            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/{args.folder.lower()}/{energy}/results/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
         else:
-            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/reduced/{energy}/results/signal_{100*args.signal_uncertanty:.0f}%_only"
-
-        if args.fiducial is not None:
-            fiducial = args.fiducial
-        else:
-            rprint(f"Using optimized fiducial cut {fastest_sigma[key]['Fiducialized']}")
-            fiducial = int(fastest_sigma[key]["Fiducialized"])
+            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/hd_1x2x6_centralAPA/marley/{args.folder.lower()}/{energy}/results/signal_{100*args.signal_uncertainty:.0f}%_only"
 
         if args.nhits is not None:
             nhits = args.nhits
@@ -109,8 +106,8 @@ for config in configs:
             rprint(f"Using optimized nhits {fastest_sigma[key]['NHits']}")
             nhits = int(fastest_sigma[key]["NHits"])
 
-        if args.adjcl is not None:
-            adjcl = args.adjcl
+        if args.adjcls is not None:
+            adjcl = args.adjcls
         else:
             rprint(f"Using optimized adjcl {fastest_sigma[key]['AdjCl']}")
             adjcl = int(fastest_sigma[key]["AdjCl"])
@@ -122,16 +119,16 @@ for config in configs:
             ophits = int(fastest_sigma[key]["OpHits"])
 
         solar_sin13_df = pd.read_pickle(
-            f"{data_path}/marley_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin13_df.pkl"
+            f"{data_path}/marley_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin13_df.pkl"
         )
         solar_sin12_df = pd.read_pickle(
-            f"{data_path}/marley_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin12_df.pkl"
+            f"{data_path}/marley_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin12_df.pkl"
         )
         react_sin13_df = pd.read_pickle(
-            f"{data_path}/marley_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin13_df.pkl"
+            f"{data_path}/marley_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin13_df.pkl"
         )
         react_sin12_df = pd.read_pickle(
-            f"{data_path}/marley_{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin12_df.pkl"
+            f"{data_path}/marley_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin12_df.pkl"
         )
 
         # Substitute 0 values for nan in all dfs
@@ -147,7 +144,7 @@ for config in configs:
             1,
             subplot_titles=(
                 [
-                    f"Fiducial {fiducial:.0f} (cm), min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}"
+                    f"min#Hits {nhits:.0f}, min#OpHits {ophits:.0f}, max#AdjCl {adjcl:.0f}"
                 ]
             ),
         )
@@ -218,7 +215,7 @@ for config in configs:
             for idx, file_path in enumerate(file_paths):
                 compute_sin = False
                 deltam_factor = 1e-5
-                folder_path = f"{root}/lib/import/contours/{label}"
+                folder_path = f"{root}/import/contours/{label}"
                 # Check if the file exists
                 if not os.path.exists(f"{folder_path}/{file_path}"):
                     print(f"File {folder_path}/{file_path} does not exist.")
@@ -258,9 +255,9 @@ for config in configs:
         )
 
         if args.background:
-            figure_name = f"{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertanty:.0f}_Bkg{100*args.background_uncertanty:.0f}"
+            figure_name = f"{args.folder}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertainty:.0f}_Bkg{100*args.background_uncertainty:.0f}"
         else:
-            figure_name = f"{energy}_Fiducial{fiducial}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertanty:.0f}"
+            figure_name = f"{args.folder}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Signal{100*args.signal_uncertainty:.0f}"
 
         fig.update_xaxes(title=f"sin²{unicode('theta')}{subscript(12)}")
         fig.update_yaxes(title=f"{unicode('Delta')}m²{subscript(21)} (eV²)")

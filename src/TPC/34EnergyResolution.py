@@ -45,14 +45,6 @@ run, output = load_multi(
     configs, preset=user_input["workflow"], debug=user_input["debug"]
 )
 
-filtered_run, mask, output = compute_filtered_run(
-    run,
-    configs,
-    presets=[user_input["workflow"]],
-    debug=user_input["debug"],
-)
-rprint(output)
-
 RMS_data = []
 for label, params in zip(
     ["True", "Reco", "None"],
@@ -69,7 +61,7 @@ for label, params in zip(
     ],
 ):
     this_run = compute_reco_workflow(
-        filtered_run,
+        run,
         configs,
         params=params,
         workflow=user_input["workflow"],
@@ -80,6 +72,8 @@ for label, params in zip(
         this_run,
         configs,
         params={("Reco", "TrueMain"): ("equal", True)},
+        presets=[user_input["workflow"]],
+        signal = "marley" in args.name,
         debug=user_input["debug"],
     )
     rprint(output)
