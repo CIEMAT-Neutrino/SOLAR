@@ -1,11 +1,23 @@
 # See https://help.github.com/ignore-files/ for more about ignoring files.
+.vscode-remote-containers
 .vscode-server
+.ipython
+.copilot
+.config
+.dotnet
+.redhat
+.codex
+.local
+
+.bash_history
+.python_history
+
 data
 notebooks
 sensitivity
-.local/
 config/*/*/*calib/
 config/*/*calib/
+
 *.png
 *.pkl
 
