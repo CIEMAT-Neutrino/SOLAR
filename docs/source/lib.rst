@@ -1,7 +1,7 @@
 lib package
 ===========
 
-The `lib` package contains the shared utilities used across the staged workflow and solar analyses.
+The `lib` package contains the shared helpers used across the staged workflow and solar analyses.
 
 Core modules
 ------------
@@ -18,15 +18,7 @@ Core modules
 - `lib.lib_sigma`: significance evaluation helpers.
 - `lib.lib_weights`: truth-level weighting and PDF evaluation.
 
-Package contents
-----------------
+Notes
+-----
 
-.. automodule:: lib
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Recent additions
-----------------
-
-Recent analysis work introduced smoothing and fiducial helper modules that are now used by the DayNight, HEP, and Sensitivity workflows through `import/analysis.json`.
+The Read the Docs build intentionally keeps this page descriptive instead of importing the full runtime package tree. That avoids requiring ROOT-era analysis dependencies just to render the documentation site.

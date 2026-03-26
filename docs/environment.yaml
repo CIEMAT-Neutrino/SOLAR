@@ -3,51 +3,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.6
-  - conda-forge::root
+  - python=3.11
   - pip
-  - pip:
-    - sphinx==4.1.0
-    - alabaster==0.7.13
-    - sphinx_book_theme
-    - myst-nb
-    - myst-parser
-    - sphinxcontrib-bibtex
-    - sphinxcontrib-plantuml
-    - sphinxcontrib-mermaid
-    - sphinxcontrib-matlabdomain
-    - sphinxcontrib-svg2pdfconverter
-    - sphinxcontrib-actdiag
-    - sphinxcontrib-blockdiag
-    - sphinxcontrib-nwdiag
-    - sphinxcontrib-seqdiag
-    - sphinxcontrib-plantuml
-    - sphinxcontrib-plantuml
-    - sphinxemoji
-    - nbsphinx
-    - sphinx_plotly_directive
-    - sphinx_rtd_theme==0.5.0rc1
-    - sphinx_copybutton
-    - awkward
-    - chart_studio
-    - datashader
-    - datashape
-    - hist
-    - icecream
-    - iminuit
-    - inquirer
-    - ipykernel
-    - jupyter
-    - kaleido
-    - matplotlib
-    - nbformat
-    - numba
-    - numpy
-    - pandas
-    - particle
-    - plotly
-    - plotly_express
-    - rich
-    - root_numpy
-    - scipy
-    - uproot
+  - sphinx>=7,<8
+  - myst-parser>=2,<3
+  - sphinx-copybutton
+  - sphinxemoji

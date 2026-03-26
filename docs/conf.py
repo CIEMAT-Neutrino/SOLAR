@@ -1,35 +1,26 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+from pathlib import Path
+import sys
 
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-import os,sys;
-sys.path.insert(0, os.path.abspath('../'))
-sys.path.append('lib/__init__.py')
-
-import six
-print('Six version: %s\n' % six.__version__)
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 project = 'SOLAR'
-copyright = '2023, mantheys'
+copyright = '2026, mantheys'
 author = 'mantheys'
 release = '1.0.0'
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-extensions = ['myst_parser', 'sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.napoleon', 'sphinxemoji.sphinxemoji', 'sphinx_copybutton', 'nbsphinx', 'sphinx_plotly_directive']
+extensions = [
+    'myst_parser',
+    'sphinx.ext.napoleon',
+    'sphinxemoji.sphinxemoji',
+    'sphinx_copybutton',
+]
+
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 html_theme = 'nature'
 html_static_path = ['_static']
 
-# -- Napoleon settings -------------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html#configuration
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
