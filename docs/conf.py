@@ -12,7 +12,6 @@ release = '1.0.0'
 extensions = [
     'myst_parser',
     'sphinx.ext.napoleon',
-    'sphinxemoji.sphinxemoji',
     'sphinx_copybutton',
 ]
 
