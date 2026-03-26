@@ -1,49 +1,99 @@
 # SOLAR
-SolarNuAna_module Output Library for Analysis &amp; Research
 
-## Introduction
+SolarNuAna output analysis and reconstruction toolkit for DUNE solar-neutrino studies.
 
-This module is designed to analyze the output of the [SolarNuAna_module](https://github.com/DUNE/duneana/blob/develop/duneana/SolarNuAna/SolarNuAna_module.cc). It is designed to be used in conjunction with the [DUNE](https://github.com/DUNE) software framework.
+The repository turns `SolarNuAna_module` outputs into reusable analysis products, detector-performance studies, and oscillation sensitivity plots. It now includes a full staged pipeline covering truth-level weighting, reconstruction workflow studies, preselection, PDS/TPC/vertex performance, and high-level solar analyses such as Day-Night, HEP, fiducial optimization, and oscillation sensitivity.
 
-Read more about the module [here](https://dune-solar.readthedocs.io/en/latest/).
+Full documentation lives in [`docs/`](docs/) and is published at [dune-solar.readthedocs.io](https://dune-solar.readthedocs.io/en/latest/).
+
+## What Is In The Repo
+
+- `src/workflow/`: detector-response and reconstruction workflow drivers.
+- `src/preselection/`: production, efficiency, and clustering studies.
+- `src/PDS/`: optical-flash and matching studies.
+- `src/TPC/`: cluster and energy-resolution studies.
+- `src/vertex/`: smearing, fiducial, and reconstruction performance scans.
+- `src/truth/`: truth-level weighting and background PDF preparation.
+- `src/analysis/`: solar-physics analyses, fiducial optimization, Day-Night, HEP, and sensitivity products.
+- `lib/`: shared IO, plotting, smoothing, fiducial, oscillation, and workflow helpers.
+- `tests/`: regression coverage for newer smoothing utilities.
+- `config/`: detector-configuration-specific JSON files.
+- `import/analysis.json`: shared analysis defaults, including smoothing and fiducialization settings.
+
+## Typical Workflow
+
+1. Start from ROOT outputs produced with DUNE + `SolarNuAna_module`.
+2. Run the detector workflow and reconstruction chain:
+
+   ```bash
+   python3 src/00All.py --config hd_1x2x6_centralAPA --name marley
+   ```
+
+3. Run the high-level solar analyses:
+
+   ```bash
+   python3 src/analysis/10SensitivityAnalysis.py \
+     --config hd_1x2x6_centralAPA \
+     --names marley gamma neutron \
+     --analysis DayNight HEP Sensitivity \
+     --folder Reduced
+   ```
+
+4. Inspect generated artefacts under `data/` and `images/`.
+
+For analysis-only reruns on existing reconstructed products, `src/01Analysis.py` skips the initial workflow stage and starts from preselection/PDS/TPC/vertex.
+
+## Recent Developments Reflected In This Repo
+
+- Config-driven histogram smoothing via `lib/lib_smooth.py`.
+- Fiducial optimization helpers in `lib/lib_fiducial.py` and `src/analysis/0YBestFiducial.py`.
+- Updated Day-Night, HEP, and oscillation-sensitivity orchestration in `src/analysis/10SensitivityAnalysis.py`.
+- Shared analysis defaults in [`import/analysis.json`](import/analysis.json), including:
+  - Gaussian smoothing defaults for 1D and 2D products.
+  - Best-significance reference selection.
+  - Analysis-specific fiducialization rules for DayNight, HEP, and Sensitivity.
+- Regression tests for smoothing behaviour in [`tests/test_smoothing.py`](tests/test_smoothing.py).
 
 ## Installation
 
-To use the SolarNuAna_module, you must have a working version of the DUNE software framework. This can be done by following the instructions [here](https://dune.bnl.gov/wiki/Computing#Getting_the_DUNE_Software_Framework). Once you were able to run the module on a given set of marley (+ bkg) data, use this repository to analyse the output tree.
+SOLAR is a Python analysis repository intended to run alongside DUNE-produced files. A lightweight local setup is:
 
 ```bash
 git clone https://github.com/CIEMAT-Neutrino/SOLAR.git
 cd SOLAR
-git checkout -b yourbranch
-source scripts/setup.sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r docs/requirements.txt
 ```
 
-## Usage
+For the Sphinx documentation environment, use:
 
-Once you have the output tree from the SolarNuAna_module, you can use the following scripts to analyze the data.
+```bash
+conda env create -f docs/environment.yaml
+conda activate test
+```
 
-Macros:
+If you work against shared CIEMAT storage, `source scripts/setup.sh` can mount the expected `data/` and `sensitivity/` directories through `sshfs`.
 
-- 00Processing.py: This script will process the output tree from the SolarNuAna_module and save the branches in numpy format for faster access.
-- 01Calibration.py: This script will calibrate the (lifetime-corrected) charge-to-energy conversion of the TPC based on marley electrons.
-- 02Reconstruction.py: This script will reconstruct the true neutrino energy of the events based on the previous calibration &amp; the topology of the event.
-- 03Smearing.py: This script will compute the smearing matrix of the neutrino interactions and weight it with the solar neutrino flux.
-- 04Computing.py: This script will execute the full reconstruction workflow of the detector to the solar neutrino flux based on the previous smearing matrix.
-- 05Sensitivity.py: This script will compute the sensitivity to the different oscillation parameters (dm2, sin13, sin12) based on the computed reco solar spectrum & background.
+## Documentation Build
 
-## Contributing
+```bash
+cd docs
+make html
+```
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+The generated site is written to `docs/_build/html/`.
+
+## Testing
+
+```bash
+python3 -m pytest tests/test_smoothing.py
+```
 
 ## Authors
 
-- [**Sergio Manthey Corchado**](https://github.com/mantheys)
+- [Sergio Manthey Corchado](https://github.com/mantheys)
 
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
-
-## Acknowledgments
-
-- [**DUNE Collaboration**](https://github.com/DUNE)
-- [**CIEMAT**](https://github.com/CIEMAT-Neutrino)
