@@ -22,7 +22,12 @@ from rich import print as rprint
 # Import all the local functions
 from .lib_reco import compute_reco_workflow
 from .lib_reco import compute_true_efficiency
-from .lib_default import get_default_energies, get_default_nhits
+from .lib_default import (
+    get_default_energies,
+    get_default_nhits,
+    load_analysis_info,
+    get_analysis_threshold,
+)
 from .lib_filter import (
     compute_filtered_run,
     update_yaml_file,
@@ -39,10 +44,14 @@ from .lib_io import *
 from .lib_osc import *
 from .lib_plt import *
 from .lib_root import *
-from .lib_sigma import evaluate_significance
+from .lib_smooth import *
+from .lib_sigma import evaluate_significance, evaluate_profile_likelihood_discovery
 from .lib_solar import *
 from .lib_wkf import *
 from .lib_evt import *
+from .lib_fiducial import *
+from .lib_background import *
+from .lib_log import configure_global_logging, get_global_logging_config
 
 # Config the external libraries
 np.seterr(divide="ignore", invalid="ignore")
@@ -103,8 +112,8 @@ hep_rebin = np.arange(0, 10, 10)
 hep_rebin = np.append(hep_rebin, np.arange(10, 31, 1))
 hep_rebin_centers = (hep_rebin[1:] + hep_rebin[:-1]) / 2
 
-sensitivity_rebin = np.arange(0, 10, 10)
-sensitivity_rebin = np.append(sensitivity_rebin, np.arange(10, 32, 2))
+sensitivity_rebin = np.arange(0, 8, 8)
+sensitivity_rebin = np.append(sensitivity_rebin, np.arange(8, 31, 1))
 sensitivity_rebin_centers = (sensitivity_rebin[1:] + sensitivity_rebin[:-1]) / 2
 
 daynight_rebin = np.arange(0, 8, 8)

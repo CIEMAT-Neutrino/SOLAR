@@ -1,0 +1,6 @@
+{
+  "markdown.marp.themes": [
+    "./themes/dune.css"
+  ],
+  "markdown.marp.exportType": "pdf"
+}

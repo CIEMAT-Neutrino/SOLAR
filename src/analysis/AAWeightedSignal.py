@@ -52,20 +52,23 @@ user_input = {
         "neutron": ["SignalParticleWeight"],
         "gamma": ["SignalParticleWeight"],
         "alpha": ["SignalParticleWeight"],
+        "radiological": ["SignalParticleWeight"],
     },
     "weight_labels": {
         "marley": ["Solar", "8B", "hep"],
         "neutron": ["neutron"],
         "gamma": ["gamma"],
         "alpha": ["alpha"],
+        "radiological": ["radiological"],
     },
     "colors": {
         "marley": ["grey", "rgb(225,124,5)", "rgb(204,80,62)"],
         "neutron": ["rgb(15,133,84)"],
         "gamma": ["black"],
         "alpha": ["rgb(29, 105, 150)"],
+        "radiological": ["rgb(120, 94, 240)"],
     },
-    "yzoom": {"marley": [0, 6], "neutron": [0, 6], "gamma": [0, 6], "alpha": [2, 8]},
+    "yzoom": {"marley": [0, 6], "neutron": [0, 6], "gamma": [0, 6], "alpha": [2, 8], "radiological": [0, 6]},
     "rewrite": True,
     "debug": True,
 }
@@ -74,7 +77,6 @@ run, output = load_multi(
     configs,
     preset=user_input["workflow"],
     branches={"Config": ["Geometry"]},
-    debug=user_input["debug"],
 )
 
 run = compute_reco_workflow(
@@ -92,7 +94,7 @@ run = compute_reco_workflow(
     ),
     rm_branches=False,
     workflow=user_input["workflow"],
-    debug=user_input["debug"],
+    debug=args.debug,
 )
 
 nhits_list = []
@@ -106,7 +108,7 @@ for config in configs:
                     user_input["weight_labels"][name.split("_")[0]],
                     user_input["colors"][name.split("_")[0]],
                 ),
-                [None, -1, 0, 1, 2, 3, 4],
+                [None, -1, 0, 1, 2, 3, 4] if name in ["marley", "neutron"] else [None],
             ),
             total=(3 if "marley" in args.name else 1),
             description=f"Processing {name} - {config}",
@@ -120,28 +122,34 @@ for config in configs:
             else:
                 mask = run["Reco"]["SignalParticleSurface"] == surface
 
-            nhits_list.append(
-                {
-                    "Config": config,
-                    "Name": name,
-                    "Folder": args.folder,
-                    "Component": weight_labels,
-                    "Weight": weight,
-                    "Type": "signal" if "marley" in name else "background",
-                    "Surface": surface,
-                    "#Hits": run["Reco"]["NHits"][mask],
-                    "Counts": run["Reco"][weight][mask],
-                    "TrueEnergy": run["Reco"]["SignalParticleK"][mask],
-                    "RecoEnergy": run["Reco"]["SolarEnergy"][mask],
-                }
-            )
+            # If mask is not empty, append the number of hits to the list
+            if np.sum(mask) > 0:
+                nhits_list.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "Folder": args.folder,
+                        "Component": weight_labels,
+                        "Weight": weight,
+                        "Type": "signal" if "marley" in name else "background",
+                        "Surface": surface,
+                        "#Hits": run["Reco"]["NHits"][mask],
+                        "Counts": run["Reco"][weight][mask],
+                        "TrueEnergy": run["Reco"]["SignalParticleK"][mask],
+                        "RecoEnergy": run["Reco"]["SolarEnergy"][mask],
+                    }
+                )
+            else:
+                if args.debug:
+                    print(f"No events found for {name} - {config} - {weight} - Surface {surface}")
 
 save_df(
     pd.DataFrame(nhits_list),
-    f"{data_path}/{args.folder.lower()}",
+    f"{data_path}",
     config=config,
     name=name,
-    filename=f"Weighted_{args.folder}",
+    filename=f"Weighted_Distributions",
+    subfolder=f"{args.folder.lower()}",
     rm=user_input["rewrite"],
     debug=user_input["debug"],
 )

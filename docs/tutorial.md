@@ -54,6 +54,15 @@ What it does today:
 - Runs HEP products: `13HEP.py`, exposure plots, significance plots, and best-sigma selection.
 - Runs oscillation sensitivity templates and contour plots: `14SensitivityBackgroundTemplate.py`, `14SensitivitySignalTemplate.py`, `14Sensitivity.py`, and `14SensitivityContourPlot.py`.
 
+Component policy note:
+
+- The orchestration applies the background component policy from `import/analysis.json` (`BACKGROUND_SAMPLES.ANALYSES` and `BACKGROUND_SAMPLES.ESSENTIAL`).
+- Non-essential components not selected for the requested analyses are skipped.
+- Missing essential components produce warnings.
+- Missing optional components are skipped with warnings.
+
+This is useful when optional samples (for example `radiological`) are available only for a subset of detector configurations.
+
 ## 4. Inspect Outputs
 
 The repository writes intermediate and final artefacts into project-local folders, especially:

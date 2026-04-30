@@ -6,8 +6,8 @@
     "vd_1x8x14_3view_30deg": {"marley": 1000},
     "hd_1x2x6_centralAPA": {
         "marley": 50,
-        "neutron": 4000,
-        "gamma": 4000
+        "neutron": 3600,
+        "gamma": 3600
     },
     "hd_1x2x6_lateralAPA": {
         "marley": 50,
@@ -16,8 +16,8 @@
     },
     "vd_1x8x14_3view_30deg_nominal": {
         "marley": 100,
-        "neutron": 300,
-        "gamma": 1000
+        "neutron": 2000,
+        "gamma": 2000
     },
     "vd_1x8x14_3view_30deg_optimistic": {
         "marley": 40,
@@ -26,7 +26,7 @@
     },
     "vd_1x8x14_3view_30deg_shielded": {
         "marley": 100,
-        "neutron": 300,
-        "gamma": 1000
+        "neutron": 2000,
+        "gamma": 2000
     }
 }

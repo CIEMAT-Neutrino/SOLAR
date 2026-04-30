@@ -5,11 +5,22 @@
 
 import os
 import sys
+import subprocess
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
+
+
+def run_command(command: str):
+    rprint(f"\n[green][CMD][/green] {command}")
+    completed = subprocess.run(command, shell=True)
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"Workflow stopped with exit code {completed.returncode}.\n"
+            f"Executed command: {command}"
+        )
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
@@ -30,18 +41,18 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 args = parser.parse_args()
 
 # Run the first script with the arguments
-os.system(
+run_command(
     f"python3 {root}/src/workflow/01Correction.py --config {args.config} --name {args.name}"
 )
-os.system(
+run_command(
     f"python3 {root}/src/workflow/02Calibration.py --config {args.config} --name {args.name}"
 )
-os.system(
+run_command(
     f"python3 {root}/src/workflow/03Discrimination.py --config {args.config} --name {args.name}"
 )
-os.system(
+run_command(
     f"python3 {root}/src/workflow/04Reconstruction.py --config {args.config} --name {args.name}"
 )
-os.system(
+run_command(
     f"python3 {root}/src/workflow/05Smearing.py --config {args.config} --name {args.name}"
 )

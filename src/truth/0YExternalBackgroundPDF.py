@@ -81,11 +81,7 @@ for config, name in product(args.config, args.name):
     exposure_dict = {}
     bin_edges = np.array([])
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
-    detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
-    detector_z = info["DETECTOR_SIZE_Z"] + 2 * info["DETECTOR_GAP_Z"]
-    lar_density = 1.396  # g/cm^3
-    detector_mass = detector_x * detector_y * detector_z * lar_density / 1e9  # kT
+    detector_mass = get_workspace_detector_mass(config, info)  # kT
 
     areas = json.load(open(f"{root}/import/surface_areas.json", "r"))
     for geometry, surfaces in areas.items():

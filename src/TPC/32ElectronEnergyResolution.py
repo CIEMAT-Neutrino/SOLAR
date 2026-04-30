@@ -294,8 +294,9 @@ for label, params in zip(
                     "FitFunctionLabel": f"Calorimetric Energy Resolution",
                     "FitFunctionFormula": "sqrt(p2^2 + (p1/sqrt(x - b))^2 + (p0/(x - b))^2)",
                     "Params": fit_params,
-                    "ParamsLabels": ["p0", "p1", "p2", "b"],
+                    "ParamsLabel": ["p0", "p1", "p2", "b"],
                     "ParamsFormat": [".1f", ".0e", ".2f", ".1f"],
+                    "ParamsUnit": ["", r"MeV$^{\frac{1}{2}}$", "%", "MeV"],
                     "ParamsError": fit_errors,
                 }
             )

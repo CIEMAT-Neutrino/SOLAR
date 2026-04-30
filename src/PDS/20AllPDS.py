@@ -5,11 +5,22 @@
 
 import os
 import sys
+import subprocess
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
+
+
+def run_command(command: str):
+    rprint(f"\n[green][CMD][/green] {command}")
+    completed = subprocess.run(command, shell=True)
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"Workflow stopped with exit code {completed.returncode}.\n"
+            f"Executed command: {command}"
+        )
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
@@ -43,11 +54,11 @@ args = parser.parse_args()
 # Run the first script with the arguments
 for config, name in product(args.config, args.name):
     # Your processing code here
-    os.system(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
+    run_command(f"python3 {root}/src/PDS/21OpFlash.py --config {config} --name {name}")
     # os.system(f"python3 {root}/src/PDS/22AdjOpFlash.py --config {config} --name {name}")
-    os.system(
+    run_command(
         f"python3 {root}/src/PDS/23MatchedOpFlash.py --config {config} --name {name}"
     )
-    os.system(
+    run_command(
         f"python3 {root}/src/PDS/24MatchedOpFlashEfficiency.py --config {config} --name {name}"
     )

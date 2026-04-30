@@ -11,6 +11,48 @@ from src.utils import get_project_root
 
 root = get_project_root()
 osc_names = {"mean": "Mean", "day": "Day", "night": "Night"}
+SECONDS_PER_YEAR = 365.25 * 24 * 3600
+LAR_DENSITY_G_PER_CM3 = 1.38
+
+
+def is_radiological_sample(name: str) -> bool:
+    return "radiological" in str(name).lower()
+
+
+def compute_detector_mass_kton(info: dict) -> float:
+    detector_x = info["DETECTOR_SIZE_X"] + 2 * info.get("DETECTOR_GAP_X", 0)
+    detector_y = info["DETECTOR_SIZE_Y"] + 2 * info.get("DETECTOR_GAP_Y", 0)
+    detector_z = info["DETECTOR_SIZE_Z"] + 2 * info.get("DETECTOR_GAP_Z", 0)
+    return detector_x * detector_y * detector_z * LAR_DENSITY_G_PER_CM3 / 1e9
+
+
+def compute_detector_time_exposure(info: dict, event_count: int) -> dict[str, float]:
+    full_detector_factor = float(info.get("FULL_DETECTOR_FACTOR", 1.0))
+    timewindow = float(info.get("TIMEWINDOW", 0.0))
+    detector_time_seconds = float(event_count) * timewindow * full_detector_factor
+    detector_years = detector_time_seconds / SECONDS_PER_YEAR
+    detector_mass_kton = compute_detector_mass_kton(info)
+    return {
+        "counts": float(event_count),
+        "time_seconds": detector_time_seconds,
+        "years": detector_years,
+        "detector_mass_kton": detector_mass_kton,
+        "exposure": detector_mass_kton * detector_years,
+    }
+
+
+def resolve_generated_event_count(
+    run: dict[str, dict],
+    config_tree_weight: dict,
+    config: str,
+    name: str,
+    jdx: np.ndarray,
+) -> float:
+    if config in config_tree_weight and name in config_tree_weight[config]:
+        return config_tree_weight[config][name] * len(run["Config"]["Geometry"][jdx])
+    if "AnalyzedEvents" in run["Config"]:
+        return np.sum(run["Config"]["AnalyzedEvents"][jdx])
+    return len(run["Config"]["Geometry"][jdx])
 
 
 def evaluate_1d_pdf(kde, values):
@@ -180,6 +222,7 @@ def compute_particle_surface(
                     or "alpha" in name.lower()
                     or "electron" in name.lower()
                     or "neutron" in name.lower()
+                    or "radiological" in name.lower()
                 ):
                     variable = "SignalParticle"
                 else:
@@ -197,7 +240,7 @@ def compute_particle_surface(
             if "marley" in name.lower():
                 run[tree]["SignalParticleSurface"][idx] = -1.0
 
-            elif "gamma" in name.lower() or "neutron" in name.lower():
+            elif "gamma" in name.lower() or "neutron" in name.lower() or "radiological" in name.lower():
                 # surface_weights = {}
                 main_coords = {
                     "X": run[tree][f"{variable}X"][idx],
@@ -205,9 +248,7 @@ def compute_particle_surface(
                     "Z": run[tree][f"{variable}Z"][idx],
                 }
 
-                output += (
-                    f"\t\t[cyan][INFO][/cyan] Computed {tree} particles per surface: "
-                )
+                surface_summary = []
                 for surface_name, [surface_value, surface_id] in surfaces[
                     info["GEOMETRY"]
                 ].items():
@@ -222,12 +263,16 @@ def compute_particle_surface(
                         )
                     )
                     mask = np.abs(coord - surface_value) <= 1
-                    output += (
-                        f"{surface_name}: {100 * mask.sum() / len(idx[0]):.1f}% / "
+                    surface_summary.append(
+                        f"{surface_name}: {100 * mask.sum() / len(idx[0]):.1f}%"
                     )
                     # surface_weights[str(surface_id)] = mask.sum() / len(idx[0])
                     run[tree]["SignalParticleSurface"][idx[0][mask]] = surface_id
-                output = output[:-3] + "\n"
+                output += (
+                    f"\t\t[cyan][INFO][/cyan] Computed {tree} particles per surface: "
+                    + " / ".join(surface_summary)
+                    + "\n"
+                )
                 # Print the number of particles that are not within 1 cm of any surface if more than 1%
                 if (
                     (run[tree]["SignalParticleSurface"][idx] == -1).sum()
@@ -268,7 +313,7 @@ def compute_true_weights(
 ):
 
     # Load json with number of trees per configuration
-    exposure = {}
+    exposure = {"radiological": {}}
     surfaces = json.load(open(f"{root}/import/surface_positions.json"))
     if new_branches is None:
         new_branches = []
@@ -279,7 +324,6 @@ def compute_true_weights(
         )
 
         for name, tree in product(configs[config], trees):
-            exposure = {}
             idx = np.where(
                 (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
@@ -358,6 +402,26 @@ def compute_true_weights(
                         )
 
             elif params["PARTICLE_TYPE"] == "background":
+                if is_radiological_sample(name):
+                    truth_idx = np.where(
+                        (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
+                        * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
+                        * (np.asarray(run["Truth"]["Name"]) == name)
+                    )
+                    exposure["radiological"][(config, name)] = compute_detector_time_exposure(
+                        info, len(run["Truth"]["Event"][truth_idx])
+                    )
+                    run[tree]["SignalParticleWeight"][idx] = 1.0
+                    if debug:
+                        this_exposure = exposure["radiological"][(config, name)]
+                        output += (
+                            "\t\t[cyan][INFO][/cyan] Using detector-time weighting for "
+                            f"{name}: {this_exposure['counts']:.0f} truth entries over "
+                            f"{this_exposure['time_seconds']:.2e} s "
+                            f"({this_exposure['exposure']:.3e} kT·y).\n"
+                        )
+                    continue
+
                 if params["PARTICLE_WEIGHTING"] in ["histogram", "surface"]:
                     alpha_truth = []
                     areas = json.load(open(f"{root}/import/surface_areas.json", "r"))
@@ -575,7 +639,8 @@ def normalize_true_weights(
                                     / np.sum(run[tree][this_weight_name][idx])
                                     / this_exposure["exposure"]
                                 )
-                                output += f"\t\t[cyan][INFO][/cyan] Normalized {this_weight_name}\twith {this_exposure['counts']:.0f} / {this_exposure['exposure']:.0f} counts / kT·y for {this_event_count} / {len(run[tree]['Event'][idx])} Produced / {tree} events...\n"
+                                if debug:
+                                    output += f"\t\t[cyan][INFO][/cyan] Normalized {this_weight_name}\twith {this_exposure['counts']:.0f} / {this_exposure['exposure']:.0f} counts / kT·y for {this_event_count} / {len(run[tree]['Event'][idx])} Produced / {tree} events...\n"
                         else:
                             this_weight_name = None
                             rprint(
@@ -585,6 +650,35 @@ def normalize_true_weights(
                     elif osc == "truth":
                         # Compute truth weights by normalizing to exposure
                         if params["PARTICLE_TYPE"] == "background":
+                            if is_radiological_sample(name):
+                                this_weight_name = f"SignalParticleWeight{weight}"
+                                this_exposure = exposure.get("radiological", {}).get(
+                                    (config, name),
+                                    compute_detector_time_exposure(info, len(run["Truth"]["Event"][np.where(
+                                        (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
+                                        * (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
+                                        * (np.asarray(run["Truth"]["Name"]) == name)
+                                    )])),
+                                )
+                                if this_exposure["exposure"] > 0:
+                                    run[tree][this_weight_name][idx] = (
+                                        run[tree][this_weight_name][idx]
+                                        / this_exposure["exposure"]
+                                    )
+                                else:
+                                    output += (
+                                        f"[yellow][WARNING][/yellow] Non-positive exposure for {name} in {config}; "
+                                        "setting radiological weights to zero.\n"
+                                    )
+                                    run[tree][this_weight_name][idx] = 0.0
+                                if debug:
+                                    output += (
+                                        "\t\t[cyan][INFO][/cyan] Normalized "
+                                        f"{this_weight_name} with detector-time exposure "
+                                        f"{this_exposure['exposure']:.3e} kT·y for {name} ({tree}).\n"
+                                    )
+                                continue
+
                             # Renormalize surface weights
                             for surface_label, (surface_value, surface_id) in surfaces[
                                 info["GEOMETRY"]
@@ -594,52 +688,56 @@ def normalize_true_weights(
 
                                 this_weight_name = f"SignalParticleWeight{weight}"
                                 this_exposure = exposure[surface_id]
-                                this_event_count = config_tree_weight[config][
-                                    name
-                                ] * len(run["Config"]["Geometry"][jdx])
+                                this_event_count = resolve_generated_event_count(
+                                    run, config_tree_weight, config, name, jdx
+                                )
 
                                 mask = (
                                     run[tree]["SignalParticleSurface"][idx]
                                     == surface_id
                                 )
-                                run[tree][this_weight_name][idx[0][mask]] = (
-                                    this_exposure["counts"]
-                                    * len(run[tree]["Event"][idx[0][mask]])
-                                    * run[tree][this_weight_name][idx[0][mask]]
-                                    # * surface_production[info["VERSION"]][
-                                    #     str(surface_id)
-                                    # ]
-                                    # / surface_weights[info["VERSION"]][name][
-                                    #     str(surface_id)
-                                    # ]
-                                    / this_event_count
-                                    / np.sum(run[tree][this_weight_name][idx[0][mask]])
-                                    / this_exposure["exposure"]
+                                this_surface_sum = np.sum(
+                                    run[tree][this_weight_name][idx[0][mask]]
                                 )
+                                if (
+                                    this_event_count > 0
+                                    and this_exposure["exposure"] > 0
+                                    and this_surface_sum > 0
+                                ):
+                                    run[tree][this_weight_name][idx[0][mask]] = (
+                                        this_exposure["counts"]
+                                        * len(run[tree]["Event"][idx[0][mask]])
+                                        * run[tree][this_weight_name][idx[0][mask]]
+                                        / this_event_count
+                                        / this_surface_sum
+                                        / this_exposure["exposure"]
+                                    )
+                                else:
+                                    run[tree][this_weight_name][idx[0][mask]] = 0.0
 
                         elif params["PARTICLE_TYPE"] == "signal":
                             this_weight_name = f"SignalParticleWeight{weight}"
                             this_exposure = exposure[(weight, "truth")]["truth"]
-                            this_event_count = (
-                                config_tree_weight[config][name]
-                                * len(run["Config"]["Geometry"][jdx])
-                                if (
-                                    config in config_tree_weight
-                                    and name in config_tree_weight[config]
-                                )
-                                else np.sum(run["Config"]["AnalyzedEvents"][jdx])
+                            this_event_count = resolve_generated_event_count(
+                                run, config_tree_weight, config, name, jdx
                             )
-                            run[tree][this_weight_name][idx] = (
-                                this_exposure["counts"]
-                                * len(run[tree]["Event"][idx])
-                                / this_event_count
-                                * run[tree][this_weight_name][idx]
-                                / (
-                                    np.sum(run[tree][this_weight_name][idx])
-                                    * this_exposure["exposure"]
+                            this_weight_sum = np.sum(run[tree][this_weight_name][idx])
+                            if (
+                                this_event_count > 0
+                                and this_weight_sum > 0
+                                and this_exposure["exposure"] > 0
+                            ):
+                                run[tree][this_weight_name][idx] = (
+                                    this_exposure["counts"]
+                                    * len(run[tree]["Event"][idx])
+                                    / this_event_count
+                                    * run[tree][this_weight_name][idx]
+                                    / (this_weight_sum * this_exposure["exposure"])
                                 )
-                            )
-                            output += f"\t\t[cyan][INFO][/cyan] Normalized {this_weight_name}\twith {this_exposure['counts']:.0f} / {this_exposure['exposure']:.0f} counts / kT·y for {this_event_count} / {len(run[tree]['Event'][idx])} Produced / {tree} events...\n"
+                            else:
+                                run[tree][this_weight_name][idx] = 0.0
+                            if debug:
+                                output += f"\t\t[cyan][INFO][/cyan] Normalized {this_weight_name}\twith {this_exposure['counts']:.0f} / {this_exposure['exposure']:.0f} counts / kT·y for {this_event_count} / {len(run[tree]['Event'][idx])} Produced / {tree} events...\n"
 
                         else:
                             this_weight_name = None

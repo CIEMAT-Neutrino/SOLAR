@@ -19,73 +19,105 @@ def position_mask(
     position: float = 0,
     coordinate_bin: Optional[float] = 10,
     coordinate: Optional[str] = "X",
+    combined_scan_coordinate: Optional[str] = "X",
     sigma: bool = True,
 ):
+    def _energy_sigma(coord_label: str) -> float:
+        sigma_row = df[
+            (df["Coordinate"] == coord_label)
+            * (df["Energy"] == energy if energy is not None else df["Energy"].isna())
+        ]["Sigma"].values
+        return float(sigma_row[0]) if len(sigma_row) > 0 else np.nan
+
+    if tolerances is None:
+        tolerances = [1]
+
+    half_bin = coordinate_bin / 2 if coordinate_bin is not None else 0.0
+
     true_mask_dict = {}
     reco_mask_dict = {}
-    for idx, tolerance in enumerate(tolerances):
+    for tolerance in tolerances:
         true_mask = np.ones(len(run[reference]["SignalParticleX"]), dtype=bool)
         reco_mask = np.ones(len(run["Reco"]["SignalParticleX"]), dtype=bool)
-        if coordinate == "X" and info["GEOMETRY"] == "hd":
+        scan_coordinate = coordinate if coordinate is not None else combined_scan_coordinate
+
+        if scan_coordinate is None:
+            # Combined 3D efficiency with no scan axis selected.
+            pass
+        elif scan_coordinate == "X" and info["GEOMETRY"] == "hd":
             true_mask = true_mask * (
                 (
-                    np.absolute(run[reference][f"SignalParticle{coordinate}"])
-                    > position - coordinate_bin / 2
+                    np.absolute(run[reference][f"SignalParticle{scan_coordinate}"])
+                    > position - half_bin
                 )
                 * (
-                    np.absolute(run[reference][f"SignalParticle{coordinate}"])
-                    <= position + coordinate_bin / 2
+                    np.absolute(run[reference][f"SignalParticle{scan_coordinate}"])
+                    <= position + half_bin
                 )
             )
             reco_mask = reco_mask * (
                 (
-                    np.absolute(run["Reco"][f"SignalParticle{coordinate}"])
-                    < position + coordinate_bin / 2
+                    np.absolute(run["Reco"][f"SignalParticle{scan_coordinate}"])
+                    < position + half_bin
                 )
                 * (
-                    np.absolute(run["Reco"][f"SignalParticle{coordinate}"])
-                    >= position - coordinate_bin / 2
+                    np.absolute(run["Reco"][f"SignalParticle{scan_coordinate}"])
+                    >= position - half_bin
                 )
             )
         else:
             true_mask = true_mask * (
                 (
-                    run[reference][f"SignalParticle{coordinate}"]
-                    > position - coordinate_bin / 2
+                    run[reference][f"SignalParticle{scan_coordinate}"]
+                    > position - half_bin
                 )
                 * (
-                    run[reference][f"SignalParticle{coordinate}"]
-                    <= position + coordinate_bin / 2
+                    run[reference][f"SignalParticle{scan_coordinate}"]
+                    <= position + half_bin
                 )
             )
             reco_mask = reco_mask * (
                 (
-                    run["Reco"][f"SignalParticle{coordinate}"]
-                    < position + coordinate_bin / 2
+                    run["Reco"][f"SignalParticle{scan_coordinate}"]
+                    < position + half_bin
                 )
                 * (
-                    run["Reco"][f"SignalParticle{coordinate}"]
-                    >= position - coordinate_bin / 2
+                    run["Reco"][f"SignalParticle{scan_coordinate}"]
+                    >= position - half_bin
                 )
             )
 
         if sigma:
-            reco_mask = reco_mask * (
-                np.absolute(run["Reco"][f"Error{coordinate}"])
-                < tolerance
-                * df[
-                    (df["Coordinate"] == f"{coordinate}")
-                    * (
-                        df["Energy"] == energy
-                        if energy != None
-                        else df["Energy"].isna()
-                    )
-                ]["Sigma"].values[0]
-            )
+            if coordinate is None:
+                sigma_axes = np.asarray([_energy_sigma(axis) for axis in ["X", "Y", "Z"]])
+                has_valid_sigma = np.all(np.isfinite(sigma_axes))
+                sigma_3d = np.sqrt(np.sum(sigma_axes**2)) if has_valid_sigma else np.nan
+                reco_error = np.sqrt(
+                    run["Reco"]["ErrorX"] ** 2
+                    + run["Reco"]["ErrorY"] ** 2
+                    + run["Reco"]["ErrorZ"] ** 2
+                )
+                reco_mask = reco_mask * (
+                    reco_error < tolerance * sigma_3d if has_valid_sigma else False
+                )
+            else:
+                axis_sigma = _energy_sigma(f"{coordinate}")
+                reco_mask = reco_mask * (
+                    np.absolute(run["Reco"][f"Error{coordinate}"])
+                    < tolerance * axis_sigma if np.isfinite(axis_sigma) else False
+                )
         else:
-            reco_mask = reco_mask * (
-                np.absolute(run["Reco"][f"Error{coordinate}"]) < tolerance
-            )
+            if coordinate is None:
+                reco_error = np.sqrt(
+                    run["Reco"]["ErrorX"] ** 2
+                    + run["Reco"]["ErrorY"] ** 2
+                    + run["Reco"]["ErrorZ"] ** 2
+                )
+                reco_mask = reco_mask * (reco_error < tolerance)
+            else:
+                reco_mask = reco_mask * (
+                    np.absolute(run["Reco"][f"Error{coordinate}"]) < tolerance
+                )
 
         true_mask_dict[tolerance] = true_mask
         reco_mask_dict[tolerance] = reco_mask
@@ -110,12 +142,24 @@ parser.add_argument(
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_official"
 )
+parser.add_argument(
+    "--combined-scan-coordinate",
+    type=str,
+    default="X",
+    choices=["X", "Y", "Z", "NONE"],
+    help="Scan axis for combined 3D reconstruction efficiency (X, Y, Z, or NONE)",
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
 args = parser.parse_args()
 config = args.config
 name = args.name
+combined_scan_coordinate = (
+    None
+    if args.combined_scan_coordinate.upper() == "NONE"
+    else args.combined_scan_coordinate.upper()
+)
 
 configs = {config: [name]}
 
@@ -158,11 +202,13 @@ for config in configs:
         f"{root}/config/{config}/{config}", {}, output, debug=args.debug
     )
     fig = make_subplots(rows=1, cols=1)
+    position_list = []
+    analysis_info = load_analysis_info(str(root))
     for name in configs[config]:
-        position_list, hist_list = [], []
-        missing_energies = []   
+        hist_list = []
+        missing_energies = []
+        missing_sigma_warnings = set()
         info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
-        analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
 
         this_filtered_run, mask, output = compute_filtered_run(
             run,
@@ -179,7 +225,7 @@ for config in configs:
         )
         print( df.head())
         df = df.fillna(np.nan)
-        for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z"]):
+        for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z", None]):
             if energy not in df["Energy"].values and energy is not None:
                 missing_energies.append(energy)
                 continue
@@ -202,25 +248,30 @@ for config in configs:
                 efficiency[sigma][tolerance] = []
                 efficiency_error[sigma][tolerance] = []
 
-            if coord == "X" and info["GEOMETRY"] == "hd":
+            scan_coordinate = coord if coord is not None else combined_scan_coordinate
+
+            if scan_coordinate is None:
+                coordinate_array = np.array([0])
+            elif scan_coordinate == "X" and info["GEOMETRY"] == "hd":
                 coordinate_array = np.arange(
                     0,
-                    info[f"DETECTOR_MAX_{coord}"]
-                    + info[f"DETECTOR_GAP_{coord}"]
-                    + params[f"DEFAULT_{coord}_BIN"],
-                    params[f"DEFAULT_{coord}_BIN"],
+                    info[f"DETECTOR_MAX_{scan_coordinate}"]
+                    + info[f"DETECTOR_GAP_{scan_coordinate}"]
+                    + params[f"DEFAULT_{scan_coordinate}_BIN"],
+                    params[f"DEFAULT_{scan_coordinate}_BIN"],
                 )
 
             else:
                 coordinate_array = np.arange(
-                    info[f"DETECTOR_MIN_{coord}"] - info[f"DETECTOR_GAP_{coord}"],
-                    info[f"DETECTOR_MAX_{coord}"]
-                    + info[f"DETECTOR_GAP_{coord}"]
-                    + params[f"DEFAULT_{coord}_BIN"],
-                    params[f"DEFAULT_{coord}_BIN"],
+                    info[f"DETECTOR_MIN_{scan_coordinate}"] - info[f"DETECTOR_GAP_{scan_coordinate}"],
+                    info[f"DETECTOR_MAX_{scan_coordinate}"]
+                    + info[f"DETECTOR_GAP_{scan_coordinate}"]
+                    + params[f"DEFAULT_{scan_coordinate}_BIN"],
+                    params[f"DEFAULT_{scan_coordinate}_BIN"],
                 )
 
             true_mask, reco_mask = {}, {}
+            reference = "Reco"
             for position, (tolerances, sigma), reference in product(
                 coordinate_array,
                 zip(
@@ -232,6 +283,46 @@ for config in configs:
                 ),
                 ['Reco']
             ):
+                if sigma:
+                    if coord is None:
+                        sigma_values = [
+                            df[
+                                (df["Coordinate"] == axis)
+                                * (
+                                    df["Energy"] == energy
+                                    if energy is not None
+                                    else df["Energy"].isna()
+                                )
+                            ]["Sigma"].values
+                            for axis in ["X", "Y", "Z"]
+                        ]
+                        if any(len(vals) == 0 for vals in sigma_values):
+                            warning_key = (energy, coord)
+                            if warning_key not in missing_sigma_warnings:
+                                output += (
+                                    f"[yellow][WARNING][/yellow] Missing sigma entry for combined XYZ at energy={energy}. "
+                                    "Skipping sigma-based reconstruction efficiency for this point.\n"
+                                )
+                                missing_sigma_warnings.add(warning_key)
+                            continue
+                    else:
+                        axis_sigma_vals = df[
+                            (df["Coordinate"] == coord)
+                            * (
+                                df["Energy"] == energy
+                                if energy is not None
+                                else df["Energy"].isna()
+                            )
+                        ]["Sigma"].values
+                        if len(axis_sigma_vals) == 0:
+                            warning_key = (energy, coord)
+                            if warning_key not in missing_sigma_warnings:
+                                output += (
+                                    f"[yellow][WARNING][/yellow] Missing sigma entry for coordinate={coord} at energy={energy}. "
+                                    "Skipping sigma-based reconstruction efficiency for this point.\n"
+                                )
+                                missing_sigma_warnings.add(warning_key)
+                            continue
                 
                 true_mask[sigma], reco_mask[sigma] = position_mask(
                     run=run,
@@ -240,8 +331,13 @@ for config in configs:
                     energy=energy,
                     tolerances=tolerances,
                     position=position,
-                    coordinate_bin=params[f"DEFAULT_{coord}_BIN"],
+                    coordinate_bin=(
+                        params[f"DEFAULT_{scan_coordinate}_BIN"]
+                        if scan_coordinate is not None
+                        else None
+                    ),
                     coordinate=coord,
+                    combined_scan_coordinate=combined_scan_coordinate,
                     sigma=sigma,
                 )
                 if energy is None:
@@ -303,6 +399,7 @@ for config in configs:
             ):
                 if energy in missing_energies:
                     continue
+                values_axis = scan_coordinate
                 position_list.append(
                     {
                         "Geometry": info["GEOMETRY"],
@@ -313,11 +410,19 @@ for config in configs:
                         "Tolerance": tolerance,
                         "Reference": reference,
                         "Values": (
-                            2 * info[f"DETECTOR_MAX_{coord}"] - coordinate_array
-                            if (config == "hd_1x2x6_lateralAPA" and coord == "X")
+                            2 * info[f"DETECTOR_MAX_{values_axis}"] - coordinate_array
+                            if (
+                                values_axis is not None
+                                and config == "hd_1x2x6_lateralAPA"
+                                and values_axis == "X"
+                            )
                             else (
-                                coordinate_array + info[f"DETECTOR_MAX_{coord}"]
-                                if (info["GEOMETRY"] == "vd" and coord == "X")
+                                coordinate_array + info[f"DETECTOR_MAX_{values_axis}"]
+                                if (
+                                    values_axis is not None
+                                    and info["GEOMETRY"] == "vd"
+                                    and values_axis == "X"
+                                )
                                 else coordinate_array
                             )
                         ),
@@ -330,19 +435,25 @@ for config in configs:
                 )
 
     df_position = pd.DataFrame(position_list)
-    df_position = df_position.fillna(np.nan)
+
+    # Keep Variable=None in saved outputs, but use an explicit label for plotting/faceting.
+    df_position_plot = df_position.copy()
+    df_position_plot["VariablePlot"] = df_position_plot["Variable"].apply(
+        lambda value: "XYZ (3D)" if value is None else value
+    )
 
     for sigma in [True, False]:
         fig = px.line(
-            df_position[
-                (df_position["Energy"].isna()) * (df_position["Sigma"] == sigma)
+            df_position_plot[
+                (df_position_plot["Energy"].isna())
+                * (df_position_plot["Sigma"] == sigma)
             ].explode(["Values", "Efficiency", "EfficiencyError"]),
             x="Values",
             y="Efficiency",
             error_y="EfficiencyError",
             markers=True,
             line_shape="spline",
-            facet_col="Variable",
+            facet_col="VariablePlot",
             color="Tolerance",
             color_discrete_sequence=default,
         )
@@ -369,17 +480,17 @@ for config in configs:
 
     for tolerance in analysis_info["VERTEX_RESOLUTION_SIGMAS"]:
         fig = px.line(
-            df_position[
-                (df_position["Energy"].notna())
-                * (df_position["Sigma"] == True)
-                * (df_position["Tolerance"] == tolerance)
+            df_position_plot[
+                (df_position_plot["Energy"].notna())
+                * (df_position_plot["Sigma"] == True)
+                * (df_position_plot["Tolerance"] == tolerance)
             ].explode(["Values", "Efficiency", "EfficiencyError"]),
             x="Values",
             y="Efficiency",
             error_y="EfficiencyError",
             markers=True,
             line_shape="spline",
-            facet_col="Variable",
+            facet_col="VariablePlot",
             color="Energy",
             color_discrete_sequence=colors,
         )
@@ -412,19 +523,22 @@ for config in configs:
     # Create a df with the values at 100 cm position cut from 8, 16, 24 MeV
     summary_list = []
     for energy in [6, 10, 14]:
-        for coord in ["X", "Y", "Z"]:
+        for coord in ["X", "Y", "Z", None]:
             this_df = df_position[
                 (df_position["Energy"] == energy)
                 * (df_position["Variable"] == coord)
                 * (df_position["Sigma"] == True)
-            ].explode(["Efficiency", "EfficiencyError"])
+            ]
             if len(this_df) > 0:
+                efficiency_values = np.asarray(
+                    [val for row in this_df["Efficiency"].values for val in np.asarray(row)]
+                )
                 summary_list.append(
                     {
                         "Energy": energy,
                         "Coordinate": coord,
-                        "Efficiency": np.mean(this_df["Efficiency"].values),
-                        "EfficiencyError": np.std(this_df["Efficiency"].values),
+                        "Efficiency": np.mean(efficiency_values),
+                        "EfficiencyError": np.std(efficiency_values),
                     }
                 )
     summary_df = pd.DataFrame(summary_list)

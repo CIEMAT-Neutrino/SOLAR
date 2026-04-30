@@ -4,6 +4,7 @@ import copy
 import json
 import stat
 import pickle
+import tempfile
 import plotly
 import uproot
 import argparse
@@ -13,11 +14,13 @@ import awkward as ak
 import plotly.express as px
 import plotly.graph_objs as go
 
-from typing import Optional
+from typing import Optional, Union
 from rich import print as rprint
 from rich.progress import track
 from matplotlib import pyplot as plt
 from src.utils import get_project_root
+from .lib_log import create_workflow_log
+from .lib_filter import compute_filtered_run
 
 root = get_project_root()
 
@@ -382,8 +385,26 @@ def root2npy(root_info, user_input, trim: bool = False, debug=False):
                     "SUCCESS",
                 )
 
-                # if "Map" not in branch:
-                this_array = f[root_info["Folder"] + "/" + tree][branch].array()
+                branch_obj = f[root_info["Folder"] + "/" + tree][branch]
+                try:
+                    this_array = branch_obj.array()
+                except ValueError as err:
+                    if "negative dimensions are not allowed" in str(err):
+                        # Uproot can fail for malformed/empty jagged offsets; keep processing the rest.
+                        n_entries = int(branch_obj.num_entries)
+                        if debug:
+                            rprint(
+                                f"[yellow]Skipping malformed branch {tree}/{branch}: {err}. Saving empty placeholder with {n_entries} entries.[/yellow]"
+                            )
+                        empty_branch = np.empty((n_entries, 0), dtype=np.float32)
+                        save2pnfs(
+                            path + name + "/" + out_folder + "/" + branch + ".npy",
+                            user_input,
+                            empty_branch,
+                            debug,
+                        )
+                        continue
+                    raise
                 if trim != False and debug:
                     rprint("Selected trimming value: ", trim)
 
@@ -880,6 +901,8 @@ def load_multi(
     generator_swap: bool = False,
     name_prefix: Optional[str] = None,
     debug: bool = False,
+    verbose: Optional[Union[int, str]] = None,
+    max_log_lines: Optional[int] = None,
 ) -> tuple[dict, str]:
     """
     Load multiple files with different configurations and merge them into a single dictionary
@@ -892,11 +915,13 @@ def load_multi(
         branches (dict): dictionary with the branches to load (default: {})
         generator_swap (bool): if True, swap the generator for the background files (default: False)
         debug (bool): if True, the debug mode is activated (default: False)
+        verbose: global verbosity for load logs (0=warnings/errors, 1=log, 2=info)
+        max_log_lines: maximum number of log lines to keep
 
     Returns:
         run (dict): dictionary with the loaded data
     """
-    output = ""
+    output = create_workflow_log(verbose=verbose, max_lines=max_log_lines)
     run = dict()
     branches_dict = dict()
     files_notfound = dict()
@@ -1060,17 +1085,20 @@ def load_multi(
 
             if debug and len(files_notfound) > 0:
                 output += f"\n[red]Missing branches: [/red]\n{files_notfound}\n"
+            
+            if "radiological" in name.lower():
+                run, __, __ = compute_filtered_run(run, {config:[name]}, {("Reco", "Generator"): ("different", 1)}, debug=debug)
 
     if debug:
         for tree in branches_dict.keys():
             try:
-                output = output + f"\nKeys extracted from the {tree} tree:\n"
-                output = output + str(run[tree].keys())
-                output = output + f"\n-> # {tree} entries: %i\n" % len(
+                output += f"\nKeys extracted from the {tree} tree:\n"
+                output += str(run[tree].keys())
+                output += f"\n-> # {tree} entries: %i\n" % len(
                     run[tree][ref_branch[tree]]
                 )
             except KeyError:
-                output = output + f"- No {tree} tree found!\n"
+                output += f"- No {tree} tree found!\n"
 
     return run, output
 
@@ -1283,6 +1311,8 @@ def get_simple_names(names: list[str], debug: bool = False) -> dict:
             simple_names[name] = "Gamma"
         elif "neutron" in name.lower():
             simple_names[name] = "Neutron"
+        elif "radiological" in name.lower():
+            simple_names[name] = "Radiological"
         elif "cpa" in name.lower():
             simple_names[name] = "CPA"
         elif "cathode" in name.lower():

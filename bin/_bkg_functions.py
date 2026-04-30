@@ -1,6 +1,6 @@
 import numpy as np
 from rich import print as rprint
-from lib.io_functions import print_colored
+from lib.lib_io import print_colored
 
 
 def get_bkg_config(info, debug=False):

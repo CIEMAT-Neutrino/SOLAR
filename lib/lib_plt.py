@@ -18,6 +18,7 @@ from matplotlib.collections import LineCollection
 from plotly.validators.scatter.marker import SymbolValidator
 
 from src.utils import get_project_root
+from .lib_default import load_analysis_info
 
 colors = px.colors.qualitative.Prism
 symbols = SymbolValidator().values
@@ -177,22 +178,649 @@ def find_subplots(fig, debug: bool = False):
     return rows, cols
 
 
+def _axis_ref_to_layout_key(axis_ref: str, axis_name: str) -> str:
+    """Convert a trace axis ref (x, x2, y3) to layout axis key (xaxis, xaxis2, yaxis3)."""
+    if not axis_ref:
+        return f"{axis_name}axis"
+
+    suffix = axis_ref[1:]
+    return f"{axis_name}axis{suffix}" if suffix else f"{axis_name}axis"
+
+
+def _to_float_1d(values):
+    """Convert data to a flat float array, coercing datetime-like values when possible."""
+    arr = np.asarray(values)
+    if arr.ndim == 0:
+        arr = arr.reshape(1)
+    if arr.size == 0:
+        return np.array([], dtype=float)
+
+    if np.issubdtype(arr.dtype, np.number):
+        return arr.astype(float)
+
+    flat = arr.ravel()
+
+    numeric = np.asarray(pd.to_numeric(flat, errors="coerce"), dtype=float)
+    if np.isfinite(numeric).any():
+        return numeric
+
+    dt = pd.to_datetime(flat, errors="coerce")
+    dt64 = np.asarray(dt, dtype="datetime64[ns]")
+    valid_dt = ~np.isnat(dt64)
+    if np.any(valid_dt):
+        converted = np.full(dt64.shape, np.nan, dtype=float)
+        converted[valid_dt] = dt64[valid_dt].astype("int64").astype(float)
+        return converted
+
+    return np.full(arr.size, np.nan, dtype=float)
+
+
+def auto_place_legend(
+    fig: go.Figure,
+    box_size: tuple = (0.26, 0.18),
+    pad: float = 0.01,
+    watermark: bool = False,
+    debug: bool = False,
+):
+    """
+    Place legend in the least crowded corner of the figure or subplot domains.
+    Avoids top-left corner when watermark is active.
+
+    Returns:
+        dict: legend layout keys (x, y, xanchor, yanchor)
+    """
+    axis_limits = {}
+    domains = []
+    paper_points = []
+
+    # First pass: estimate axis ranges from trace data when explicit ranges are absent.
+    for trace in fig.data:
+        x_raw = getattr(trace, "x", None)
+        y_raw = getattr(trace, "y", None)
+        if x_raw is None or y_raw is None:
+            continue
+
+        x = _to_float_1d(x_raw)
+        y = _to_float_1d(y_raw)
+        if x.size == 0 or y.size == 0:
+            continue
+
+        x_key = _axis_ref_to_layout_key(getattr(trace, "xaxis", "x"), "x")
+        y_key = _axis_ref_to_layout_key(getattr(trace, "yaxis", "y"), "y")
+
+        x_fin = x[np.isfinite(x)]
+        y_fin = y[np.isfinite(y)]
+        if x_fin.size:
+            if x_key not in axis_limits:
+                axis_limits[x_key] = [np.min(x_fin), np.max(x_fin)]
+            else:
+                axis_limits[x_key][0] = min(axis_limits[x_key][0], np.min(x_fin))
+                axis_limits[x_key][1] = max(axis_limits[x_key][1], np.max(x_fin))
+        if y_fin.size:
+            if y_key not in axis_limits:
+                axis_limits[y_key] = [np.min(y_fin), np.max(y_fin)]
+            else:
+                axis_limits[y_key][0] = min(axis_limits[y_key][0], np.min(y_fin))
+                axis_limits[y_key][1] = max(axis_limits[y_key][1], np.max(y_fin))
+
+    # Second pass: project points into paper coordinates.
+    for trace in fig.data:
+        x_raw = getattr(trace, "x", None)
+        y_raw = getattr(trace, "y", None)
+        if x_raw is None or y_raw is None:
+            continue
+
+        x = _to_float_1d(x_raw)
+        y = _to_float_1d(y_raw)
+        n_points = min(x.size, y.size)
+        if n_points == 0:
+            continue
+
+        x = x[:n_points]
+        y = y[:n_points]
+
+        x_key = _axis_ref_to_layout_key(getattr(trace, "xaxis", "x"), "x")
+        y_key = _axis_ref_to_layout_key(getattr(trace, "yaxis", "y"), "y")
+
+        xaxis = getattr(fig.layout, x_key, None)
+        yaxis = getattr(fig.layout, y_key, None)
+
+        x_dom = tuple(getattr(xaxis, "domain", [0, 1]) if xaxis else [0, 1])
+        y_dom = tuple(getattr(yaxis, "domain", [0, 1]) if yaxis else [0, 1])
+        domains.append((x_dom, y_dom))
+
+        x_range = getattr(xaxis, "range", None) if xaxis else None
+        y_range = getattr(yaxis, "range", None) if yaxis else None
+
+        if x_range and len(x_range) == 2:
+            x_range_num = _to_float_1d(x_range)
+            x_min, x_max = float(np.nanmin(x_range_num)), float(np.nanmax(x_range_num))
+        else:
+            x_min, x_max = axis_limits.get(x_key, [np.nan, np.nan])
+
+        if y_range and len(y_range) == 2:
+            y_range_num = _to_float_1d(y_range)
+            y_min, y_max = float(np.nanmin(y_range_num)), float(np.nanmax(y_range_num))
+        else:
+            y_min, y_max = axis_limits.get(y_key, [np.nan, np.nan])
+
+        valid_limits = (
+            np.isfinite(x_min)
+            and np.isfinite(x_max)
+            and np.isfinite(y_min)
+            and np.isfinite(y_max)
+        )
+        if not valid_limits or x_max == x_min or y_max == y_min:
+            continue
+
+        mask = np.isfinite(x) & np.isfinite(y)
+        if not np.any(mask):
+            continue
+
+        nx = (x[mask] - x_min) / (x_max - x_min)
+        ny = (y[mask] - y_min) / (y_max - y_min)
+        keep = (nx >= 0) & (nx <= 1) & (ny >= 0) & (ny <= 1)
+        nx = nx[keep]
+        ny = ny[keep]
+
+        if nx.size == 0:
+            continue
+
+        paper_x = x_dom[0] + nx * (x_dom[1] - x_dom[0])
+        paper_y = y_dom[0] + ny * (y_dom[1] - y_dom[0])
+        paper_points.extend(zip(paper_x, paper_y))
+
+    if not paper_points:
+        return dict(x=0.99, y=0.99, xanchor="right", yanchor="top")
+
+    unique_domains = list(dict.fromkeys(domains)) if domains else [((0, 1), (0, 1))]
+    points = np.array(paper_points)
+
+    def score_box(x0, x1, y0, y1):
+        return int(
+            np.sum(
+                (points[:, 0] >= x0)
+                & (points[:, 0] <= x1)
+                & (points[:, 1] >= y0)
+                & (points[:, 1] <= y1)
+            )
+        )
+
+    candidates = []
+    width, height = box_size
+
+    for x_dom, y_dom in unique_domains:
+        x0, x1 = x_dom
+        y0, y1 = y_dom
+
+        # top-right
+        x, y = x1 - pad, y1 - pad
+        candidates.append(
+            (
+                score_box(max(x - width, x0), x, max(y - height, y0), y),
+                0,
+                dict(x=x, y=y, xanchor="right", yanchor="top"),
+            )
+        )
+        # top-left
+        x, y = x0 + pad, y1 - pad
+        candidates.append(
+            (
+                score_box(x, min(x + width, x1), max(y - height, y0), y),
+                1,
+                dict(x=x, y=y, xanchor="left", yanchor="top"),
+            )
+        )
+        # bottom-right
+        x, y = x1 - pad, y0 + pad
+        candidates.append(
+            (
+                score_box(max(x - width, x0), x, y, min(y + height, y1)),
+                2,
+                dict(x=x, y=y, xanchor="right", yanchor="bottom"),
+            )
+        )
+        # bottom-left
+        x, y = x0 + pad, y0 + pad
+        candidates.append(
+            (
+                score_box(x, min(x + width, x1), y, min(y + height, y1)),
+                3,
+                dict(x=x, y=y, xanchor="left", yanchor="bottom"),
+            )
+        )
+
+    # If watermark is active, exclude top-left corner (index 1) to avoid overlap
+    if watermark:
+        candidates = [c for c in candidates if c[1] != 1]
+
+    if not candidates:
+        # Fallback if all candidates filtered out (shouldn't happen)
+        return dict(x=0.99, y=0.99, xanchor="right", yanchor="top")
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    if debug:
+        rprint(f"[cyan]Auto legend overlap score: {candidates[0][0]}[/cyan]")
+
+    return candidates[0][2]
+
+
+def grouped_axis_from_starts(
+    energy_axis_tail: np.ndarray,
+    starts: np.ndarray,
+    fallback_width: float = 1.0,
+):
+    """Build grouped-bin centers and widths from adaptive-rebin group starts."""
+    starts_array = np.asarray(starts, dtype=int)
+    if starts_array.size == 0:
+        return np.zeros(0, dtype=float), np.zeros(0, dtype=float)
+
+    energy_tail = np.asarray(energy_axis_tail, dtype=float)
+    ends = np.append(starts_array[1:], len(energy_tail))
+    centers = []
+    widths = []
+    for start, end in zip(starts_array, ends):
+        this_slice = np.asarray(energy_tail[start:end], dtype=float)
+        centers.append(float(np.mean(this_slice)))
+        if len(this_slice) > 1:
+            this_diff = np.diff(this_slice)
+            this_step = float(np.median(this_diff)) if len(this_diff) > 0 else float(fallback_width)
+            widths.append(float(this_slice[-1] - this_slice[0] + this_step))
+        else:
+            widths.append(float(fallback_width))
+
+    return np.asarray(centers, dtype=float), np.asarray(widths, dtype=float)
+
+
+def add_histogram_style_legend_traces(
+    fig: go.Figure,
+    row: int = 1,
+    col: int = 1,
+    legend: Optional[str] = None,
+    legendgroup: str = "linestyle",
+    legendgrouptitle: str = "Histogram",
+    styles: Optional[list] = None,
+):
+    """Add style-only legend entries (Raw/Smoothed/Rebinned) for histogram overlays."""
+    if styles is None:
+        styles = [
+            {"name": "Raw", "color": "gray", "width": 2, "dash": "dot", "opacity": None, "showlegend": True},
+            {"name": "Smoothed", "color": "gray", "width": 3, "dash": "solid", "opacity": None, "showlegend": True},
+        ]
+
+    for style in styles:
+        trace = go.Scatter(
+            x=[None],
+            y=[None],
+            mode="lines",
+            name=str(style.get("name", "Style")),
+            line=dict(
+                color=style.get("color", "gray"),
+                width=int(style.get("width", 2)),
+                dash=style.get("dash", "solid"),
+            ),
+            opacity=style.get("opacity", None),
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle),
+            showlegend=bool(style.get("showlegend", True)),
+        )
+        if legend is not None:
+            trace.legend = legend
+        fig.add_trace(trace, row=row, col=col)
+
+    return fig
+
+
+def add_significance_series_trace(
+    fig: go.Figure,
+    x,
+    y,
+    name_prefix: str,
+    row: int = 2,
+    col: int = 1,
+    color: str = "black",
+    width: int = 2,
+    dash: str = "solid",
+    legend: str = "legend2",
+    legendgroup: str = "Significance",
+    legendgrouptitle: str = "Significance",
+    showlegend: bool = True,
+    append_total: bool = True,
+    total_digits: int = 1,
+    line_shape: str = "hvh",
+):
+    """Add one significance series trace with consistent styling and optional total-σ in legend label."""
+    x_values = np.asarray(x, dtype=float)
+    y_values = np.nan_to_num(np.asarray(y, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    total_sigma = float(np.sqrt(np.sum(np.power(y_values, 2))))
+
+    if append_total:
+        label = f"{name_prefix}: {total_sigma:.{int(total_digits)}f}"
+    else:
+        label = str(name_prefix)
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=y_values,
+            mode="lines",
+            name=label,
+            showlegend=showlegend,
+            line=dict(color=color, width=int(width), dash=dash),
+            line_shape=line_shape,
+            legend=legend,
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle),
+        ),
+        row=row,
+        col=col,
+    )
+
+    return total_sigma
+
+
+def add_significance_bin_labels(
+    fig: go.Figure,
+    x,
+    y,
+    label_values=None,
+    row: int = 2,
+    col: int = 1,
+    text_prefix: str = "",
+    digits: int = 1,
+    label_stride: int = 1,
+    show_zero: bool = False,
+    color: str = "black",
+    font_size: int = 10,
+    textposition: str = "top center",
+    y_offset_fraction: float = 0.1,
+):
+    """Overlay optional bin labels at y positions, optionally formatting alternate values."""
+    x_values = np.asarray(x, dtype=float)
+    y_values = np.nan_to_num(np.asarray(y, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    if label_values is None:
+        label_display_values = y_values
+    else:
+        label_display_values = np.nan_to_num(
+            np.asarray(label_values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0
+        )
+        if len(label_display_values) != len(y_values):
+            raise ValueError("label_values must have the same length as y")
+    stride = max(1, int(label_stride))
+    prefix = str(text_prefix)
+
+    offset_fraction = max(0.0, float(y_offset_fraction))
+    position = str(textposition).lower()
+    direction = -1.0 if position.startswith("bottom") else 1.0
+    scale_ref = float(np.nanmax(np.abs(y_values))) if y_values.size > 0 else 0.0
+    min_offset = max(1e-6, scale_ref * 1e-3)
+    delta = np.maximum(np.abs(y_values) * offset_fraction, min_offset)
+    y_text_values = y_values + direction * delta
+
+    text_values = []
+    for idx, value in enumerate(label_display_values):
+        if idx % stride != 0:
+            text_values.append("")
+            continue
+        if (not show_zero) and np.isclose(value, 0.0):
+            text_values.append("")
+            continue
+        if len(prefix) > 0:
+            text_values.append(f"{prefix}{idx}:{value:.{int(digits)}f}")
+        else:
+            text_values.append(f"{value:.{int(digits)}f}")
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=y_text_values,
+            mode="text",
+            text=text_values,
+            textposition=textposition,
+            textfont=dict(size=int(font_size), color=color),
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=row,
+        col=col,
+    )
+
+    return fig
+
+
+def add_variable_width_hist_trace(
+    fig: go.Figure,
+    x,
+    y,
+    widths,
+    style: str = "step",
+    row: int = 1,
+    col: int = 1,
+    name: str = "Histogram",
+    color: str = "black",
+    width: int = 3,
+    dash: str = "solid",
+    error_y=None,
+    legend: Optional[str] = None,
+    legendgroup: Optional[str] = None,
+    legendgrouptitle: Optional[str] = None,
+    showlegend: bool = True,
+    opacity: Optional[float] = None,
+    bar_offsetgroup: Optional[str] = None,
+    bar_alignmentgroup: Optional[str] = None,
+):
+    """Draw histogram-like traces for variable bin widths using line, step, or bar style."""
+    x_values = np.asarray(x, dtype=float)
+    y_values = np.nan_to_num(np.asarray(y, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    width_values = np.asarray(widths, dtype=float)
+    if len(x_values) != len(y_values) or len(x_values) != len(width_values):
+        raise ValueError("x, y, and widths must have the same length")
+
+    error_values = None
+    if error_y is not None:
+        error_values = np.nan_to_num(np.asarray(error_y, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+
+    style_value = str(style).lower()
+    if style_value == "bar":
+        trace = go.Bar(
+            x=x_values,
+            y=y_values,
+            width=width_values,
+            offset=0,
+            name=name,
+            marker=dict(color=color, line=dict(color=color, width=0)),
+            opacity=opacity,
+            showlegend=showlegend,
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle) if legendgrouptitle is not None else None,
+            offsetgroup=bar_offsetgroup,
+            alignmentgroup=bar_alignmentgroup,
+        )
+        if error_values is not None:
+            trace.error_y = dict(type="data", array=error_values)
+        if legend is not None:
+            trace.legend = legend
+        fig.add_trace(trace, row=row, col=col)
+        return fig
+
+    if style_value == "step":
+        x_left = x_values - 0.5 * width_values
+        x_right = x_values + 0.5 * width_values
+        x_step = np.empty(3 * len(x_values), dtype=float)
+        y_step = np.empty(3 * len(y_values), dtype=float)
+        x_step[0::3] = x_left
+        x_step[1::3] = x_right
+        x_step[2::3] = np.nan
+        y_step[0::3] = y_values
+        y_step[1::3] = y_values
+        y_step[2::3] = np.nan
+
+        trace = go.Scatter(
+            x=x_step,
+            y=y_step,
+            mode="lines",
+            name=name,
+            line=dict(color=color, width=int(width), dash=dash),
+            line_shape="linear",
+            opacity=opacity,
+            showlegend=showlegend,
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle) if legendgrouptitle is not None else None,
+        )
+        if legend is not None:
+            trace.legend = legend
+        fig.add_trace(trace, row=row, col=col)
+
+        if error_values is not None:
+            error_trace = go.Scatter(
+                x=x_values,
+                y=y_values,
+                mode="markers",
+                marker=dict(size=0, opacity=0),
+                error_y=dict(type="data", array=error_values, color=color),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+            if legend is not None:
+                error_trace.legend = legend
+            fig.add_trace(error_trace, row=row, col=col)
+        return fig
+
+    trace = go.Scatter(
+        x=x_values,
+        y=y_values,
+        mode="lines",
+        name=name,
+        line=dict(color=color, width=int(width), dash=dash),
+        line_shape="hvh",
+        opacity=opacity,
+        showlegend=showlegend,
+        legendgroup=legendgroup,
+        legendgrouptitle=dict(text=legendgrouptitle) if legendgrouptitle is not None else None,
+    )
+    if error_values is not None:
+        trace.error_y = dict(type="data", array=error_values)
+    if legend is not None:
+        trace.legend = legend
+    fig.add_trace(trace, row=row, col=col)
+    return fig
+
+
+def add_reference_pair_traces(
+    fig: go.Figure,
+    x,
+    y_raw,
+    y_smoothed,
+    name: str,
+    raw_style: dict,
+    smoothed_style: dict,
+    row: int = 1,
+    col: int = 1,
+    legend: str = "legend",
+    legendgroup: str = "reference",
+    legendgrouptitle: str = "Reference",
+    showlegend_raw: bool = False,
+    showlegend_smoothed: bool = True,
+    line_shape: str = "linear",
+    y_upper=None,
+    y_lower=None,
+    band_fillcolor: str = "rgba(68, 68, 68, 0.3)",
+):
+    """Add paired raw/smoothed traces for a reference curve and optional uncertainty band."""
+    x_values = np.asarray(x, dtype=float)
+    raw_values = np.nan_to_num(np.asarray(y_raw, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    smooth_values = np.nan_to_num(np.asarray(y_smoothed, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=raw_values,
+            mode="lines",
+            name=name,
+            line=dict(
+                color=raw_style.get("color", "black"),
+                dash=raw_style.get("dash", "dot"),
+                width=int(raw_style.get("width", 2)),
+            ),
+            line_shape=line_shape,
+            legend=legend,
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle),
+            showlegend=showlegend_raw,
+        ),
+        row=row,
+        col=col,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=smooth_values,
+            mode="lines",
+            name=name,
+            line=dict(
+                color=smoothed_style.get("color", "black"),
+                dash=smoothed_style.get("dash", "solid"),
+                width=int(smoothed_style.get("width", 3)),
+            ),
+            line_shape=line_shape,
+            legend=legend,
+            legendgroup=legendgroup,
+            legendgrouptitle=dict(text=legendgrouptitle),
+            showlegend=showlegend_smoothed,
+        ),
+        row=row,
+        col=col,
+    )
+
+    if y_upper is not None and y_lower is not None:
+        upper_values = np.nan_to_num(np.asarray(y_upper, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        lower_values = np.nan_to_num(np.asarray(y_lower, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=upper_values,
+                mode="lines",
+                line=dict(width=0),
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=lower_values,
+                mode="lines",
+                line=dict(width=0),
+                fillcolor=band_fillcolor,
+                fill="tonexty",
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+
+    return fig
+
+
 def format_coustom_plotly(
     fig: go.Figure,
     add_units: bool = True,
     add_watermark: bool = True,
     bargap: int = 0,
-    figsize: int = None,
+    figsize: Optional[tuple] = None,
     fontsize: int = 16,
     legend: Optional[dict] = None,
-    legend_title: str = None,
+    legend_title: Optional[str] = None,
     log: tuple = (False, False),
     margin: dict = {"auto": True},
     matches: tuple = ("x", "y"),
     ranges: tuple = (None, None),
     template: Optional[str] = None,
     tickformat: tuple = (".s", ".s"),
-    title: str = None,
+    title: Optional[str] = None,
+    legend_auto: bool = True,
     debug: bool = False,
 ):
     """
@@ -210,6 +838,7 @@ def format_coustom_plotly(
         log (tuple): axis log scale (default: (False,False))
         margin (dict): figure margin (default: {"auto":True,"color":"white","margin":(0,0,0,0)})
         add_units (bool): True to add units to axis labels, False otherwise (default: False)
+        legend_auto (bool): True to auto-place legend unless manually pinned with x and y
         debug (bool): True to print debug statements, False otherwise (default: False)
 
     Returns:
@@ -236,6 +865,10 @@ def format_coustom_plotly(
         # Print error message
         rprint("[red][ERROR] Invalid legend type! Must be a dictionary![/red]")
         legend = default_legend
+
+    has_manual_position = isinstance(legend, dict) and "x" in legend and "y" in legend
+    if legend_auto and not has_manual_position:
+        legend.update(auto_place_legend(fig, watermark=add_watermark, debug=debug))
 
     if figsize == None:
         rows, cols = find_subplots(fig, debug=debug)
@@ -666,7 +1299,7 @@ def get_common_colorbar(data_list, bins):
 def plot_nhit_energy_scan(df, variable, bins=100, density=False):
     plot_list = []
     # Get energy bins from config file
-    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
+    analysis_info = load_analysis_info(str(root))
     energy_edges = np.linspace(
         analysis_info["REDUCED_RECO_ENERGY_RANGE"][0],
         analysis_info["REDUCED_RECO_ENERGY_RANGE"][1],

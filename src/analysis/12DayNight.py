@@ -1,272 +1,419 @@
 import os
 import sys
 
-# Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
 
-# Define flags for the analysis config and name with the python parser
+
 parser = argparse.ArgumentParser(
-    description="Plot the energy distribution of the particles"
+    description="Perform the day-night analysis for a given configuration and name",
+    allow_abbrev=False,
 )
+parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
+parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--folder", type=str, default="Nominal")
+parser.add_argument("--signal_uncertainty", type=float, default=0.00)
+parser.add_argument("--background_uncertainty", type=float, default=0.02)
 parser.add_argument(
-    "--config",
-    type=str,
-    help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
-)
-parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
-)
-parser.add_argument(
-    "--folder", type=str, help="The name of the background folder", default="Nominal"
-)
-parser.add_argument(
-    "--signal_uncertainty",
+    "--earth_density_band",
     type=float,
-    help="The signal uncertainty for the analysis",
-    default=0.00,
-)
-parser.add_argument(
-    "--background_uncertainty",
-    type=float,
-    help="The background uncertainty for the analysis",
-    default=0.02,
+    default=0.13,
+    help=(
+        "Fractional spread in the expected day-night asymmetry from Earth density profile "
+        "variations (MSW matter effect). The analysis produces three significance curves: "
+        "nominal (scale=1.0), upper (1+band), and lower (1-band) Earth model predictions. "
+        "The default ±13%% brackets published PREM-based oscillation probability ranges."
+    ),
 )
 parser.add_argument(
     "--energy",
     nargs="+",
     type=str,
-    help="The energy label for the analysis",
     default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
+parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--nhits", type=int, default=None)
+parser.add_argument("--ophits", type=int, default=None)
+parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument(
-    "--exposure",
+    "--threshold",
     type=float,
-    help="The exposure array for the analysis",
-    default=100,
-)
-parser.add_argument(
-    "--nhits",
-    type=int,
-    help="The min niht cut for the analysis",
-    default=None,
-)
-parser.add_argument(
-    "--ophits",
-    type=int,
-    help="The min ophit cut for the analysis",
-    default=None,
-)
-parser.add_argument(
-    "--adjcls",
-    type=int,
-    help="The max adjcl cut for the analysis",
-    default=None,
-)
-parser.add_argument(
-    "--threshold", type=float, help="The threshold for the analysis", default=8.0
+    default=get_analysis_threshold(str(root), "DAYNIGHT", stage="SIGNIFICANCE", fallback=0.0),
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 
 args = parser.parse_args()
-rprint(args)
+if args.debug:
+    rprint(args)
+explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
 
-config = args.config
-name = args.name
+# The signal in the day-night analysis is the oscillation-induced asymmetry
+# (N_night - N_day), not the raw neutrino count.  Earth's density profile enters
+# via the MSW matter effect, which modifies the effective oscillation length inside
+# the Earth and shifts the expected nighttime excess.  The three asymmetry_scales
+# bracket the range of predicted asymmetries from published Earth density models:
+#   upper  (1 + band): denser profile → stronger matter effect → larger asymmetry
+#   nominal (1.0)     : best-fit PREM profile
+#   lower  (1 - band): lower-density profile → weaker matter effect → smaller asymmetry
+#
+# Extension opportunities:
+#   - Load per-energy scale factors from file for an energy-dependent matter effect.
+#   - Specify N density models directly to produce N significance curves rather than
+#     assuming a symmetric ±band approximation.
+#   - Use separate --earth_density_band_up / _down arguments when the uncertainty
+#     is asymmetric around the nominal prediction.
+asymmetry_scales = [1.0 + args.earth_density_band, 1.0, 1.0 - args.earth_density_band]
 
-hits = args.nhits
-ophits = args.ophits
-adjcls = args.adjcls
-
-configs = {config: [name]}
-
-user_input = {
-    "exposure": args.exposure,
-    "threshold": args.threshold,
-    "rewrite": args.rewrite,
-    "debug": args.debug,
-}
-
-components = ["neutron", "gamma", "Solar"]
-thld_idx = np.where(daynight_rebin_centers > user_input["threshold"])[0][0]
-rprint(
-    f"[cyan][INFO][/cyan] Threshold {user_input['threshold']} found to correspond to index {thld_idx}"
+threshold_idx = np.where(daynight_rebin_centers > args.threshold)[0][0]
+exposure_grid = np.logspace(-1, np.log10(args.exposure), 100)
+smoothing_config = get_smoothing_config(
+    str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance"
 )
-for config in configs:
-    for (idx, name), energy in product(enumerate(configs[config]), args.energy):
-        sigmas = []
+smoothing_info = smoothing_metadata(smoothing_config)
+if args.debug:
+    rprint(
+        f"[cyan][INFO][/cyan] Threshold {args.threshold} found to correspond to index {threshold_idx}"
+    )
+    rprint(
+        f"[cyan][INFO][/cyan] DayNight smoothing method={smoothing_info['SmoothingMethod']} sigma={smoothing_info.get('SmoothingSigma', 0.0):.2f} enabled={smoothing_info['SmoothingEnabled']}"
+    )
 
-        plot_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
-        )
+for config, name, energy in product(args.config, args.name, args.energy):
+    info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    detector_mass = get_full_detector_mass(config, info)
 
-        for bkg, bkg_label, color in [
-            ("neutron", "neutron", "green"),
-            ("gamma", "gamma", "black"),
-        ]:
-            bkg_df = pd.read_pickle(
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{args.folder.lower()}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_{energy}_Rebin.pkl"
+    sigmas = []
+    significance_bins = []
+    plot_df = pd.read_pickle(
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
+    )
+    configured_backgrounds = get_background_samples(str(root), "DAYNIGHT")
+    loaded_backgrounds = []
+    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
+        bkg_df = pd.read_pickle(filepath)
+        plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
+        loaded_backgrounds.append(bkg)
+    components = [
+        bkg for bkg in configured_backgrounds if bkg in loaded_backgrounds
+    ] + ["Solar"]
+
+    sigmamax = 0.0
+    last_sigma2 = 1e6
+    last_sigma3 = 1e6
+
+    for nhit, ophit, adjcl in track(
+        product(
+            nhits[:10],
+            nhits[3:10],
+            nhits[::-1][10:],
+        ),
+        description=f"Looping over analysis cuts for {energy}...",
+        total=len(nhits[:10]) * len(nhits[3:10]) * len(nhits[::-1][10:]),
+    ):
+        nhit_value = int(nhit)
+        ophit_value = int(ophit)
+        adjcl_value = int(adjcl)
+        this_df = plot_df.loc[
+            (plot_df["NHits"] == nhit_value)
+            * (plot_df["OpHits"] == ophit_value)
+            * (plot_df["AdjCl"] == adjcl_value)
+        ]
+        if this_df.empty:
+            rprint(
+                f"[yellow][WARNING] No data for {energy} with {nhit_value} nhits and {ophit_value} ophits {adjcl_value} adjcl[/yellow]"
             )
-            plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
+            continue
 
-        background = np.zeros(len(daynight_rebin_centers) - thld_idx, dtype=float)
-        background_error = np.zeros(len(daynight_rebin_centers) - thld_idx, dtype=float)
-        all_components = np.ones(len(daynight_rebin_centers) - thld_idx, dtype=bool)
+        raw_background = np.zeros(len(daynight_rebin_centers) - threshold_idx, dtype=float)
+        smoothed_background = np.zeros(len(daynight_rebin_centers) - threshold_idx, dtype=float)
+        raw_signal_day = None
+        raw_signal_night = None
+        smoothed_signal_day = None
+        smoothed_signal_night = None
 
-        last_sigma2 = 1e6
-        last_sigma3 = 1e6
-        for (jdx, nhit), ophit, adjcl in track(
-            product(
-                enumerate(nhits[:10]),
-                nhits[3:10],
-                nhits[::-1][10:],
-            ),
-            description=f"Looping over analysis cuts for {energy}...",
-            total=len(nhits[:10]) * len(nhits[3:10]) * len(nhits[::-1][10:]),
-        ):
-
-            for array in [
-                background,
-                background_error,
-            ]:
-                array.fill(0)
-
-            all_components.fill(1)
-            this_df = plot_df.loc[
-                (plot_df["NHits"] == int(nhit))
-                * (plot_df["OpHits"] == int(ophit))
-                * (plot_df["AdjCl"] == int(adjcl))
-            ]
-            if this_df.empty:
-                print(
-                    f"[WARNING] No data for {energy} with {nhit} nhits and {ophit} ophits {adjcl} adjcl"
+        for component in components:
+            comp_df = this_df.loc[this_df["Component"] == component].copy()
+            if comp_df.empty:
+                rprint(
+                    f"[yellow][WARNING] No data for {component} in {energy} with {nhit_value} nhits, {ophit_value} ophits, {adjcl_value} adjcl[/yellow]"
                 )
                 continue
-
-            for component in components:
-                comp_df = this_df.loc[(this_df["Component"] == component)]
-                if comp_df.empty:
-                    print(
-                        f"[WARNING] No data for {component} in {energy} fiducialized, {nhit} nhits and {ophit} ophits {adjcl} adjcl"
+            comp_df = comp_df.fillna(0)
+            component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
+            if component == "Solar":
+                if "Oscillation" in comp_df.columns:
+                    comp_df = comp_df.loc[comp_df["Oscillation"] == "Osc"]
+                day_df = comp_df.loc[comp_df["Mean"] == "Day"]
+                night_df = comp_df.loc[comp_df["Mean"] == "Night"]
+                if day_df.empty or night_df.empty:
+                    rprint(
+                        f"[yellow][WARNING] Missing Solar Day/Night rows in {energy} with {nhit_value} nhits, {ophit_value} ophits, {adjcl_value} adjcl[/yellow]"
                     )
                     continue
-                comp_df.fillna(0, inplace=True)
-
-                if component == "Solar":
-                    this_comp_df = comp_df.loc[comp_df["Mean"] == "Day"]
-                    signal_day = np.asarray(this_comp_df["Counts"].values[0][thld_idx:])
-
-                    this_comp_df = comp_df.loc[comp_df["Mean"] == "Night"]
-                    signal_night = np.asarray(
-                        this_comp_df["Counts"].values[0][thld_idx:]
+                raw_signal_day = np.asarray(day_df["Counts"].values[0][threshold_idx:], dtype=float)
+                raw_signal_night = np.asarray(night_df["Counts"].values[0][threshold_idx:], dtype=float)
+                smoothed_signal_day = smooth_histogram_with_config(raw_signal_day, component_smoothing_config)
+                smoothed_signal_night = smooth_histogram_with_config(raw_signal_night, component_smoothing_config)
+            else:
+                if "Oscillation" in comp_df.columns:
+                    comp_df = comp_df.loc[comp_df["Oscillation"] == "Truth"]
+                if "Mean" in comp_df.columns:
+                    comp_df = comp_df.loc[comp_df["Mean"] == "Mean"]
+                if comp_df.empty:
+                    rprint(
+                        f"[yellow][WARNING] Missing Truth/Mean rows for {component} in {energy} with {nhit_value} nhits, {ophit_value} ophits, {adjcl_value} adjcl[/yellow]"
                     )
+                    continue
+                raw_counts = np.sum(
+                    np.asarray(
+                        [
+                            np.asarray(row["Counts"][threshold_idx:], dtype=float)
+                            for _, row in comp_df.iterrows()
+                        ]
+                    ),
+                    axis=0,
+                )
+                raw_background += raw_counts
+                smoothed_background += smooth_histogram_with_config(raw_counts, component_smoothing_config)
 
-                else:
-                    background = (
-                        background + np.asarray(comp_df["Counts"].values[0])[thld_idx:]
+        if raw_signal_day is None or raw_signal_night is None or smoothed_signal_day is None or smoothed_signal_night is None:
+            continue
+
+        found_sigma2 = False
+        found_sigma3 = False
+        sigma2 = 0.0
+        sigma3 = 0.0
+        sigma2_curve = []
+        sigma3_curve = []
+
+        raw_gaussian_significances = [[], [], []]
+        raw_gaussian_error_significances = [[], [], []]
+        smoothed_gaussian_significances = [[], [], []]
+        smoothed_gaussian_error_significances = [[], [], []]
+
+        # Backgrounds are assumed time-uniform: equal exposure in daytime and nighttime.
+        # This holds for cosmogenic, geological, and detector-intrinsic backgrounds
+        # that have no coupling to the solar zenith angle.
+        DAY_FRACTION = 0.5
+
+        for years in exposure_grid:
+            factor = years * detector_mass
+            for kdx, asymmetry_scale in enumerate(asymmetry_scales):
+                # total background seen in the daytime half of the run:
+                #   - DAY_FRACTION of the isotropic background
+                #   - plus the daytime solar signal (which is background for the asymmetry measurement)
+                raw_background_total = factor * (DAY_FRACTION * raw_background + raw_signal_day)
+                # The asymmetry_scale brackets Earth density uncertainty via the MSW matter
+                # effect: it multiplies only the day-night difference, leaving the total
+                # normalization unchanged.
+                raw_signal = factor * asymmetry_scale * (raw_signal_night - raw_signal_day)
+                raw_signal = np.where(raw_background_total == 0, 0, raw_signal)
+
+                # "ErrorGaussian" includes the Poisson statistical uncertainty on the
+                # background count (absolute: sqrt(N_bkg), not relative 1/sqrt(N_bkg)).
+                raw_gaussian_error = evaluate_significance(
+                    raw_signal,
+                    raw_background_total,
+                    background_uncertainty=np.where(
+                        factor * DAY_FRACTION * raw_background > 0,
+                        np.sqrt(factor * DAY_FRACTION * raw_background),
+                        0.0,
+                    ),
+                    type="gaussian",
+                )
+                raw_gaussian_error = np.nan_to_num(raw_gaussian_error, nan=0.0)
+                raw_gaussian_error_significances[kdx].append(
+                    float(np.sqrt(np.sum(np.power(raw_gaussian_error, 2))))
+                )
+
+                raw_gaussian = evaluate_significance(
+                    raw_signal,
+                    raw_background_total,
+                    type="gaussian",
+                )
+                raw_gaussian = np.nan_to_num(raw_gaussian, nan=0.0)
+                raw_gaussian_significances[kdx].append(
+                    float(np.sqrt(np.sum(np.power(raw_gaussian, 2))))
+                )
+
+                smoothed_background_total = factor * (
+                    DAY_FRACTION * smoothed_background + smoothed_signal_day
+                )
+                smoothed_signal = factor * asymmetry_scale * (
+                    smoothed_signal_night - smoothed_signal_day
+                )
+                smoothed_signal = np.where(smoothed_background_total == 0, 0, smoothed_signal)
+
+                smoothed_gaussian_error = evaluate_significance(
+                    smoothed_signal,
+                    smoothed_background_total,
+                    background_uncertainty=np.where(
+                        factor * DAY_FRACTION * smoothed_background > 0,
+                        np.sqrt(factor * DAY_FRACTION * smoothed_background),
+                        0.0,
+                    ),
+                    type="gaussian",
+                )
+                smoothed_gaussian_error = np.nan_to_num(smoothed_gaussian_error, nan=0.0)
+                smoothed_gaussian_error_significances[kdx].append(
+                    float(np.sqrt(np.sum(np.power(smoothed_gaussian_error, 2))))
+                )
+
+                smoothed_gaussian = evaluate_significance(
+                    smoothed_signal,
+                    smoothed_background_total,
+                    type="gaussian",
+                )
+                smoothed_gaussian = np.nan_to_num(smoothed_gaussian, nan=0.0)
+                smoothed_gaussian_significances[kdx].append(
+                    float(np.sqrt(np.sum(np.power(smoothed_gaussian, 2))))
+                )
+
+            if smoothed_gaussian_significances[1][-1] > sigmamax:
+                sigmamax = smoothed_gaussian_significances[1][-1]
+
+            if smoothed_gaussian_significances[1][-1] > 2 and not found_sigma2:
+                sigma2 = factor
+                found_sigma2 = True
+                if sigma2 < last_sigma2 and args.debug:
+                    rprint(
+                        f"Found smoothed sigma2 with exposure {factor:.0f} for nhits {nhit_value} ophits {ophit_value} and adjcls {adjcl_value}"
                     )
+                if sigma2 < last_sigma2:
+                    last_sigma2 = sigma2
 
-            found_sigma2 = False
-            found_sigma3 = False
-            sigma2, sigma3 = 0, 0
-            gaussian_significances = [[], [], []]
-            gaussian_error_significances = [[], [], []]
-            sigma2s = []
-            sigma3s = []
-
-            for factor in np.logspace(0, np.log10(args.exposure), 20):
-                for kdx, model_uncertainty in enumerate([1.13, 1, 0.87]):
-                    ##########################################
-                    # Evaluate the significance with the error
-                    ##########################################
-                    background_total = factor * (background / 2 + signal_day)
-                    signal = factor * model_uncertainty * (signal_night - signal_day)
-                    # Replace entries in signal with 0 where background_total is 0 to avoid nan in significance calculation
-                    signal = np.where(background_total == 0, 0, signal)
-                    gaussian_error_significance = evaluate_significance(
-                        signal,
-                        background_total,
-                        background_uncertainty=(
-                            1 / ((factor * (background / 2)) ** 0.5)
-                        ),
-                        type="gaussian",
+            if smoothed_gaussian_significances[1][-1] > 3 and not found_sigma3:
+                sigma3 = factor
+                found_sigma3 = True
+                if sigma3 < last_sigma3 and args.debug:
+                    rprint(
+                        f"Found smoothed sigma3 with exposure {factor:.0f} for nhits {nhit_value} ophits {ophit_value} and adjcls {adjcl_value}"
                     )
-                    gaussian_error_significance = np.nan_to_num(
-                        gaussian_error_significance, nan=0
-                    )
-                    gaussian_error_significance = (
-                        np.sum(np.power(gaussian_error_significance, 2)) ** 0.5
-                    )
-                    gaussian_error_significances[kdx].append(
-                        float(gaussian_error_significance)
-                    )
+                if sigma3 < last_sigma3:
+                    last_sigma3 = sigma3
 
-                    #############################################
-                    # Evaluate the significance without the error
-                    #############################################
-                    gaussian_significance = evaluate_significance(
-                        factor * model_uncertainty * (signal_night - signal_day),
-                        factor * (background / 2 + signal_day),
-                        type="gaussian",
-                    )
-                    # Substitute nan values with 0
-                    gaussian_significance = np.nan_to_num(gaussian_significance, nan=0)
-                    gaussian_significance = (
-                        np.sum(np.power(gaussian_significance, 2)) ** 0.5
-                    )
-                    gaussian_significances[kdx].append(float(gaussian_significance))
+            sigma2_curve.append(sigma2)
+            sigma3_curve.append(sigma3)
 
-                if gaussian_significances[1][-1] > 2 and found_sigma2 == False:
-                    sigma2 = factor
-                    found_sigma2 = True
-                    if sigma2 < last_sigma2:
-                        rprint(
-                            f"Found sigma2 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
-                        )
-                        last_sigma2 = sigma2
+        crossing_summary = compute_crossing_summary(
+            exposure_grid,
+            np.array(raw_gaussian_significances[1], dtype=float),
+            np.array(smoothed_gaussian_significances[1], dtype=float),
+        )
 
-                if gaussian_significances[1][-1] > 3 and found_sigma3 == False:
-                    sigma3 = factor
-                    found_sigma3 = True
-                    if sigma3 < last_sigma3:
-                        rprint(
-                            f"Found sigma3 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
-                        )
-                        last_sigma3 = sigma3
+        # Persist per-bin significance at the configured exposure so plotting macros
+        # can render spectra without recomputing significance.
+        factor_display = args.exposure * detector_mass
+        raw_background_total_display = factor_display * (DAY_FRACTION * raw_background + raw_signal_day)
+        raw_signal_display = factor_display * (raw_signal_night - raw_signal_day)
+        raw_signal_display = np.where(raw_background_total_display == 0, 0, raw_signal_display)
+        raw_gaussian_spectrum = evaluate_significance(
+            raw_signal_display,
+            raw_background_total_display,
+            type="gaussian",
+        )
+        raw_gaussian_spectrum = np.nan_to_num(
+            raw_gaussian_spectrum, nan=0.0, posinf=0.0, neginf=0.0
+        )
 
-                sigma2s.append(sigma2)
-                sigma3s.append(sigma3)
+        smoothed_background_total_display = factor_display * (
+            DAY_FRACTION * smoothed_background + smoothed_signal_day
+        )
+        smoothed_signal_display = factor_display * (
+            smoothed_signal_night - smoothed_signal_day
+        )
+        smoothed_signal_display = np.where(
+            smoothed_background_total_display == 0, 0, smoothed_signal_display
+        )
+        smoothed_gaussian_spectrum = evaluate_significance(
+            smoothed_signal_display,
+            smoothed_background_total_display,
+            type="gaussian",
+        )
+        smoothed_gaussian_spectrum = np.nan_to_num(
+            smoothed_gaussian_spectrum, nan=0.0, posinf=0.0, neginf=0.0
+        )
 
-            sigmas.append(
+        if smoothing_info["SmoothingReport"] and args.debug and explicit_debug_flag:
+            rprint(
+                f"[cyan][REPORT][/cyan] {config} {name} {energy} NHits={nhit_value} OpHits={ophit_value} AdjCl={adjcl_value} "
+                f"sigma2 raw={crossing_summary['RawSigma2Crossing']:.2f} smooth={crossing_summary['SmoothedSigma2Crossing']:.2f}, "
+                f"sigma3 raw={crossing_summary['RawSigma3Crossing']:.2f} smooth={crossing_summary['SmoothedSigma3Crossing']:.2f}"
+            )
+
+        sigmas.append(
+            {
+                "Config": config,
+                "Name": name,
+                "Energy": energy,
+                "Sigma2": sigma2_curve,
+                "Sigma3": sigma3_curve,
+                "Exposure": exposure_grid.tolist(),
+                "NHits": nhit_value,
+                "OpHits": ophit_value,
+                "AdjCl": adjcl_value,
+                "ErrorGaussian+Error": smoothed_gaussian_error_significances[0],
+                "ErrorGaussian": smoothed_gaussian_error_significances[1],
+                "ErrorGaussian-Error": smoothed_gaussian_error_significances[2],
+                "Gaussian+Error": smoothed_gaussian_significances[0],
+                "Gaussian": smoothed_gaussian_significances[1],
+                "Gaussian-Error": smoothed_gaussian_significances[2],
+                "RawErrorGaussian+Error": raw_gaussian_error_significances[0],
+                "RawErrorGaussian": raw_gaussian_error_significances[1],
+                "RawErrorGaussian-Error": raw_gaussian_error_significances[2],
+                "RawGaussian+Error": raw_gaussian_significances[0],
+                "RawGaussian": raw_gaussian_significances[1],
+                "RawGaussian-Error": raw_gaussian_significances[2],
+                "EarthDensityBand": args.earth_density_band,
+                **smoothing_info,
+                **crossing_summary,
+            }
+        )
+
+        significance_energy = np.asarray(daynight_rebin_centers[threshold_idx:], dtype=float)
+        for bin_idx, (energy_value, raw_value, smooth_value) in enumerate(
+            zip(significance_energy, raw_gaussian_spectrum, smoothed_gaussian_spectrum)
+        ):
+            significance_bins.append(
                 {
                     "Config": config,
                     "Name": name,
-                    "Energy": energy,
-                    "Sigma2": sigma2s,
-                    "Sigma3": sigma3s,
-                    "Exposure": np.logspace(0, np.log10(args.exposure), 20).tolist(),
-                    "NHits": nhit,
-                    "OpHits": ophit,
-                    "AdjCl": adjcl,
-                    "ErrorGaussian+Error": gaussian_error_significances[0],
-                    "ErrorGaussian": gaussian_error_significances[1],
-                    "ErrorGaussian-Error": gaussian_error_significances[2],
-                    "Gaussian+Error": gaussian_significances[0],
-                    "Gaussian": gaussian_significances[1],
-                    "Gaussian-Error": gaussian_significances[2],
+                    "EnergyLabel": energy,
+                    "NHits": nhit_value,
+                    "OpHits": ophit_value,
+                    "AdjCl": adjcl_value,
+                    "Threshold": float(args.threshold),
+                    "ExposureYears": float(args.exposure),
+                    "BinIndex": int(bin_idx),
+                    "RecoEnergy": float(energy_value),
+                    "RawGaussian": float(raw_value),
+                    "Gaussian": float(smooth_value),
+                    **smoothing_info,
                 }
             )
 
-        sigmas_df = pd.DataFrame(sigmas)
-        save_df(
-            sigmas_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
-            config=config,
-            name=name,
-            filename=f"{energy}_DayNight_Results",
-            rm=user_input["rewrite"],
-            debug=user_input["debug"],
-        )
+    if args.debug:
+        rprint(f"Maximum significance for {energy}: {sigmamax:.2f} sigma")
+    sigmas_df = pd.DataFrame(sigmas)
+    save_df(
+        sigmas_df,
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+        config=config,
+        name=name,
+        filename=f"{energy}_DayNight_Results",
+        rm=args.rewrite,
+        debug=args.debug,
+    )
+    significance_bins_df = pd.DataFrame(significance_bins)
+    save_df(
+        significance_bins_df,
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+        config=config,
+        name=name,
+        filename=f"{energy}_DayNight_SignificanceBins",
+        rm=args.rewrite,
+        debug=args.debug,
+    )

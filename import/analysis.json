@@ -1,7 +1,4 @@
 {
-    "ASSYMETRY_ERROR": 0.001,
-    "SIGNAL_ERROR": 0.04,
-    "BACKGROUND_ERROR": 0.02,
     "NADIR_RANGE": [
         -1,
         1
@@ -11,176 +8,252 @@
         -1,
         1
     ],
-    "ROOT_NADIR_BINS": 2000,
-    "SOLAR_DM2": 6e-05,
     "REACT_DM2": 7.4e-05,
+    "SOLAR_DM2": 6e-05,
     "SIN13": 0.021,
     "SIN12": 0.303,
-    "NHITS": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20
-    ],
-    "ENERGY_RANGE": [
-        0,
-        30
-    ],
-    "ENERGY_BINS": 120,
-    "TRUE_ENERGY_RANGE": [
-        0,
-        30
-    ],
-    "TRUE_ENERGY_BINS": 60,
-    "RECO_ENERGY_RANGE": [
-        0,
-        30
-    ],
-    "RECO_ENERGY_BINS": 30,
-    "BKG_RECO_ENERGY_RANGE": [
-        0,
-        18
-    ],
-    "BKG_RECO_ENERGY_BINS": 120,
-    "REDUCED_RECO_ENERGY_RANGE": [
-        6,
-        30
-    ],
-    "REDUCED_RECO_ENERGY_BINS": 6,
-    "LOWE_RECO_ENERGY_RANGE": [
-        5,
-        17
-    ],
-    "LOWE_RECO_ENERGY_BINS": 6,
-    "ML_FEATURES": [
-        "NHits",
-        "AdjClNum",
-        "SelectedAdjClNum",
-        "Energy",
-        "TotalEnergy",
-        "SelectedEnergy",
-        "SelectedAdjClEnergy",
-        "SelectedAdjClEnergyRatio",
-        "SelectedMaxAdjClEnergy",
-        "TotalAdjClEnergy",
-        "MaxAdjClEnergy"
-    ],
-    "VERTEX_RESOLUTION_SIGMAS": [
-        7,
-        5,
-        3,
-        1
-    ],
-    "VERTEX_RESOLUTION_TOLERANCES": [
-        15,
-        10,
-        5,
-        1
-    ],
+    "ROOT_NADIR_BINS": 2000,
+    "SIGNAL_ERROR": 0.04,
+    "BACKGROUND_ERROR": 0.02,
+    "ANALYSIS_THRESHOLDS": {
+        "DAYNIGHT": {"SIGNIFICANCE": 0.0},
+        "HEP": {"SIGNIFICANCE": 0.0, "MC": 0.0},
+        "SENSITIVITY": {"SIGNIFICANCE": 0.0, "MC": 0.0},
+        "FIDUCIALIZATION": {"MC": 0.0}
+    },
+    "ANALYSIS_UNCERTAINTIES": {
+        "DAYNIGHT": {
+            "signal_uncertainty": 0.04,
+            "background_uncertainty": 0.02
+        },
+        "HEP": {
+            "signal_uncertainty": 0.3,
+            "background_uncertainty": 0.02
+        },
+        "SENSITIVITY": {
+            "signal_uncertainty": 0.04,
+            "background_uncertainty": 0.02
+        }
+    },
     "SMOOTHING": {
-        "enabled": true,
-        "method": "gaussian",
         "preserve_integral": true,
         "qa": true,
         "report": true,
-        "dimensions": {
-            "1d": {
-                "sigma": 0.75
-            },
-            "2d": {
-                "sigma_x": 0.75,
-                "sigma_y": 0.75
-            }
-        },
         "ANALYSES": {
             "DAYNIGHT": {
                 "enabled": true,
-                "method": "gaussian"
+                "method": "gaussian",
+                "STAGES": {
+                    "FIDUCIAL": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    },
+                    "SIGNIFICANCE": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron",
+                            "hep",
+                            "8B"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    }
+                }
             },
             "HEP": {
                 "enabled": true,
-                "method": "gaussian"
+                "method": "gaussian",
+                "STAGES": {
+                    "FIDUCIAL": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    },
+                    "SIGNIFICANCE": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    }
+                }
             },
             "SENSITIVITY": {
                 "enabled": true,
-                "method": "gaussian"
+                "method": "gaussian",
+                "STAGES": {
+                    "FIDUCIAL": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    },
+                    "SIGNIFICANCE": {
+                        "component_mode": "only",
+                        "components": [
+                            "gamma",
+                            "neutron"
+                        ],
+                        "dimensions": {
+                            "1d": {
+                                "sigma": 0.5
+                            }
+                        }
+                    }
+                }
             }
         }
     },
     "BEST_SIGMA_HISTOGRAM_REFERENCE": "Smoothed",
     "BEST_SIGMA_SIGNIFICANCE_REFERENCE": {
         "DAYNIGHT": "Gaussian",
-        "HEP": "Asimov",
-        "SENSITIVITY": "Gaussian"
+        "HEP": "ProfileLikelihood",
+        "SENSITIVITY": "Asimov"
     },
     "FIDUCIALIZATION": {
         "combine_mode": "quadrature",
-        "significance_type": "gaussian",
-        "energy_min": null,
-        "energy_max": null,
-        "signal_components": [
-            "8B",
-            "hep"
-        ],
-        "background_components": [
-            "gamma",
-            "neutron"
-        ],
         "ANALYSES": {
             "DAYNIGHT": {
                 "significance_type": "gaussian",
-                "energy_min": null,
-                "energy_max": null,
+                "energy_min": 0,
+                "energy_max": 20,
                 "signal_components": [
                     "8B",
                     "hep"
                 ],
                 "background_components": [
                     "gamma",
-                    "neutron"
+                    "neutron",
+                    "radiological"
                 ]
             },
             "HEP": {
                 "significance_type": "asimov",
-                "energy_min": null,
-                "energy_max": null,
+                "energy_min": 0,
+                "energy_max": 30,
                 "signal_components": [
                     "hep"
                 ],
                 "background_components": [
                     "8B",
+                    "gamma",
                     "neutron",
-                    "gamma"
+                    "radiological"
                 ]
             },
             "SENSITIVITY": {
-                "significance_type": "gaussian",
-                "energy_min": 14.0,
-                "energy_max": null,
+                "significance_type": "asimov",
+                "energy_min": 10,
+                "energy_max": 30,
                 "signal_components": [
                     "hep",
                     "8B"
                 ],
                 "background_components": [
+                    "gamma",
                     "neutron",
-                    "gamma"
+                    "radiological"
                 ]
+            }
+        }
+    },
+    "BACKGROUND_SAMPLES": {
+        "ESSENTIAL": {
+            "gamma": true,
+            "alpha": false,
+            "neutron": true,
+            "radiological": false
+        },
+        "default": [
+            "gamma",
+            "neutron",
+            "radiological"
+        ],
+        "surface_filtered": [
+            "gamma",
+            "neutron"
+        ],
+        "ANALYSES": {
+            "DAYNIGHT": [
+                "gamma",
+                "neutron",
+                "radiological"
+            ],
+            "HEP": [
+                "gamma",
+                "neutron",
+                "radiological"
+            ],
+            "SENSITIVITY": [
+                "gamma",
+                "neutron",
+                "radiological"
+            ]
+        },
+        "STYLE": {
+            "gamma": {
+                "label": "gamma",
+                "color": "black",
+                "reduction": 3
+            },
+            "neutron": {
+                "label": "neutron",
+                "color": "rgb(15,133,84)",
+                "reduction": 2
+            },
+            "alpha": {
+                "label": "alpha",
+                "color": "rgb(29, 105, 150)",
+                "reduction": 1
+            },
+            "radiological": {
+                "label": "radiological",
+                "color": "rgb(120, 94, 240)",
+                "reduction": 1
+            }
+        }
+    },
+    "ADAPTIVE_REBIN": {
+        "ANALYSES": {
+            "HEP": {
+                "enabled": true,
+                "min_expected_events": 1.0,
+                "min_count_probability": 0.7,
+                "min_group_bins": 1,
+                "max_group_bins": 0,
+                "objective": "max_sigma_proxy",
+                "isolate_detectable_bins": false,
+                "report": false
             }
         }
     }

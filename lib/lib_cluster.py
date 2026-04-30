@@ -343,7 +343,7 @@ def compute_total_energy(
     run = remove_branches(
         run, rm_branches, ["TotalAdjClEnergy", "SelectedAdjClEnergy"], debug=debug
     )
-    output += f"\tClusterEvent energy computation \t-> Done!\n\n"
+    output += f"\tClusterEvent energy computation -> Done!\n\n"
     return run, output, new_branches
 
 

@@ -13,6 +13,7 @@ from rich import print as rprint
 from plotly.subplots import make_subplots
 
 from lib.lib_io import print_colored
+from lib.lib_default import load_analysis_info
 from lib.lib_plt import format_coustom_plotly, unicode
 
 root = get_project_root()
@@ -136,7 +137,7 @@ def get_oscillation_datafiles(
 
     if auto == False:
         if dm2 is None and sin13 is None and sin12 is None:
-            analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
+            analysis_info = load_analysis_info(str(root))
             found_dm2, found_sin13, found_sin12 = (
                 analysis_info["SOLAR_DM2"],
                 analysis_info["SIN13"],
@@ -333,7 +334,7 @@ def process_oscillation_map(
     debug=False,
 ):
     nadir_data = get_nadir_angle(path=path, debug=debug)
-    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
+    analysis_info = load_analysis_info(str(root))
     root_nadir_edges = np.linspace(
         analysis_info["ROOT_NADIR_RANGE"][0],
         analysis_info["ROOT_NADIR_RANGE"][1],
@@ -400,7 +401,7 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, factor=1, d
     Returns:
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
-    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
+    analysis_info = load_analysis_info(str(root))
     oscillation_map = get_oscillation_map(
         dm2=dm2, sin13=sin13, sin12=sin12, debug=debug
     )
@@ -451,7 +452,7 @@ def rebin_df(
     Returns:
         small_df (pandas.DataFrame): Rebinning result.
     """
-    analysis_info = json.load(open(f"{root}/import/analysis.json", "r"))
+    analysis_info = load_analysis_info(str(root))
     energy_edges = np.linspace(
         analysis_info["RECO_ENERGY_RANGE"][0],
         analysis_info["RECO_ENERGY_RANGE"][1],

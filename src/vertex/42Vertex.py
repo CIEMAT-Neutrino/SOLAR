@@ -223,11 +223,12 @@ for config in configs:
                             ),
                             "Params": popt,
                             "ParamsError": perr,
-                            "ParamsLabels": (
+                            "ParamsLabel": (
                                 ["Amp.", "Mean", "Sigma"]
                                 if fit_function == "Gaussian"
                                 else ["Amp.", "Offset", "DecayConst"]
                             ),
+                            "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
                             "ParamsFormat": [".1f", ".1f", ".2f"],
                         }
                     )
@@ -268,11 +269,12 @@ for config in configs:
                     "FitFunctionLabel": fit_function,
                     "Params": popt,
                     "ParamsError": perr,
-                    "ParamsLabels": (
+                    "ParamsLabel": (
                         ["Amp.", "Mean", "Sigma"]
                         if fit_function == "Gaussian"
                         else ["Amp.", "Offset", "DecayConst"]
                     ),
+                    "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
                     "ParamsFormat": [".1f", ".1f", ".2f"],
                 }
             )
@@ -382,11 +384,12 @@ for config in configs:
                         "FitFunctionLabel": fit_function,
                         "Params": popt,
                         "ParamsError": perr,
-                        "ParamsLabels": (
+                        "ParamsLabel": (
                             ["Amp.", "Mean", "Sigma"]
                             if fit_function == "Gaussian"
                             else ["Amp.", "Offset", "DecayConst"]
                         ),
+                        "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
                         "ParamsFormat": [".1f", ".1f", ".2f"],
                     }
                 )

@@ -33,7 +33,8 @@ The current analysis layer lives in `src/analysis/`.
 Important scripts include:
 
 - `0XFiducializeSignal.py`: builds fiducial scan products.
-- `0YBestFiducial.py`: selects optimized fiducials using analysis-specific significance settings.
+- `0YBestFiducial.py`: selects optimized fiducials using analysis-specific significance settings and writes best-fiducial summaries.
+- `10FiducializationPlot.py`: renders best/no-fiducial significance plots from fiducial scan products.
 - `0ZBestSigmas.py`: records the best significance curves for downstream plots.
 - `10SensitivityAnalysis.py`: orchestrates the full DayNight, HEP, and Sensitivity workflow.
 - `12DayNight*.py`: Day-Night spectrum, exposure, and significance products.
@@ -47,5 +48,24 @@ Analysis defaults are centralized in `import/analysis.json`. Recent additions th
 - default Gaussian smoothing for 1D and 2D histograms
 - analysis-specific best-significance references
 - fiducialization settings for DayNight, HEP, and Sensitivity
+- analysis-stage thresholds via `ANALYSIS_THRESHOLDS` (`DAYNIGHT`, `HEP`, `SENSITIVITY`)
+- background component policy controls (`essential` vs `non-essential`)
 
-Those settings are consumed by helpers in `lib/lib_smooth.py` and `lib/lib_fiducial.py`.
+Those settings are consumed by helpers in `lib/lib_smooth.py`, `lib/lib_fiducial.py`, and `lib/lib_default.py`.
+
+## Component Policy In Analysis Orchestration
+
+The high-level orchestrator `src/analysis/10SensitivityAnalysis.py` applies a component-selection policy before launching per-sample analysis jobs.
+
+The policy is configured in `import/analysis.json` under `BACKGROUND_SAMPLES`:
+
+- `ANALYSES`: per-analysis background component lists (`DAYNIGHT`, `HEP`, `SENSITIVITY`).
+- `ESSENTIAL`: map of components that must be present (`true`) vs optional (`false`).
+
+Runtime behavior:
+
+- Non-essential components not listed in the selected analysis component list are not processed.
+- Essential components that are missing on disk produce warnings.
+- Optional components that are missing are skipped with warnings.
+
+This avoids failures when optional backgrounds (for example `radiological`) are unavailable for a given detector configuration while still protecting required components.

@@ -462,7 +462,7 @@ for config in configs:
                 "FitFunctionLabel": f"Exponential + Sigmoid",
                 "FitFunctionFormula": f"a * exp(-b * x) + c / (1 + exp(-d * x))",
                 "Params": popt[f"{charge}Charge"],
-                "ParamsLabels": [
+                "ParamsLabel": [
                     "Amplitude",
                     "Decay",
                     "Constant",
@@ -470,6 +470,7 @@ for config in configs:
                 ],
                 "ParamsFormat": [".0f", ".1f", ".0f", ".1f"],
                 "ParamsError": perr[f"{charge}Charge"],
+                "ParamsUnit": ["ADC x tick / MeV", "1 / #hits", "ADC x tick / MeV", "1 / #hits"],
             }
         )
 

@@ -2,9 +2,10 @@ import yaml
 import json
 import numpy as np
 
-from typing import Optional
+from typing import Optional, Union
 from rich import print as rprint
 from src.utils import get_project_root
+from .lib_log import create_workflow_log
 
 root = get_project_root()
 
@@ -160,6 +161,8 @@ def compute_filtered_run(
     signal: Optional[bool] = None,
     output: str = "",
     debug: bool = False,
+    verbose: Optional[Union[int, str]] = None,
+    max_log_lines: Optional[int] = None,
 ):
     """
     Function to filter all events in the run according to the filters defined in the params dictionary.
@@ -167,7 +170,12 @@ def compute_filtered_run(
     mask = {}
     new_run = {}
     if output is None:
-        output = ""
+        output = create_workflow_log(verbose=verbose, max_lines=max_log_lines)
+    elif isinstance(output, str):
+        initial_output = output
+        output = create_workflow_log(verbose=verbose, max_lines=max_log_lines)
+        if initial_output:
+            output += initial_output
 
     if params == {} and presets == None:
         return run, mask, output

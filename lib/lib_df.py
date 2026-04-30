@@ -6,7 +6,7 @@ import dask.dataframe as dd
 import plotly.graph_objects as go
 import plotly.express as px
 
-from typing import Optional
+from typing import Optional, Union
 from dask import delayed
 from rich import print as rprint
 from plotly.subplots import make_subplots
@@ -20,36 +20,86 @@ root = get_project_root()
 
 
 def rebin_hist(
-    x: np.ndarray, y: np.ndarray, y_error: np.ndarray, rebin: Optional[int]
+    x: np.ndarray,
+    y: np.ndarray,
+    y_error: np.ndarray,
+    rebin: Optional[Union[int, list, np.ndarray]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    y_error = np.asarray(y_error, dtype=float)
+
+    if len(x) == 0:
+        return np.asarray([]), np.asarray([]), np.asarray([]), np.asarray([])
+
+    def _infer_bin_edges_from_centers(centers: np.ndarray) -> np.ndarray:
+        if len(centers) == 1:
+            half_width = 0.5
+            return np.asarray([centers[0] - half_width, centers[0] + half_width], dtype=float)
+
+        deltas = np.diff(centers)
+        edges = np.empty(len(centers) + 1, dtype=float)
+        edges[1:-1] = centers[:-1] + 0.5 * deltas
+        edges[0] = centers[0] - 0.5 * deltas[0]
+        edges[-1] = centers[-1] + 0.5 * deltas[-1]
+        return edges
+
+    source_edges = _infer_bin_edges_from_centers(x)
+
     if isinstance(rebin, int):
-        new_x = [np.mean(x[i : i + rebin]) for i in range(0, len(x), rebin)]
-        new_y = [np.sum(y[i : i + rebin]) for i in range(0, len(y), rebin)]
-        new_y_per_x = [
-            np.sum(y[i : i + rebin]) / rebin for i in range(0, len(y), rebin)
-        ]
-        new_y_error = [
-            np.sqrt(np.sum(y_error[i : i + rebin] ** 2))
-            for i in range(0, len(y_error), rebin)
-        ]
+        if rebin <= 0:
+            raise ValueError("rebin must be a positive integer")
+
+        target_edges = source_edges[::rebin]
+        if target_edges[-1] != source_edges[-1]:
+            target_edges = np.append(target_edges, source_edges[-1])
+
+        bin_widths = np.diff(target_edges)
+        new_x = 0.5 * (target_edges[:-1] + target_edges[1:])
+        new_y = np.zeros(len(bin_widths), dtype=float)
+        new_y_per_x = np.zeros(len(bin_widths), dtype=float)
+        new_y_error = np.zeros(len(bin_widths), dtype=float)
+
+        for i, (low, high) in enumerate(zip(target_edges[:-1], target_edges[1:])):
+            if i == len(bin_widths) - 1:
+                mask = (x >= low) & (x <= high)
+            else:
+                mask = (x >= low) & (x < high)
+
+            if not np.any(mask):
+                continue
+
+            new_y[i] = np.sum(y[mask])
+            new_y_per_x[i] = new_y[i] / bin_widths[i] if bin_widths[i] > 0 else 0.0
+            new_y_error[i] = np.sqrt(np.sum(np.power(y_error[mask], 2)))
 
     elif isinstance(rebin, list) or isinstance(rebin, np.ndarray):
-        rebin_centers = [
-            np.mean([rebin[i], rebin[i + 1]]) for i in range(len(rebin) - 1)
-        ]
-        rebin_widths = [rebin[i + 1] - rebin[i] for i in range(len(rebin) - 1)]
-        new_y = np.zeros(len(rebin_centers))
-        new_y_per_x = np.zeros(len(rebin_centers))
-        new_y_error = np.zeros(len(rebin_centers))
+        target_edges = np.asarray(rebin, dtype=float)
+        if target_edges.ndim != 1 or len(target_edges) < 2:
+            raise ValueError("rebin array must contain at least two bin edges")
 
-        for i, value in enumerate(rebin_centers):
-            idx = np.where((x >= rebin[i]) & (x < rebin[i + 1]))[0]
-            if rebin[i] > x[-1]:
-                break
-            new_y[i] = np.sum(y[idx[0] : idx[-1] + 1])
-            new_y_per_x[i] = np.sum(y[idx[0] : idx[-1] + 1]) / rebin_widths[i]
-            new_y_error[i] = np.sqrt(np.sum(y_error[idx[0] : idx[-1] + 1] ** 2))
-        new_x = rebin_centers
+        rebin_widths = np.diff(target_edges)
+        new_x = 0.5 * (target_edges[:-1] + target_edges[1:])
+        new_y = np.zeros(len(new_x), dtype=float)
+        new_y_per_x = np.zeros(len(new_x), dtype=float)
+        new_y_error = np.zeros(len(new_x), dtype=float)
+
+        for i, (low, high) in enumerate(zip(target_edges[:-1], target_edges[1:])):
+            if i == len(new_x) - 1:
+                mask = (x >= low) & (x <= high)
+            else:
+                mask = (x >= low) & (x < high)
+
+            if not np.any(mask):
+                continue
+
+            new_y[i] = np.sum(y[mask])
+            new_y_per_x[i] = new_y[i] / rebin_widths[i] if rebin_widths[i] > 0 else 0.0
+            new_y_error[i] = np.sqrt(np.sum(np.power(y_error[mask], 2)))
+
+    else:
+        raise TypeError("rebin must be an int or an array of bin edges")
+
     return new_x, new_y, new_y_per_x, new_y_error
 
 
@@ -84,7 +134,7 @@ def rebin_hist2d(
         for i, value in enumerate(rebin_centers):
             mask = np.logical_and(x >= rebin[i], x < rebin[i + 1])
             new_z[:, i] = np.sum(z[:, mask], axis=1)
-            new_z_per_x = new_z / rebin_widths
+            new_z_per_x[:, i] = new_z[:, i] / rebin_widths[i] if rebin_widths[i] > 0 else 0.0
 
         new_x = rebin_centers
         new_y = y
@@ -93,11 +143,12 @@ def rebin_hist2d(
 
 def rebin_df_columns(
     df: pd.DataFrame,
-    rebin: Optional[int],
+    rebin: Optional[Union[int, list, np.ndarray]],
     bins: str = "Energy",
     counts: str = "Counts",
     counts_per_energy: str = "Counts/Energy",
     counts_error: str = "Error",
+    mc_counts: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     This function rebins the columns of a dataframe according to the rebin value/array.
@@ -105,35 +156,40 @@ def rebin_df_columns(
     """
 
     new_df = df.copy()
-    if isinstance(rebin, int):
-        bins_array = np.zeros((len(df), int(len(df[counts][0]) / rebin)))
-        count_array = np.zeros((len(df), int(len(df[counts][0]) / rebin)))
-        count_per_energy_array = np.zeros((len(df), int(len(df[counts][0]) / rebin)))
-        count_error_array = np.zeros((len(df), int(len(df[counts_error][0]) / rebin)))
-
-    elif isinstance(rebin, list) or isinstance(rebin, np.ndarray):
-        bins_array = np.zeros((len(df), len(rebin) - 1))
-        count_array = np.zeros((len(df), len(rebin) - 1))
-        count_per_energy_array = np.zeros((len(df), len(rebin) - 1))
-        count_error_array = np.zeros((len(df), len(rebin) - 1))
+    bins_array = []
+    count_array = []
+    count_per_energy_array = []
+    count_error_array = []
+    mc_count_array = [] if mc_counts is not None else None
 
     for i in range(len(df)):
-        (
-            bins_array[i],
-            count_array[i],
-            count_per_energy_array[i],
-            count_error_array[i],
-        ) = rebin_hist(
+        new_bins, new_counts, new_counts_per_energy, new_counts_error = rebin_hist(
             np.asarray(df[bins][i]),
             np.asarray(df[counts][i]),
             np.asarray(df[counts_error][i]),
             rebin,
         )
+        bins_array.append(np.asarray(new_bins, dtype=float).tolist())
+        count_array.append(np.asarray(new_counts, dtype=float).tolist())
+        count_per_energy_array.append(np.asarray(new_counts_per_energy, dtype=float).tolist())
+        count_error_array.append(np.asarray(new_counts_error, dtype=float).tolist())
 
-    new_df[bins] = pd.Series(bins_array.tolist())
-    new_df[counts] = pd.Series(count_array.tolist())
-    new_df[counts_per_energy] = pd.Series(count_per_energy_array.tolist())
-    new_df[counts_error] = pd.Series(count_error_array.tolist())
+        if mc_counts is not None:
+            (_, rebinned_mc_counts, _, _) = rebin_hist(
+                np.asarray(df[bins][i]),
+                np.asarray(df[mc_counts][i]),
+                np.zeros_like(np.asarray(df[mc_counts][i]), dtype=float),
+                rebin,
+            )
+            assert mc_count_array is not None
+            mc_count_array.append(np.asarray(rebinned_mc_counts, dtype=float).tolist())
+
+    new_df[bins] = pd.Series(bins_array)
+    new_df[counts] = pd.Series(count_array)
+    new_df[counts_per_energy] = pd.Series(count_per_energy_array)
+    new_df[counts_error] = pd.Series(count_error_array)
+    if mc_counts is not None:
+        new_df[mc_counts] = pd.Series(mc_count_array)
 
     return new_df
 
@@ -171,6 +227,13 @@ def explode(
             rprint(f"[yellow]Column {col} not found in the dataframe[/yellow]")
             explode.remove(col)
 
+    if len(explode) == 0:
+        if debug:
+            rprint("[yellow]No columns to explode. Returning dataframe unchanged.[/yellow]")
+        if keep is not None:
+            return df[keep].copy()
+        return df.copy()
+
     try:
         # Explode the columns
         if keep is not None:
@@ -181,8 +244,9 @@ def explode(
             result_df = df.explode(explode)
 
     except ValueError:
+        selected_columns = (keep + explode) if keep is not None else explode
         # Convert Pandas DataFrame to Dask DataFrame but keep the columns in keep + explode
-        ddf = dd.from_pandas(df[keep + explode], npartitions=2)
+        ddf = dd.from_pandas(df[selected_columns], npartitions=2)
         # ddf = dd.from_pandas(df, npartitions=2)  # Adjust the number of partitions as needed
 
         # Define a function to explode a column

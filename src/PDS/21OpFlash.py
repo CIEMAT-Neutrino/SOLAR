@@ -348,7 +348,8 @@ for config in configs:
                             "FitFunctionFormula": r"$y = a - a \cdot b \cdot \frac{x}{t_{max}} + c \cdot \left(\frac{x}{t_{max}}\right)^2$",
                             "Params": popt,
                             "ParamsError": perr,
-                            "ParamsLabels": ["Amplitude", "Attenuation", "Correction"],
+                            "ParamsLabel": ["Amplitude", "Attenuation", "Correction"],
+                            "ParamsUnit": ["log10(PE)", r"$\mu$s", "log10(PE)"],
                             "ParamsFormat": [".2f", ".2f", ".2f"],
                         }
                     )
@@ -419,7 +420,8 @@ for config in configs:
                             "FitFunctionFormula": r"$y = a \cdot x^2 + b \cdot x + c$",
                             "Params": popt,
                             "ParamsError": perr,
-                            "ParamsLabels": ["A", "B", "C"],
+                            "ParamsLabel": ["A", "B", "C"],
+                            "ParamsUnit": ["", "", ""],
                             "ParamsFormat": [".1e", ".1e", ".2f"],
                             "p0": popt[0],
                             "p1": popt[1],

@@ -3,6 +3,100 @@ import numpy as np
 from typing import Optional
 
 
+def _solve_beta_hat_background_only(
+    observed: np.ndarray,
+    background: np.ndarray,
+    rel_background_uncertainty: np.ndarray,
+) -> np.ndarray:
+    """Solve profiled background scale factors for mu=0 with Gaussian priors."""
+    obs = np.nan_to_num(np.asarray(observed, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    bkg = np.nan_to_num(np.asarray(background, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    rel_unc = np.nan_to_num(
+        np.asarray(rel_background_uncertainty, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+
+    beta_hat = np.ones_like(bkg, dtype=float)
+    mask = (bkg > 0.0) & (rel_unc > 0.0)
+    if not np.any(mask):
+        return beta_hat
+
+    n = obs[mask]
+    b = bkg[mask]
+    sigma2 = np.power(rel_unc[mask], 2)
+
+    # Closed-form root of derivative equation for each bin under mu=0.
+    # beta^2 + (b*sigma^2 - 1) * beta - n*sigma^2 = 0
+    linear = b * sigma2 - 1.0
+    discriminant = np.maximum(np.power(linear, 2) + 4.0 * n * sigma2, 0.0)
+    positive_root = (-linear + np.sqrt(discriminant)) / 2.0
+    beta_hat[mask] = np.maximum(positive_root, 1e-12)
+    return beta_hat
+
+
+def evaluate_profile_likelihood_discovery(
+    signal: np.ndarray,
+    background: np.ndarray,
+    background_uncertainty: Optional[np.ndarray] = None,
+    min_expected: float = 1e-12,
+) -> float:
+    """
+    Evaluate median discovery significance from a profile-likelihood ratio test.
+
+    This computes q0 for Asimov data generated at s+b with mu=1 and tests mu=0,
+    profiling per-bin background normalization nuisance parameters constrained by
+    Gaussian priors derived from `background_uncertainty / background`.
+    """
+    signal_arr = np.nan_to_num(np.asarray(signal, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    background_arr = np.nan_to_num(
+        np.asarray(background, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+    if signal_arr.size != background_arr.size:
+        raise ValueError("signal and background must have the same length")
+
+    if background_uncertainty is None:
+        rel_unc = np.zeros_like(background_arr, dtype=float)
+    else:
+        bkg_unc = np.nan_to_num(
+            np.asarray(background_uncertainty, dtype=float),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        if bkg_unc.size != background_arr.size:
+            raise ValueError("background_uncertainty and background must have the same length")
+        rel_unc = np.divide(
+            bkg_unc,
+            background_arr,
+            out=np.zeros_like(background_arr, dtype=float),
+            where=background_arr > 0.0,
+        )
+
+    observed = signal_arr + background_arr
+    expected_sb = np.maximum(observed, min_expected)
+
+    # Asimov s+b point is the unconditional MLE: mu=1 and beta=1.
+    ll_sb = np.sum(observed * np.log(expected_sb) - expected_sb)
+
+    beta_hat_null = _solve_beta_hat_background_only(observed, background_arr, rel_unc)
+    expected_null = np.maximum(beta_hat_null * background_arr, min_expected)
+    ll_null = np.sum(observed * np.log(expected_null) - expected_null)
+
+    pull_mask = rel_unc > 0.0
+    if np.any(pull_mask):
+        ll_null -= 0.5 * np.sum(
+            np.power((beta_hat_null[pull_mask] - 1.0) / rel_unc[pull_mask], 2)
+        )
+
+    q0 = max(0.0, 2.0 * (ll_sb - ll_null))
+    return float(np.sqrt(q0))
+
+
 def evaluate_significance(
     signal: np.ndarray,
     background: np.ndarray,
@@ -98,6 +192,24 @@ def evaluate_significance(
                     )
                 )
             )
+    elif type in ["profile", "profile_likelihood", "profile-likelihood"]:
+        mask = (signal > 0) & (background >= 0)
+        if not np.any(mask):
+            return significance
+
+        this_signal = signal[mask]
+        this_background = background[mask]
+        this_bkg_unc = (
+            np.asarray(background_uncertainty[mask], dtype=float)
+            if background_uncertainty is not None
+            else None
+        )
+        significance[mask] = evaluate_profile_likelihood_discovery(
+            this_signal,
+            this_background,
+            background_uncertainty=this_bkg_unc,
+        )
+
     else:
         raise ValueError(f"Unknown significance type: {type}")
 

@@ -95,11 +95,7 @@ surfaces = json.load(open(f"{root}/import/surface_positions.json"))
 
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
 detector_time = 2 * info["TIMEWINDOW"] * events / 60 / 60 / 24 / 365.25  # years
-detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
-detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
-detector_z = info["DETECTOR_SIZE_Z"] + 2 * info["DETECTOR_GAP_Z"]
-lar_density = 1.396  # g/cm^3
-detector_mass = detector_x * detector_y * detector_z * lar_density / 1e9  # kT
+detector_mass = get_workspace_detector_mass(args.config, info)  # kT
 detector_exposure = detector_mass * detector_time  # kT*years
 print(f"Detector exposure: {detector_exposure} kT·years")
 data = dict()

@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Dict, List, Optional, Set, Tuple
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -9,58 +10,279 @@ from lib import *
 save_path = f"{root}/images/solar/fiducial"
 data_path = f"{root}/data/solar/fiducial"
 
-# Define flags for the analysis config and name with the python parser
-parser = argparse.ArgumentParser(
-    description="Plot the energy distribution of the particles"
-)
-parser.add_argument(
-    "--config",
-    type=str,
-    help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
-)
-parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
-)
-parser.add_argument(
-    "--folder",
-    type=str,
-    help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal"],
-    default="Nominal",
-)
-parser.add_argument(
-    "--energy",
-    nargs="+",
-    type=str,
-    help="The energy for the analysis",
-    choices=[
-        "SignalParticleK",
-        "ClusterEnergy",
-        "TotalEnergy",
-        "SelectedEnergy",
-        "SolarEnergy",
-    ],
-    default=[
-        "SignalParticleK",
-        "ClusterEnergy",
-        "TotalEnergy",
-        "SelectedEnergy",
-        "SolarEnergy",
-    ],
-)
-parser.add_argument(
-    "--exposure",
-    type=float,
-    help="The exposure in kT·year",
-    default=100,
-)
+ANALYSIS_CHOICES = ["DayNight", "HEP", "Sensitivity"]
+GROUP_COLUMNS = ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]
+FIDUCIAL_COLUMNS = ["FiducializedX", "FiducializedY", "FiducializedZ"]
+
+
+def _deep_merge_dict(base: dict, update: dict) -> dict:
+    merged = dict(base)
+    for key, value in update.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_and_write_json(path: str, payload: dict) -> None:
+    existing: dict = {}
+    if os.path.exists(path):
+        with open(path, "r") as f_read:
+            existing = json.load(f_read)
+    merged = _deep_merge_dict(existing, payload)
+    if os.path.exists(path):
+        os.remove(path)
+    with open(path, "w") as f_write:
+        json.dump(merged, f_write, indent=4)
+
+
+def combine_components(df: pd.DataFrame, components: List[str]) -> pd.DataFrame:
+    component_df = df[df["Component"].isin(components)].copy()
+    if component_df.empty:
+        return pd.DataFrame(columns=GROUP_COLUMNS + ["MCCounts", "Counts", "Error+", "Error-"])
+    return (
+        component_df.groupby(GROUP_COLUMNS)
+        .agg({
+            "MCCounts": "sum",
+            "Counts": "sum",
+            "Error+": lambda x: float(np.sqrt(np.sum(np.square(np.asarray(x, dtype=float))))),
+            "Error-": lambda x: float(np.sqrt(np.sum(np.square(np.asarray(x, dtype=float))))),
+        })
+        .reset_index()
+    )
+
+
+def aggregate_significance(significance: np.ndarray, mode: str) -> float:
+    values = np.nan_to_num(np.asarray(significance, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    if str(mode).lower() == "sum":
+        return float(np.sum(values))
+    return float(np.sqrt(np.sum(np.square(values))))
+
+
+def build_significance_payload(
+    merged_df: pd.DataFrame,
+    significance_type: str,
+    combine_mode: str,
+    smoothing_config: dict,
+    exposure: float,
+    energy_min=None,
+    energy_max=None,
+) -> Optional[Dict]:
+    if merged_df.empty:
+        return None
+    ordered = merged_df.sort_values("Energy").copy()
+    energy = ordered["Energy"].to_numpy(dtype=float)
+    signal_counts = np.nan_to_num(ordered["CountsSignal"].to_numpy(dtype=float), nan=0.0)
+    background_counts = np.nan_to_num(ordered["CountsBackground"].to_numpy(dtype=float), nan=0.0)
+    signal_errors = np.nan_to_num(ordered["Error+Signal"].to_numpy(dtype=float), nan=0.0)
+    background_errors = np.nan_to_num(ordered["Error+Background"].to_numpy(dtype=float), nan=0.0)
+    signal_mc = np.nan_to_num(ordered["MCCountsSignal"].to_numpy(dtype=float), nan=0.0)
+    background_mc = np.nan_to_num(ordered["MCCountsBackground"].to_numpy(dtype=float), nan=0.0)
+
+    smoothed_signal_counts = smooth_histogram_with_config(signal_counts, smoothing_config)
+    smoothed_background_counts = smooth_histogram_with_config(background_counts, smoothing_config)
+    smoothed_signal_errors = smooth_histogram_errors(
+        signal_errors, smoothing_config, counts=signal_counts, mc_counts=signal_mc
+    )
+    smoothed_background_errors = smooth_histogram_errors(
+        background_errors, smoothing_config, counts=background_counts, mc_counts=background_mc
+    )
+
+    window_mask = np.ones_like(energy, dtype=bool)
+    if energy_min is not None:
+        window_mask = window_mask & (energy >= float(energy_min))
+    if energy_max is not None:
+        window_mask = window_mask & (energy <= float(energy_max))
+
+    signal_counts_eval = signal_counts[window_mask]
+    background_counts_eval = background_counts[window_mask]
+    signal_errors_eval = signal_errors[window_mask]
+    background_errors_eval = background_errors[window_mask]
+    smoothed_signal_counts_eval = smoothed_signal_counts[window_mask]
+    smoothed_background_counts_eval = smoothed_background_counts[window_mask]
+    smoothed_signal_errors_eval = smoothed_signal_errors[window_mask]
+    smoothed_background_errors_eval = smoothed_background_errors[window_mask]
+
+    significance_kind = str(significance_type).lower()
+    if significance_kind == "asimov":
+        raw_significance_eval = evaluate_significance(
+            exposure * signal_counts_eval,
+            exposure * background_counts_eval,
+            background_uncertainty=exposure * background_errors_eval,
+            type=significance_kind,
+        )
+        smoothed_significance_eval = evaluate_significance(
+            exposure * smoothed_signal_counts_eval,
+            exposure * smoothed_background_counts_eval,
+            background_uncertainty=exposure * smoothed_background_errors_eval,
+            type=significance_kind,
+        )
+    else:
+        raw_significance_eval = evaluate_significance(
+            exposure * signal_counts_eval,
+            exposure * background_counts_eval,
+            exposure * signal_errors_eval,
+            exposure * background_errors_eval,
+            type=significance_kind,
+        )
+        smoothed_significance_eval = evaluate_significance(
+            exposure * smoothed_signal_counts_eval,
+            exposure * smoothed_background_counts_eval,
+            exposure * smoothed_signal_errors_eval,
+            exposure * smoothed_background_errors_eval,
+            type=significance_kind,
+        )
+    raw_significance_eval = np.nan_to_num(raw_significance_eval, nan=0.0, posinf=0.0, neginf=0.0)
+    smoothed_significance_eval = np.nan_to_num(smoothed_significance_eval, nan=0.0, posinf=0.0, neginf=0.0)
+
+    raw_significance = np.zeros_like(energy, dtype=float)
+    smoothed_significance = np.zeros_like(energy, dtype=float)
+    raw_significance[window_mask] = raw_significance_eval
+    smoothed_significance[window_mask] = smoothed_significance_eval
+
+    return {
+        "Energy": energy,
+        "RawSignal": exposure * signal_counts,
+        "RawBackground": exposure * background_counts,
+        "SmoothedSignal": exposure * smoothed_signal_counts,
+        "SmoothedBackground": exposure * smoothed_background_counts,
+        "RawSignificance": raw_significance,
+        "SmoothedSignificance": smoothed_significance,
+        "RawTotal": aggregate_significance(raw_significance, combine_mode),
+        "SmoothedTotal": aggregate_significance(smoothed_significance, combine_mode),
+    }
+
+
+def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing_config: Dict, exposure: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    signal_df = combine_components(
+        plot_df,
+        analysis_config.get("signal_components", []),
+    )
+    background_df = combine_components(
+        plot_df,
+        analysis_config.get("background_components", []),
+    )
+    merged_df = pd.merge(
+        signal_df,
+        background_df,
+        on=GROUP_COLUMNS,
+        how="outer",
+        suffixes=("Signal", "Background"),
+    )
+    for column in [
+        "MCCountsSignal",
+        "CountsSignal",
+        "Error+Signal",
+        "Error-Signal",
+        "MCCountsBackground",
+        "CountsBackground",
+        "Error+Background",
+        "Error-Background",
+    ]:
+        if column not in merged_df.columns:
+            merged_df[column] = 0.0
+    merged_df = merged_df.fillna(0.0)
+
+    significance_rows = []
+    for fiducial_values, group in merged_df.groupby(FIDUCIAL_COLUMNS):
+        payload = build_significance_payload(
+            group,
+            analysis_config.get("significance_type", "gaussian"),
+            analysis_config.get("combine_mode", "quadrature"),
+            smoothing_config,
+            exposure,
+            analysis_config.get("energy_min"),
+            analysis_config.get("energy_max"),
+        )
+        if payload is None:
+            continue
+        significance_rows.append({
+            "FiducializedX": int(fiducial_values[0]),
+            "FiducializedY": int(fiducial_values[1]),
+            "FiducializedZ": int(fiducial_values[2]),
+            "RawSignificance": payload["RawTotal"],
+            "SmoothedSignificance": payload["SmoothedTotal"],
+        })
+
+    return merged_df, pd.DataFrame(significance_rows)
+
+
+def get_essential_background_components(root_path: str, components: List[str]) -> Set[str]:
+    background_cfg = get_background_config(root_path)
+    essential_map = {
+        str(component).lower(): bool(is_essential)
+        for component, is_essential in background_cfg.get("ESSENTIAL", {}).items()
+    }
+    return {
+        str(component)
+        for component in components
+        if essential_map.get(str(component).lower(), False)
+    }
+
+
+def apply_fiducial_mc_threshold(
+    plot_df: pd.DataFrame,
+    analysis_config: Dict,
+    mc_threshold: int,
+    root_path: str,
+) -> pd.DataFrame:
+    background_components = list(analysis_config.get("background_components", []))
+    essential_components = get_essential_background_components(root_path, background_components)
+    if not essential_components:
+        return plot_df
+
+    filtered = plot_df.copy()
+    energy_min = analysis_config.get("energy_min")
+    energy_max = analysis_config.get("energy_max")
+    if energy_min is not None:
+        filtered = filtered.loc[filtered["Energy"] >= float(energy_min)]
+    if energy_max is not None:
+        filtered = filtered.loc[filtered["Energy"] <= float(energy_max)]
+
+    component_mc = (
+        filtered.loc[filtered["Component"].isin(essential_components)]
+        .groupby(FIDUCIAL_COLUMNS + ["Component"])["MCCounts"]
+        .sum()
+        .reset_index()
+    )
+    if component_mc.empty:
+        return filtered.iloc[0:0]
+
+    component_mc["Pass"] = component_mc["MCCounts"] >= float(mc_threshold)
+    pass_counts = (
+        component_mc.loc[component_mc["Pass"]]
+        .groupby(FIDUCIAL_COLUMNS)["Component"]
+        .nunique()
+        .reset_index(name="PassComponents")
+    )
+    pass_counts = pass_counts.loc[
+        pass_counts["PassComponents"] >= len(essential_components),
+        FIDUCIAL_COLUMNS,
+    ]
+    if pass_counts.empty:
+        return filtered.iloc[0:0]
+
+    return plot_df.merge(pass_counts, on=FIDUCIAL_COLUMNS, how="inner")
+
+
+parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
+parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
+parser.add_argument("--name", type=str, help="The name of the configuration", default="marley")
+parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
+parser.add_argument("--analysis", nargs="+", type=str, help="The analyses to optimize fiducials for", choices=ANALYSIS_CHOICES, default=ANALYSIS_CHOICES)
+parser.add_argument("--energy", nargs="+", type=str, help="The energy for the analysis", choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument("--exposure", type=float, help="The exposure in kT·year", default=100)
 parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
-    "--threshold", type=float, help="The threshold for the analysis", default=8
+    "--mc_threshold",
+    type=int,
+    default=get_analysis_threshold(str(root), "FIDUCIALIZATION", stage="MC", fallback=0.0),
+    help="Minimum summed MCCounts required for every essential background component in fiducial selection",
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 
 args = parser.parse_args()
 config = args.config
@@ -71,349 +293,89 @@ for path in [save_path, data_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
         os.makedirs(f"{path}/{args.folder.lower()}")
 
-plot_dict = {}
+filename = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+if os.path.exists(filename):
+    best_fiducials = json.loads(open(filename, "r").read())
+else:
+    best_fiducials = {}
+
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):
         df_list = []
         signal_df = pd.read_pickle(
-            f"/pc/choozdsk01/users/manthey/SOLAR/data/solar/fiducial/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan.pkl"
+            f"{root}/data/solar/fiducial/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan.pkl"
         )
         df_list.append(signal_df)
-        for bkg, bkg_label in [
-            ("gamma", "gamma"),
-            ("neutron", "neutron"),
-        ]:
-            bkg_df = pd.read_pickle(
-                f"/pc/choozdsk01/users/manthey/SOLAR/data/solar/fiducial/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
-            )
+        for bkg_label in get_background_samples(str(root)):
+            filepath = f"{root}/data/solar/fiducial/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
+            if not os.path.exists(filepath):
+                continue
+            bkg_df = pd.read_pickle(filepath)
             df_list.append(bkg_df)
 
         raw_df = pd.concat(df_list, ignore_index=True)
+        plot_df = explode(raw_df, ["Counts", "Error+", "Error-", "Energy", "MCCounts"], debug=args.debug).copy()
+        plot_df["Counts"] = pd.to_numeric(plot_df["Counts"], errors="coerce").fillna(0.0)
+        plot_df["Error+"] = pd.to_numeric(plot_df["Error+"], errors="coerce").fillna(0.0)
+        plot_df["Error-"] = pd.to_numeric(plot_df["Error-"], errors="coerce").fillna(0.0)
+        plot_df["Energy"] = pd.to_numeric(plot_df["Energy"], errors="coerce")
+        plot_df["MCCounts"] = pd.to_numeric(plot_df["MCCounts"], errors="coerce").fillna(0.0)
 
-        plot_df = explode(
-            raw_df,
-            ["Counts", "Error+", "Error-", "Energy", "MCCounts"],
-            debug=args.debug,
-        )
-        plot_df["Counts"] = plot_df["Counts"].replace(0, np.nan)
+        best_fiducials.setdefault(config, {})
 
-        # Filter signal and background dataframes
-        signal_df = plot_df[
-            (plot_df["Component"].isin(["Solar", "8B", "hep"]))
-            * (plot_df["Energy"] > args.threshold)
-        ]
-        background_df = plot_df[
-            (plot_df["Component"].isin(["neutron", "gamma"]))
-            * (plot_df["Energy"] > args.threshold)
-        ]
-
-        # Compute background counts by grouping over each FiducializedX/Y/Z values
-        background_df = (
-            background_df.groupby(
-                ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]
+        for analysis_name in args.analysis:
+            analysis_key = analysis_name.upper()
+            analysis_config = get_fiducialization_config(str(root), analysis_key)
+            gated_plot_df = apply_fiducial_mc_threshold(
+                plot_df,
+                analysis_config,
+                args.mc_threshold,
+                str(root),
             )
-            .agg(
-                {
-                    "MCCounts": lambda x: sum(x),  # Sum the MCCounts
-                    "Counts": lambda x: sum(x),  # Sum the Counts
-                    "Error+": lambda x: sum(x**2)
-                    ** 0.5,  # BEGIN: Compute sqrt of summed squares of the Error
-                    "Error-": lambda x: sum(x**2) ** 0.5,
-                }  # END:
+            smoothing_config = get_smoothing_config(
+                str(root), analysis_name=analysis_key, dimensions="1d", stage="fiducial"
             )
-            .reset_index()
-        )
 
-        # Apply the compute significance function to each row of the signal and background dataframes that match in Energy and FiducializedX/Y/Z by merging them first
-        merged_df = pd.merge(
-            signal_df,
-            background_df,
-            on=["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"],
-            suffixes=("Signal", "Background"),
-        )
-        merged_df["Significance"] = evaluate_significance(
-            merged_df["CountsSignal"].to_numpy(),
-            merged_df["CountsBackground"].to_numpy(),
-            merged_df["Error+Signal"].to_numpy(),
-            merged_df["Error+Background"].to_numpy(),
-        )
-
-        max_significance = merged_df["Significance"].max()
-        print(f"{energy_label} Max significance: {max_significance:.2f}")
-
-        significance_df = (
-            merged_df.groupby(
-                ["Component", "FiducializedX", "FiducializedY", "FiducializedZ"]
+            merged_df, significance_df = select_best_fiducial(
+                gated_plot_df, analysis_config, smoothing_config, args.exposure
             )
-            .agg(
-                {
-                    "Significance": lambda x: sum(x**2)
-                    ** 0.5,  # Get the sqrt of summed squares of the Significance
-                }
-            )
-            .reset_index()
-        )
+            if significance_df.empty:
+                rprint(
+                    f"[yellow]No fiducial significance points found for {analysis_name} {energy_label} "
+                    f"after essential-component MC threshold {args.mc_threshold}[/yellow]"
+                )
+                continue
 
-        # Find the row with the maximum significance
-        max_row = significance_df.loc[significance_df["Significance"].idxmax()]
-        print(max_row)
-
-        # Save the best significance fiducial position
-        best_fiducials = {
-            config: {
-                energy_label: {
-                    "FiducialX": int(max_row["FiducializedX"]),
-                    "FiducialY": int(max_row["FiducializedY"]),
-                    "FiducialZ": int(max_row["FiducializedZ"]),
-                }
-            }
-        }
-
-        # Save as a json file. If already exists, load and update
-        filename = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
-        if os.path.exists(filename):
-            with open(filename, "r") as f:
-                existing_data = json.load(f)
-                print(f"Loaded existing best fiducials from {filename}")
-            existing_data.setdefault(config, {}).update(
-                {energy_label: best_fiducials[config][energy_label]}
-            )
-            best_fiducials = existing_data
-
-        with open(filename, "w") as f:
-            json.dump(best_fiducials, f, indent=4)
-
-        fiducialx = int(max_row["FiducializedX"])
-        fiducialy = int(max_row["FiducializedY"])
-        fiducialz = int(max_row["FiducializedZ"])
-
-        # max_counts = 0
-        max_significance = 0
-        for [fiducialx, fiducialy, fiducialz], fiducial_label in zip(
-            [
-                [
-                    max_row["FiducializedX"],
-                    max_row["FiducializedY"],
-                    max_row["FiducializedZ"],
-                ],
-                [0, 0, 0],
-            ],
-            ["Best", "No"],
-        ):
-            this_plot = plot_df[
-                (plot_df["Component"] != "Solar")
-                * (plot_df["FiducializedX"] == fiducialx)
-                * (plot_df["FiducializedY"] == fiducialy)
-                * (plot_df["FiducializedZ"] == fiducialz)
+            max_row = significance_df.loc[significance_df["SmoothedSignificance"].idxmax()]
+            no_fid_row = significance_df.loc[
+                (significance_df["FiducializedX"] == 0)
+                & (significance_df["FiducializedY"] == 0)
+                & (significance_df["FiducializedZ"] == 0)
             ]
-            print(this_plot.groupby("Component")["Counts"].sum())
-            fig = make_subplots(
-                rows=2,
-                cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0,
-                row_heights=[0.7, 0.3],
+            no_fid_smoothed = (
+                float(no_fid_row.iloc[0]["SmoothedSignificance"])
+                if not no_fid_row.empty
+                else None
+            )
+            rprint(
+                f"{analysis_name} {energy_label}: best smoothed significance {max_row['SmoothedSignificance']:.2f} at X={int(max_row['FiducializedX'])} Y={int(max_row['FiducializedY'])} Z={int(max_row['FiducializedZ'])}"
             )
 
-            component_color = {
-                "gamma": "black",
-                "neutron": "rgb(15,133,84)",
-                "8B": "rgb(225,124,5)",
-                "hep": "rgb(204,80,62)",
+            best_fiducials[config].setdefault(analysis_key, {})[energy_label] = {
+                "FiducialX": int(max_row["FiducializedX"]),
+                "FiducialY": int(max_row["FiducializedY"]),
+                "FiducialZ": int(max_row["FiducializedZ"]),
+                "RawSignificance": float(max_row["RawSignificance"]),
+                "SmoothedSignificance": float(max_row["SmoothedSignificance"]),
+                "NoFiducialSignificance": no_fid_smoothed,
+                "BestFiducialSignificance": float(max_row["SmoothedSignificance"]),
+                "SignalComponents": list(analysis_config.get("signal_components", [])),
+                "BackgroundComponents": list(analysis_config.get("background_components", [])),
+                "MCThreshold": int(args.mc_threshold),
+                "EnergyMin": analysis_config.get("energy_min"),
+                "EnergyMax": analysis_config.get("energy_max"),
+                "SignificanceType": analysis_config.get("significance_type", "gaussian"),
+                **smoothing_metadata(smoothing_config),
             }
 
-            for component in this_plot["Component"].unique():
-                component_data = this_plot[this_plot["Component"] == component]
-                if args.stacked:
-                    fig.add_trace(
-                        go.Bar(
-                            x=component_data["Energy"].to_numpy(),
-                            y=args.exposure * component_data["Counts"].to_numpy(),
-                            name=component,
-                            marker_color=component_color.get(component, "grey"),
-                            legendgroup=1,
-                            legendgrouptitle=dict(text="Component", font=dict(size=16)),
-                        ),
-                        row=1,
-                        col=1,
-                    )
-
-                else:
-                    x = component_data["Energy"].to_numpy().astype(float)
-                    y = component_data["Counts"].to_numpy().astype(float)
-                    y_error_plus = component_data["Error+"].to_numpy().astype(float)
-                    y_error_minus = component_data["Error-"].to_numpy().astype(float)
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x,
-                            y=args.exposure * y,
-                            error_y=dict(
-                                type="data",
-                                symmetric=False,
-                                array=args.exposure * y_error_plus,
-                                arrayminus=args.exposure * y_error_minus,
-                                visible=True,
-                            ),
-                            mode="lines+markers",
-                            line_shape="hvh",
-                            legendgroup=1,
-                            legendgrouptitle=dict(text="Component", font=dict(size=16)),
-                            name=f"{component} {args.exposure * component_data['Counts'].sum():.1e}",
-                            marker=dict(
-                                size=6,
-                                color=component_color.get(component, "grey"),
-                            ),
-                        ),
-                        row=1,
-                        col=1,
-                    )
-                # if max(max_counts, (args.exposure*component_data["Counts"]).max()) > max_counts:
-                #     max_counts = max(max_counts, (args.exposure*component_data["Counts"]).max())
-
-            # fig.add_vline(10, line=dict(color="grey", dash="dash"))
-
-            fig.update_layout(
-                title=f"{energy_label} Significance<br>Fiducial: X={fiducialx}cm, Y={fiducialy}cm, Z={fiducialz}cm",
-                showlegend=True,
-            )
-            # Compute the significance for the hep and b8 components
-            this_hep = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "hep")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Counts"].to_list()
-            )
-            this_hep_error = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "hep")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Error+"].to_list()
-            )
-            this_8b = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "8B")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Counts"].to_list()
-            )
-            this_8b_error = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "8B")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Error+"].to_list()
-            )
-            this_gamma = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "gamma")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Counts"].to_list()
-            )
-            this_gamma_error = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "gamma")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Error+"].to_list()
-            )
-            this_neutron = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "neutron")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Counts"].to_list()
-            )
-            this_neutron_error = args.exposure * np.array(
-                this_plot[
-                    (this_plot["Component"] == "neutron")
-                    * (this_plot["Energy"] >= args.threshold)
-                ]["Error+"].to_list()
-            )
-            this_bkg = np.add(this_gamma, this_neutron)
-
-            hep_significance = evaluate_significance(
-                this_hep,
-                this_bkg,
-            )
-            b8_significance = evaluate_significance(
-                this_8b,
-                this_bkg,
-            )
-
-            # Add the significance to the plot
-            if (
-                max(np.max(hep_significance), np.max(b8_significance))
-                > max_significance
-            ):
-                max_significance = max(
-                    np.max(hep_significance), np.max(b8_significance)
-                )
-            for component, significance in zip(
-                ["8B", "hep"], [b8_significance, hep_significance]
-            ):
-                # Append zeros to significance to match the length of this_plot "Energy"
-                energy_array = np.array(
-                    this_plot[(this_plot["Component"] == component)]["Energy"].to_list()
-                )
-                significance = np.concatenate(
-                    (np.zeros(len(energy_array) - len(significance)), significance)
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=energy_array,
-                        y=significance,
-                        mode="lines+markers",
-                        line_shape="hvh",
-                        legendgroup=2,
-                        legendgrouptitle=dict(
-                            text="Significance",
-                            font=dict(size=16),
-                        ),
-                        name=f"{component} {np.sqrt(np.sum(significance**2)):.1f}σ",
-                        line=dict(color=component_color.get(component, "grey")),
-                    ),
-                    row=2,
-                    col=1,
-                )
-            # Add vertical line at args.threshold
-            fig.add_vline(
-                args.threshold,
-                line=dict(color="grey", dash="dash"),
-                row=1,
-                col=1,
-            )
-            if args.stacked:
-                fig.update_layout(barmode="stack")
-
-            fig = format_coustom_plotly(
-                fig, tickformat=(".0f", ".1e"), legend={"x": 0.72, "y": 0.99}
-            )
-            fig.update_xaxes(range=[8, 22])
-            fig.update_xaxes(title_text="Reconstructed Energy (MeV)", row=2, col=1)
-            # Set row 1 yaxis to log
-            fig.update_yaxes(
-                type="log",
-                range=[0.5, 10],
-                tickformat=".0e",
-                title_text="Counts per Energy (100·kT·year·MeV)⁻¹",
-                row=1,
-                col=1,
-            )
-            # Set row 2 yaxis to linear and tickformat to .1f
-            fig.update_yaxes(
-                type="linear",
-                range=[0, max_significance * 1.5],
-                tickformat=".1f",
-                title_text="Significance (σ)",
-                row=2,
-                col=1,
-            )
-
-            save_figure(
-                fig,
-                f"{save_path}/{args.folder.lower()}",
-                config,
-                name,
-                None,
-                f"{energy_label}_{fiducial_label}Fiducial_Significance"
-                + (f"_Stacked" if args.stacked else ""),
-                rm=args.rewrite,
-                debug=args.debug,
-            )
+_merge_and_write_json(filename, best_fiducials)
