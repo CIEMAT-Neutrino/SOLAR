@@ -3,6 +3,7 @@
 .vscode-server
 .ipython
 .copilot
+.chrome/
 .config
 .dotnet
 .redhat
