@@ -141,6 +141,31 @@ def build_significance_payload(
     raw_significance[window_mask] = raw_significance_eval
     smoothed_significance[window_mask] = smoothed_significance_eval
 
+    if significance_kind == "gaussian":
+        # Correct global formula: S_total / sqrt(B_total + Σσ_s² + Σσ_b²)
+        # Per-bin quadrature overestimates significance when bins differ in S/B ratio.
+        def _gaussian_global(s, b, se, be):
+            s_sum = float(np.sum(s))
+            denom_sq = float(np.sum(b) + np.sum(np.square(se)) + np.sum(np.square(be)))
+            return float(s_sum / np.sqrt(denom_sq)) if denom_sq > 0 else 0.0
+
+        raw_total = _gaussian_global(
+            exposure * signal_counts_eval,
+            exposure * background_counts_eval,
+            exposure * signal_errors_eval,
+            exposure * background_errors_eval,
+        )
+        smoothed_total = _gaussian_global(
+            exposure * smoothed_signal_counts_eval,
+            exposure * smoothed_background_counts_eval,
+            exposure * smoothed_signal_errors_eval,
+            exposure * smoothed_background_errors_eval,
+        )
+    else:
+        # Asimov: q0 is additive over independent bins → sqrt(Σz_i²) is exact.
+        raw_total = aggregate_significance(raw_significance, combine_mode)
+        smoothed_total = aggregate_significance(smoothed_significance, combine_mode)
+
     return {
         "Energy": energy,
         "RawSignal": exposure * signal_counts,
@@ -149,8 +174,8 @@ def build_significance_payload(
         "SmoothedBackground": exposure * smoothed_background_counts,
         "RawSignificance": raw_significance,
         "SmoothedSignificance": smoothed_significance,
-        "RawTotal": aggregate_significance(raw_significance, combine_mode),
-        "SmoothedTotal": aggregate_significance(smoothed_significance, combine_mode),
+        "RawTotal": raw_total,
+        "SmoothedTotal": smoothed_total,
     }
 
 
@@ -263,7 +288,22 @@ def apply_fiducial_mc_threshold(
     if pass_counts.empty:
         return filtered.iloc[0:0]
 
-    return plot_df.merge(pass_counts, on=FIDUCIAL_COLUMNS, how="inner")
+    result = plot_df.merge(pass_counts, on=FIDUCIAL_COLUMNS, how="inner")
+
+    # Always include the no-fiducial baseline (0,0,0) regardless of MC threshold.
+    # It is the reference point: any tighter fiducial must improve over it.
+    # Configs with suppressed backgrounds have fewer MC events by physics, not by
+    # poor statistics — excluding (0,0,0) forces the optimizer into spuriously tight cuts.
+    no_fid = plot_df.loc[
+        (plot_df["FiducializedX"] == 0)
+        & (plot_df["FiducializedY"] == 0)
+        & (plot_df["FiducializedZ"] == 0)
+    ]
+    if not no_fid.empty:
+        result = pd.concat([result, no_fid]).drop_duplicates(
+            subset=GROUP_COLUMNS + ["Component"], keep="first"
+        )
+    return result
 
 
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
@@ -276,7 +316,7 @@ parser.add_argument("--exposure", type=float, help="The exposure in kT·year", d
 parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
     "--mc_threshold",
-    type=int,
+    type=float,
     default=get_analysis_threshold(str(root), "FIDUCIALIZATION", stage="MC", fallback=0.0),
     help="Minimum summed MCCounts required for every essential background component in fiducial selection",
 )
@@ -326,6 +366,18 @@ for config in configs:
         for analysis_name in args.analysis:
             analysis_key = analysis_name.upper()
             analysis_config = get_fiducialization_config(str(root), analysis_key)
+            _analysis_info = load_analysis_info(str(root))
+            _sig_ref = str(
+                _analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get(analysis_key, "")
+            ).lower()
+            if _sig_ref in {"asimov", "gaussian"} and _sig_ref != analysis_config.get("significance_type", "gaussian").lower():
+                rprint(
+                    f"[yellow][WARNING][/yellow] Overriding {analysis_key} fiducial significance_type "
+                    f"({analysis_config.get('significance_type', 'gaussian')!r}) → ({_sig_ref!r}) "
+                    f"to match BEST_SIGMA_SIGNIFICANCE_REFERENCE."
+                )
+                analysis_config = dict(analysis_config)
+                analysis_config["significance_type"] = _sig_ref
             gated_plot_df = apply_fiducial_mc_threshold(
                 plot_df,
                 analysis_config,
@@ -377,5 +429,38 @@ for config in configs:
                 "SignificanceType": analysis_config.get("significance_type", "gaussian"),
                 **smoothing_metadata(smoothing_config),
             }
+
+            # Per-energy-band optimization: find the best fiducial independently for
+            # each band. Downstream masking applies the band-specific cut per event.
+            band_results = []
+            for band in analysis_config.get("energy_bands", []):
+                band_config = dict(analysis_config)
+                band_config["energy_min"] = band["energy_min"]
+                band_config["energy_max"] = band["energy_max"]
+                _, band_sig_df = select_best_fiducial(
+                    gated_plot_df, band_config, smoothing_config, args.exposure
+                )
+                if band_sig_df.empty:
+                    continue
+                band_best = band_sig_df.loc[band_sig_df["SmoothedSignificance"].idxmax()]
+                band_label = band.get("label", f"{band['energy_min']}-{band['energy_max']}")
+                rprint(
+                    f"  [{band_label}] {band['energy_min']}-{band['energy_max']} MeV: "
+                    f"significance {band_best['SmoothedSignificance']:.2f} at "
+                    f"X={int(band_best['FiducializedX'])} "
+                    f"Y={int(band_best['FiducializedY'])} "
+                    f"Z={int(band_best['FiducializedZ'])}"
+                )
+                band_results.append({
+                    "label": band_label,
+                    "energy_min": band["energy_min"],
+                    "energy_max": band["energy_max"],
+                    "FiducialX": int(band_best["FiducializedX"]),
+                    "FiducialY": int(band_best["FiducializedY"]),
+                    "FiducialZ": int(band_best["FiducializedZ"]),
+                    "SmoothedSignificance": float(band_best["SmoothedSignificance"]),
+                })
+            if band_results:
+                best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
 
 _merge_and_write_json(filename, best_fiducials)

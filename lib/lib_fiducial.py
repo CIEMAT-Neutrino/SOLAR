@@ -1,6 +1,8 @@
 import json
 from copy import deepcopy
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
+
+import numpy as np
 
 from .lib_default import load_analysis_info
 
@@ -74,6 +76,56 @@ def get_fiducialization_config(root: str, analysis_name: Optional[str] = None) -
         overrides = fiducial_info.get("ANALYSES", {}).get(str(analysis_name).upper(), {})
         config = _deep_update(config, overrides)
     return config
+
+
+def build_fiducial_spatial_mask(run: dict, config: str, detector_x: float, detector_y: float, info: dict, folder: str, fiducial: Dict[str, Any]) -> np.ndarray:
+    """Spatial-only fiducial mask (X/Y/Z cuts). Shared by analysis scripts."""
+    return np.asarray(
+        (
+            (
+                np.absolute(run["Reco"]["RecoX"]) > fiducial["FiducialX"]
+                if config == "hd_1x2x6_lateralAPA"
+                else (
+                    np.absolute(run["Reco"]["RecoX"]) < detector_x / 2 - fiducial["FiducialX"]
+                    if config == "hd_1x2x6_centralAPA"
+                    else run["Reco"]["RecoX"] < detector_x / 2 - fiducial["FiducialX"]
+                )
+            )
+            * (np.absolute(run["Reco"]["RecoY"]) < detector_y / 2 - fiducial["FiducialY"])
+            * (((run["Reco"]["RecoZ"] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])) if folder == "Nominal" else 1)
+            * (((run["Reco"]["RecoZ"] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])) if folder == "Nominal" else 1)
+        ),
+        dtype=bool,
+    )
+
+
+def build_energy_band_spatial_mask(run: dict, config: str, detector_x: float, detector_y: float, info: dict, folder: str, fiducial: Dict[str, Any], band_fiducials: List[Dict[str, Any]], energy: str) -> np.ndarray:
+    """Spatial mask with per-energy-band overrides. Events outside all bands use the global fiducial."""
+    spatial_mask = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, fiducial)
+    if not band_fiducials:
+        return spatial_mask
+    event_energies = run["Reco"][energy]
+    for band in band_fiducials:
+        e_mask = (event_energies >= band["energy_min"]) & (event_energies < band["energy_max"])
+        if not np.any(e_mask):
+            continue
+        band_fid = {"FiducialX": band["FiducialX"], "FiducialY": band["FiducialY"], "FiducialZ": band["FiducialZ"]}
+        spatial_mask[e_mask] = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, band_fid)[e_mask]
+    return spatial_mask
+
+
+def get_best_fiducial_bands(
+    fiducials: Dict[str, Any],
+    config: str,
+    energy: str,
+    analysis_name: Optional[str] = None,
+) -> list:
+    """Return per-energy-band fiducials stored under 'EnergyBands' key, or empty list."""
+    try:
+        best = get_best_fiducial(fiducials, config, energy, analysis_name)
+    except KeyError:
+        return []
+    return list(best.get("EnergyBands", []))
 
 
 def get_best_fiducial(

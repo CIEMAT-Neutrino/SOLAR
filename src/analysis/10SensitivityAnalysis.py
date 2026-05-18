@@ -30,10 +30,29 @@ def build_command(script_name: str, additional_args: Optional[List[str]] = None)
 
 
 
+def _subprocess_env() -> dict:
+    """Return an environment dict with Apptainer-specific workarounds applied.
+
+    BROWSER_PATH: points kaleido at the project-local Chrome installation
+    (.chrome/chrome-linux64/chrome) so static image export works without
+    needing a system-wide Chrome install.
+
+    Note: do NOT set LD_PRELOAD here. Chrome is spawned as a child of the
+    analysis subprocesses, and it would inherit LD_PRELOAD, causing it to
+    crash immediately. The pyarrow/libarrow exit-segfault is handled instead
+    by the os._exit(0) atexit handler in lib/__init__.py.
+    """
+    env = os.environ.copy()
+    chrome_exe = os.path.join(str(root), ".chrome", "chrome-linux64", "chrome")
+    if os.path.isfile(chrome_exe) and "BROWSER_PATH" not in env:
+        env["BROWSER_PATH"] = chrome_exe
+    return env
+
+
 def run_python_command(command: List[str], label: Optional[str] = None, stop_on_error: bool = True):
     rendered = " ".join(command)
     rprint(f"\n[green][CMD][/green] {rendered}")
-    completed = subprocess.run(command, check=False)
+    completed = subprocess.run(command, check=False, env=_subprocess_env())
     if completed.returncode != 0 and stop_on_error:
         script_label = label or os.path.basename(command[1])
         raise SystemExit(
@@ -161,13 +180,13 @@ parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis",
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
 parser.add_argument(
     "--fiducial_mc_threshold",
-    type=int,
+    type=float,
     help="Minimum summed MCCounts per essential background component required in fiducialization",
     default=get_analysis_threshold(str(root), "FIDUCIALIZATION", stage="MC", fallback=0.0),
 )
 parser.add_argument(
     "--hep_mc_threshold",
-    type=int,
+    type=float,
     help=(
         "Minimum summed MCCounts per essential background component required in HEP cut scan. "
         "This is configured in import/analysis.json and can be overridden on the CLI."
@@ -176,9 +195,52 @@ parser.add_argument(
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument("--computation", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--significance",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Run main significance computing macros (12DayNight.py, 13HEP.py, 14Sensitivity.py). Pass --no-significance to skip.",
+)
+parser.add_argument(
+    "--computation",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Run all analysis macros (fiducialization, best-sigma selection, significance). Pass --no-computation to run only plot-producing macros.",
+)
+parser.add_argument(
+    "--fiducialization",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Run 0XFiducializeSignal.py steps. Pass --no-fiducialization to skip when fiducial outputs are already up to date.",
+)
+parser.add_argument(
+    "--rebin",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Run 11AnalysisSignal.py rebinning step. Pass --no-rebin to skip when rebinned data is already up to date.",
+)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--smoothing_strategy",
+    type=str,
+    default="silverman",
+    choices=["silverman", "scott", "none"],
+    help=(
+        "Bandwidth rule for smoothing optimization run before each analysis stage. "
+        "'silverman' (default) and 'scott' apply analytic rule-of-thumb estimation; "
+        "'none' skips the optimization step entirely."
+    ),
+)
+parser.add_argument(
+    "--apply_smoothing",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Write the optimized sigma back into import/analysis.json before running each "
+        "analysis stage. Pass --no-apply-smoothing to compute and report only."
+    ),
+)
 
 args = parser.parse_args()
 analysis_info = load_analysis_info(str(root))
@@ -186,7 +248,11 @@ selected_background_components = get_selected_background_components(args.analysi
 
 if not args.computation:
     rprint(
-        "[cyan][INFO][/cyan] Computation disabled (--no-computation): running plotting macros only and skipping presentation generation."
+        "[cyan][INFO][/cyan] Computation disabled (--no-computation): running plot-producing macros only."
+    )
+elif not args.significance:
+    rprint(
+        "[cyan][INFO][/cyan] Significance disabled (--no-significance): skipping DayNight/HEP/Sensitivity computation."
     )
 
 
@@ -276,9 +342,12 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     exposure_args = exposure_arg_for()
     cut_args = cut_args_for()
 
-    for name in available_names:
-        sample_args = base_args + ["--name", name]
-        run_analysis_script("0XFiducializeSignal.py", sample_args + energy_args)
+    if args.fiducialization:
+        for name in available_names:
+            sample_args = base_args + ["--name", name]
+            run_analysis_script("0XFiducializeSignal.py", sample_args + energy_args)
+    else:
+        rprint("[cyan][INFO][/cyan] Skipping 0XFiducializeSignal.py (--no-fiducialization).")
 
     for name in available_names:
         if "marley" not in name:
@@ -293,16 +362,41 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             + ["--mc_threshold", str(args.fiducial_mc_threshold)],
         )
 
-    for name in available_names:
-        sample_args = base_args + ["--name", name]
-        run_analysis_script(
-            "11AnalysisSignal.py",
-            sample_args + analysis_selection_args + energy_args + cut_args,
-        )
+    if args.rebin:
+        for name in available_names:
+            sample_args = base_args + ["--name", name]
+            run_analysis_script(
+                "11AnalysisSignal.py",
+                sample_args + analysis_selection_args + energy_args + cut_args,
+            )
+    else:
+        rprint("[cyan][INFO][/cyan] Skipping 11AnalysisSignal.py (--no-rebin).")
 
+
+
+def run_smoothing_optimization(config: str, folder: str, name: str, analysis_name: str):
+    if args.smoothing_strategy == "none":
+        return
+    script_path = f"{root}/scripts/optimize_smoothing.py"
+    if not os.path.exists(script_path):
+        rprint(f"[yellow][WARNING][/yellow] Smoothing optimizer not found: {script_path}. Skipping.")
+        return
+    command = [
+        "python3", script_path,
+        "--config", config,
+        "--name", name,
+        "--folder", folder,
+        "--analysis", analysis_name,
+        "--strategy", args.smoothing_strategy,
+        "--energy", *args.energy,
+        "--rewrite" if args.rewrite else "--no-rewrite",
+        "--patch" if args.apply_smoothing else "--no-patch",
+    ]
+    run_python_command(command, label="optimize_smoothing.py", stop_on_error=False)
 
 
 def run_daynight_stage(config: str, folder: str, name: str):
+    run_smoothing_optimization(config, folder, name, "DayNight")
     plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
     analysis_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
     common_args = common_analysis_args_for(args.energy)
@@ -312,7 +406,8 @@ def run_daynight_stage(config: str, folder: str, name: str):
 
     run_analysis_script("10FiducializationPlot.py", plot_base_args + ["--analysis", "DayNight"])
     if args.computation:
-        run_analysis_script("12DayNight.py", analysis_base_args + common_args + uncertainty_args)
+        if args.significance:
+            run_analysis_script("12DayNight.py", analysis_base_args + common_args + uncertainty_args)
         run_analysis_script(
             "0ZBestSigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference],
@@ -323,6 +418,7 @@ def run_daynight_stage(config: str, folder: str, name: str):
 
 
 def run_hep_stage(config: str, folder: str, name: str):
+    run_smoothing_optimization(config, folder, name, "HEP")
     plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
     analysis_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
     common_args = common_analysis_args_for(args.energy)
@@ -453,18 +549,22 @@ def run_hep_stage(config: str, folder: str, name: str):
 
     run_analysis_script("10FiducializationPlot.py", plot_base_args + ["--analysis", "HEP"])
     if args.computation:
-        run_analysis_script(
-            "13HEP.py",
-            analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)],
-        )
+        if args.significance:
+            run_analysis_script(
+                "13HEP.py",
+                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)],
+            )
         run_analysis_script(
             "0ZBestSigmas.py",
             plot_base_args + selector_args + ["--analysis", "HEP", "--reference", reference],
         )
-        run_analysis_script("13HEPProfileLikelihood.py", analysis_base_args + common_args + uncertainty_args)
     run_analysis_script(
         "13HEPExposurePlot.py",
         analysis_base_args + common_args + uncertainty_args + ["--reference", hep_significance_reference],
+    )
+    run_analysis_script(
+        "13HEPExposurePlot.py",
+        analysis_base_args + common_args + uncertainty_args + ["--reference", hep_significance_reference, "--pkl_label", "highest_spiked"],
     )
     run_analysis_script(
         "13HEPSignificancePlot.py",
@@ -472,6 +572,13 @@ def run_hep_stage(config: str, folder: str, name: str):
         + common_args
         + uncertainty_args
         + ["--reference", hep_significance_reference, "--bottom-panel-mode", "both"],
+    )
+    run_analysis_script(
+        "13HEPSignificancePlot.py",
+        analysis_base_args
+        + common_args
+        + uncertainty_args
+        + ["--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl_label", "highest_spiked"],
     )
     run_analysis_script("13HEPSignificanceComparisonPlot.py", analysis_base_args + common_args + uncertainty_args)
     run_analysis_script("13HEPExposureComparisonPlot.py", analysis_base_args + common_args + uncertainty_args)
@@ -483,6 +590,7 @@ def run_hep_stage(config: str, folder: str, name: str):
 
 
 def run_sensitivity_stage(config: str, folder: str, name: str):
+    run_smoothing_optimization(config, folder, name, "Sensitivity")
     plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
     background_base_args = base_args_for(config, folder, include_background=True) + ["--name", name]
     uncertainty_args = uncertainty_args_for("SENSITIVITY")
@@ -491,7 +599,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
     run_analysis_script("10FiducializationPlot.py", plot_base_args + ["--analysis", "Sensitivity"])
     for energy in args.energy:
         energy_args = common_analysis_args_for([energy])
-        if args.computation:
+        if args.computation and args.significance:
             run_analysis_script(
                 "14SensitivityTemplateCompute.py",
                 plot_base_args + reference_args + energy_args + uncertainty_args + ["--template", "all"],
@@ -579,5 +687,4 @@ for config, folder in product(args.config, args.folder):
         if "Sensitivity" in args.analysis:
             run_sensitivity_stage(config, folder, name)
 
-if args.computation:
-    run_presentations()
+run_presentations()

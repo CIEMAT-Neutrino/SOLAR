@@ -505,8 +505,11 @@ for config in configs:
                         )
 
                 energy_min = analysis_config.get("energy_min")
+                energy_max = analysis_config.get("energy_max")
                 if energy_min is not None:
                     fig.add_vline(energy_min, line=dict(color="grey", dash="dash"))
+                if energy_max is not None:
+                    fig.add_vline(energy_max, line=dict(color="grey", dash="dash"))
                 if args.stacked:
                     fig.update_layout(barmode="stack")
 
@@ -526,7 +529,9 @@ for config in configs:
                     legend2=dict(y=0.1, x=0.74, font=dict(size=12), bgcolor="rgba(255,255,255,0.7)"),
                 )
 
-                fig.update_xaxes(range=[8, 26])
+                x_min = analysis_config.get("energy_min") or 0
+                x_max = analysis_config.get("energy_max") or 30
+                fig.update_xaxes(range=[max(0, x_min - 2), x_max + 2])
                 fig.update_xaxes(title_text="Reconstructed Energy (MeV)", row=2, col=1)
                 fig.update_yaxes(
                     type="log",
@@ -554,7 +559,7 @@ for config in configs:
                     fig,
                     path=f"{save_path}",
                     config=config,
-                    name=None,
+                    name=name,
                     subfolder=args.folder.lower(),
                     filename=f"{energy_label}_{analysis_key}_{fiducial_label}Fiducial_Significance" + ("_Stacked" if args.stacked else ""),
                     rm=args.rewrite,

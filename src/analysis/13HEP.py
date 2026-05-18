@@ -5,6 +5,23 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from typing import Optional
+from sklearn.isotonic import IsotonicRegression as _IsotonicRegression
+from scipy.ndimage import gaussian_filter1d as _gaussian_filter1d
+
+_isotonic_regressor = _IsotonicRegression(increasing=True)
+
+# Gaussian kernel width (in exposure-grid index units) applied before isotonic
+# regression. Smooths numerical oscillations from the PL solver at low signal-to-
+# background ratios (e.g. low-signal configurations) so PAVA operates on a continuous
+# envelope rather than a noisy step sequence.
+_PL_SMOOTH_SIGMA = 6.0
+
+
+def _isotonic_monotone(values: list) -> list:
+    arr = np.clip(np.asarray(values, dtype=float), 0.0, None)
+    arr = _gaussian_filter1d(arr, sigma=_PL_SMOOTH_SIGMA, mode='nearest')
+    arr = np.clip(arr, 0.0, None)
+    return list(_isotonic_regressor.fit_transform(np.arange(len(arr)), arr))
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +167,44 @@ def _hep_display_spectrum(
     }
 
 
+
+def _hep_profile_step(
+    signal_rate: np.ndarray,
+    background_rate: np.ndarray,
+    background_uncertainty_frac: float,
+    factor: float,
+    fluctuation_sigma: float = 0.0,
+    signal_norm_frac: float = 0.0,
+    perm_mask: Optional[np.ndarray] = None,
+) -> float:
+    """Compute profile-likelihood significance for one exposure step.
+
+    Uses the original fine binning — no adaptive rebin. PL is optimal at the
+    finest available resolution; merging bins can only reduce information.
+    A single global background normalization nuisance (σ = background_uncertainty_frac)
+    is profiled jointly across all bins, matching the physical model of a correlated
+    rate systematic.
+
+    fluctuation_sigma * signal_norm_frac scales signal events: +1 → upper band,
+    -1 → lower band. Background is never shifted.
+
+    perm_mask: boolean array (same shape as signal_rate). Bins where perm_mask=False
+    have insufficient background MC statistics and are excluded by zeroing both
+    signal and background — the Barlow-Beeston (ROOT/HistFactory) convention.
+    Bins with no MC support have no reliable background model; including them
+    produces LLR terms that grow super-linearly with exposure. The mask is static
+    (MC counts do not change with exposure), so no discrete transitions are introduced.
+    """
+    signal_events     = factor * signal_rate * (1.0 + fluctuation_sigma * signal_norm_frac)
+    background_events = factor * background_rate
+    if perm_mask is not None:
+        background_events = np.where(perm_mask, background_events, 0.0)
+        signal_events = np.where(perm_mask, signal_events, 0.0)
+    return float(evaluate_profile_likelihood_discovery(
+        signal_events, background_events, background_uncertainty=background_uncertainty_frac,
+    ))
+
+
 # ---------------------------------------------------------------------------
 
 data_path = f"{root}/data/solar/"
@@ -177,7 +232,7 @@ parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument(
     "--mc_threshold",
-    type=int,
+    type=float,
     default=get_analysis_threshold(str(root), "HEP", stage="MC", fallback=0.0),
     help="Minimum summed MCCounts required for every essential background component after cuts",
 )
@@ -185,6 +240,16 @@ parser.add_argument(
     "--threshold",
     type=float,
     default=get_analysis_threshold(str(root), "HEP", stage="SIGNIFICANCE", fallback=0.0),
+)
+parser.add_argument(
+    "--min_mc_per_bin",
+    type=float,
+    default=1.0,
+    help=(
+        "Minimum summed background MCCounts per energy bin for inclusion in the PL sum. "
+        "Mirrors Barlow-Beeston: bins with insufficient MC have no reliable background model "
+        "and must not contribute to the LLR. Default 1.0 (at least one MC event)."
+    ),
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
@@ -261,12 +326,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     for nhit, ophit, adjcl in track(
         product(
-            nhits[:10],
-            nhits[3:10],
-            nhits[::-1][10:],
+            nhits,
+            nhits[3:],
+            nhits[::-1],
         ),
         description=f"Looping over analysis cuts for {energy}...",
-        total=len(nhits[:10]) * len(nhits[3:10]) * len(nhits[::-1][10:]),
+        total=len(nhits) * len(nhits[3:]) * len(nhits[::-1]),
     ):
         total_cut_trials += 1
         this_df = plot_df.loc[
@@ -285,6 +350,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         smoothed_background = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
         background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
         smoothed_background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
+        background_mc_counts = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
         hep_signal = None
         smoothed_hep = None
         mc_sums = {}
@@ -325,6 +391,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             else:
                 raw_background += counts
                 smoothed_background += smoothed_counts
+                background_mc_counts += mc_counts
                 background_statistical = np.divide(
                     errors,
                     counts,
@@ -402,15 +469,40 @@ for config, name, energy in product(args.config, args.name, args.energy):
         raw_rebinned_bins = [[], [], []]
         smoothed_rebinned_bins = [[], [], []]
 
+        raw_profile_significances      = [[], [], []]
+        smoothed_profile_significances = [[], [], []]
+        pl_sigma2 = 0.0
+        pl_sigma3 = 0.0
+        found_pl_sigma2 = False
+        found_pl_sigma3 = False
+        pl_sigma2_curve = []
+        pl_sigma3_curve = []
+
         raw_signal_rate = np.asarray(hep_signal, dtype=float)
         raw_background_rate = np.asarray(raw_background, dtype=float)
         raw_bkg_error_rate = np.asarray(raw_combined_b_error, dtype=float)
-        smoothed_signal_rate = np.asarray(smoothed_hep, dtype=float)
-        smoothed_background_rate = np.asarray(smoothed_background, dtype=float)
+        # Clip smoothed rates to >= 0: Gaussian histogram smoothing can produce negative
+        # values at bin edges where the distribution drops to zero. Negative rates are
+        # unphysical and cause the PL LLR to blow up at high exposures (the min_expected
+        # floor makes the bin effectively signal-only, producing superlinear growth).
+        smoothed_signal_rate = np.clip(np.asarray(smoothed_hep, dtype=float), 0.0, None)
+        smoothed_background_rate = np.clip(np.asarray(smoothed_background, dtype=float), 0.0, None)
         smoothed_bkg_error_rate = np.asarray(smoothed_combined_b_error, dtype=float)
 
         prev_raw_starts      = [np.zeros(0, dtype=int) for _ in range(3)]
         prev_smoothed_starts = [np.zeros(0, dtype=int) for _ in range(3)]
+
+        # kdx 0 → +1σ_s signal normalization, kdx 1 → nominal, kdx 2 → −1σ_s signal normalization
+        _pl_fluctuations = [+1.0, 0.0, -1.0]
+
+        # Barlow-Beeston-style static mask: exclude bins where the summed background
+        # MC count is below min_mc_per_bin.  Bins with no (or insufficient) MC events
+        # have no reliable background model — including them in the PL LLR produces
+        # artificial significance that grows super-linearly with exposure.  This is
+        # the standard ROOT/HistFactory treatment: zero contribution to the test
+        # statistic for bins without MC support, regardless of exposure.
+        # Both raw and smoothed use the same mask: smoothing does not create new MC events.
+        pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
 
         for years in exposure_grid:
             factor = years * detector_mass
@@ -443,6 +535,22 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 smoothed_asimov_significances[kdx].append(smoothed["asimov_rebinned"])
                 smoothed_rebinned_bins[kdx].append(smoothed["n_bins"])
 
+            for kdx in range(3):
+                raw_profile_significances[kdx].append(_hep_profile_step(
+                    raw_signal_rate, raw_background_rate, args.background_uncertainty,
+                    factor,
+                    fluctuation_sigma=_pl_fluctuations[kdx],
+                    signal_norm_frac=args.signal_uncertainty,
+                    perm_mask=pl_bin_mask,
+                ))
+                smoothed_profile_significances[kdx].append(_hep_profile_step(
+                    smoothed_signal_rate, smoothed_background_rate, args.background_uncertainty,
+                    factor,
+                    fluctuation_sigma=_pl_fluctuations[kdx],
+                    signal_norm_frac=args.signal_uncertainty,
+                    perm_mask=pl_bin_mask,
+                ))
+
             if smoothed_asimov_significances[1][-1] > sigmamax:
                 sigmamax = smoothed_asimov_significances[1][-1]
 
@@ -468,6 +576,15 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
             sigma2_curve.append(sigma2)
             sigma3_curve.append(sigma3)
+
+            if smoothed_profile_significances[1][-1] > 2 and not found_pl_sigma2:
+                pl_sigma2 = factor
+                found_pl_sigma2 = True
+            if smoothed_profile_significances[1][-1] > 3 and not found_pl_sigma3:
+                pl_sigma3 = factor
+                found_pl_sigma3 = True
+            pl_sigma2_curve.append(pl_sigma2)
+            pl_sigma3_curve.append(pl_sigma3)
 
         # Per-bin significance spectra at the configured display exposure for plotting.
         display_factor = args.exposure * detector_mass
@@ -499,16 +616,44 @@ for config, name, energy in product(args.config, args.name, args.energy):
             smoothed_display["starts_adaptive"],
         )
 
+        # Capture pre-isotonic curves for diagnostics before overwriting.
+        raw_profile_pre_isotonic      = [list(arr) for arr in raw_profile_significances]
+        smoothed_profile_pre_isotonic = [list(arr) for arr in smoothed_profile_significances]
+
+        # Enforce monotonicity on PL curves via isotonic regression (PAVA).
+        # Isotonic regression minimises the L2 distance from the computed values
+        # subject to a non-decreasing constraint, giving the smoothest monotone
+        # curve consistent with the data — unlike a running maximum, which freezes
+        # every transient solver spike into a permanent plateau.
+        for _kdx in range(3):
+            raw_profile_significances[_kdx]      = _isotonic_monotone(raw_profile_significances[_kdx])
+            smoothed_profile_significances[_kdx] = _isotonic_monotone(smoothed_profile_significances[_kdx])
+
+        for _sigs in (raw_profile_significances, smoothed_profile_significances):
+            _upper   = np.asarray(_sigs[0])
+            _nominal = np.asarray(_sigs[1])
+            _lower   = np.asarray(_sigs[2])
+            _sigs[0] = np.maximum(_upper,   _nominal).tolist()
+            _sigs[2] = np.minimum(_lower,   _nominal).tolist()
+
         crossing_summary = compute_crossing_summary(
             exposure_grid,
             np.asarray(raw_asimov_significances[1], dtype=float),
             np.asarray(smoothed_asimov_significances[1], dtype=float),
         )
+        pl_crossing_summary = compute_crossing_summary(
+            exposure_grid,
+            np.asarray(raw_profile_significances[1], dtype=float),
+            np.asarray(smoothed_profile_significances[1], dtype=float),
+        )
+        pl_crossing_summary_prefixed = {f"PL{k}": v for k, v in pl_crossing_summary.items()}
         if smoothing_info["SmoothingReport"] and args.debug and explicit_debug_flag:
             rprint(
                 f"[cyan][REPORT][/cyan] {config} {name} {energy} NHits={nhit} OpHits={ophit} AdjCl={adjcl} "
-                f"sigma2 raw={crossing_summary['RawSigma2Crossing']:.2f} smooth={crossing_summary['SmoothedSigma2Crossing']:.2f}, "
-                f"sigma3 raw={crossing_summary['RawSigma3Crossing']:.2f} smooth={crossing_summary['SmoothedSigma3Crossing']:.2f}"
+                f"Asimov sigma2 raw={crossing_summary['RawSigma2Crossing']:.2f} smooth={crossing_summary['SmoothedSigma2Crossing']:.2f}, "
+                f"sigma3 raw={crossing_summary['RawSigma3Crossing']:.2f} smooth={crossing_summary['SmoothedSigma3Crossing']:.2f} | "
+                f"PL sigma2 raw={pl_crossing_summary['RawSigma2Crossing']:.2f} smooth={pl_crossing_summary['SmoothedSigma2Crossing']:.2f}, "
+                f"sigma3 raw={pl_crossing_summary['RawSigma3Crossing']:.2f} smooth={pl_crossing_summary['SmoothedSigma3Crossing']:.2f}"
             )
         if adaptive_rebin_info["AdaptiveRebinReport"] and args.debug and explicit_debug_flag:
             rprint(
@@ -557,9 +702,24 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "AdaptiveBins+Error": smoothed_rebinned_bins[0],
                 "AdaptiveBins": smoothed_rebinned_bins[1],
                 "AdaptiveBins-Error": smoothed_rebinned_bins[2],
+                "PLSigma2": pl_sigma2_curve,
+                "PLSigma3": pl_sigma3_curve,
+                "ProfileLikelihood+Error":  smoothed_profile_significances[0],
+                "ProfileLikelihood":        smoothed_profile_significances[1],
+                "ProfileLikelihood-Error":  smoothed_profile_significances[2],
+                "RawProfileLikelihood+Error": raw_profile_significances[0],
+                "RawProfileLikelihood":       raw_profile_significances[1],
+                "RawProfileLikelihood-Error": raw_profile_significances[2],
+                "PreIsotonicProfileLikelihood+Error":    smoothed_profile_pre_isotonic[0],
+                "PreIsotonicProfileLikelihood":          smoothed_profile_pre_isotonic[1],
+                "PreIsotonicProfileLikelihood-Error":    smoothed_profile_pre_isotonic[2],
+                "RawPreIsotonicProfileLikelihood+Error": raw_profile_pre_isotonic[0],
+                "RawPreIsotonicProfileLikelihood":       raw_profile_pre_isotonic[1],
+                "RawPreIsotonicProfileLikelihood-Error": raw_profile_pre_isotonic[2],
                 **smoothing_info,
                 **adaptive_rebin_info,
                 **crossing_summary,
+                **pl_crossing_summary_prefixed,
             }
         )
 

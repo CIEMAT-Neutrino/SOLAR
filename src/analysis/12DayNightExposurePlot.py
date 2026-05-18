@@ -503,7 +503,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             fig,
             save_path,
             config=config,
-            name=None,
+            name=name,
             subfolder=args.folder.lower(),
             filename=figure_name,
             rm=args.rewrite,

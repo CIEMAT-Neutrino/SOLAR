@@ -106,12 +106,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     for nhit, ophit, adjcl in track(
         product(
-            nhits[:10],
-            nhits[3:10],
-            nhits[::-1][10:],
+            nhits,
+            nhits[3:],
+            nhits[::-1],
         ),
         description=f"Looping over analysis cuts for {energy}...",
-        total=len(nhits[:10]) * len(nhits[3:10]) * len(nhits[::-1][10:]),
+        total=len(nhits) * len(nhits[3:]) * len(nhits[::-1]),
     ):
         nhit_value = int(nhit)
         ophit_value = int(ophit)

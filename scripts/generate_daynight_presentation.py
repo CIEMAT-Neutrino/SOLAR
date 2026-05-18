@@ -166,19 +166,19 @@ def gather_daynight_plot_specs(folder, energy):
 
     slides = []
     for config_key, display_name in standard_configs:
-        config_dir = plot_dir / config_key / folder
+        config_dir = plot_dir / config_key / "marley" / folder
         expected_significance = find_latest(
             config_dir,
             [
-                f"{config_key}_{energy_label}_DayNight_Significance_Exposure_*_Threshold_*.png",
-                f"{config_key}_{energy_label}_DayNight_Significance_Exposure_*.png",
+                f"{config_key}_marley_{energy_label}_DayNight_Significance_Exposure_*_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_DayNight_Significance_Exposure_*.png",
             ],
         )
         expected_exposure = find_latest(
             config_dir,
             [
-                f"{config_key}_{energy_label}_DayNight_Exposure_Threshold_*.png",
-                f"{config_key}_{energy_label}_DayNight_Exposure_*.png",
+                f"{config_key}_marley_{energy_label}_DayNight_Exposure_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_DayNight_Exposure_*.png",
             ],
         )
 
@@ -465,15 +465,41 @@ def build_markdown(
     - The discovery spectrum is the day-night difference, $\Delta S_i = S_i^{{night}} - S_i^{{day}}$, evaluated in the thresholded energy region.
     - Per-bin discovery proxies are computed with `evaluate_significance(..., type="gaussian")` in [lib/lib_sigma.py](../lib/lib_sigma.py), then combined into the global curve as:
     $$
-    $Z_{{global}} = \sqrt{{\sum_i Z_i^2}}$.
+    Z_{{global}} = \sqrt{{\sum_i Z_i^2}}.
     $$
     
     ---
     
     ### Day-Night Discovery Statistic Details
-    
+
     - [src/analysis/12DayNight.py](../src/analysis/12DayNight.py) stores both the plain Gaussian curve and an alternate version with background-statistical uncertainty included; this workflow does not perform a likelihood or chi-square fit.
     - Smoothing is only used to build alternate component spectra: each component is smoothed separately, and the threshold slice keeps unsmoothed bins below threshold while replacing bins above threshold with their smoothed values.
+
+    ---
+
+    ### Context: Super-Kamiokande Day-Night Analysis
+
+    Super-K measures the solar day-night effect with an energy-spectral chi-squared [[Abe et al., PRD 94, 052010 (2016)](https://doi.org/10.1103/PhysRevD.94.052010); [Renshaw et al., PRL 112, 091805 (2014)](https://doi.org/10.1103/PhysRevLett.112.091805)]:
+    $$
+    \\chi^2_{{SK}} = \\sum_{{k\\in\\{{D,N\\}}}} \\sum_j \\frac{{(N_{{kj}}-\\mu_{{kj}})^2}}{{\\sigma_{{kj}}^2}} + \\text{{(systematic penalties)}}
+    $$
+    In the statistical-only limit, DUNE's $Z_{{global}}^2$ is equivalent:
+    $$
+    Z_{{global}}^2 = \\sum_i \\frac{{(\\Delta S_i)^2}}{{B_i}} \\equiv \\chi^2_{{DN}}\\bigg|_{{\\sigma_i=\\sqrt{{B_i}}}}
+    $$
+
+    ---
+
+    ### Similarities and Differences vs. Super-K
+
+    **Shared structure:**
+    - Energy-binned counting; day signal enters null hypothesis as background
+    - MSW Earth matter effect is the physical driver of the night excess
+
+    **DUNE vs. Super-K differences:**
+    - No systematic nuisance penalty terms in DUNE baseline; second curve folds in background uncertainty
+    - DUNE projects future discovery exposure; Super-K measures $A_{{DN}} = 2(\\Phi_N - \\Phi_D)/(\\Phi_N + \\Phi_D)$ from existing data
+    - Energy binning only; Super-K also sub-bins by solar zenith angle for additional sensitivity
 
     ---
 

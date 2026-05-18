@@ -141,34 +141,34 @@ def gather_result_specs(folder, energy):
     energy_label = output_energy_label(energy)
     folder_title = folder.title()
     for config_key, display_name in STANDARD_CONFIGS:
-        contour_dir = ROOT / "images" / "analysis" / "sensitivity" / config_key / folder
+        contour_dir = ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
 
         solar_sin12_path = _find_latest(
             [contour_dir],
             [
-                f"{config_key}_solar_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
-                f"{config_key}_solar_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
+                f"{config_key}_marley_solar_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
+                f"{config_key}_marley_solar_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
         )
         react_sin12_path = _find_latest(
             [contour_dir],
             [
-                f"{config_key}_react_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
-                f"{config_key}_react_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
+                f"{config_key}_marley_react_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
+                f"{config_key}_marley_react_sin12_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
         )
         solar_sin13_path = _find_latest(
             [contour_dir],
             [
-                f"{config_key}_solar_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
-                f"{config_key}_solar_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
+                f"{config_key}_marley_solar_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
+                f"{config_key}_marley_solar_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
         )
         react_sin13_path = _find_latest(
             [contour_dir],
             [
-                f"{config_key}_react_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
-                f"{config_key}_react_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
+                f"{config_key}_marley_react_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
+                f"{config_key}_marley_react_sin13_df_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
         )
 
@@ -313,12 +313,13 @@ def render_template_slides(template_specs):
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
         background_plot = template_specs.get("background", {}).get(config_key)
-        signal_plot = template_specs.get("signal", {}).get(config_key)
+        # signal_plot = template_specs.get("signal", {}).get(config_key)
+        signal_plot = False
         if background_plot:
             slides.append(
                 "\n".join(
                     [
-                        f"### {display_name} Background Template",
+                        f"### {display_name} Templates",
                         "",
                         "<div class=\"center\">",
                         f"  <img src=\"../{background_plot}\">",
@@ -330,9 +331,9 @@ def render_template_slides(template_specs):
             slides.append(
                 "\n".join(
                     [
-                        f"### {display_name} Background Template",
+                        f"### {display_name} Templates",
                         "",
-                        f"No background template found for {display_name}",
+                        f"No template found for {display_name}",
                     ]
                 )
             )
@@ -349,16 +350,16 @@ def render_template_slides(template_specs):
                     ]
                 )
             )
-        else:
-            slides.append(
-                "\n".join(
-                    [
-                        f"### {display_name} Signal Template",
-                        "",
-                        f"No selected-signal template found for {display_name}",
-                    ]
-                )
-            )
+        # else:
+        #     slides.append(
+        #         "\n".join(
+        #             [
+        #                 f"### {display_name} Signal Template",
+        #                 "",
+        #                 f"No selected-signal template found for {display_name}",
+        #             ]
+        #         )
+        #     )
 
     return "\n\n---\n\n".join(slides)
 
@@ -424,6 +425,102 @@ def render_folder_sections(folder, result_specs, template_specs):
 """
 
 
+def _sensitivity_math_slides():
+    return """\
+### 2D Template Construction
+
+Signal and background are represented as 2D histograms with axes **(reconstructed neutrino energy \xd7 azimuth cos(η))**.
+
+For each oscillation point $(\\Delta m^2,\\, \\sin^2\\theta_{13},\\, \\sin^2\\theta_{12})$, the signal template is built by convolving the detector energy-response matrix $H$ with the oscillation-probability matrix $P$:
+$$
+T^{\\mathrm{sig}}_{ij}(\\vec{\\theta}) = T \\cdot M_{\\mathrm{det}} \\cdot \\left[ P(\\vec{\\theta})\\, H \\right]_{ij}
+$$
+where $i$ indexes azimuth bins and $j$ indexes energy bins ([src/analysis/14SensitivitySignalTemplate.py](../src/analysis/14SensitivitySignalTemplate.py)).
+
+The background template $T^{\\mathrm{bkg}}_{ij}$ is independent of oscillation parameters ([src/analysis/14SensitivityBackgroundTemplate.py](../src/analysis/14SensitivityBackgroundTemplate.py)).
+
+---
+
+### Asimov Grid Construction
+
+For each oscillation point $\\vec{\\theta}_k$ in the scan grid, the **Asimov (fake) observed dataset** is:
+$$
+o_{ij}(\\vec{\\theta}_k) = T^{\\mathrm{sig}}_{ij}(\\vec{\\theta}_k) + T^{\\mathrm{bkg}}_{ij}
+$$
+Same Asimov construction as the HEP profile-likelihood (*Background Normalization Model* slide): no statistical fluctuations, expected sensitivity in the median experiment.
+
+Two **reference templates** are fixed at the solar and reactor best-fit oscillation points:
+$$
+p^{\\mathrm{solar}}_{ij} = T^{\\mathrm{sig}}_{ij}(\\vec{\\theta}_{\\mathrm{solar}}), \\qquad p^{\\mathrm{react}}_{ij} = T^{\\mathrm{sig}}_{ij}(\\vec{\\theta}_{\\mathrm{react}})
+$$
+
+---
+
+### Objective Function (Poisson Deviance)
+
+The fit minimizes a **Baker-Cousins Poisson deviance** ([Baker & Cousins 1984](https://doi.org/10.1016/0029-554X(84)90016-4)) with two free normalization nuisances $A_{\\mathrm{pred}},\\, A_{\\mathrm{bkg}}$:
+$$
+\\chi^2(A_{\\mathrm{pred}}, A_{\\mathrm{bkg}}) = 2\\sum_{i,j} \\Delta\\ell_{ij} + \\left(\\frac{A_{\\mathrm{pred}}}{\\sigma_{\\mathrm{pred}}}\\right)^{\\!2} + \\left(\\frac{A_{\\mathrm{bkg}}}{\\sigma_{\\mathrm{bkg}}}\\right)^{\\!2}
+$$
+Expected model: $e_{ij} = (1+A_{\\mathrm{bkg}})\\,T^{\\mathrm{bkg}}_{ij} + (1+A_{\\mathrm{pred}})\\,p_{ij}$.
+Per-bin deviance: $\\Delta\\ell_{ij} = e_{ij} - o_{ij} + o_{ij}\\ln(o_{ij}/e_{ij})$ for $o_{ij}>0$, else $\\Delta\\ell_{ij} = e_{ij}$.
+
+Implemented in [lib/lib_root.py: Sensitivity_Fitter](../lib/lib_root.py). Minimized with [iminuit (Minuit)](https://iminuit.readthedocs.io/en/stable/).
+
+---
+
+### Nuisance Parameters: Comparison with HEP
+
+Both analyses use **Gaussian-constrained normalization nuisances** added to the Poisson deviance:
+
+| Feature | HEP Profile-Likelihood | Sensitivity |
+|---|---|---|
+| Histogram | 1D (energy) | 2D (energy \xd7 azimuth) |
+| Goal | Discovery significance | $\\chi^2$ map over $(\\Delta m^2, \\sin^2\\theta)$ |
+| Nuisances | 1 global $\\beta$ (background) | $A_{\\mathrm{pred}} + A_{\\mathrm{bkg}}$ |
+| Solution | Closed-form quadratic ([Cowan 2010](https://arxiv.org/abs/1007.1727)) | scipy L-BFGS-B (joint 2D) |
+| Deviance | $2\\sum_i [n_i \\ln(n_i/\\hat{\\beta}b_i) - (n_i - \\hat{\\beta}b_i)]$ | $2\\sum_{ij} [e_{ij} - o_{ij} + o_{ij}\\ln(o_{ij}/e_{ij})]$ |
+| Penalty | $[(\\hat{\\beta}-1)/\\sigma_{\\mathrm{rel}}]^2$ | $(A_{\\mathrm{pred}}/\\sigma_{\\mathrm{pred}})^2 + (A_{\\mathrm{bkg}}/\\sigma_{\\mathrm{bkg}})^2$ |
+| MC mask | Barlow-Beeston (static) | BB mask: bins with bkg template = 0 excluded |
+
+---
+
+### Oscillation Grid Scan and Best-Cut Score
+
+For each analysis cut $(N_{\\mathrm{hits}}, N_{\\mathrm{ophits}}, N_{\\mathrm{adjcl}})$ and each oscillation point $\\vec{\\theta}_k$:
+1. Build Asimov dataset $o_{ij}(\\vec{\\theta}_k)$.
+2. Fit against **solar** reference template → $\\chi^2_{\\mathrm{solar}}(\\vec{\\theta}_k)$.
+3. Fit against **reactor** reference template → $\\chi^2_{\\mathrm{react}}(\\vec{\\theta}_k)$.
+
+The **cut quality score** is the average $\\chi^2$ when fitting with the *wrong* hypothesis:
+$$
+\\mathrm{Score} = \\tfrac{1}{2}\\left[\\chi^2_{\\mathrm{solar}}(\\vec{\\theta}_{\\mathrm{react}}) + \\chi^2_{\\mathrm{react}}(\\vec{\\theta}_{\\mathrm{solar}})\\right]
+$$
+Higher score = better discrimination between solar and reactor hypotheses. The best cut maximizes this.
+
+---
+
+### Implemented Improvements
+
+Improvements 2–5 implemented in [lib/lib_root.py](../lib/lib_root.py) and [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py):
+
+1. **Replace heuristic score with profile-LR** *(proposed, not yet implemented)*: use $\\Delta\\chi^2 = \\chi^2_{\\mathrm{null}} - \\chi^2_{\\mathrm{best}}$ and report $Z = \\sqrt{\\Delta\\chi^2}$ (Wilks theorem) instead of average cross-hypothesis $\\chi^2$.
+2. ✅ **Barlow-Beeston mask** (`bb_mask = bkg > 0`): bins where the background template is zero are excluded from the fit, preventing spurious large deviance contributions from zero-MC-support bins.
+3. ✅ **Removed `abs()`** from `ROOTOperator` and `NumpyOperator`: the Baker-Cousins deviance is always $\\ge 0$ at the minimum; `abs()` distorts gradients and can impair Minuit convergence.
+4. ✅ **Tightened parameter limits**: $\\pm 100\\sigma \\to \\pm 10\\sigma$, reducing search space and avoiding minimization in flat tails.
+5. ✅ **Replaced Minuit with scipy L-BFGS-B** (joint 2D): `scipy.optimize.minimize(..., method="L-BFGS-B")` minimizes over $(A_{\\mathrm{pred}}, A_{\\mathrm{bkg}})$ jointly with ±10$\\sigma$ bounds. Uses gradient info → fewer function evaluations than Minuit for smooth convex objectives. `_profile_a_bkg` retained as `profile_bkg=True` option for comparison. No analytic closed form exists for either nuisance (unlike HEP's $\\hat{\\beta}$) due to per-bin coupling.
+
+---
+
+### Sensitivity Fit Summary
+
+- [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py) builds Asimov maps from signal + background templates, then fits each oscillation-grid point against solar and reactor reference templates with free normalizations.
+- The fit minimizes the **Baker-Cousins Poisson deviance** ([Baker & Cousins 1984](https://doi.org/10.1016/0029-554X(84)90016-4)) — identical in form to the per-bin LLR in the HEP profile-likelihood, extended to 2D (energy \xd7 azimuth).
+- Penalty terms $(A_{\\mathrm{pred}}/\\sigma_{\\mathrm{pred}})^2 + (A_{\\mathrm{bkg}}/\\sigma_{\\mathrm{bkg}})^2$ play the same role as HEP's $[(\\hat{\\beta}-1)/\\sigma_{\\mathrm{rel}}]^2$; HEP solves analytically, Sensitivity solves numerically.
+- Improvements 2–5 implemented in [lib/lib_root.py](../lib/lib_root.py): BB mask, no `abs()`, ±10σ limits, scipy L-BFGS-B joint 2D minimization.
+- Full mathematical derivations: [docs/hep\\_likelihood\\_derivation.tex](../docs/hep_likelihood_derivation.tex)."""
+
+
 def build_markdown(energy, folder, folder_specs, folder_templates):
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
     energy_label = output_energy_label(energy)
@@ -478,14 +575,9 @@ def build_markdown(energy, folder, folder_specs, folder_templates):
 
     ---
 
-    ### Sensitivity Fit Summary
+{_sensitivity_math_slides()}
 
-    - [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py) builds fake observed maps as signal template at each oscillation point plus the corresponding background template, then fits that map against the solar and reactor reference templates with free signal and background normalizations.
-    - The fit in [lib/lib_root.py](../lib/lib_root.py) minimizes a Poisson deviance-like objective, not a generic least-squares chi-square.
-    - For observed count $o_i$ and expected count $e_i$, the per-bin contribution is $2(e_i - o_i + o_i \\log(o_i / e_i))$ for $o_i > 0$ and $2e_i$ for $o_i = 0$, plus quadratic penalty terms on the fitted signal and background normalization shifts.
-    - The saved grid values are the minimized fit objective returned by `Sensitivity_Fitter.Fit`; contour labels may display $\\sqrt{{\\chi^2}}$ as a visualization proxy, but the workflow fundamentally stores the minimized deviance / chi-square-like statistic itself.
-
-    ---
+---
 
 {selected_sections}
 
@@ -498,6 +590,7 @@ def build_markdown(energy, folder, folder_specs, folder_templates):
 - Cut table values are parsed from selected result filenames when available.
 - Re-run script to refresh this folder after each workflow run:
     - /usr/bin/python3 scripts/generate_sensitivity_presentation.py --folder {folder}
+- Full mathematical derivations: [docs/hep\_likelihood\_derivation.tex](../docs/hep_likelihood_derivation.tex)
 """
     )
 

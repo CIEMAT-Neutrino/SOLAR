@@ -184,6 +184,7 @@ for config in configs:
     )
     fiducials = json.loads(open(f"{root}/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
     selected_fiducial = get_best_fiducial(fiducials, config, args.energy, "SENSITIVITY")
+    selected_fiducial_bands = get_best_fiducial_bands(fiducials, config, args.energy, "SENSITIVITY")
     analysis_info = load_analysis_info(str(root))
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
@@ -269,40 +270,24 @@ for config in configs:
                 rprint(f"Using optimized ophits {selected['OpHits']}")
             ophits = int(selected["OpHits"])
 
-        this_filter = np.where(
-            (run["Reco"]["SignalParticleSurface"] >= 0 if args.name.split("_")[0] in ["gamma", "neutron"] else 1)
-            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.name.split("_")[0] in ["gamma", "neutron"]) else 1)
+        quality_mask = (
+            (
+                (run["Reco"]["SignalParticleSurface"] >= 0)
+                & (run["Reco"]["SignalParticleSurface"] < 3)
+                if args.name.split("_")[0] in ["gamma", "neutron"]
+                else np.ones(len(run["Reco"]["NHits"]), dtype=bool)
+            )
+            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.name.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
             & (run["Reco"]["MatchedOpFlashPE"] > 0)
             & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
-            & (
-                np.absolute(run["Reco"]["RecoX"])
-                > selected_fiducial["FiducialX"]
-                if config == "hd_1x2x6_lateralAPA"
-                else np.absolute(run["Reco"]["RecoX"])
-                < detector_x / 2
-                - selected_fiducial["FiducialX"] 
-                if config == "hd_1x2x6_centralAPA"
-                else run["Reco"]["RecoX"]
-                < detector_x / 2
-                - selected_fiducial["FiducialX"]
-            )
-            & (
-                np.absolute(run["Reco"]["RecoY"])
-                < detector_y / 2 - selected_fiducial["FiducialY"]
-            )
-            & (
-                (run["Reco"]["RecoZ"]
-                > selected_fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"]) if args.folder == "Nominal" else 1
-            )
-            & (
-                (run["Reco"]["RecoZ"]
-                < info["DETECTOR_SIZE_Z"]
-                + info["DETECTOR_GAP_Z"]
-                - selected_fiducial["FiducialZ"]) if args.folder == "Nominal" else 1
-            )
         )
+        spatial_mask = build_energy_band_spatial_mask(
+            run, config, detector_x, detector_y, info, args.folder,
+            selected_fiducial, selected_fiducial_bands, energy,
+        )
+        this_filter = np.where(quality_mask & spatial_mask)
 
         if args.debug:
             print(
@@ -482,10 +467,10 @@ for config in configs:
 
         save_figure(
             fig,
-            f"{save_path}/{args.folder.lower()}",
+            f"{save_path}",
             config=args.config,
-            name=None,
-            subfolder=None,
+            name=args.name,
+            subfolder=f"{args.folder.lower()}",
             filename=f"Selected_Signal_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite,
             debug=args.plot,

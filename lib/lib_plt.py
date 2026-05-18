@@ -15,13 +15,11 @@ from rich import print as rprint
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from plotly.subplots import make_subplots
 from matplotlib.collections import LineCollection
-from plotly.validators.scatter.marker import SymbolValidator
-
 from src.utils import get_project_root
 from .lib_default import load_analysis_info
 
 colors = px.colors.qualitative.Prism
-symbols = SymbolValidator().values
+symbols = go.scatter.Marker()._get_prop_validator('symbol').values
 root = get_project_root()
 
 pio.templates["DUNE"] = go.layout.Template(
@@ -285,8 +283,10 @@ def auto_place_legend(
         xaxis = getattr(fig.layout, x_key, None)
         yaxis = getattr(fig.layout, y_key, None)
 
-        x_dom = tuple(getattr(xaxis, "domain", [0, 1]) if xaxis else [0, 1])
-        y_dom = tuple(getattr(yaxis, "domain", [0, 1]) if yaxis else [0, 1])
+        x_domain = getattr(xaxis, "domain", None) if xaxis else None
+        y_domain = getattr(yaxis, "domain", None) if yaxis else None
+        x_dom = tuple(x_domain) if x_domain is not None else (0, 1)
+        y_dom = tuple(y_domain) if y_domain is not None else (0, 1)
         domains.append((x_dom, y_dom))
 
         x_range = getattr(xaxis, "range", None) if xaxis else None

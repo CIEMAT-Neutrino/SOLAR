@@ -1,4 +1,6 @@
+import os
 import sys
+import atexit
 import argparse
 import numpy as np
 import pandas as pd
@@ -9,6 +11,14 @@ sys.path.insert(0, "../")
 
 # from lib import *
 from lib.lib_io import load_multi
+
+# Arrow library conflict workaround (see lib/__init__.py for full explanation).
+if os.path.exists("/lib64/libarrow.so.900"):
+    def _exit_before_arrow_teardown():
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+    atexit.register(_exit_before_arrow_teardown)
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(

@@ -108,19 +108,48 @@ lowe_energy_edges, lowe_energy_centers, lowe_ebin = get_default_energies(
     str(root), "LOWE_RECO_ENERGY"
 )
 
-hep_rebin = np.arange(0, 10, 10)
-hep_rebin = np.append(hep_rebin, np.arange(10, 31, 1))
+hep_rebin = np.arange(0, 31, 1)
 hep_rebin_centers = (hep_rebin[1:] + hep_rebin[:-1]) / 2
 
-sensitivity_rebin = np.arange(0, 8, 8)
-sensitivity_rebin = np.append(sensitivity_rebin, np.arange(8, 31, 1))
+sensitivity_rebin = np.arange(0, 31, 1)
 sensitivity_rebin_centers = (sensitivity_rebin[1:] + sensitivity_rebin[:-1]) / 2
 
-daynight_rebin = np.arange(0, 8, 8)
-daynight_rebin = np.append(daynight_rebin, np.arange(8, 32, 2))
+daynight_rebin = np.arange(0, 32, 2)
 daynight_rebin_centers = (daynight_rebin[1:] + daynight_rebin[:-1]) / 2
 
 pio.templates.default = "none"
 default = px.colors.qualitative.D3
 colors = px.colors.qualitative.Prism
 compare = px.colors.qualitative.Plotly
+
+# ---------------------------------------------------------------------------
+# Kaleido / Chrome path
+#
+# kaleido v1+ requires Chrome for static image export.  The system container
+# is read-only so Chrome is kept in <project>/.chrome/.  Set BROWSER_PATH if
+# not already in the environment so kaleido picks it up automatically.
+# ---------------------------------------------------------------------------
+_chrome_exe = os.path.join(str(root), ".chrome", "chrome-linux64", "chrome")
+if os.path.isfile(_chrome_exe) and "BROWSER_PATH" not in os.environ:
+    os.environ["BROWSER_PATH"] = _chrome_exe
+
+# ---------------------------------------------------------------------------
+# Apptainer arrow conflict workaround
+#
+# The container carries both pyarrow's libarrow.so.2100 and the system
+# libarrow.so.900.  They have different sonames so the dynamic linker loads
+# both; the C++ ThreadPool vtable then resolves across incompatible versions
+# and segfaults during normal Python teardown.  Registering os._exit(0) as an
+# atexit handler (LIFO → runs last) lets all user handlers finish first, then
+# terminates before C++ destructors are invoked.  Guard on the conflicting
+# library so the workaround is inert everywhere else.
+# ---------------------------------------------------------------------------
+import atexit as _atexit
+import sys as _sys
+
+if os.path.exists("/lib64/libarrow.so.900"):
+    def _exit_before_arrow_teardown():
+        _sys.stdout.flush()
+        _sys.stderr.flush()
+        os._exit(0)
+    _atexit.register(_exit_before_arrow_teardown)

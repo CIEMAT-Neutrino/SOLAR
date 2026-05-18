@@ -20,7 +20,7 @@ def get_selection_cuts(config: str, name: str, energy: str, args: argparse.Names
 
     sigma_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_highest_HEP.pkl"
+        f"{config}/{name}/{config}_{name}_{args.pkl_label}_HEP.pkl"
     )
     if not os.path.exists(sigma_path):
         return None
@@ -77,6 +77,12 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--pkl_label",
+    type=str,
+    default="highest",
+    help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked').",
+)
 args = parser.parse_args()
 
 comparison_styles = {
@@ -382,7 +388,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig_energy,
         save_path,
         config=config,
-        name=None,
+        name=name,
         subfolder=args.folder.lower(),
         filename=figure_name,
         rm=args.rewrite,

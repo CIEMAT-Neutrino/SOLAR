@@ -8,6 +8,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 
 
+def _is_spiked(arr, threshold: float) -> bool:
+    """Return True if any consecutive step in arr exceeds threshold.
+
+    Used on RawPreIsotonicProfileLikelihood before PAVA: spikes appear as large
+    positive jumps that PAVA converts into high plateaus in the final curve.
+    """
+    a = np.nan_to_num(np.asarray(arr, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    if a.size < 2:
+        return False
+    return float(np.max(np.diff(a))) > threshold
+
+
 def _to_builtin(value):
     if isinstance(value, np.generic):
         return value.item()
@@ -189,6 +201,19 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--max_pl_jump",
+    type=float,
+    default=1.0,
+    help=(
+        "Maximum allowed single-step jump (σ) in RawPreIsotonicProfileLikelihood "
+        "or PreIsotonicProfileLikelihood when classifying a curve as spiked. "
+        "Both pre-PAVA columns are checked: spikes can appear in the smoothed-histogram "
+        "path (PreIsotonic) even when the raw-histogram path (RawPreIsotonic) is clean. "
+        "Spiked curves are excluded from the main highest selection and saved separately "
+        "as highest_spiked. Set to 0 to disable filtering (backward-compatible)."
+    ),
+)
 
 args = parser.parse_args()
 
@@ -200,25 +225,22 @@ significance_reference = analysis_info.get(
     "BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}
 ).get(args.analysis.upper(), "Asimov")
 
-# 0ZBestSigmas runs before profile-likelihood products are generated in the HEP workflow.
-# Force Asimov here so best-cut selection always has an available reference column.
-if args.analysis.upper() == "HEP" and significance_reference == "ProfileLikelihood":
-    rprint(
-        "[cyan][INFO][/cyan] Overriding HEP best-sigma reference to Asimov in 0ZBestSigmas (ProfileLikelihood is produced in a later step)."
-    )
-    significance_reference = "Asimov"
-
 reference_column = (
     significance_reference
     if histogram_reference == "Smoothed"
     else f"Raw{significance_reference}"
 )
 
+# For ProfileLikelihood reference use the PL-specific crossing columns (PLSigma2/PLSigma3)
+# so that the "fastest discovery" cut is selected by PL crossing time, not Asimov.
+# These columns exist only in Results pkl files produced by the current 13HEP.py.
+_pl_sigma_prefix = "PL" if significance_reference == "ProfileLikelihood" else ""
+
 rprint(
     f"Using {histogram_reference.lower()} histogram reference column {reference_column} for {args.analysis}"
 )
 
-fastest_sigma2, fastest_sigma3, highest_sigma = {}, {}, {}
+fastest_sigma2, fastest_sigma3, highest_sigma, highest_spiked_sigma = {}, {}, {}, {}
 fastest_sigmas = [fastest_sigma2, fastest_sigma3]
 
 plot_data = {}
@@ -255,7 +277,38 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
         )
         continue
 
-    sigmas_df = explode(sigmas_df, ["Sigma2", "Sigma3", "Exposure", reference_column])
+    pl_crossing_cols = [
+        col for col in ["PLSigma2", "PLSigma3"] if col in sigmas_df.columns
+    ]
+
+    # Compute spike flag per cut (before exploding, while reference column is still a list).
+    # Check both the raw and histogram-smoothed pre-isotonic PL curves: spikes can appear
+    # in either path independently (the smoothed-histogram path can produce large boundary
+    # jumps even when the raw-histogram path is clean).
+    spike_cols = [
+        col for col in [
+            "RawPreIsotonicProfileLikelihood",
+            "PreIsotonicProfileLikelihood",
+        ]
+        if col in sigmas_df.columns
+    ]
+    if args.max_pl_jump > 0 and spike_cols:
+        sigmas_df["_is_spiked"] = False
+        for spike_col in spike_cols:
+            sigmas_df["_is_spiked"] = sigmas_df["_is_spiked"] | sigmas_df[spike_col].apply(
+                lambda arr: _is_spiked(arr, args.max_pl_jump)
+            )
+        n_spiked = int(sigmas_df["_is_spiked"].sum())
+        if n_spiked > 0:
+            rprint(
+                f"[cyan][INFO][/cyan] {n_spiked}/{len(sigmas_df)} cut rows flagged as spiked "
+                f"(max single-step jump > {args.max_pl_jump:.2f} σ, checked: {spike_cols}) "
+                f"for {config} {name} {energy_label}."
+            )
+    else:
+        sigmas_df["_is_spiked"] = False
+
+    sigmas_df = explode(sigmas_df, ["Sigma2", "Sigma3", "Exposure", reference_column] + pl_crossing_cols)
     if sigmas_df.empty:
         rprint(
             f"[yellow][WARNING][/yellow] Skipping {config} {name} {energy_label}: exploded dataframe is empty."
@@ -270,14 +323,27 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
         this_sigma_df = sigmas_df[
             (sigmas_df["Config"] == config)
             * (sigmas_df["Name"] == name)
-            * (sigmas_df["NHits"].isin(nhits[:10]))
-            * (sigmas_df["OpHits"].isin(nhits[3:10]))
-            * (sigmas_df["AdjCl"].isin(nhits[::-1][10:]))
+            * (sigmas_df["NHits"].isin(nhits))
+            * (sigmas_df["OpHits"].isin(nhits[3:]))
+            * (sigmas_df["AdjCl"].isin(nhits[::-1]))
         ]
-        # print(this_sigma_df)
+
+        # Split into spike-free and spiked subsets.
+        # Spiked rows are excluded from the main selection; if all rows are spiked,
+        # fall back to using all rows so the workflow never silently produces empty output.
+        clean_df  = this_sigma_df[~this_sigma_df["_is_spiked"]]
+        spiked_df = this_sigma_df[ this_sigma_df["_is_spiked"]]
+        if clean_df.empty and not spiked_df.empty:
+            rprint(
+                f"[yellow][WARNING][/yellow] All cut rows spiked for {config} {name} {energy_label}. "
+                "Falling back to full set for highest selection."
+            )
+            clean_df = this_sigma_df
+
         if idx == 0:
-            this_sigma_df_best = this_sigma_df.loc[
-                this_sigma_df[reference_column] == this_sigma_df[reference_column].max()
+            # Highest from clean rows
+            this_sigma_df_best = clean_df.loc[
+                clean_df[reference_column] == clean_df[reference_column].max()
             ].copy()
             this_sigma = _pick_first_row(this_sigma_df_best)
             if this_sigma is None:
@@ -296,10 +362,34 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
                     f'\t*Adding highest sigma with nihts {this_sigma["NHits"]} ophits {this_sigma["OpHits"]} adjcls {this_sigma["AdjCl"]}'
                 )
 
+            # Highest from spiked rows (debug artifact)
+            if not spiked_df.empty:
+                this_sigma_df_spiked = spiked_df.loc[
+                    spiked_df[reference_column] == spiked_df[reference_column].max()
+                ].copy()
+                this_sigma_spiked = _pick_first_row(this_sigma_df_spiked)
+                if this_sigma_spiked is not None:
+                    highest_spiked_sigma[(config, name, energy_label)] = {
+                        sigma_label: this_sigma_spiked[sigma_label],
+                        "Values": this_sigma_spiked[reference_column],
+                        "NHits": this_sigma_spiked["NHits"],
+                        "OpHits": this_sigma_spiked["OpHits"],
+                        "AdjCl": this_sigma_spiked["AdjCl"],
+                    }
+                    rprint(
+                        f'\t*Adding highest_spiked sigma with nhits {this_sigma_spiked["NHits"]} '
+                        f'ophits {this_sigma_spiked["OpHits"]} adjcls {this_sigma_spiked["AdjCl"]}'
+                    )
+
         # Find the entry with the fastest sigma (min this_sigma_df["sigma_label"])
-        this_sigma_df_fast = this_sigma_df.loc[
-            (this_sigma_df[sigma_label] > 0)
-            * (this_sigma_df[reference_column] == this_sigma_df[reference_column].max())
+        # Use PL-specific crossing column when reference is ProfileLikelihood so cut
+        # selection reflects PL discovery time, not Asimov.
+        crossing_label = f"{_pl_sigma_prefix}{sigma_label}"
+        if crossing_label not in clean_df.columns:
+            crossing_label = sigma_label
+        this_sigma_df_fast = clean_df.loc[
+            (clean_df[crossing_label] > 0)
+            * (clean_df[reference_column] == clean_df[reference_column].max())
         ].copy()
         this_sigma = _pick_first_row(this_sigma_df_fast)
         if this_sigma is None:
@@ -309,7 +399,7 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
             continue
 
         fastest_sigmas[idx][(config, name, energy_label)] = {
-            sigma_label: this_sigma[sigma_label],
+            sigma_label: this_sigma[crossing_label],
             "Values": this_sigma[reference_column],
             "NHits": this_sigma["NHits"],
             "OpHits": this_sigma["OpHits"],
@@ -320,8 +410,8 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
         )
 
     for sigma_results, sigma_results_label in zip(
-        [highest_sigma, fastest_sigma2, fastest_sigma3],
-        ["highest", "fastest_sigma2", "fastest_sigma3"],
+        [highest_sigma, highest_spiked_sigma, fastest_sigma2, fastest_sigma3],
+        ["highest", "highest_spiked", "fastest_sigma2", "fastest_sigma3"],
     ):
         # If file already exists, load it and update it with the new results, otherwise create a new file
 

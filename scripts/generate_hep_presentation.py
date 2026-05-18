@@ -54,6 +54,25 @@ def _fmt_components(mode, components):
     return ", ".join(values) if values else "All components"
 
 
+def gather_hep_threshold_rows():
+    path = ROOT / "import" / "analysis.json"
+    if not path.exists():
+        return []
+    payload = read_json(path)
+    hep = payload.get("HEP", {})
+    thresholds = hep.get("THRESHOLDS", {})
+    rows = []
+    for key in sorted(thresholds.keys()):
+        threshold = thresholds.get(key, {})
+        rows.append(
+            {
+                "Config": key,
+                "Energy": threshold.get("energy"),
+                "Threshold": threshold.get("threshold"),
+            }
+        )
+    return rows
+
 def gather_hep_smoothing_stage_rows():
     analysis_path = ROOT / "import" / "analysis.json"
     if not analysis_path.exists():
@@ -170,12 +189,14 @@ def _pick_most_recent(paths):
     return max(existing, key=lambda path: path.stat().st_mtime)
 
 
-def _find_latest(base_dir, patterns):
+def _find_latest(base_dir, patterns, exclude=None):
     if not base_dir.exists():
         return None
     candidates = []
     for pattern in patterns:
         candidates.extend(base_dir.glob(pattern))
+    if exclude:
+        candidates = [c for c in candidates if not any(ex in c.name for ex in exclude)]
     return _pick_most_recent(candidates)
 
 
@@ -271,55 +292,25 @@ def gather_hep_plot_specs(folder, energy, reference):
     significance_refs = list(dict.fromkeys(significance_refs))
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
-        search_dirs = [
-            plot_dir / folder / config_key,
-            plot_dir / config_key / folder,
-            plot_dir / config_key,
-        ]
-
-        significance_candidates = []
-        for this_ref in significance_refs:
-            for base_dir in search_dirs:
-                significance_candidates.extend(
-                    [
-                        _find_latest(
-                            base_dir,
-                            [
-                                f"{config_key}_{energy_label}_HEP_Significance_{this_ref}_Exposure_*.png"
-                            ],
-                        ),
-                        _find_latest(
-                            base_dir / "marley",
-                            [
-                                f"{config_key}_marley_{energy_label}_HEP_Significance_{this_ref}_Exposure_*.png"
-                            ],
-                        ),
-                    ]
-                )
-        expected_significance = _pick_most_recent(significance_candidates)
-
-        exposure_candidates = []
-        for this_ref in significance_refs:
-            for base_dir in search_dirs:
-                exposure_candidates.extend(
-                    [
-                        _find_latest(
-                            base_dir,
-                            [
-                                f"{config_key}_{energy_label}_HEP_Exposure_{this_ref}_Threshold_*.png",
-                                f"{config_key}_{energy_label}_HEP_Exposure_{this_ref}_*.png",
-                            ],
-                        ),
-                        _find_latest(
-                            base_dir / "marley",
-                            [
-                                f"{config_key}_marley_{energy_label}_HEP_Exposure_{this_ref}_Threshold_*.png",
-                                f"{config_key}_marley_{energy_label}_HEP_Exposure_{this_ref}_*.png",
-                            ],
-                        ),
-                    ]
-                )
-        expected_exposure = _pick_most_recent(exposure_candidates)
+        canonical_dir = plot_dir / config_key / "marley" / folder
+        expected_significance = _find_latest(
+            canonical_dir,
+            [
+                f"{config_key}_marley_{energy_label}_HEP_Significance_{ref}_Exposure_*.png"
+                for ref in significance_refs
+            ],
+        )
+        expected_exposure = _find_latest(
+            canonical_dir,
+            [
+                f"{config_key}_marley_{energy_label}_HEP_Exposure_{ref}_Threshold_*.png"
+                for ref in significance_refs
+            ] + [
+                f"{config_key}_marley_{energy_label}_HEP_Exposure_{ref}_*.png"
+                for ref in significance_refs
+            ],
+            exclude=["highest_spiked"],
+        )
         slides.append(
             {
                 "name": display_name,
@@ -342,35 +333,21 @@ def gather_reference_comparison_specs(folder, energy):
     energy_label = output_energy_label(energy)
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
-        search_dirs = [
-            plot_dir / config_key / folder,
-            plot_dir / config_key / "marley" / folder,
-            plot_dir / folder / config_key,
-            plot_dir / folder / config_key / "marley",
-            plot_dir / config_key,
-            plot_dir / config_key / "marley",
-        ]
-
-        significance_patterns = [
-            f"{config_key}_{energy_label}_HEP_Significance_Comparison_Exposure_*_Threshold_*.png",
-            f"{config_key}_{energy_label}_HEP_Significance_Comparison_Exposure_*.png",
-            f"{config_key}_marley_{energy_label}_HEP_Significance_Comparison_Exposure_*_Threshold_*.png",
-            f"{config_key}_marley_{energy_label}_HEP_Significance_Comparison_Exposure_*.png",
-        ]
-        expected_significance = _pick_most_recent(
-            [_find_latest(base_dir, significance_patterns) for base_dir in search_dirs]
+        canonical_dir = plot_dir / config_key / "marley" / folder
+        expected_significance = _find_latest(
+            canonical_dir,
+            [
+                f"{config_key}_marley_{energy_label}_HEP_Significance_Comparison_Exposure_*_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_HEP_Significance_Comparison_Exposure_*.png",
+            ],
         )
-
-        exposure_patterns = [
-            f"{config_key}_{energy_label}_HEP_Exposure_Comparison_Threshold_*.png",
-            f"{config_key}_{energy_label}_HEP_Exposure_Comparison_*.png",
-            f"{config_key}_marley_{energy_label}_HEP_Exposure_Comparison_Threshold_*.png",
-            f"{config_key}_marley_{energy_label}_HEP_Exposure_Comparison_*.png",
-        ]
-        expected_exposure = _pick_most_recent(
-            [_find_latest(base_dir, exposure_patterns) for base_dir in search_dirs]
+        expected_exposure = _find_latest(
+            canonical_dir,
+            [
+                f"{config_key}_marley_{energy_label}_HEP_Exposure_Comparison_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_HEP_Exposure_Comparison_*.png",
+            ],
         )
-
         slides.append(
             {
                 "name": display_name,
@@ -393,55 +370,27 @@ def gather_adaptive_rebin_specs(folder, energy):
     energy_label = output_energy_label(energy)
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
-        search_dirs = [
-            plot_dir / config_key / folder,
-            plot_dir / config_key / "marley" / folder,
-            plot_dir / folder / config_key,
-            plot_dir / folder / config_key / "marley",
-            plot_dir / config_key,
-            plot_dir / config_key / "marley",
-        ]
-        expected_asimov = _pick_most_recent(
+        canonical_dir = plot_dir / config_key / "marley" / folder
+        expected_asimov = _find_latest(
+            canonical_dir,
             [
-                _find_latest(
-                    base_dir,
-                    [
-                        f"{config_key}_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison*.png",
-                    ],
-                )
-                for base_dir in search_dirs
-            ]
+                f"{config_key}_marley_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_HEP_Asimov_AdaptiveRebin_Comparison*.png",
+            ],
         )
-        expected_gaussian = _pick_most_recent(
+        expected_gaussian = _find_latest(
+            canonical_dir,
             [
-                _find_latest(
-                    base_dir,
-                    [
-                        f"{config_key}_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison*.png",
-                    ],
-                )
-                for base_dir in search_dirs
-            ]
+                f"{config_key}_marley_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_HEP_Gaussian_AdaptiveRebin_Comparison*.png",
+            ],
         )
-        expected_profile = _pick_most_recent(
+        expected_profile = _find_latest(
+            canonical_dir,
             [
-                _find_latest(
-                    base_dir,
-                    [
-                        f"{config_key}_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_*.png",
-                        f"{config_key}_marley_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison*.png",
-                    ],
-                )
-                for base_dir in search_dirs
-            ]
+                f"{config_key}_marley_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_*.png",
+                f"{config_key}_marley_{energy_label}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison*.png",
+            ],
         )
         slides.append(
             {
@@ -463,53 +412,55 @@ def gather_adaptive_rebin_specs(folder, energy):
     return slides
 
 
-def gather_rebinned_significance_specs(folder, energy, reference):
+def gather_spiked_debug_specs(folder, energy, reference):
+    """Gather exposure and significance plots generated with --pkl_label highest_spiked for debug slides."""
     plot_dir = ROOT / "images" / "analysis" / "hep"
     energy_label = output_energy_label(energy)
+    refs = list(dict.fromkeys([reference, "ProfileLikelihood", "Asimov", "Gaussian"]))
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
-        config_dir = plot_dir / folder / config_key / "marley"
-        expected = _find_latest(
-            config_dir,
+        canonical_dir = plot_dir / config_key / "marley" / folder
+        expected_exposure = _find_latest(
+            canonical_dir,
             [
-                f"{config_key}_marley_{energy_label}_HEP_RebinnedSignificance_{reference}_Smoothed_Threshold_*_Exposure_*.png",
-                f"{config_key}_marley_{energy_label}_HEP_RebinnedSignificance_{reference}_Smoothed*.png",
+                f"{config_key}_marley_{energy_label}_HEP_Exposure_{ref}_*highest_spiked*.png"
+                for ref in refs
             ],
         )
-
+        expected_significance = _find_latest(
+            canonical_dir,
+            [
+                f"{config_key}_marley_{energy_label}_HEP_Significance_{ref}_*highest_spiked*.png"
+                for ref in refs
+            ],
+        )
         slides.append(
             {
                 "name": display_name,
                 "config": config_key,
                 "folder": folder,
-                "plot": expected.relative_to(ROOT).as_posix() if expected is not None else None,
+                "exposure": expected_exposure.relative_to(ROOT).as_posix()
+                if expected_exposure is not None
+                else None,
+                "significance": expected_significance.relative_to(ROOT).as_posix()
+                if expected_significance is not None
+                else None,
             }
         )
-
     return slides
 
 
 def _find_fiducial_plot(folder, config_key, label, energy):
     root_dir = ROOT / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
-
-    # Strict pattern: use only HEP-tagged fiducial significance outputs.
-    # Prefer config-first layout (images/solar/fiducial/<config>/<folder>/...),
-    # then fall back to older folder-first layout when missing.
-    search_dirs = [
-        root_dir / config_key / folder,
-        root_dir / config_key / folder / "marley",
-        root_dir / folder / config_key,
-        root_dir / folder / config_key / "marley",
-    ]
-    patterns = [
-        f"{config_key}_{energy_label}_HEP_{label}Fiducial_Significance*.png",
-        f"{config_key}_marley_{energy_label}_HEP_{label}Fiducial_Significance*.png",
-    ]
-    for base_dir in search_dirs:
-        expected = _find_latest(base_dir, patterns)
-        if expected is not None:
-            return expected.relative_to(ROOT).as_posix()
+    # save_figure writes: {root}/images/solar/fiducial/{config}/marley/{folder}/{config}_marley_{energy}_HEP_{label}...
+    canonical_dir = root_dir / config_key / "marley" / folder
+    expected = _find_latest(
+        canonical_dir,
+        [f"{config_key}_marley_{energy_label}_HEP_{label}Fiducial_Significance*.png"],
+    )
+    if expected is not None:
+        return expected.relative_to(ROOT).as_posix()
     return None
 
 
@@ -608,7 +559,7 @@ def render_hep_plot_slides(plot_specs):
             "local discovery density, estimated as z_local / DeltaE (sigma per MeV), "
             "where z_local comes from the per-bin discovery test statistic. "
             # "Dotted black = raw; solid color = smoothed; translucent blue bars = adaptive-bin density estimate. "
-            "Compare where discovery is concentrated "
+            "Compare where discovery is concentrated."
             # "and how smoothing/rebinning changes threshold-region behavior."
         )
 
@@ -756,24 +707,24 @@ def render_adaptive_rebin_slides(specs):
     slides = []
     for spec in specs:
         available_blocks = []
-        if spec.get("asimov"):
-            available_blocks.append(
-                "\n".join(
-                    [
-                        "<div>",
-                        "  <p><strong>Adaptive Rebin Comparison (Asimov)</strong></p>",
-                        f"  <img src=\"../{spec['asimov']}\">",
-                        "</div>",
-                    ]
-                )
-            )
         if spec.get("gaussian"):
             available_blocks.append(
                 "\n".join(
                     [
                         "<div>",
-                        "  <p><strong>Adaptive Rebin Comparison (Gaussian)</strong></p>",
+                        "  <p><strong>Gaussian</strong></p>",
                         f"  <img src=\"../{spec['gaussian']}\">",
+                        "</div>",
+                    ]
+                )
+            )
+        if spec.get("asimov"):
+            available_blocks.append(
+                "\n".join(
+                    [
+                        "<div>",
+                        "  <p><strong>Asimov</strong></p>",
+                        f"  <img src=\"../{spec['asimov']}\">",
                         "</div>",
                     ]
                 )
@@ -783,7 +734,7 @@ def render_adaptive_rebin_slides(specs):
                 "\n".join(
                     [
                         "<div>",
-                        "  <p><strong>Adaptive Rebin Comparison (ProfileLikelihood)</strong></p>",
+                        "  <p><strong>ProfileLikelihood</strong></p>",
                         f"  <img src=\"../{spec['profile']}\">",
                         "</div>",
                     ]
@@ -825,34 +776,51 @@ def render_adaptive_rebin_slides(specs):
     return "\n\n---\n\n".join(slides)
 
 
-def render_rebinned_significance_slides(specs):
+def render_spiked_debug_slides(specs):
+    """Render debug slides for the best spiked curves excluded from the main selection."""
+    any_available = any(spec.get("exposure") or spec.get("significance") for spec in specs)
+    if not any_available:
+        return "### Spike Debug\n\nNo spiked-cut plots found. Run workflow with `--pkl_label highest_spiked` to generate them."
+
     slides = []
     for spec in specs:
-        if spec["plot"]:
+        if spec.get("exposure") or spec.get("significance"):
+            exposure_block = (
+                f"    <img src=\"../{spec['exposure']}\">"
+                if spec.get("exposure")
+                else "    <p>Exposure plot not available.</p>"
+            )
+            significance_block = (
+                f"    <img src=\"../{spec['significance']}\">"
+                if spec.get("significance")
+                else "    <p>Significance plot not available.</p>"
+            )
             slides.append(
                 "\n".join(
                     [
-                        f"### {spec['name']}",
+                        f"### {spec['name']} — best excluded (spiked)",
                         "",
-                        "<div class=\"center\">",
-                        f"  <img src=\"../{spec['plot']}\">",
+                        "<div class=\"comparison-note\">",
+                        "  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.",
+                        "</div>",
+                        "",
+                        "<div class=\"two-col\">",
+                        "  <div>",
+                        "    <p><strong>Significance</strong></p>",
+                        significance_block,
+                        "  </div>",
+                        "  <div>",
+                        "    <p><strong>Exposure</strong></p>",
+                        exposure_block,
+                        "  </div>",
                         "</div>",
                     ]
                 )
             )
         else:
             slides.append(
-                "\n".join(
-                    [
-                        f"### {spec['name']}",
-                        "",
-                        f"No rebinned-significance output found for {spec['name']}",
-                    ]
-                )
+                f"### {spec['name']} — best excluded (spiked)\n\nNo spiked plots found."
             )
-
-    if not slides:
-        slides.append("### Rebinned significance\n\nNo HEP rebinned-significance PNGs were found.")
 
     return "\n\n---\n\n".join(slides)
 
@@ -865,6 +833,7 @@ def render_folder_sections(
     adaptive_specs,
     best_sigma_rows,
     fid_rows,
+    spiked_specs=None,
 ):
     def _bottom_variant(path, target_variant):
         if not path:
@@ -948,11 +917,22 @@ def render_folder_sections(
 ---
 
 {render_sigma_table(folder, best_sigma_rows.get(folder, []))}
+
+{_render_spike_debug_section(spiked_specs)}
 """
+
+
+def _render_spike_debug_section(spiked_specs):
+    if not spiked_specs:
+        return ""
+    any_available = any(spec.get("exposure") for spec in spiked_specs)
+    title = "Spike Debug (excluded from selection)"
+    return f"---\n\n## {title}\n\n---\n\n{render_spiked_debug_slides(spiked_specs)}\n"
 
 
 def build_markdown(
     folder,
+    threshold_rows,
     best_sigma_rows,
     fid_rows,
     hep_specs,
@@ -961,6 +941,7 @@ def build_markdown(
     fid_specs,
     reference,
     smoothing_stage_rows,
+    spiked_specs=None,
 ):
     coverage = {folder: len(rows) for folder, rows in best_sigma_rows.items()}
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
@@ -972,6 +953,7 @@ def build_markdown(
         adaptive_specs,
         best_sigma_rows,
         fid_rows,
+        spiked_specs=spiked_specs,
     )
     selected_title = folder.title()
 
@@ -979,6 +961,7 @@ def build_markdown(
         f"""
     ---
     marp: true
+    math: katex
     description: Inputs, workflow outputs, and per-config HEP results
     paginate: true
     theme: dune
@@ -1009,10 +992,20 @@ def build_markdown(
     - folder: **{selected_title}**
     - analysis: HEP
     - exposure: default **30 years**
-    - threshold in 13HEP.py: default 10.0 MeV
+    - threshold in 13HEP.py: from [import/analysis.json](../import/analysis.json) HEP -> THRESHOLDS -> {threshold_rows[folder] if folder in threshold_rows else "(no threshold config found)"}
     - optional cuts override: nhits, ophits, adjcls
     - significance reference in plots: {reference}
-    - best-curve reference in 0ZBestSigmas.py: Smoothed or Raw
+    - best-cut selection in 0ZBestSigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
+
+    ---
+
+    ### Workflow Skip Flags
+
+    Used for [src/analysis/10SensitivityAnalysis.py](../src/analysis/10SensitivityAnalysis.py):
+    - `--no-computation`: skip all analysis, run plot macros only
+    - `--no-significance`: skip 13HEP.py/12DayNight.py/14Sensitivity.py only
+    - `--no-fiducialization`: skip 0XFiducializeSignal.py only
+    - `--no-rebin`: skip 11AnalysisSignal.py rebinning step only
 
     ---
 
@@ -1025,44 +1018,56 @@ def build_markdown(
 
     ---
 
-    ### Histogram and Significance Flow
+    ### Histogram and Significance Flow I: Building, Smoothing, and Evaluation
 
     - Step 1: Build HEP rates and threshold region in [src/analysis/13HEP.py](../src/analysis/13HEP.py) per component.
     - Step 2: Apply component-aware smoothing via [lib/lib_smooth.py](../lib/lib_smooth.py) using HEP smoothing config.
-    - Step 3: Evaluate Gaussian and Asimov significance curves in [src/analysis/13HEP.py](../src/analysis/13HEP.py).
-    - Step 4: Pick best cuts in [src/analysis/0ZBestSigmas.py](../src/analysis/0ZBestSigmas.py), then evaluate ProfileLikelihood exposure in [src/analysis/13HEPProfileLikelihood.py](../src/analysis/13HEPProfileLikelihood.py).
+    - Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/analysis/13HEP.py](../src/analysis/13HEP.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
+    
+    ---
+
+    ### Histogram and Significance Flow II: Post-Processing and Plotting
+
+    - Step 4: Select the best cut by ProfileLikelihood in [src/analysis/0ZBestSigmas.py](../src/analysis/0ZBestSigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
     - Step 5: Render exposure/significance and comparison plots in [src/analysis/13HEPExposurePlot.py](../src/analysis/13HEPExposurePlot.py), [src/analysis/13HEPSignificancePlot.py](../src/analysis/13HEPSignificancePlot.py), [src/analysis/13HEPSignificanceComparisonPlot.py](../src/analysis/13HEPSignificanceComparisonPlot.py), and [src/analysis/13HEPExposureComparisonPlot.py](../src/analysis/13HEPExposureComparisonPlot.py).
 
     ---
 
-    ### Adaptative Rebinning: Strategy
+    ### Background Normalization Model
 
-    - Rebinning is applied in [src/analysis/13HEP.py](../src/analysis/13HEP.py) through [lib/lib_smooth.py](../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
-    - It is controlled by [import/analysis.json](../import/analysis.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
-    - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
-    - This stabilizes low-statistics significance estimates while preserving discovery sensitivity in sparse tails.
+    The background systematic is a **single global scale factor** β — not independent per-bin nuisances.
+    Significance is computed from $q_0 = -2\ln\lambda(\mu=0)$ following [Cowan et al. 2010 (arXiv:1007.1727)](https://arxiv.org/abs/1007.1727) — the standard ATLAS/CMS formulation for discovery tests.
 
-    Rebin threshold criterion used for each grouped bin:
+    β satisfies the closed-form quadratic (total counts $N = \sum n_i$, $B = \sum b_i$, $\sigma^2 = \sigma_\mathrm{{rel}}^2$):
     $$
-    S_{{\mathrm{{group}}}} = \sum_{{i \in \mathrm{{group}}}} S_i^{{\mathrm{{det}}}} \ge T
+    \hat{{\\beta}}^2 + (B\sigma^2 - 1)\hat{{\\beta}} - N\sigma^2 = 0
     $$
-    $$
-    T = \max\!\left(\\texttt{{min\_expected\_events}},\,-\ln(1-\\texttt{{min\_count\_probability}})\\right)
-    $$
+
+    **Why not per-bin nuisances?** With $k$ independent per-bin β's each with a 2% Gaussian constraint, the null hypothesis has $k$ dials to absorb signal bin-by-bin. This creates an artificial flat region in significance vs exposure that ends in a sharp kink when the absorbing capacity is exhausted (at $f \\sim 1/(b_r \\cdot \\sigma^2)$ per bin — typically around 20 years for shielded configs with tight OpHits cuts). A global β has its absorbing regime end at $f \\sim 1/(B_\\mathrm{{total}} \\cdot \\sigma^2)$ (typically sub-year), giving a smooth, physically correct PL curve throughout the analysis window.
 
     ---
 
-    ### Adaptative Rebinning: Discovery
+    ### ProfileLikelihood Smoothing
 
-    Discovery significance is then evaluated on rebinned inputs:
+    PL curves are post-processed with **Gaussian kernel smoothing followed by isotonic regression** to produce a continuous, monotone exposure curve:
+      1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/analysis/13HEP.py`](../src/analysis/13HEP.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
+      2. [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) is then applied to enforce strict monotonicity. It finds the non-decreasing sequence that minimises the L2 distance from the smoothed values, ensuring more data cannot reduce sensitivity.
+
+    These steps remove residual numerical oscillations from the profile-likelihood solver at low signal-to-background ratios.
+
+    ---
+
+    ### ProfileLikelihood Error Bands
+
+    The ±1σ bands on PL exposure curves use **signal normalization variation**: signal events are scaled by $(1 \pm \sigma_s)$ where $\sigma_s$ is the signal reconstruction efficiency systematic (`--signal_uncertainty`, typically 10%):
     $$
-    Z = Z\!\left(S_{{\mathrm{{group}}}},\,B_{{\mathrm{{group}}}},\,\sigma_{{B,\mathrm{{group}}}}\\right)
+    s_i^{{\pm}} = s_i \cdot (1 \pm \sigma_s)
     $$
 
-    Latest ProfileLikelihood updates used in this deck:
-    - Adaptive rebinning is enabled by default in [src/analysis/13HEPProfileLikelihood.py](../src/analysis/13HEPProfileLikelihood.py).
-    - Detection-mask zeroing is disabled for the ProfileLikelihood path to avoid artificial early-exposure suppression.
-    - Adaptive rebin starts are frozen (computed once at reference exposure and reused across the scan) to reduce discontinuities and keep curves monotonic.
+    The background is **never shifted**, so the profiled nuisance $\hat{{\\beta}}$ is unaffected. Both bands collapse symmetrically when signal is negligible ($\pm\sigma_s \cdot 0 = 0$). This avoids the asymmetric-collapse artifact of background-shifting approaches, where $\hat{{\\beta}}_{{null}}$ pull contributions drive the upper band non-zero independent of signal strength.
+
+    - **Upper band** ($\delta = +1$): more signal → higher $q_0$ → easier discovery.
+    - **Lower band** ($\delta = -1$): less signal → lower $q_0$. Both bands collapse symmetrically for configurations where signal is negligible.
 
     ---
 
@@ -1083,6 +1088,39 @@ def build_markdown(
 - Table values are read from workflow-generated JSON at generation time.
 - Re-run script to refresh this folder after each workflow run:
     - /usr/bin/python3 scripts/generate_hep_presentation.py --folder {folder}
+- Full mathematical derivations (signal model, PL formulation, adaptive rebinning, BB mask, spike detection): [docs/hep\_likelihood\_derivation.tex](../docs/hep_likelihood_derivation.tex)
+
+---
+
+### Adaptive Rebinning: Strategy
+
+- Rebinning is applied in [src/analysis/13HEP.py](../src/analysis/13HEP.py) through [lib/lib_smooth.py](../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
+- It is controlled by [import/analysis.json](../import/analysis.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
+- This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
+
+Rebin threshold criterion used for each grouped bin:
+$$
+S_{{\mathrm{{group}}}} = \sum_{{i \in \mathrm{{group}}}} S_i^{{\mathrm{{det}}}} \ge T
+$$
+$$
+T = \max\!\left(\\texttt{{min\_expected\_events}},\,-\ln(1-\\texttt{{min\_count\_probability}})\\right)
+$$
+
+---
+
+### Adaptive Rebinning: Discovery
+
+Discovery significance is then evaluated on rebinned inputs:
+$$
+Z = Z\!\left(S_{{\mathrm{{group}}}},\,B_{{\mathrm{{group}}}},\,\sigma_{{B,\mathrm{{group}}}}\\right)
+$$
+
+ProfileLikelihood implementation in [src/analysis/13HEP.py](../src/analysis/13HEP.py):
+- PL is computed for **every** analysis cut combination.
+- Original fine binning used throughout — no adaptive rebin. PL is optimal at the finest resolution; the likelihood ratio naturally suppresses bins with negligible signal without merging.
+- A **single global background normalization nuisance** (β ~ Gaussian(1, σ_rel)) is profiled jointly across all bins. See the *Background Normalization Model* slide.
+
 """
     )
 
@@ -1096,17 +1134,19 @@ def main():
     args = parse_args()
     export_pdf = args.pdf if args.pdf is not None else default_pdf_export_enabled()
     out_md = output_markdown_path(args.energy, args.folder)
-
+    threshold_rows = gather_hep_threshold_rows()
     best_sigma_rows = gather_best_sigma_rows(args.energy)
     fid_rows = gather_fiducial_rows(args.energy)
     selected_hep_specs = gather_hep_plot_specs(args.folder, args.energy, args.reference)
     selected_reference_specs = gather_reference_comparison_specs(args.folder, args.energy)
     selected_adaptive_specs = gather_adaptive_rebin_specs(args.folder, args.energy)
     selected_fid_specs = gather_fiducial_plot_specs(args.folder, args.energy)
+    selected_spiked_specs = gather_spiked_debug_specs(args.folder, args.energy, args.reference)
     smoothing_stage_rows = gather_hep_smoothing_stage_rows()
 
     markdown = build_markdown(
         args.folder,
+        threshold_rows,
         best_sigma_rows,
         fid_rows,
         selected_hep_specs,
@@ -1115,6 +1155,7 @@ def main():
         selected_fid_specs,
         args.reference,
         smoothing_stage_rows,
+        spiked_specs=selected_spiked_specs,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

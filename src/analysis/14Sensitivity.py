@@ -477,6 +477,7 @@ for config in configs:
                     bkg_df[:, thld:],
                     SigmaPred=args.signal_uncertainty,
                     SigmaBkg=args.background_uncertainty,
+                    bb_mask=(bkg_df[:, thld:] > 0),
                 )
 
                 chi2, best_A_pred, best_A_bkg = fitter.Fit(initial_A_pred, initial_A_bkg)
@@ -502,6 +503,7 @@ for config in configs:
                     bkg_df[:, thld:],
                     SigmaPred=args.signal_uncertainty,
                     SigmaBkg=args.background_uncertainty,
+                    bb_mask=(bkg_df[:, thld:] > 0),
                 )
 
                 chi2, best_A_pred, best_A_bkg = fitter.Fit(initial_A_pred, initial_A_bkg)

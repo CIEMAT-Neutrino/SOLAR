@@ -33,8 +33,8 @@ def _merge_and_write_json(path: str, payload: dict) -> None:
         json.dump(merged, f_write, indent=4)
 
 
-def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name):
-    return (
+def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, energy=None, band_fiducials=None):
+    quality_mask = (
         (
             (run["Reco"]["SignalParticleSurface"] >= 0)
             * (run["Reco"]["SignalParticleSurface"] < 3)
@@ -46,19 +46,16 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
         * (run["Reco"]["MatchedOpFlashPlane"] == 0)
         * (run["Reco"]["MatchedOpFlashPE"] > 0)
         * (run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1)
-        * (
-            np.absolute(run["Reco"]["RecoX"]) > fiducial["FiducialX"]
-            if config == "hd_1x2x6_lateralAPA"
-            else (
-                np.absolute(run["Reco"]["RecoX"]) < detector_x / 2 - fiducial["FiducialX"]
-                if config == "hd_1x2x6_centralAPA"
-                else run["Reco"]["RecoX"] < detector_x / 2 - fiducial["FiducialX"]
-            )
-        )
-        * (np.absolute(run["Reco"]["RecoY"]) < detector_y / 2 - fiducial["FiducialY"])
-        * (((run["Reco"]["RecoZ"] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])) if args.folder == "Nominal" else 1)
-        * (((run["Reco"]["RecoZ"] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])) if args.folder == "Nominal" else 1)
     )
+    # Per-energy-band spatial mask: each band may have a different optimal fiducial.
+    # Events outside all bands fall back to the global fiducial.
+    spatial_mask = build_energy_band_spatial_mask(
+        run, config, detector_x, detector_y, info, args.folder,
+        fiducial, band_fiducials or [], energy or "",
+    ) if (band_fiducials and energy) else build_fiducial_spatial_mask(
+        run, config, detector_x, detector_y, info, args.folder, fiducial
+    )
+    return quality_mask * spatial_mask
 
 
 def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name):
@@ -79,6 +76,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
         )
     )
     fiducialy = np.absolute(run["Reco"]["RecoY"]) < detector_y / 2 - fiducial["FiducialY"]
+    # build_cut_impact reports per-axis efficiency so keeps per-axis cuts separate
     fiducialz = (run["Reco"]["RecoZ"] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"]) & (
         run["Reco"]["RecoZ"] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"]
     )
@@ -203,16 +201,17 @@ for config in configs:
 
         plot_lists = {analysis: [] for analysis in args.analysis}
         fiducials_by_analysis = {analysis: get_best_fiducial(fiducials, config, energy, analysis) for analysis in args.analysis}
+        band_fiducials_by_analysis = {analysis: get_best_fiducial_bands(fiducials, config, energy, analysis) for analysis in args.analysis}
         analysis_cache = {}
 
         for this_nhit, this_ophit, this_adjcl, (weight, weight_labels, color) in track(
             product(
-                nhits[:10] if args.nhits is None else [args.nhits],
-                nhits[3:10] if args.ophits is None else [args.ophits],
-                nhits[::-1][10:] if args.adjcls is None else [args.adjcls],
+                nhits if args.nhits is None else [args.nhits],
+                nhits[3:] if args.ophits is None else [args.ophits],
+                nhits[::-1] if args.adjcls is None else [args.adjcls],
                 zip(user_input["weights"][name], user_input["weight_labels"][name], user_input["colors"][name]),
             ),
-            total=(10 * 7 * 10 * (3 if "marley" in name else 1) if args.nhits is None and args.ophits is None and args.adjcls is None else 1),
+            total=(len(nhits) * len(nhits[3:]) * len(nhits[::-1]) * (3 if "marley" in name else 1) if args.nhits is None and args.ophits is None and args.adjcls is None else 1),
             description=f"Iterating over cut configurations for reco {energy}...",
         ):
             for analysis in args.analysis:
@@ -232,6 +231,8 @@ for config in configs:
                             this_ophit,
                             this_adjcl,
                             name,
+                            energy=energy,
+                            band_fiducials=band_fiducials_by_analysis[analysis],
                         ),
                         dtype=bool,
                     )

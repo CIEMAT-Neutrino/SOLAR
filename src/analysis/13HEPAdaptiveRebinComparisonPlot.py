@@ -16,7 +16,7 @@ for this_path in [save_path, data_path]:
 def get_selection_cuts(config: str, name: str, energy: str, args: argparse.Namespace):
     sigma_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_highest_HEP.pkl"
+        f"{config}/{name}/{config}_{name}_{args.pkl_label}_HEP.pkl"
     )
     if not os.path.exists(sigma_path):
         return None
@@ -93,6 +93,12 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--pkl_label",
+    type=str,
+    default="highest",
+    help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked').",
+)
 args = parser.parse_args()
 
 
@@ -162,46 +168,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
     total_bins_default = int(len(as_curve(sigma_row.get("SignificanceEnergy", []))))
     if total_bins_default <= 0:
         total_bins_default = int(len(exposure_grid))
-
-    profile_rows = pd.DataFrame()
-    profile_path = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_{energy}_{args.analysis}_ProfileLikelihood.pkl"
-    )
-    if os.path.exists(profile_path):
-        profile_df = pd.read_pickle(profile_path)
-        required_profile_columns = [
-            "Config",
-            "Name",
-            "Energy",
-            "NHits",
-            "OpHits",
-            "AdjCl",
-            "Exposure",
-            "RawProfileLikelihood",
-            "ProfileLikelihood",
-            "RawAdaptiveBins",
-            "AdaptiveBins",
-        ]
-        missing_profile_columns = [
-            column for column in required_profile_columns if column not in profile_df.columns
-        ]
-        if profile_df.empty or missing_profile_columns:
-            rprint(
-                f"[yellow][WARNING][/yellow] Invalid profile-likelihood payload for {config} {name} {energy}: "
-                f"missing columns {missing_profile_columns}. "
-                "ProfileLikelihood adaptive-rebin comparison will be skipped for this selection."
-            )
-            profile_rows = pd.DataFrame()
-        else:
-            profile_rows = profile_df.loc[
-                (profile_df["Config"] == config)
-                & (profile_df["Name"] == name)
-                & (profile_df["Energy"] == energy)
-                & (profile_df["NHits"] == int(nhits_value))
-                & (profile_df["OpHits"] == int(ophits_value))
-                & (profile_df["AdjCl"] == int(adjcl_value))
-            ].copy()
 
     for significance_type in ["Asimov", "Gaussian"]:
         curve_keys = {
@@ -356,8 +322,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
             debug=args.plot,
         )
 
-    if not profile_rows.empty:
-        profile_row = profile_rows.iloc[0]
+    pl_required = ["ProfileLikelihood", "RawProfileLikelihood"]
+    if all(c in sigma_row.index for c in pl_required):
         fig = make_subplots(
             rows=2,
             cols=1,
@@ -368,46 +334,32 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "",
             ),
         )
-        profile_styles = style_map
-        profile_exposure = as_curve(profile_row["Exposure"])
         significance_peak = 0.0
         profile_entries = [
-            ("Raw", "NoRebin", "RawProfileLikelihoodNoRebin", "RawAdaptiveBinsNoRebin"),
-            ("Raw", "AdaptiveRebin", "RawProfileLikelihood", "RawAdaptiveBins"),
-            ("Smoothed", "NoRebin", "ProfileLikelihoodNoRebin", "AdaptiveBinsNoRebin"),
-            ("Smoothed", "AdaptiveRebin", "ProfileLikelihood", "AdaptiveBins"),
+            ("Raw", "NoRebin", "RawProfileLikelihoodNoRebin"),
+            ("Raw", "AdaptiveRebin", "RawProfileLikelihood"),
+            ("Smoothed", "NoRebin", "ProfileLikelihoodNoRebin"),
+            ("Smoothed", "AdaptiveRebin", "ProfileLikelihood"),
         ]
-        has_full_profile_shape = all(curve_key in profile_row.index for _, _, curve_key, _ in profile_entries)
+        has_full_profile_shape = all(curve_key in sigma_row.index for _, _, curve_key in profile_entries)
         if not has_full_profile_shape:
             profile_entries = [
-                ("Raw", "AdaptiveRebin", "RawProfileLikelihood", "RawAdaptiveBins"),
-                ("Smoothed", "AdaptiveRebin", "ProfileLikelihood", "AdaptiveBins"),
+                ("Raw", "AdaptiveRebin", "RawProfileLikelihood"),
+                ("Smoothed", "AdaptiveRebin", "ProfileLikelihood"),
             ]
 
-        for spectrum_label, rebin_mode, curve_key, bins_key in profile_entries:
+        pl_curves = {}
+        for spectrum_label, rebin_mode, curve_key in profile_entries:
             y_values = np.nan_to_num(
-                as_curve(profile_row[curve_key]), nan=0.0, posinf=0.0, neginf=0.0
+                as_curve(sigma_row[curve_key]), nan=0.0, posinf=0.0, neginf=0.0
             )
+            pl_curves[(spectrum_label, rebin_mode)] = y_values
             significance_peak = max(significance_peak, float(np.max(y_values)))
-            if bins_key in profile_row.index:
-                grouped_bins = np.nan_to_num(
-                    as_curve(profile_row[bins_key]), nan=0.0, posinf=0.0, neginf=0.0
-                )
-            else:
-                grouped_bins = np.full_like(profile_exposure, float(total_bins_default), dtype=float)
-
-            if len(grouped_bins) != len(profile_exposure):
-                grouped_bins = np.interp(
-                    profile_exposure,
-                    np.linspace(profile_exposure[0], profile_exposure[-1], len(grouped_bins)),
-                    grouped_bins,
-                )
-
-            style = profile_styles[(spectrum_label, rebin_mode)]
+            style = style_map[(spectrum_label, rebin_mode)]
             label = f"{spectrum_label} {rebin_mode}"
             fig.add_trace(
                 go.Scatter(
-                    x=profile_exposure,
+                    x=exposure_grid,
                     y=y_values,
                     mode="lines",
                     name=label,
@@ -415,19 +367,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     line_shape="linear",
                 ),
                 row=1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=profile_exposure,
-                    y=grouped_bins,
-                    mode="lines",
-                    name=f"{label} bins",
-                    line=dict(color=style["color"], dash=style["dash"], width=max(1, style["width"] - 1)),
-                    line_shape="linear",
-                    showlegend=False,
-                ),
-                row=2,
                 col=1,
             )
             comparison_rows.append(
@@ -439,13 +378,38 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "OpHits": int(ophits_value),
                     "AdjCl": int(adjcl_value),
                     "Threshold": float(args.threshold),
-                    "Exposure": as_curve(profile_row["Exposure"]).tolist(),
+                    "Exposure": exposure_grid.tolist(),
                     "SignificanceType": "ProfileLikelihood",
                     "SpectrumType": spectrum_label,
                     "RebinMode": rebin_mode,
                     "Significance": y_values.tolist(),
-                    "GroupedBins": grouped_bins.tolist(),
                 }
+            )
+
+        # Bottom panel: smoothing effect = Raw PL − Smoothed PL for each rebin mode.
+        # Positive = smoothing reduces significance; negative = smoothing boosts it.
+        smoothing_peak = 0.0
+        rebin_modes_present = list(dict.fromkeys(rm for _, rm, _ in profile_entries))
+        for rebin_mode in rebin_modes_present:
+            raw_key = ("Raw", rebin_mode)
+            smo_key = ("Smoothed", rebin_mode)
+            if raw_key not in pl_curves or smo_key not in pl_curves:
+                continue
+            smoothing_effect = pl_curves[raw_key] - pl_curves[smo_key]
+            smoothing_peak = max(smoothing_peak, float(np.max(np.abs(smoothing_effect))))
+            style = style_map[smo_key]
+            fig.add_trace(
+                go.Scatter(
+                    x=exposure_grid,
+                    y=smoothing_effect,
+                    mode="lines",
+                    name=f"Smoothing {rebin_mode}",
+                    line=dict(color=style["color"], dash=style["dash"], width=max(1, style["width"] - 1)),
+                    line_shape="linear",
+                    showlegend=False,
+                ),
+                row=2,
+                col=1,
             )
 
         fig = format_coustom_plotly(
@@ -464,7 +428,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
             row=1,
             col=1,
         )
-        fig.update_yaxes(title="Grouped bins", row=2, col=1)
+        sym = max(0.1, 1.1 * smoothing_peak)
+        fig.update_yaxes(title="Smoothing effect (σ)", range=[-sym, sym], row=2, col=1)
+        fig.add_hline(y=0, line=dict(color="gray", dash="dot", width=1), row=2, col=1)
 
         figure_name = f"{energy}_HEP_ProfileLikelihood_AdaptiveRebin_Comparison"
         if args.threshold is not None:
@@ -487,7 +453,7 @@ if comparison_rows:
         comparison_df,
         data_path,
         config=args.config[0],
-        name=None,
+        name=name,
         subfolder=args.folder.lower(),
         filename="HEP_AdaptiveRebin_Comparison",
         rm=args.rewrite,

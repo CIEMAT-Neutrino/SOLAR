@@ -1,3 +1,12 @@
+# Local browser and tool caches
+.mozilla/firefox/
+.npm/
+.tools/
+
+# Generated presentation exports
+presentations/*.html
+presentations/*.pdf
+
 # See https://help.github.com/ignore-files/ for more about ignoring files.
 .vscode-remote-containers
 .vscode-server

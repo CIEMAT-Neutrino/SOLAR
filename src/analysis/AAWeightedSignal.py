@@ -134,6 +134,8 @@ for config in configs:
                         "Type": "signal" if "marley" in name else "background",
                         "Surface": surface,
                         "#Hits": run["Reco"]["NHits"][mask],
+                        "#OpHits": run["Reco"]["MatchedOpFlashNHits"][mask],
+                        "#AdjCls": run["Reco"]["AdjClNum"][mask],
                         "Counts": run["Reco"][weight][mask],
                         "TrueEnergy": run["Reco"]["SignalParticleK"][mask],
                         "RecoEnergy": run["Reco"]["SolarEnergy"][mask],

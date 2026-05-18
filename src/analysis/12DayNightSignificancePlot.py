@@ -129,6 +129,35 @@ for config, name, energy in product(args.config, args.name, args.energy):
         threshold_idx = np.where(energy_axis > args.threshold)[0][0]
     bin_width = float(np.median(np.diff(energy_axis))) if len(energy_axis) > 1 else 1.0
 
+    selected_bins = significance_bins_df.loc[
+        (significance_bins_df["Config"] == config)
+        * (significance_bins_df["Name"] == name)
+        * (significance_bins_df["EnergyLabel"] == energy)
+        * (significance_bins_df["NHits"] == int(nhits_value))
+        * (significance_bins_df["OpHits"] == int(ophits_value))
+        * (significance_bins_df["AdjCl"] == int(adjcl_value))
+    ].copy()
+    if selected_bins.empty:
+        rprint(
+            f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+        )
+        continue
+
+    selected_bins = selected_bins.sort_values("BinIndex")
+    stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
+    raw_significance = np.nan_to_num(
+        np.asarray(selected_bins["RawGaussian"].values, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+    smoothed_significance = np.nan_to_num(
+        np.asarray(selected_bins["Gaussian"].values, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+
     fig = make_subplots(
         rows=2,
         cols=1,
@@ -265,6 +294,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
             (raw_counts_per_energy, detector_mass * args.exposure * errors, "Raw"),
             (smoothed_counts_per_energy, smoothed_errors_per_energy, "Smoothed"),
         ]:
+            significance_values = None
+            if component_label == "Solar Day":
+                sig_source = smoothed_significance if spectrum_type == "Smoothed" else raw_significance
+                energy_len = len(energy_axis)
+                bin_len = len(sig_source)
+                if bin_len >= energy_len:
+                    significance_values = sig_source[:energy_len]
+                else:
+                    significance_values = np.pad(
+                        sig_source,
+                        (0, energy_len - bin_len),
+                        mode="constant",
+                        constant_values=np.nan,
+                    )
 
             day_night_counts.append(
                 {
@@ -272,11 +315,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Config": config,
                     "Name": name,
                     "Exposure": args.exposure,
-                    "Smoothed": spectrum_type == "Smoothed",
+                    "SpectrumType": spectrum_type,
                     "Component": component_label,
                     "Energy": energy_axis,
                     "Counts": counts_per_energy,
                     "CountsError": errors_per_energy,
+                    # Add the per bin significance values for this spectrum type
+                    "Significance": significance_values,
+                    "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
                 }
             )
 
@@ -317,35 +363,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     if signal_day_raw is None or signal_night_raw is None:
         continue
-
-    selected_bins = significance_bins_df.loc[
-        (significance_bins_df["Config"] == config)
-        * (significance_bins_df["Name"] == name)
-        * (significance_bins_df["EnergyLabel"] == energy)
-        * (significance_bins_df["NHits"] == int(nhits_value))
-        * (significance_bins_df["OpHits"] == int(ophits_value))
-        * (significance_bins_df["AdjCl"] == int(adjcl_value))
-    ].copy()
-    if selected_bins.empty:
-        rprint(
-            f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
-        )
-        continue
-
-    selected_bins = selected_bins.sort_values("BinIndex")
-    stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
-    raw_significance = np.nan_to_num(
-        np.asarray(selected_bins["RawGaussian"].values, dtype=float),
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0,
-    )
-    smoothed_significance = np.nan_to_num(
-        np.asarray(selected_bins["Gaussian"].values, dtype=float),
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0,
-    )
 
     for label, significance, dash, showlegend in [
         (args.reference, raw_significance, "dot", False),
@@ -475,7 +492,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig,
         save_path,
         config=config,
-        name=None,
+        name=name,
         subfolder=args.folder.lower(),
         filename=figure_name,
         rm=args.rewrite,

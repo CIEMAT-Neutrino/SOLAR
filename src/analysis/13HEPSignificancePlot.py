@@ -76,6 +76,20 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--pkl_label",
+    type=str,
+    default="highest",
+    help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked'). "
+         "Controls both the input pkl path and a suffix added to the output filename.",
+)
+parser.add_argument(
+    "--local-metric",
+    type=str,
+    choices=["AsimovTS", "Fisher", "SNR", "Purity"],
+    default="AsimovTS",
+    help="Metric to show in the Local Proxy lower panel (AsimovTS, Fisher, SNR, Purity)",
+)
 args = parser.parse_args()
 
 
@@ -215,7 +229,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     sigma_map_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/"
-        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_highest_{args.analysis}.pkl"
+        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{args.pkl_label}_{args.analysis}.pkl"
     )
     if not os.path.exists(sigma_map_path):
         rprint(
@@ -364,6 +378,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             rows=2,
             cols=1,
             row_heights=[0.7, 0.3],
+            specs=[[{}], [{"secondary_y": True}]],
             vertical_spacing=0.0,
             subplot_titles=(
                 f"{energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}",
@@ -506,8 +521,56 @@ for config, name, energy in product(args.config, args.name, args.energy):
             adaptive_energy,
             adaptive_width,
         ) if adaptive_energy.size > 0 else np.zeros(0, dtype=float)
+        no_rebin_signal_counts = scale * signal_tail_counts
+        no_rebin_background_counts = scale * background_tail_counts
+        no_rebin_b_safe = np.maximum(no_rebin_background_counts, 1e-12)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            no_rebin_asimov = 2.0 * (
+                (no_rebin_signal_counts + no_rebin_b_safe)
+                * np.log1p(np.divide(no_rebin_signal_counts, no_rebin_b_safe))
+                - no_rebin_signal_counts
+            )
+        no_rebin_asimov = np.nan_to_num(no_rebin_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+        no_rebin_asimov_density = np.divide(
+            no_rebin_asimov,
+            no_rebin_width,
+            out=np.zeros_like(no_rebin_asimov),
+            where=no_rebin_width > 0,
+        )
+        no_rebin_fisher_density = np.divide(
+            np.divide(
+                no_rebin_signal_counts * no_rebin_signal_counts,
+                no_rebin_b_safe,
+                out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+                where=no_rebin_b_safe > 0,
+            ),
+            no_rebin_width,
+            out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+            where=no_rebin_width > 0,
+        )
+        no_rebin_snr_density = np.divide(
+            np.divide(
+                no_rebin_signal_counts,
+                np.sqrt(no_rebin_b_safe),
+                out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+                where=no_rebin_b_safe > 0,
+            ),
+            no_rebin_width,
+            out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+            where=no_rebin_width > 0,
+        )
+        no_rebin_purity = np.divide(
+            no_rebin_signal_counts,
+            no_rebin_signal_counts + no_rebin_background_counts,
+            out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+            where=(no_rebin_signal_counts + no_rebin_background_counts) > 0,
+        )
 
-        if adaptive_energy.size > 0:
+        # Local densities used in lower-panel and for exporting to HEP_Counts
+        raw_local_density = _density(raw_no_rebin_significance, no_rebin_width)
+        smooth_local_density = _density(smoothed_no_rebin_significance, no_rebin_width)
+
+        if mode == "rigorous" and adaptive_energy.size > 0:
             _add_rebinned_overlay(
                 fig,
                 adaptive_energy,
@@ -569,6 +632,28 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     row=2,
                     col=1,
                 )
+                adaptive_purity = np.divide(
+                    grouped_signal_counts,
+                    grouped_signal_counts + grouped_background_counts,
+                    out=np.zeros_like(grouped_signal_counts, dtype=float),
+                    where=(grouped_signal_counts + grouped_background_counts) > 0,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=adaptive_energy,
+                        y=adaptive_purity,
+                        mode="lines",
+                        name="Signal purity",
+                        line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
+                        legend="legend3",
+                        legendgroup="purity_overlay",
+                        legendgrouptitle=dict(text="Signal Purity"),
+                        showlegend=True,
+                    ),
+                    row=2,
+                    col=1,
+                    secondary_y=True,
+                )
                 lower_panel_max = max(
                     lower_panel_max,
                     float(np.max(smoothed_adaptive_significance)),
@@ -604,7 +689,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     y=intuitive_density,
                     mode="lines",
                     name="Smoothed",
-                    line=dict(color=compare[1], width=3, dash="solid"),
+                    line=dict(color="rgb(31,119,180)", width=3, dash="solid"),
                     line_shape="hvh",
                     legend="legend2",
                     legendgroup="proxy",
@@ -613,24 +698,51 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 row=2,
                 col=1,
             )
-            if adaptive_energy.size > 0:
-                adaptive_density = _density(smoothed_adaptive_significance, adaptive_width)
-                lower_panel_max = max(lower_panel_max, float(np.max(adaptive_density)))
-                fig.add_trace(
-                    go.Bar(
-                        x=adaptive_energy,
-                        y=adaptive_density,
-                        width=adaptive_width,
-                        name="Adaptive",
-                        marker_color="rgba(31,119,180,0.22)",
-                        marker_line=dict(color="rgb(31,119,180)", width=1),
-                        legend="legend2",
-                        legendgroup="proxy",
-                        showlegend=True,
-                    ),
-                    row=2,
-                    col=1,
-                )
+            if args.local_metric == "AsimovTS":
+                plotted_vals = no_rebin_asimov_density
+                legend_name = "Asimov TS density"
+            elif args.local_metric == "Fisher":
+                plotted_vals = no_rebin_fisher_density
+                legend_name = "Fisher info density"
+            elif args.local_metric == "SNR":
+                plotted_vals = no_rebin_snr_density
+                legend_name = "SNR density"
+            else:
+                plotted_vals = no_rebin_purity
+                legend_name = "Signal purity"
+
+            lower_panel_max = max(lower_panel_max, float(np.max(plotted_vals)))
+            fig.add_trace(
+                go.Bar(
+                    x=no_rebin_energy,
+                    y=plotted_vals,
+                    width=no_rebin_width,
+                    name=legend_name,
+                    marker_color="rgba(31,119,180,0.22)",
+                    marker_line=dict(color="rgb(31,119,180)", width=1),
+                    legend="legend2",
+                    legendgroup="proxy",
+                    showlegend=True,
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=no_rebin_energy,
+                    y=no_rebin_purity,
+                    mode="lines",
+                    name="Signal purity",
+                    line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
+                    legend="legend3",
+                    legendgroup="purity_overlay",
+                    legendgrouptitle=dict(text="Signal Purity"),
+                    showlegend=True,
+                ),
+                row=2,
+                col=1,
+                secondary_y=True,
+            )
 
         fig = format_coustom_plotly(
             fig,
@@ -644,8 +756,21 @@ for config, name, energy in product(args.config, args.name, args.energy):
             add_watermark=False,
         )
         fig.update_layout(
-            legend=dict(font=dict(size=12), bgcolor="rgba(255,255,255,0.7)"),
-            legend2=dict(font=dict(size=12), x=0.74, y=0.06, bgcolor="rgba(255,255,255,0.7)"),
+            legend=dict(
+                font=dict(size=12),
+                x=0.75, y=0.99, xanchor="left", yanchor="top",
+                bgcolor="rgba(255,255,255,0.7)",
+            ),
+            legend2=dict(
+                font=dict(size=12),
+                x=0.01, y=0.3, xanchor="left", yanchor="top",
+                bgcolor="rgba(255,255,255,0.7)",
+            ),
+            legend3=dict(
+                font=dict(size=12),
+                x=0.75, y=0.3, xanchor="left", yanchor="top",
+                bgcolor="rgba(255,255,255,0.7)",
+            ),
         )
         fig.update_yaxes(
             type="log",
@@ -662,16 +787,30 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if mode == "rigorous":
             fig.update_yaxes(
                 title=reference_label,
-                range=[0, max(1.0, 1.1 * lower_panel_max)] if args.zoom else [0, 6],
+                range=[0, max(1.0, 1.1 * lower_panel_max)],
                 row=2,
                 col=1,
+            )
+            fig.update_yaxes(
+                title="Purity",
+                range=[0, 1],
+                row=2,
+                col=1,
+                secondary_y=True,
             )
         else:
             fig.update_yaxes(
                 title=local_proxy_label,
-                range=[0, max(1.0, 1.1 * lower_panel_max)] if args.zoom else [0, 6],
+                range=[0, max(1.0, 1.1 * lower_panel_max)],
                 row=2,
                 col=1,
+            )
+            fig.update_yaxes(
+                title="Purity",
+                range=[0, 1],
+                row=2,
+                col=1,
+                secondary_y=True,
             )
         
         fig.update_xaxes(showticklabels=False, row=1, col=1, range=[8, 30])
@@ -683,12 +822,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
         figure_name = (
             f"{energy}_HEP_Significance_{args.reference}_Exposure_{args.exposure:.0f}_{_figure_suffix(mode)}"
         )
+        if args.pkl_label != "highest":
+            figure_name += f"_{args.pkl_label}"
         
         save_figure(
             fig,
             save_path,
             config=config,
-            name=None,
+            name=name,
             subfolder=args.folder.lower(),
             filename=figure_name,
             rm=args.rewrite,
@@ -767,8 +908,33 @@ for config, name, energy in product(args.config, args.name, args.energy):
             }
         )
 
-        raw_local_density = _density(raw_no_rebin_significance, no_rebin_width)
-        smooth_local_density = _density(smoothed_no_rebin_significance, no_rebin_width)
+        # Compute candidate metrics for export and choose the one requested
+        s = scale * signal_tail_counts
+        b = scale * background_tail_counts
+        eps = 1e-12
+        b_safe = np.maximum(b, eps)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            q_asimov = 2.0 * ((s + b_safe) * np.log1p(np.divide(s, b_safe)) - s)
+        q_asimov = np.nan_to_num(q_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+        fisher = np.divide(s * s, b_safe, out=np.zeros_like(s, dtype=float), where=b_safe > 0)
+        snr = np.divide(s, np.sqrt(b_safe), out=np.zeros_like(s, dtype=float), where=b_safe > 0)
+        purity = np.divide(s, (s + b_safe), out=np.zeros_like(s, dtype=float), where=(s + b_safe) > 0)
+        if args.local_metric == "AsimovTS":
+            to_save = np.divide(q_asimov, no_rebin_width, out=np.zeros_like(q_asimov), where=no_rebin_width > 0).tolist()
+            binmode_name = "AsimovTS"
+        elif args.local_metric == "Fisher":
+            to_save = np.divide(fisher, no_rebin_width, out=np.zeros_like(fisher), where=no_rebin_width > 0).tolist()
+            binmode_name = "Fisher"
+        elif args.local_metric == "SNR":
+            to_save = np.divide(snr, no_rebin_width, out=np.zeros_like(snr), where=no_rebin_width > 0).tolist()
+            binmode_name = "SNR"
+        elif args.local_metric == "Purity":
+            to_save = purity.tolist()
+            binmode_name = "Purity"
+        else:
+            to_save = np.divide(q_asimov, no_rebin_width, out=np.zeros_like(q_asimov), where=no_rebin_width > 0).tolist()
+            binmode_name = "AsimovTS"
+        
         hep_significance.append(
             {
                 "Config": config,
@@ -805,6 +971,26 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "BinWidth": no_rebin_width.tolist(),
             }
         )
+        hep_significance.append(
+            {
+                "Config": config,
+                "Name": name,
+                "EnergyLabel": energy,
+                "Variable": saved_variable,
+                "ProxyReference": reference_for_bins,
+                "SpectrumType": "Smoothed",
+                "Component": None,
+                "BinMode": binmode_name,
+                "NHits": int(nhits_value),
+                "OpHits": int(ophits_value),
+                "AdjCl": int(adjcl_value),
+                "Energy": no_rebin_energy.tolist(),
+                "Significance": to_save,
+                "BinWidth": no_rebin_width.tolist(),
+            }
+        )
+
+        # (local densities will be stored into existing `hep` rows below)
 
     for component, component_label, oscillation, mean_label, _, _, color in component_specs:
         comp_df = this_plot_df.loc[
@@ -817,6 +1003,47 @@ for config, name, energy in product(args.config, args.name, args.energy):
         counts = _safe_array(comp_df["Counts"].values[0])
         component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
         smoothed_counts = smooth_threshold_slice(counts, 0, component_smoothing_config)
+        
+        # Compute Asimov TS density proxy for this component
+        # This shows the significance contribution of each energy bin in this component
+        scaled_counts = scale * counts
+        scaled_smoothed_counts = scale * smoothed_counts
+        
+        # Asimov TS for raw spectrum (component counts vs zero background)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            raw_asimov = 2.0 * (
+                (scaled_counts)
+                * np.log1p(np.divide(scaled_counts, 1e-12))
+                - scaled_counts
+            )
+        raw_asimov = np.nan_to_num(raw_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Asimov TS for smoothed spectrum
+        with np.errstate(divide="ignore", invalid="ignore"):
+            smoothed_asimov = 2.0 * (
+                (scaled_smoothed_counts)
+                * np.log1p(np.divide(scaled_smoothed_counts, 1e-12))
+                - scaled_smoothed_counts
+            )
+        smoothed_asimov = np.nan_to_num(smoothed_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Compute bin widths for density normalization
+        hep_bin_widths = np.diff(hep_rebin)
+        
+        raw_asimov_density = np.divide(
+            raw_asimov,
+            hep_bin_widths,
+            out=np.zeros_like(raw_asimov),
+            where=hep_bin_widths > 0,
+        )
+        smoothed_asimov_density = np.divide(
+            smoothed_asimov,
+            hep_bin_widths,
+            out=np.zeros_like(smoothed_asimov),
+            where=hep_bin_widths > 0,
+        )
+        
+        tail_slice = slice(no_rebin_start, no_rebin_start + len(no_rebin_energy))
         hep_counts.append(
             {
                 "Config": config,
@@ -827,8 +1054,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "NHits": int(nhits_value),
                 "OpHits": int(ophits_value),
                 "AdjCl": int(adjcl_value),
-                "Energy": hep_rebin_centers.tolist(),
-                "Counts": (scale * counts).tolist(),
+                "Energy": no_rebin_energy.tolist(),
+                "Counts": (scale * counts[tail_slice]).tolist(),
+                "Significance": (raw_local_density.tolist() if component == "hep" else None),
+                "SignificanceLabel": ("Asimov TS density" if component == "hep" else None),
             }
         )
         hep_counts.append(
@@ -841,31 +1070,33 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "NHits": int(nhits_value),
                 "OpHits": int(ophits_value),
                 "AdjCl": int(adjcl_value),
-                "Energy": hep_rebin_centers.tolist(),
-                "Counts": (scale * smoothed_counts).tolist(),
+                "Energy": no_rebin_energy.tolist(),
+                "Counts": (scale * smoothed_counts[tail_slice]).tolist(),
+                "Significance": (smooth_local_density.tolist() if component == "hep" else None),
+                "SignificanceLabel": ("Asimov TS density" if component == "hep" else None),
             }
         )
 
-if hep_counts:
+if hep_counts and args.pkl_label == "highest":
     save_df(
         pd.DataFrame(hep_counts),
         data_path,
         config=args.config[0],
         name=args.name[0],
         subfolder=args.folder.lower(),
-        filename=f"{args.config[0]}_{args.name[0]}_HEP_Counts",
+        filename="HEP_Counts",
         rm=args.rewrite,
         debug=args.debug,
     )
 
-if hep_significance:
+if hep_significance and args.pkl_label == "highest":
     save_df(
         pd.DataFrame(hep_significance),
         data_path,
         config=args.config[0],
         name=args.name[0],
         subfolder=args.folder.lower(),
-        filename=f"{args.config[0]}_{args.name[0]}_HEP_Significance",
+        filename="HEP_Significance",
         rm=args.rewrite,
         debug=args.debug,
     )

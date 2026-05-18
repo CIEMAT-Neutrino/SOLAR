@@ -117,10 +117,16 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--pkl_label",
+    type=str,
+    default="highest",
+    help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked'). "
+         "Controls both the input pkl path and a suffix added to the output filename.",
+)
 
 args = parser.parse_args()
 
-hep_counts = []
 hep_exposure = []
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="HEP", dimensions="1d", stage="significance"
@@ -146,18 +152,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
     sigmas_df = pd.read_pickle(
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results.pkl",
     )
-    profile_sigmas_df = None
-    profile_path = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_{energy}_{args.analysis}_ProfileLikelihood.pkl"
-    )
-    if os.path.exists(profile_path):
-        profile_sigmas_df = pd.read_pickle(profile_path)
-    elif args.reference == "ProfileLikelihood":
-        rprint(
-            f"[yellow][WARNING][/yellow] Missing profile-likelihood curve payload for {config} {name} {energy}: {profile_path}"
-        )
-
     required_base_columns = ["Config", "Name", "NHits", "OpHits", "AdjCl", "Exposure"]
     missing_base_columns = [
         column for column in required_base_columns if column not in sigmas_df.columns
@@ -170,8 +164,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
         continue
 
     for sigma_name, sigma_label in zip(
-        ["highest"],
-        ["Highest"],
+        [args.pkl_label],
+        [args.pkl_label.replace("_", " ").title()],
     ):
 
         sigma = pd.read_pickle(
@@ -244,20 +238,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "dash": "solid",
                 "raw_dash": "dot",
             },
+            "PreIsotonicProfileLikelihood": {
+                "label": "pre-isotonic PL",
+                "dash": "dashdot",
+                "raw_dash": "dashdot",
+            },
         }
         for significance, style in significance_plot_styles.items():
-            if significance == "ProfileLikelihood":
-                if profile_sigmas_df is None or profile_sigmas_df.empty:
-                    continue
-                this_plot_sigmas = profile_sigmas_df[
-                    (profile_sigmas_df["Config"] == config)
-                    * (profile_sigmas_df["Name"] == name)
-                    * (profile_sigmas_df["NHits"] == int(ref_plot["NHits"]))
-                    * (profile_sigmas_df["OpHits"] == int(ref_plot["OpHits"]))
-                    * (profile_sigmas_df["AdjCl"] == int(ref_plot["AdjCl"]))
-                ].copy()
-            else:
-                this_plot_sigmas = plot_sigmas.copy()
+            this_plot_sigmas = plot_sigmas.copy()
 
             if this_plot_sigmas.empty:
                 continue
@@ -330,7 +318,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 }
             )
 
-            if significance != args.reference:
+            is_pre_isotonic = significance.startswith("PreIsotonic")
+            if significance != args.reference and not is_pre_isotonic:
                 continue
             y_upper = None
             y_lower = None
@@ -344,14 +333,15 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 float(np.max(significance_plus)),
             )
 
+            trace_color = "rgba(180,0,0,0.6)" if is_pre_isotonic else "black"
             add_reference_pair_traces(
                 fig,
                 x=exposure_values,
                 y_raw=raw_significance,
                 y_smoothed=smoothed_significance,
                 name=style["label"],
-                raw_style={"color": "black", "dash": style["raw_dash"], "width": 2},
-                smoothed_style={"color": "black", "dash": style["dash"], "width": 2},
+                raw_style={"color": trace_color, "dash": style["raw_dash"], "width": 1},
+                smoothed_style={"color": trace_color, "dash": style["dash"], "width": 2},
                 row=1,
                 col=1,
                 legend="legend",
@@ -384,7 +374,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig.update_xaxes(
             range=[-1, args.exposure],
             zeroline=False,
-            title=f"Exposure (kT·year)",
+            title=f"Exposure (years)",
             row=1,
             col=1,
         )
@@ -417,6 +407,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.threshold is not None:
             figure_name += f"_Threshold_{args.threshold:.0f}"
 
+        if args.pkl_label != "highest":
+            figure_name += f"_{args.pkl_label}"
+
         if args.stacked:
             figure_name += "_Stacked"
 
@@ -424,24 +417,25 @@ for config, name, energy in product(args.config, args.name, args.energy):
             fig,
             save_path,
             config=config,
-            name=None,
+            name=name,
             subfolder=args.folder.lower(),
             filename=figure_name,
             rm=args.rewrite,
             debug=args.plot,
         )
 
-        for df, df_name in zip(
-            [pd.DataFrame(hep_counts), pd.DataFrame(hep_exposure)],
-            ["HEP_Counts", "HEP_Exposure"],
-        ):
-            save_df(
-                df,
-                data_path,
-                config=config,
-                name=None,
-                subfolder=args.folder.lower(),
-                filename=df_name,
-                rm=args.rewrite,
-                debug=args.debug,
-            )
+        if args.pkl_label == "highest":
+            for df, df_name in zip(
+                [pd.DataFrame(hep_exposure)],
+                ["HEP_Exposure"],
+            ):
+                save_df(
+                    df,
+                    data_path,
+                    config=config,
+                    name=name,
+                    subfolder=args.folder.lower(),
+                    filename=df_name,
+                    rm=args.rewrite,
+                    debug=args.debug,
+                )

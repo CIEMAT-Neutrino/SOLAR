@@ -1,99 +1,93 @@
 import numpy as np
 
-from typing import Optional
+from typing import Optional, Union
 
 
-def _solve_beta_hat_background_only(
-    observed: np.ndarray,
-    background: np.ndarray,
-    rel_background_uncertainty: np.ndarray,
-) -> np.ndarray:
-    """Solve profiled background scale factors for mu=0 with Gaussian priors."""
-    obs = np.nan_to_num(np.asarray(observed, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
-    bkg = np.nan_to_num(np.asarray(background, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
-    rel_unc = np.nan_to_num(
-        np.asarray(rel_background_uncertainty, dtype=float),
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0,
-    )
+def _solve_global_beta_hat(
+    N_total: float,
+    B_total: float,
+    sigma_rel: float,
+) -> float:
+    """Solve global background scale factor for mu=0 with a Gaussian prior.
 
-    beta_hat = np.ones_like(bkg, dtype=float)
-    mask = (bkg > 0.0) & (rel_unc > 0.0)
-    if not np.any(mask):
-        return beta_hat
-
-    n = obs[mask]
-    b = bkg[mask]
-    sigma2 = np.power(rel_unc[mask], 2)
-
-    # Closed-form root of derivative equation for each bin under mu=0.
-    # beta^2 + (b*sigma^2 - 1) * beta - n*sigma^2 = 0
-    linear = b * sigma2 - 1.0
-    discriminant = np.maximum(np.power(linear, 2) + 4.0 * n * sigma2, 0.0)
-    positive_root = (-linear + np.sqrt(discriminant)) / 2.0
-    beta_hat[mask] = np.maximum(positive_root, 1e-12)
-    return beta_hat
+    Closed-form positive root of:  β² + (B·σ² – 1)·β – N·σ² = 0
+    """
+    if B_total <= 0.0 or sigma_rel <= 0.0:
+        return 1.0
+    sigma2 = sigma_rel ** 2
+    linear = B_total * sigma2 - 1.0
+    discriminant = max(float(linear ** 2) + 4.0 * N_total * sigma2, 0.0)
+    return max((-linear + discriminant ** 0.5) / 2.0, 1e-12)
 
 
 def evaluate_profile_likelihood_discovery(
     signal: np.ndarray,
     background: np.ndarray,
-    background_uncertainty: Optional[np.ndarray] = None,
+    background_uncertainty: Optional[Union[float, np.ndarray]] = None,
     min_expected: float = 1e-12,
 ) -> float:
-    """
-    Evaluate median discovery significance from a profile-likelihood ratio test.
+    """Evaluate median discovery significance from a profile-likelihood ratio test.
 
-    This computes q0 for Asimov data generated at s+b with mu=1 and tests mu=0,
-    profiling per-bin background normalization nuisance parameters constrained by
-    Gaussian priors derived from `background_uncertainty / background`.
+    Computes q0 for Asimov data at s+b testing mu=0 with a single global
+    background normalization nuisance β ~ Gaussian(1, σ_rel) profiled jointly
+    across all bins.  One global β per analysis window correctly represents a
+    rate systematic that is fully correlated across bins; independent per-bin
+    nuisances are over-parameterized and allow the null hypothesis to absorb
+    signal bin-by-bin, causing an artificial plateau in significance vs exposure.
+
+    background_uncertainty:
+        float  → global fractional σ_rel applied to the summed background.
+        array  → per-bin absolute errors σ_i = σ_rel · b_i; effective σ_rel
+                 recovered as Σσ_i / Σb_i (exact when σ_rel is uniform, which
+                 is the normal case).  Provided for backward compatibility with
+                 single-bin callers in evaluate_significance.
+        None   → no background uncertainty; β is fixed at 1.
     """
     signal_arr = np.nan_to_num(np.asarray(signal, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
     background_arr = np.nan_to_num(
-        np.asarray(background, dtype=float),
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0,
+        np.asarray(background, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
     )
     if signal_arr.size != background_arr.size:
         raise ValueError("signal and background must have the same length")
 
     if background_uncertainty is None:
-        rel_unc = np.zeros_like(background_arr, dtype=float)
+        sigma_rel = 0.0
+    elif np.ndim(background_uncertainty) == 0:
+        sigma_rel = float(background_uncertainty)
     else:
         bkg_unc = np.nan_to_num(
-            np.asarray(background_uncertainty, dtype=float),
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
+            np.asarray(background_uncertainty, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
         )
-        if bkg_unc.size != background_arr.size:
-            raise ValueError("background_uncertainty and background must have the same length")
-        rel_unc = np.divide(
-            bkg_unc,
-            background_arr,
-            out=np.zeros_like(background_arr, dtype=float),
-            where=background_arr > 0.0,
-        )
+        B_sum = float(np.sum(background_arr))
+        sigma_rel = float(np.sum(bkg_unc)) / B_sum if B_sum > 0.0 else 0.0
 
     observed = signal_arr + background_arr
-    expected_sb = np.maximum(observed, min_expected)
 
-    # Asimov s+b point is the unconditional MLE: mu=1 and beta=1.
-    ll_sb = np.sum(observed * np.log(expected_sb) - expected_sb)
+    N_total = float(np.sum(observed))
+    B_total = float(np.sum(background_arr))
+    beta_hat = _solve_global_beta_hat(N_total, B_total, sigma_rel)
 
-    beta_hat_null = _solve_beta_hat_background_only(observed, background_arr, rel_unc)
-    expected_null = np.maximum(beta_hat_null * background_arr, min_expected)
-    ll_null = np.sum(observed * np.log(expected_null) - expected_null)
+    # Compute the LLR directly as the Poisson deviance between Asimov data
+    # and the null-hypothesis expectation, avoiding catastrophic cancellation.
+    # The naive form  2*(ll_sb - ll_null) subtracts two O(N·logN) quantities
+    # whose difference is O(S²/B) at low exposure — losing log10(N·logN·B/S²)
+    # significant digits and producing large oscillations in sqrt(q0).
+    #
+    # The stable form:  q0 = 2·Σ [n_i·log(n_i/μ_null_i) − (n_i − μ_null_i)]
+    #                           + ((β̂−1)/σ_rel)²
+    # Each per-bin term is O((n−μ)²/μ) when n≈μ — numerically tiny directly.
+    expected_null = np.maximum(beta_hat * background_arr, min_expected)
+    n_over_mu = np.where(
+        (observed > 0) & (expected_null > 0),
+        np.maximum(observed, min_expected) / expected_null,
+        1.0,
+    )
+    per_bin_llr = observed * np.log(n_over_mu) - (np.maximum(observed, min_expected) - expected_null)
+    q0 = 2.0 * float(np.sum(per_bin_llr))
+    if sigma_rel > 0.0:
+        q0 += ((beta_hat - 1.0) / sigma_rel) ** 2
 
-    pull_mask = rel_unc > 0.0
-    if np.any(pull_mask):
-        ll_null -= 0.5 * np.sum(
-            np.power((beta_hat_null[pull_mask] - 1.0) / rel_unc[pull_mask], 2)
-        )
-
-    q0 = max(0.0, 2.0 * (ll_sb - ll_null))
+    q0 = max(0.0, q0)
     return float(np.sqrt(q0))
 
 

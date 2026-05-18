@@ -20,7 +20,7 @@ def get_selection_cuts(config: str, name: str, energy: str, args: argparse.Names
 
     sigma_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_highest_HEP.pkl"
+        f"{config}/{name}/{config}_{name}_{args.pkl_label}_HEP.pkl"
     )
     if not os.path.exists(sigma_path):
         return None
@@ -77,6 +77,12 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--pkl_label",
+    type=str,
+    default="highest",
+    help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked').",
+)
 args = parser.parse_args()
 
 comparison_styles = {
@@ -133,7 +139,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         (exposure_df["Config"] == config)
         & (exposure_df["Name"] == name)
         & (exposure_df["EnergyLabel"] == energy)
-        & (exposure_df["Variable"].isin(["Asimov", "Gaussian"]))
+        & (exposure_df["Variable"].isin(["Asimov", "Gaussian", "ProfileLikelihood"]))
     ].copy()
 
     for column, value in [
@@ -144,23 +150,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if column in exposure_rows.columns:
             exposure_rows = exposure_rows.loc[exposure_rows[column] == int(value)].copy()
 
-    profile_rows = pd.DataFrame()
-    profile_path = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_{energy}_{args.analysis}_ProfileLikelihood.pkl"
-    )
-    if os.path.exists(profile_path):
-        profile_df = pd.read_pickle(profile_path)
-        profile_rows = profile_df.loc[
-            (profile_df["Config"] == config)
-            & (profile_df["Name"] == name)
-            & (profile_df["Energy"] == energy)
-            & (profile_df["NHits"] == int(nhits_value))
-            & (profile_df["OpHits"] == int(ophits_value))
-            & (profile_df["AdjCl"] == int(adjcl_value))
-        ].copy()
-
-    if exposure_rows.empty and profile_rows.empty:
+    if exposure_rows.empty:
         rprint(
             f"[yellow][WARNING][/yellow] Missing exposure comparison inputs for {config} {name} {energy} after cut filtering NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
         )
@@ -171,75 +161,45 @@ for config, name, energy in product(args.config, args.name, args.energy):
     significance_max = 0.0
     for variable in reference_variables:
         row = exposure_rows.loc[exposure_rows["Variable"] == variable]
-        if variable == "ProfileLikelihood":
-            row = profile_rows
         if row.empty:
             continue
 
         xvals = np.asarray(row["Exposure"].values[0], dtype=float)
-        if variable == "ProfileLikelihood":
-            yvals = np.nan_to_num(
-                np.asarray(row["ProfileLikelihood"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
-            )
-            yraw = np.nan_to_num(
-                np.asarray(row["RawProfileLikelihood"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
-            )
+        yvals = np.nan_to_num(
+            np.asarray(row["Significance"].values[0], dtype=float),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        yraw = np.nan_to_num(
+            np.asarray(row["RawSignificance"].values[0], dtype=float),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        y_upper = None
+        y_lower = None
+        if (
+            "SignificanceError+" in row.columns
+            and "SignificanceError-" in row.columns
+            and len(row["SignificanceError+"].values) > 0
+            and len(row["SignificanceError-"].values) > 0
+        ):
             err_plus = np.nan_to_num(
-                np.asarray(row["ProfileLikelihood+Error"].values[0], dtype=float),
+                np.asarray(row["SignificanceError+"].values[0], dtype=float),
                 nan=0.0,
                 posinf=0.0,
                 neginf=0.0,
             )
             err_minus = np.nan_to_num(
-                np.asarray(row["ProfileLikelihood-Error"].values[0], dtype=float),
+                np.asarray(row["SignificanceError-"].values[0], dtype=float),
                 nan=0.0,
                 posinf=0.0,
                 neginf=0.0,
             )
-            y_upper = err_plus
-            y_lower = err_minus
-        else:
-            yvals = np.nan_to_num(
-                np.asarray(row["Significance"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
-            )
-            yraw = np.nan_to_num(
-                np.asarray(row["RawSignificance"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
-            )
-            y_upper = None
-            y_lower = None
-            if (
-                "SignificanceError+" in row.columns
-                and "SignificanceError-" in row.columns
-                and len(row["SignificanceError+"].values) > 0
-                and len(row["SignificanceError-"].values) > 0
-            ):
-                err_plus = np.nan_to_num(
-                    np.asarray(row["SignificanceError+"].values[0], dtype=float),
-                    nan=0.0,
-                    posinf=0.0,
-                    neginf=0.0,
-                )
-                err_minus = np.nan_to_num(
-                    np.asarray(row["SignificanceError-"].values[0], dtype=float),
-                    nan=0.0,
-                    posinf=0.0,
-                    neginf=0.0,
-                )
-                if err_plus.size == yvals.size and err_minus.size == yvals.size:
-                    y_upper = yvals + err_plus
-                    y_lower = yvals - err_minus
+            if err_plus.size == yvals.size and err_minus.size == yvals.size:
+                y_upper = yvals + err_plus
+                y_lower = yvals - err_minus
 
         significance_max = max(significance_max, float(np.max(yvals)), float(np.max(yraw)))
         if y_upper is not None:
@@ -314,7 +274,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig,
         save_path,
         config=config,
-        name=None,
+        name=name,
         subfolder=args.folder.lower(),
         filename=figure_name,
         rm=args.rewrite,

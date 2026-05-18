@@ -172,30 +172,37 @@ for config in configs:
             * len(np.arange(0.00, detector_z / 4, 20)),
             description=f"Iterating over cut configurations for {energy}...",
         ):
-            if this_fiducial_x == 0 and this_fiducial_y == 0 and this_fiducial_z == 0:
-                mask = np.ones(len(run["Reco"]["RecoX"]), dtype=bool)
+            # Quality cuts must always be applied so that the fid=(0,0,0) baseline
+            # is comparable to fid>0 points. Previously fid=(0,0,0) used
+            # mask=ones, bypassing OpFlash and surface requirements and inflating
+            # its significance over every non-zero fiducial value.
+            quality_mask = (
+                (
+                    run["Reco"]["SignalParticleSurface"] >= 0
+                    if is_surface_background(str(root), sample_key)
+                    else np.ones(
+                        len(run["Reco"]["SignalParticleSurface"]), dtype=bool
+                    )
+                )
+                * (
+                    (run["Reco"]["SignalParticleSurface"] < 3)
+                    if (
+                        args.folder in ["Reduced", "Truncated"]
+                        and is_surface_background(str(root), sample_key)
+                    )
+                    else np.ones(
+                        len(run["Reco"]["SignalParticleSurface"]), dtype=bool
+                    )
+                )
+                * (run["Reco"]["MatchedOpFlashPlane"] == 0)
+                * (run["Reco"]["MatchedOpFlashPE"] > 0)
+            )
 
+            if this_fiducial_x == 0 and this_fiducial_y == 0 and this_fiducial_z == 0:
+                mask = quality_mask
             else:
                 mask = (
-                    (
-                        run["Reco"]["SignalParticleSurface"] >= 0
-                        if is_surface_background(str(root), sample_key)
-                        else np.ones(
-                            len(run["Reco"]["SignalParticleSurface"]), dtype=bool
-                        )
-                    )
-                    * (
-                        (run["Reco"]["SignalParticleSurface"] < 3)
-                        if (
-                            args.folder in ["Reduced", "Truncated"]
-                            and is_surface_background(str(root), sample_key)
-                        )
-                        else np.ones(
-                            len(run["Reco"]["SignalParticleSurface"]), dtype=bool
-                        )
-                    )
-                    * (run["Reco"]["MatchedOpFlashPlane"] == 0)
-                    * (run["Reco"]["MatchedOpFlashPE"] > 0)
+                    quality_mask
                     * (
                         np.absolute(run["Reco"]["RecoX"]) > this_fiducial_x
                         if config == "hd_1x2x6_lateralAPA"
@@ -203,6 +210,9 @@ for config in configs:
                             np.absolute(run["Reco"]["RecoX"])
                             < detector_x / 2 - this_fiducial_x
                             if config == "hd_1x2x6_centralAPA"
+                            # VD workspace geometry simulates one drift only (upper X boundary);
+                            # the real detector is symmetric about X = -DETECTOR_MAX_X.
+                            # Fiducialize from the top boundary only.
                             else run["Reco"]["RecoX"] < detector_x / 2 - this_fiducial_x
                         )
                     )
