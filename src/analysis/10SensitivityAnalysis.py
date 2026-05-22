@@ -185,6 +185,15 @@ parser.add_argument(
     default=get_analysis_threshold(str(root), "FIDUCIALIZATION", stage="MC", fallback=0.0),
 )
 parser.add_argument(
+    "--daynight_mc_threshold",
+    type=float,
+    help=(
+        "Minimum summed MCCounts per essential background component required in DayNight cut scan. "
+        "This is configured in import/analysis.json and can be overridden on the CLI."
+    ),
+    default=get_analysis_threshold(str(root), "DAYNIGHT", stage="MC", fallback=0.0),
+)
+parser.add_argument(
     "--hep_mc_threshold",
     type=float,
     help=(
@@ -222,14 +231,34 @@ parser.add_argument(
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help=(
+        "Oscillation backend propagated to all workflow stages. "
+        "'file' uses pre-computed pkl oscillograms; "
+        "'prob3'/'nufast' compute oscillation on-the-fly (no pkl files required)."
+    ),
+)
+parser.add_argument(
+    "--optimization",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Run Silverman/Scott bandwidth optimization before each analysis stage and apply "
+        "the per-config/name recommended sigma at runtime. Off by default. "
+        "Pass --optimization to enable."
+    ),
+)
+parser.add_argument(
     "--smoothing_strategy",
     type=str,
     default="silverman",
     choices=["silverman", "scott", "none"],
     help=(
-        "Bandwidth rule for smoothing optimization run before each analysis stage. "
-        "'silverman' (default) and 'scott' apply analytic rule-of-thumb estimation; "
-        "'none' skips the optimization step entirely."
+        "Bandwidth rule used when --optimization is enabled. "
+        "'silverman' (default) and 'scott' apply analytic rule-of-thumb estimation."
     ),
 )
 parser.add_argument(
@@ -237,8 +266,8 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=True,
     help=(
-        "Write the optimized sigma back into import/analysis.json before running each "
-        "analysis stage. Pass --no-apply-smoothing to compute and report only."
+        "Write the optimized sigma into import/analysis.json (CONFIG_OVERRIDES + global fallback) "
+        "when --optimization is enabled. Pass --no-apply-smoothing to compute and report only."
     ),
 )
 
@@ -331,6 +360,10 @@ def base_args_for(config: str, folder: str, include_background: bool = False) ->
     return base_args
 
 
+def oscillation_args_for() -> List[str]:
+    return ["--oscillation_backend", args.oscillation_backend]
+
+
 
 def run_shared_prerequisites(config: str, folder: str, available_names: List[str]):
     if not args.computation:
@@ -345,7 +378,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     if args.fiducialization:
         for name in available_names:
             sample_args = base_args + ["--name", name]
-            run_analysis_script("0XFiducializeSignal.py", sample_args + energy_args)
+            run_analysis_script("0XFiducializeSignal.py", sample_args + energy_args + oscillation_args_for())
     else:
         rprint("[cyan][INFO][/cyan] Skipping 0XFiducializeSignal.py (--no-fiducialization).")
 
@@ -367,15 +400,42 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             sample_args = base_args + ["--name", name]
             run_analysis_script(
                 "11AnalysisSignal.py",
-                sample_args + analysis_selection_args + energy_args + cut_args,
+                sample_args + analysis_selection_args + energy_args + cut_args + oscillation_args_for(),
             )
     else:
         rprint("[cyan][INFO][/cyan] Skipping 11AnalysisSignal.py (--no-rebin).")
 
 
 
+def _set_smoothing_env(analysis_name: str, config: str, name: str, folder: str) -> None:
+    """Read recommended sigma from optimizer output and export as env var for child processes."""
+    from pathlib import Path
+    import json as _json
+    sigmas = []
+    for energy in args.energy:
+        sigma_path = (
+            Path(str(root)) / "data" / "smoothing" / config / name
+            / f"{folder.lower()}_{energy}_{analysis_name}_sigma.json"
+        )
+        if sigma_path.exists():
+            try:
+                data = _json.loads(sigma_path.read_text())
+                s = float(data.get("recommended_sigma", 0.0))
+                if s > 0:
+                    sigmas.append(s)
+            except Exception:
+                pass
+    if sigmas:
+        sigma = max(sigmas)
+        os.environ[f"SOLAR_SMOOTHING_SIGMA_{analysis_name.upper()}"] = str(sigma)
+        rprint(
+            f"[green][SMOOTHING][/green] {config}/{name} {analysis_name}: "
+            f"env sigma={sigma:.4f} bins"
+        )
+
+
 def run_smoothing_optimization(config: str, folder: str, name: str, analysis_name: str):
-    if args.smoothing_strategy == "none":
+    if not args.optimization or args.smoothing_strategy == "none":
         return
     script_path = f"{root}/scripts/optimize_smoothing.py"
     if not os.path.exists(script_path):
@@ -393,6 +453,7 @@ def run_smoothing_optimization(config: str, folder: str, name: str, analysis_nam
         "--patch" if args.apply_smoothing else "--no-patch",
     ]
     run_python_command(command, label="optimize_smoothing.py", stop_on_error=False)
+    _set_smoothing_env(analysis_name, config, name, folder)
 
 
 def run_daynight_stage(config: str, folder: str, name: str):
@@ -407,13 +468,16 @@ def run_daynight_stage(config: str, folder: str, name: str):
     run_analysis_script("10FiducializationPlot.py", plot_base_args + ["--analysis", "DayNight"])
     if args.computation:
         if args.significance:
-            run_analysis_script("12DayNight.py", analysis_base_args + common_args + uncertainty_args)
+            run_analysis_script("12DayNight.py", analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(args.daynight_mc_threshold)])
         run_analysis_script(
             "0ZBestSigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference],
         )
     run_analysis_script("12DayNightExposurePlot.py", analysis_base_args + common_args + uncertainty_args)
-    run_analysis_script("12DayNightSignificancePlot.py", analysis_base_args + common_args + uncertainty_args)
+    run_analysis_script(
+        "0ZSignificancePlot.py",
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"],
+    )
 
 
 
@@ -567,18 +631,18 @@ def run_hep_stage(config: str, folder: str, name: str):
         analysis_base_args + common_args + uncertainty_args + ["--reference", hep_significance_reference, "--pkl_label", "highest_spiked"],
     )
     run_analysis_script(
-        "13HEPSignificancePlot.py",
+        "0ZSignificancePlot.py",
         analysis_base_args
         + common_args
         + uncertainty_args
-        + ["--reference", hep_significance_reference, "--bottom-panel-mode", "both"],
+        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both"],
     )
     run_analysis_script(
-        "13HEPSignificancePlot.py",
+        "0ZSignificancePlot.py",
         analysis_base_args
         + common_args
         + uncertainty_args
-        + ["--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl_label", "highest_spiked"],
+        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl-label", "highest_spiked"],
     )
     run_analysis_script("13HEPSignificanceComparisonPlot.py", analysis_base_args + common_args + uncertainty_args)
     run_analysis_script("13HEPExposureComparisonPlot.py", analysis_base_args + common_args + uncertainty_args)
@@ -602,7 +666,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         if args.computation and args.significance:
             run_analysis_script(
                 "14SensitivityTemplateCompute.py",
-                plot_base_args + reference_args + energy_args + uncertainty_args + ["--template", "all"],
+                plot_base_args + reference_args + energy_args + uncertainty_args + ["--template", "all"] + oscillation_args_for(),
             )
             run_analysis_script(
                 "14Sensitivity.py",
@@ -610,11 +674,15 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             )
         run_analysis_script(
             "14SensitivityTemplatePlot.py",
-            plot_base_args + reference_args + energy_args + ["--template", "all"],
+            plot_base_args + reference_args + energy_args + ["--template", "all"] + oscillation_args_for(),
         )
         run_analysis_script(
             "14SensitivityContourPlot.py",
             background_base_args + reference_args + energy_args,
+        )
+        run_analysis_script(
+            "0ZSignificancePlot.py",
+            plot_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity"],
         )
 
 

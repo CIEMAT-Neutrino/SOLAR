@@ -8,6 +8,7 @@ from presentation_common import (
     ROOT,
     STANDARD_CONFIGS,
     analysis_json_globs,
+    compute_fiducial_mass_kt,
     config_alias,
     default_pdf_export_enabled,
     energy_candidates,
@@ -74,8 +75,8 @@ def parse_args():
 def output_markdown_path(energy, folder):
     folder_label = folder.title()
     if energy == DEFAULT_ENERGY:
-        return ROOT / "presentations" / f"{folder_label}DayNightSignificanceWorkflow.md"
-    return ROOT / "presentations" / f"{energy}{folder_label}DayNightSignificanceWorkflow.md"
+        return ROOT / "output" / "presentations" / f"{folder_label}DayNightSignificanceWorkflow.md"
+    return ROOT / "output" / "presentations" / f"{energy}{folder_label}DayNightSignificanceWorkflow.md"
 
 
 
@@ -153,6 +154,12 @@ def gather_fiducial_rows(energy):
                     "FidZ": vals.get("FiducialZ"),
                     "BeforeFid": vals.get("NoFiducialSignificance", vals.get("RawSignificance")),
                     "AfterFid": vals.get("BestFiducialSignificance", vals.get("SmoothedSignificance")),
+                    "Exposure": compute_fiducial_mass_kt(
+                        cfg,
+                        vals.get("FiducialX"),
+                        vals.get("FiducialY"),
+                        vals.get("FiducialZ"),
+                    ),
                 }
             )
 
@@ -200,25 +207,29 @@ def gather_daynight_plot_specs(folder, energy):
 
 
 def _find_fiducial_plot(folder, config_key, label, energy):
+    root_dir = ROOT / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
     candidate_dirs = [
-        ROOT / "images" / "solar" / "fiducial" / config_key / folder,
-        ROOT / "images" / "solar" / "fiducial" / config_key / folder / "marley",
-        ROOT / "images" / "solar" / "fiducial" / folder / config_key,
-        ROOT / "images" / "solar" / "fiducial" / folder / config_key / "marley",
+        root_dir / config_key / "marley" / folder,
+        root_dir / folder / config_key / "marley",
+        root_dir / config_key / folder,
+        root_dir / folder / config_key,
     ]
     patterns = [
-        f"{config_key}_{energy_label}_DAYNIGHT_{label}Fiducial_Significance*.png",
         f"{config_key}_marley_{energy_label}_DAYNIGHT_{label}Fiducial_Significance*.png",
-        f"{config_key}_{energy_label}_{label}Fiducial_Significance*.png",
+        f"{config_key}_{energy_label}_DAYNIGHT_{label}Fiducial_Significance*.png",
         f"{config_key}_marley_{energy_label}_{label}Fiducial_Significance*.png",
+        f"{config_key}_{energy_label}_{label}Fiducial_Significance*.png",
     ]
+    candidates = []
     for base_dir in candidate_dirs:
         if not base_dir.exists():
             continue
-        match = find_latest(base_dir, patterns)
-        if match is not None:
-            return match.relative_to(ROOT).as_posix()
+        for pattern in patterns:
+            candidates.extend(base_dir.glob(pattern))
+    match = pick_most_recent(candidates)
+    if match is not None:
+        return match.relative_to(ROOT).as_posix()
     return None
 
 
@@ -266,18 +277,18 @@ def render_fid_table(folder, rows):
     lines = [
         f"### {title}",
         "",
-        "| Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
 
     if not filtered_rows:
-        lines.append("| *(no DAYNIGHT entries found)* | - | - | - | - | - |")
+        lines.append("| *(no DAYNIGHT entries found)* | - | - | - | - | - | - |")
         return "\n".join(lines)
 
     for row in filtered_rows:
         lines.append(
             "| "
-            + f"{config_alias(row['Config'])} | {fmt_int(row['FidX'])} | {fmt_int(row['FidY'])} | {fmt_int(row['FidZ'])} | {fmt_float(row['BeforeFid'])} | {fmt_float(row['AfterFid'])} |"
+            + f"{config_alias(row['Config'])} | {fmt_int(row['FidX'])} | {fmt_int(row['FidY'])} | {fmt_int(row['FidZ'])} | {fmt_float(row['BeforeFid'])} | {fmt_float(row['AfterFid'])} | {fmt_float(row.get('Exposure'), digits=2)} |"
         )
 
     return "\n".join(lines)
@@ -295,11 +306,11 @@ def render_daynight_plot_slides(plot_specs):
                         "<div class=\"two-col\">",
                         "  <div>",
                         "    <p><strong>Significance</strong></p>",
-                        f"    <img src=\"../{spec['significance']}\">",
+                        f"    <img src=\"../../{spec['significance']}\">",
                         "  </div>",
                         "  <div>",
                         "    <p><strong>Exposure</strong></p>",
-                        f"    <img src=\"../{spec['exposure']}\">",
+                        f"    <img src=\"../../{spec['exposure']}\">",
                         "  </div>",
                         "</div>",
                     ]
@@ -327,12 +338,12 @@ def render_fiducial_plot_slides(folder, specs):
     for spec in specs:
         if spec["best"] or spec["no"]:
             best_img = (
-                f"    <img src=\"../{spec['best']}\">"
+                f"    <img src=\"../../{spec['best']}\">"
                 if spec["best"]
                 else "    <p>Best fiducial plot not available.</p>"
             )
             no_img = (
-                f"    <img src=\"../{spec['no']}\">"
+                f"    <img src=\"../../{spec['no']}\">"
                 if spec["no"]
                 else "    <p>No fiducial plot not available.</p>"
             )
@@ -451,19 +462,19 @@ def build_markdown(
     
     ### Workflow Outputs
     
-    - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../data/solar/fiducial/truncated/BestFiducials.json)
-    - Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../data/analysis/best-sigma-json/daynight/truncated)
-    - Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../data/analysis/daynight-json/truncated)
+    - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
+    - Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../../data/analysis/best-sigma-json/daynight/truncated)
+    - Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated)
-    - Figures: [images/analysis/day-night/truncated](../images/analysis/day-night/truncated)
+    - Figures: [images/analysis/day-night/truncated](../../images/analysis/day-night/truncated)
     
     ---
     
     ### Day-Night Discovery Statistic
 
-    - [src/analysis/12DayNight.py](../src/analysis/12DayNight.py) forms the baseline spectrum as background plus the day signal, using $B_i = B_i^{{raw}}/2 + S_i^{{day}}$ and the corresponding smoothed components above threshold.
+    - [src/analysis/12DayNight.py](../../src/analysis/12DayNight.py) forms the baseline spectrum as background plus the day signal, using $B_i = B_i^{{raw}}/2 + S_i^{{day}}$ and the corresponding smoothed components above threshold.
     - The discovery spectrum is the day-night difference, $\Delta S_i = S_i^{{night}} - S_i^{{day}}$, evaluated in the thresholded energy region.
-    - Per-bin discovery proxies are computed with `evaluate_significance(..., type="gaussian")` in [lib/lib_sigma.py](../lib/lib_sigma.py), then combined into the global curve as:
+    - Per-bin discovery proxies are computed with `evaluate_significance(..., type="gaussian")` in [lib/lib_sigma.py](../../lib/lib_sigma.py), then combined into the global curve as:
     $$
     Z_{{global}} = \sqrt{{\sum_i Z_i^2}}.
     $$
@@ -472,7 +483,7 @@ def build_markdown(
     
     ### Day-Night Discovery Statistic Details
 
-    - [src/analysis/12DayNight.py](../src/analysis/12DayNight.py) stores both the plain Gaussian curve and an alternate version with background-statistical uncertainty included; this workflow does not perform a likelihood or chi-square fit.
+    - [src/analysis/12DayNight.py](../../src/analysis/12DayNight.py) stores both the plain Gaussian curve and an alternate version with background-statistical uncertainty included; this workflow does not perform a likelihood or chi-square fit.
     - Smoothing is only used to build alternate component spectra: each component is smoothed separately, and the threshold slice keeps unsmoothed bins below threshold while replacing bins above threshold with their smoothed values.
 
     ---

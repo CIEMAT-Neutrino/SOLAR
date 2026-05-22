@@ -53,7 +53,7 @@ parser.add_argument(
     "--signal_uncertainty",
     type=float,
     help="The signal uncertainty for the analysis",
-    default=0.04,
+    default=0.3,
 )
 parser.add_argument(
     "--background_uncertainty",
@@ -140,14 +140,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
     )
 
-    for bkg, bkg_label, color in [
-        ("neutron", "neutron", "green"),
-        ("gamma", "gamma", "black"),
-    ]:
-        bkg_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{args.folder.lower()}/HEP/{config}/{bkg}/{config}_{bkg}_{energy}_Rebin.pkl"
-        )
-        plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
+    for bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy):
+        plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
 
     sigmas_df = pd.read_pickle(
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results.pkl",
@@ -294,29 +288,35 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 neginf=0.0,
             )
 
-            hep_exposure.append(
-                {
-                    "Geometry": info["GEOMETRY"],
-                    "Config": config,
-                    "Name": name,
-                    "NHits": int(ref_plot["NHits"]),
-                    "OpHits": int(ref_plot["OpHits"]),
-                    "AdjCl": int(ref_plot["AdjCl"]),
-                    "Exposure": exposure_values,
-                    "EnergyLabel": energy,
-                    "Variable": significance,
-                    "Significance": smoothed_significance,
-                    "RawSignificance": raw_significance,
-                    "SignificanceError+": np.subtract(
-                        significance_plus,
-                        smoothed_significance,
-                    ),
-                    "SignificanceError-": np.subtract(
-                        smoothed_significance,
-                        significance_minus,
-                    ),
-                }
-            )
+            for spectrum_type, this_significance in zip(
+                ["Smoothed", "Raw"],
+                [smoothed_significance, raw_significance]
+            ):
+                if significance.startswith("PreIsotonic"):
+                    continue
+                hep_exposure.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "NHits": int(ref_plot["NHits"]),
+                        "OpHits": int(ref_plot["OpHits"]),
+                        "AdjCl": int(ref_plot["AdjCl"]),
+                        "Exposure": exposure_values,
+                        "EnergyLabel": energy,
+                        "Variable": significance,
+                        "SpectrumType": spectrum_type,
+                        "Significance": this_significance,
+                        "SignificanceError+": np.subtract(
+                            significance_plus,
+                            smoothed_significance,
+                        ) if spectrum_type == "Smoothed" else None,
+                        "SignificanceError-": np.subtract(
+                            smoothed_significance,
+                            significance_minus,
+                        ) if spectrum_type == "Smoothed" else None,
+                    }
+                )
 
             is_pre_isotonic = significance.startswith("PreIsotonic")
             if significance != args.reference and not is_pre_isotonic:
@@ -437,5 +437,5 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     subfolder=args.folder.lower(),
                     filename=df_name,
                     rm=args.rewrite,
-                    debug=args.debug,
+                    debug=True,
                 )

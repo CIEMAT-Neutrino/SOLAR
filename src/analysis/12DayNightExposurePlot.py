@@ -94,7 +94,7 @@ parser.add_argument(
     "--signal_uncertainty",
     type=float,
     help="The signal uncertainty for the analysis",
-    default=0.04,
+    default=0.00,
 )
 parser.add_argument(
     "--background_uncertainty",
@@ -124,14 +124,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
     )
     df_list.append(signal_df)
-    for bkg, bkg_label in [
-        ("neutron", "neutron"),
-        ("gamma", "gamma"),
-    ]:
-        bkg_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{args.folder.lower()}/DAYNIGHT/{config}/{bkg}/{config}_{bkg}_{energy}_Rebin.pkl"
-        )
-        df_list.append(bkg_df)
+    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
+        df_list.append(pd.read_pickle(filepath))
 
     plot_df = pd.concat(df_list, ignore_index=True)
 
@@ -197,118 +191,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
             * (plot_sigmas["AdjCl"] == ref_plot["AdjCl"])
         ].copy()
 
-        # display(ref_plot)
         fig = make_subplots(
             rows=1,
             cols=1,
             subplot_titles=(f"{energy}, min#Hits {ref_plot['NHits']:.0f}, min#OpHits {ref_plot['OpHits']:.0f}, max#AdjCl {ref_plot['AdjCl']:.0f}",),
         )
-
-        # for jdx, (
-        #     component,
-        #     component_label,
-        #     osc,
-        #     mean,
-        #     legend_group,
-        #     legend_group_title,
-        #     color,
-        #     dash,
-        # ) in enumerate(
-        #     zip(
-        #         ["Solar", "Solar", "neutron", "gamma"],
-        #         ["Solar Day", "Solar Night", "Neutron", "Gamma"],
-        #         ["Osc", "Osc", "Truth", "Truth"],
-        #         ["Day", "Night", "Mean", "Mean"],
-        #         [0, 0, 1, 1],
-        #         ["Signal", "Signal", "Background", "Background"],
-        #         [compare[1], compare[0], "rgb(15,133,84)", "black"],
-        #         ["dash", "dash", "solid", "solid"],
-        #     )
-        # ):
-
-        #     comp_df = this_plot_df.loc[
-        #         (this_plot_df["Component"] == component)
-        #         * (this_plot_df["Oscillation"] == osc)
-        #         * (this_plot_df["Mean"] == mean)
-        #     ].copy()
-
-        #     if comp_df.empty:
-        #         rprint(
-        #             f"[yellow][WARNING] Not found {component_label} for {config} {name} {energy}[/yellow]"
-        #         )
-        #         continue
-
-        #     energy_axis = np.asarray(comp_df["Energy"].values[0], dtype=float)
-        #     counts = np.asarray(comp_df["Counts"].values[0], dtype=float)
-        #     errors = np.asarray(comp_df["Error"].values[0], dtype=float)
-        #     mc_counts = np.asarray(comp_df["MCCounts"].values[0], dtype=float) if "MCCounts" in comp_df.columns else None
-        #     component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
-        #     raw_counts_per_energy = (
-        #         detector_mass * args.exposure * np.asarray(comp_df["Counts/Energy"].values[0], dtype=float)
-        #     )
-        #     threshold_idx = np.where(energy_axis > args.threshold)[0][0]
-        #     smoothed_counts = smooth_threshold_slice(counts, threshold_idx, component_smoothing_config)
-        #     smoothed_errors = errors.copy()
-        #     smoothed_errors[threshold_idx:] = smooth_histogram_errors(
-        #         errors[threshold_idx:],
-        #         component_smoothing_config,
-        #         counts=counts[threshold_idx:],
-        #         mc_counts=mc_counts[threshold_idx:] if mc_counts is not None else None,
-        #     )
-        #     bin_width = float(np.median(np.diff(energy_axis))) if len(energy_axis) > 1 else 1.0
-        #     smoothed_counts_per_energy = detector_mass * args.exposure * smoothed_counts / bin_width
-        #     smoothed_errors_per_energy = detector_mass * args.exposure * smoothed_errors / bin_width
-
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=energy_axis,
-            #         y=raw_counts_per_energy,
-            #         name=component_label,
-            #         mode="lines",
-            #         line_shape="hvh",
-            #         line=dict(color=color, width=2, dash="dot"),
-            #         opacity=0.45,
-            #         legend="legend",
-            #         legendgroup=legend_group,
-            #         legendgrouptitle=dict(text=f"{legend_group_title}"),
-            #         showlegend=False,
-            #     ),
-            #     row=1,
-            #     col=1,
-            # )
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=energy_axis,
-            #         y=smoothed_counts_per_energy,
-            #         name=component_label,
-            #         mode="lines",
-            #         error_y=dict(
-            #             type="data",
-            #             array=smoothed_errors_per_energy,
-            #         ),
-            #         line_shape="hvh",
-            #         line=dict(color=color),
-            #         legend="legend",
-            #         legendgroup=legend_group,
-            #         legendgrouptitle=dict(text=f"{legend_group_title}"),
-            #         showlegend=True,
-            #     ),
-            #     row=1,
-            #     col=1,
-            # )
-
-            # day_night_counts.append(
-            #     {
-            #         "Geometry": info["GEOMETRY"],
-            #         "Config": config,
-            #         "Name": name,
-            #         "Exposure": args.exposure,
-            #         "Component": component_label,
-            #         "Energy": energy_axis,
-            #         "Counts": smoothed_counts_per_energy,
-            #         "CountsError": smoothed_errors_per_energy,
-            #     }
-            # )
 
         if plot_sigmas.empty:
             rprint(
@@ -342,24 +229,28 @@ for config, name, energy in product(args.config, args.name, args.energy):
             neginf=0.0,
         )
 
-        day_night_exposure.append(
-            {
-                "Geometry": info["GEOMETRY"],
-                "Config": config,
-                "Name": name,
-                "Exposure": exposure_values,
-                "Significance": smoothed_significance,
-                "RawSignificance": raw_significance,
-                "SignificanceError+": np.subtract(
-                    significance_upper,
-                    smoothed_significance,
-                ),
-                "SignificanceError-": np.subtract(
-                    smoothed_significance,
-                    significance_lower,
-                ),
-            }
-        )
+        for spectrum_type, significance in [
+            ("Raw", raw_significance),
+            ("Smoothed", smoothed_significance)
+        ]:
+            day_night_exposure.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Exposure": exposure_values,
+                    "SpectrumType": spectrum_type,
+                    "Significance": significance,
+                    "SignificanceError+": np.subtract(
+                        significance_upper,
+                        smoothed_significance,
+                    ) if spectrum_type == "Smoothed" else None,
+                    "SignificanceError-": np.subtract(
+                        smoothed_significance,
+                        significance_lower,
+                    ) if spectrum_type == "Smoothed" else None,
+                }
+            )
 
         fig.add_trace(
             go.Scatter(

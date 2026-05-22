@@ -10,27 +10,23 @@ save_path = f"{root}/images/solar/results"
 cuts_path = f"{root}/data/solar/cuts"
 data_path = f"{root}/data/solar/weighted"
 
-
-def _deep_merge_dict(base: dict, update: dict) -> dict:
-    merged = dict(base)
-    for key, value in update.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge_dict(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+_ANALYSIS_LOCAL_DIR = {
+    "DayNight": "daynight-json",
+    "HEP": "hep-json",
+    "Sensitivity": "sensitivity-json",
+}
 
 
-def _merge_and_write_json(path: str, payload: dict) -> None:
-    existing: dict = {}
-    if os.path.exists(path):
-        with open(path, "r") as f_read:
-            existing = json.load(f_read)
-    merged = _deep_merge_dict(existing, payload)
-    if os.path.exists(path):
-        os.remove(path)
-    with open(path, "w") as f_write:
-        json.dump(merged, f_write, indent=4)
+def _load_best_cuts(analysis, folder, config, name):
+    dir_name = _ANALYSIS_LOCAL_DIR.get(analysis)
+    if not dir_name:
+        return {}
+    path = f"{root}/data/analysis/{dir_name}/{folder.lower()}/{config}/{name}/{config}_{name}_highest_{analysis}.json"
+    if not os.path.exists(path):
+        return {}
+    d = json.load(open(path))
+    return d.get(config, {}).get(name, {})
+
 
 
 def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, energy=None, band_fiducials=None):
@@ -119,6 +115,14 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--export_raw", action=argparse.BooleanOptionalAction, default=True, help="Export raw numpy arrays (energy, mask, weights) as pkl files")
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -131,7 +135,7 @@ for path in [save_path, data_path]:
 
 user_input = {
     "workflow": "SIGNIFICANCE",
-    "reduction": {"marley": 1, "gamma": 3, "neutron": 2, "alpha": 1, "radiological": 1},
+
     "directory": {
         "marley": f"signal/{args.folder.lower()}",
         "neutron": f"background/{args.folder.lower()}",
@@ -179,6 +183,7 @@ run = compute_reco_workflow(
             "DEFAULT_SIGNAL_AZIMUTH": ["mean", "day", "night"],
             "PARTICLE_TYPE": "signal",
             "PARTICLE_WEIGHTING": "volume",
+            "OSCILLATION_BACKEND": args.oscillation_backend,
         }
         if "marley" in args.name
         else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
@@ -195,14 +200,22 @@ for config in configs:
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 
     for name, energy in product(configs[config], args.energy):
-        save_pkl(run["Reco"]["SignalParticleK"], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisEnergy_{energy}_Ref", rm=user_input["rewrite"], debug=user_input["debug"])
-        save_pkl(run["Reco"][energy], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisData_{energy}_Ref", rm=user_input["rewrite"], debug=user_input["debug"])
-        save_pkl(run["Reco"]["SignalParticleWeight"], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisWeights_{energy}_Ref", rm=user_input["rewrite"], debug=user_input["debug"])
+        if args.export_raw:
+            save_pkl(run["Reco"]["SignalParticleK"], data_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"][energy], data_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["SignalParticleWeight"], data_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
 
         plot_lists = {analysis: [] for analysis in args.analysis}
         fiducials_by_analysis = {analysis: get_best_fiducial(fiducials, config, energy, analysis) for analysis in args.analysis}
         band_fiducials_by_analysis = {analysis: get_best_fiducial_bands(fiducials, config, energy, analysis) for analysis in args.analysis}
         analysis_cache = {}
+        _prev_cut = None
+
+        best_cuts_by_analysis = {}
+        if args.nhits is None and args.ophits is None and args.adjcls is None and args.export_raw:
+            for analysis in args.analysis:
+                cuts = _load_best_cuts(analysis, args.folder, config, name)
+                best_cuts_by_analysis[analysis] = cuts.get(energy, {})
 
         for this_nhit, this_ophit, this_adjcl, (weight, weight_labels, color) in track(
             product(
@@ -214,6 +227,12 @@ for config in configs:
             total=(len(nhits) * len(nhits[3:]) * len(nhits[::-1]) * (3 if "marley" in name else 1) if args.nhits is None and args.ophits is None and args.adjcls is None else 1),
             description=f"Iterating over cut configurations for reco {energy}...",
         ):
+            _cur_cut = (this_nhit, this_ophit, this_adjcl)
+            if _prev_cut is not None and _cur_cut != _prev_cut:
+                for _a in args.analysis:
+                    analysis_cache.pop((_a, *_prev_cut), None)
+            _prev_cut = _cur_cut
+
             for analysis in args.analysis:
                 fiducial = fiducials_by_analysis[analysis]
                 cache_key = (analysis, this_nhit, this_ophit, this_adjcl)
@@ -281,8 +300,8 @@ for config in configs:
                         weights=selected_weights,
                     )
                     h *= cached["mc_filter"]
-                    if args.folder == "Reduced":
-                        h = h / user_input["reduction"][name]
+                    if folder_applies_reduction(str(root), args.folder):
+                        h = h / get_component_reduction_factor(str(root), args.folder, name)
                     h_error = h * cached["h_rel_error"]
                     h_error[np.isnan(h_error)] = 0
 
@@ -308,17 +327,31 @@ for config in configs:
 
                 if this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls and weight == "SignalParticleWeight":
                     analysis_key = analysis.upper()
-                    save_pkl(np.asarray(mask), f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
-                    save_pkl(run["Reco"]["SignalParticleK"][mask], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
-                    save_pkl(run["Reco"][energy][mask], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
-                    save_pkl(run["Reco"][weight][mask], f"{data_path}/{args.folder.lower()}", config, name, filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                    if args.export_raw:
+                        save_pkl(np.asarray(mask), cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"]["SignalParticleK"][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][energy][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][weight][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
 
                     cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name)
-                    cut_dir = f"{cuts_path}/{args.folder.lower()}/{config}/{args.name}"
+                    cut_dir = f"{cuts_path}/{config}/{args.name}/{args.folder.lower()}"
                     if not os.path.exists(cut_dir):
                         os.makedirs(cut_dir)
                     cut_path = f"{cut_dir}/analysis_cuts_{analysis_key}.json"
-                    _merge_and_write_json(cut_path, cut_impact)
+                    merge_and_write_json(cut_path, cut_impact)
+
+                if args.export_raw and weight == "SignalParticleWeight" and best_cuts_by_analysis:
+                    bc = best_cuts_by_analysis.get(analysis, {})
+                    if bc and int(bc.get("NHits", -1)) == this_nhit and int(bc.get("OpHits", -1)) == this_ophit and int(bc.get("AdjCl", -1)) == this_adjcl:
+                        analysis_key = analysis.upper()
+                        save_pkl(np.asarray(mask), cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"]["SignalParticleK"][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][energy][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][weight][mask], cuts_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
+
+        if _prev_cut is not None:
+            for _a in args.analysis:
+                analysis_cache.pop((_a, *_prev_cut), None)
 
         rebin_dict = {"DayNight": daynight_rebin, "Sensitivity": sensitivity_rebin, "HEP": hep_rebin}
         for analysis in args.analysis:

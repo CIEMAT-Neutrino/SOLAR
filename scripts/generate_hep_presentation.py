@@ -5,7 +5,7 @@ import textwrap
 from glob import glob
 from pathlib import Path
 
-from presentation_common import default_pdf_export_enabled, export_marp_pdf
+from presentation_common import compute_fiducial_mass_kt, default_pdf_export_enabled, export_marp_pdf, pick_most_recent
 
 ROOT = Path("/pc/choozdsk01/users/manthey/SOLAR")
 PNFS_HEP = Path("/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP")
@@ -168,8 +168,8 @@ def parse_args():
 def output_markdown_path(energy, folder):
     folder_label = folder.title()
     if energy == DEFAULT_ENERGY:
-        return ROOT / "presentations" / f"{folder_label}HEPSignificanceWorkflow.md"
-    return ROOT / "presentations" / f"{energy}{folder_label}HEPSignificanceWorkflow.md"
+        return ROOT / "output" / "presentations" / f"{folder_label}HEPSignificanceWorkflow.md"
+    return ROOT / "output" / "presentations" / f"{energy}{folder_label}HEPSignificanceWorkflow.md"
 
 
 def energy_candidates(energy):
@@ -279,6 +279,12 @@ def gather_fiducial_rows(energy):
                     "FidZ": vals.get("FiducialZ"),
                     "BeforeFid": vals.get("NoFiducialSignificance", vals.get("RawSignificance")),
                     "AfterFid": vals.get("BestFiducialSignificance", vals.get("SmoothedSignificance")),
+                    "Exposure": compute_fiducial_mass_kt(
+                        cfg,
+                        vals.get("FiducialX"),
+                        vals.get("FiducialY"),
+                        vals.get("FiducialZ"),
+                    ),
                 }
             )
 
@@ -453,12 +459,23 @@ def gather_spiked_debug_specs(folder, energy, reference):
 def _find_fiducial_plot(folder, config_key, label, energy):
     root_dir = ROOT / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
-    # save_figure writes: {root}/images/solar/fiducial/{config}/marley/{folder}/{config}_marley_{energy}_HEP_{label}...
-    canonical_dir = root_dir / config_key / "marley" / folder
-    expected = _find_latest(
-        canonical_dir,
-        [f"{config_key}_marley_{energy_label}_HEP_{label}Fiducial_Significance*.png"],
-    )
+    candidate_dirs = [
+        root_dir / config_key / "marley" / folder,
+        root_dir / folder / config_key / "marley",
+        root_dir / config_key / folder,
+        root_dir / folder / config_key,
+    ]
+    patterns = [
+        f"{config_key}_marley_{energy_label}_HEP_{label}Fiducial_Significance*.png",
+        f"{config_key}_{energy_label}_HEP_{label}Fiducial_Significance*.png",
+    ]
+    candidates = []
+    for base_dir in candidate_dirs:
+        if not base_dir.exists():
+            continue
+        for pattern in patterns:
+            candidates.extend(base_dir.glob(pattern))
+    expected = pick_most_recent(candidates)
     if expected is not None:
         return expected.relative_to(ROOT).as_posix()
     return None
@@ -508,18 +525,18 @@ def render_fid_table(folder, rows):
     lines = [
         f"### {title}",
         "",
-        "| Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
 
     if not filtered_rows:
-        lines.append("| *(no HEP entries found)* | - | - | - | - | - |")
+        lines.append("| *(no HEP entries found)* | - | - | - | - | - | - |")
         return "\n".join(lines)
 
     for row in filtered_rows:
         lines.append(
             "| "
-            + f"{config_alias(row['Config'])} | {fmt_int(row['FidX'])} | {fmt_int(row['FidY'])} | {fmt_int(row['FidZ'])} | {fmt_float(row['BeforeFid'])} | {fmt_float(row['AfterFid'])} |"
+            + f"{config_alias(row['Config'])} | {fmt_int(row['FidX'])} | {fmt_int(row['FidY'])} | {fmt_int(row['FidZ'])} | {fmt_float(row['BeforeFid'])} | {fmt_float(row['AfterFid'])} | {fmt_float(row.get('Exposure'), digits=2)} |"
         )
 
     return "\n".join(lines)
@@ -567,12 +584,12 @@ def render_hep_plot_slides(plot_specs):
     for spec in plot_specs:
         if spec["exposure"] or spec["significance"]:
             significance_block = (
-                f"    <img src=\"../{spec['significance']}\">"
+                f"    <img src=\"../../{spec['significance']}\">"
                 if spec["significance"]
                 else "    <p>Significance plot not available.</p>"
             )
             exposure_block = (
-                f"    <img src=\"../{spec['exposure']}\">"
+                f"    <img src=\"../../{spec['exposure']}\">"
                 if spec["exposure"]
                 else "    <p>Exposure plot not available.</p>"
             )
@@ -620,12 +637,12 @@ def render_fiducial_plot_slides(specs):
     for spec in specs:
         if spec["best"] or spec["no"]:
             best_img = (
-                f"    <img src=\"../{spec['best']}\">"
+                f"    <img src=\"../../{spec['best']}\">"
                 if spec["best"]
                 else "    <p>Best fiducial plot not available.</p>"
             )
             no_img = (
-                f"    <img src=\"../{spec['no']}\">"
+                f"    <img src=\"../../{spec['no']}\">"
                 if spec["no"]
                 else "    <p>No fiducial plot not available.</p>"
             )
@@ -666,11 +683,11 @@ def render_reference_comparison_slides(specs):
                         "<div class=\"two-col\">",
                         "  <div>",
                         "    <p><strong>Significance Reference Comparison</strong></p>",
-                        f"    <img src=\"../{spec['significance']}\">",
+                        f"    <img src=\"../../{spec['significance']}\">",
                         "  </div>",
                         "  <div>",
                         "    <p><strong>Exposure Reference Comparison</strong></p>",
-                        f"    <img src=\"../{spec['exposure']}\">",
+                        f"    <img src=\"../../{spec['exposure']}\">",
                         "  </div>",
                         "</div>",
                     ]
@@ -713,7 +730,7 @@ def render_adaptive_rebin_slides(specs):
                     [
                         "<div>",
                         "  <p><strong>Gaussian</strong></p>",
-                        f"  <img src=\"../{spec['gaussian']}\">",
+                        f"  <img src=\"../../{spec['gaussian']}\">",
                         "</div>",
                     ]
                 )
@@ -724,7 +741,7 @@ def render_adaptive_rebin_slides(specs):
                     [
                         "<div>",
                         "  <p><strong>Asimov</strong></p>",
-                        f"  <img src=\"../{spec['asimov']}\">",
+                        f"  <img src=\"../../{spec['asimov']}\">",
                         "</div>",
                     ]
                 )
@@ -735,7 +752,7 @@ def render_adaptive_rebin_slides(specs):
                     [
                         "<div>",
                         "  <p><strong>ProfileLikelihood</strong></p>",
-                        f"  <img src=\"../{spec['profile']}\">",
+                        f"  <img src=\"../../{spec['profile']}\">",
                         "</div>",
                     ]
                 )
@@ -786,12 +803,12 @@ def render_spiked_debug_slides(specs):
     for spec in specs:
         if spec.get("exposure") or spec.get("significance"):
             exposure_block = (
-                f"    <img src=\"../{spec['exposure']}\">"
+                f"    <img src=\"../../{spec['exposure']}\">"
                 if spec.get("exposure")
                 else "    <p>Exposure plot not available.</p>"
             )
             significance_block = (
-                f"    <img src=\"../{spec['significance']}\">"
+                f"    <img src=\"../../{spec['significance']}\">"
                 if spec.get("significance")
                 else "    <p>Significance plot not available.</p>"
             )
@@ -992,7 +1009,7 @@ def build_markdown(
     - folder: **{selected_title}**
     - analysis: HEP
     - exposure: default **30 years**
-    - threshold in 13HEP.py: from [import/analysis.json](../import/analysis.json) HEP -> THRESHOLDS -> {threshold_rows[folder] if folder in threshold_rows else "(no threshold config found)"}
+    - threshold in 13HEP.py: from [import/analysis.json](../../import/analysis.json) HEP -> THRESHOLDS -> {threshold_rows[folder] if folder in threshold_rows else "(no threshold config found)"}
     - optional cuts override: nhits, ophits, adjcls
     - significance reference in plots: {reference}
     - best-cut selection in 0ZBestSigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
@@ -1001,7 +1018,7 @@ def build_markdown(
 
     ### Workflow Skip Flags
 
-    Used for [src/analysis/10SensitivityAnalysis.py](../src/analysis/10SensitivityAnalysis.py):
+    Used for [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10SensitivityAnalysis.py):
     - `--no-computation`: skip all analysis, run plot macros only
     - `--no-significance`: skip 13HEP.py/12DayNight.py/14Sensitivity.py only
     - `--no-fiducialization`: skip 0XFiducializeSignal.py only
@@ -1011,25 +1028,25 @@ def build_markdown(
 
     ### Workflow Outputs
 
-    - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../data/solar/fiducial/truncated/BestFiducials.json)
-    - Best cut summaries (JSON): [data/analysis/daynight-json/truncated](../data/analysis/daynight-json/truncated)
+    - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
+    - Best cut summaries (JSON): [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
-    - Figures: [images/analysis/hep/truncated](../images/analysis/hep/truncated)
+    - Figures: [images/analysis/hep/truncated](../../images/analysis/hep/truncated)
 
     ---
 
     ### Histogram and Significance Flow I: Building, Smoothing, and Evaluation
 
-    - Step 1: Build HEP rates and threshold region in [src/analysis/13HEP.py](../src/analysis/13HEP.py) per component.
-    - Step 2: Apply component-aware smoothing via [lib/lib_smooth.py](../lib/lib_smooth.py) using HEP smoothing config.
-    - Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/analysis/13HEP.py](../src/analysis/13HEP.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
+    - Step 1: Build HEP rates and threshold region in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) per component.
+    - Step 2: Apply component-aware smoothing via [lib/lib_smooth.py](../../lib/lib_smooth.py) using HEP smoothing config.
+    - Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
     
     ---
 
     ### Histogram and Significance Flow II: Post-Processing and Plotting
 
-    - Step 4: Select the best cut by ProfileLikelihood in [src/analysis/0ZBestSigmas.py](../src/analysis/0ZBestSigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
-    - Step 5: Render exposure/significance and comparison plots in [src/analysis/13HEPExposurePlot.py](../src/analysis/13HEPExposurePlot.py), [src/analysis/13HEPSignificancePlot.py](../src/analysis/13HEPSignificancePlot.py), [src/analysis/13HEPSignificanceComparisonPlot.py](../src/analysis/13HEPSignificanceComparisonPlot.py), and [src/analysis/13HEPExposureComparisonPlot.py](../src/analysis/13HEPExposureComparisonPlot.py).
+    - Step 4: Select the best cut by ProfileLikelihood in [src/analysis/0ZBestSigmas.py](../../src/analysis/0ZBestSigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
+    - Step 5: Render exposure/significance and comparison plots in [src/analysis/13HEPExposurePlot.py](../../src/analysis/13HEPExposurePlot.py), [src/analysis/13HEPSignificancePlot.py](../../src/analysis/13HEPSignificancePlot.py), [src/analysis/13HEPSignificanceComparisonPlot.py](../../src/analysis/13HEPSignificanceComparisonPlot.py), and [src/analysis/13HEPExposureComparisonPlot.py](../../src/analysis/13HEPExposureComparisonPlot.py).
 
     ---
 
@@ -1050,7 +1067,7 @@ def build_markdown(
     ### ProfileLikelihood Smoothing
 
     PL curves are post-processed with **Gaussian kernel smoothing followed by isotonic regression** to produce a continuous, monotone exposure curve:
-      1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/analysis/13HEP.py`](../src/analysis/13HEP.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
+      1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/analysis/13HEP.py`](../../src/analysis/13HEP.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
       2. [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) is then applied to enforce strict monotonicity. It finds the non-decreasing sequence that minimises the L2 distance from the smoothed values, ensuring more data cannot reduce sensitivity.
 
     These steps remove residual numerical oscillations from the profile-likelihood solver at low signal-to-background ratios.
@@ -1088,14 +1105,14 @@ def build_markdown(
 - Table values are read from workflow-generated JSON at generation time.
 - Re-run script to refresh this folder after each workflow run:
     - /usr/bin/python3 scripts/generate_hep_presentation.py --folder {folder}
-- Full mathematical derivations (signal model, PL formulation, adaptive rebinning, BB mask, spike detection): [docs/hep\_likelihood\_derivation.tex](../docs/hep_likelihood_derivation.tex)
+- Full mathematical derivations (signal model, PL formulation, adaptive rebinning, BB mask, spike detection): [docs/hep\_likelihood\_derivation.tex](../../docs/hep_likelihood_derivation.tex)
 
 ---
 
 ### Adaptive Rebinning: Strategy
 
-- Rebinning is applied in [src/analysis/13HEP.py](../src/analysis/13HEP.py) through [lib/lib_smooth.py](../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
-- It is controlled by [import/analysis.json](../import/analysis.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- Rebinning is applied in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) through [lib/lib_smooth.py](../../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
+- It is controlled by [import/analysis.json](../../import/analysis.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
 - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
 - This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
 
@@ -1116,7 +1133,7 @@ $$
 Z = Z\!\left(S_{{\mathrm{{group}}}},\,B_{{\mathrm{{group}}}},\,\sigma_{{B,\mathrm{{group}}}}\\right)
 $$
 
-ProfileLikelihood implementation in [src/analysis/13HEP.py](../src/analysis/13HEP.py):
+ProfileLikelihood implementation in [src/analysis/13HEP.py](../../src/analysis/13HEP.py):
 - PL is computed for **every** analysis cut combination.
 - Original fine binning used throughout — no adaptive rebin. PL is optimal at the finest resolution; the likelihood ratio naturally suppresses bins with negligible signal without merging.
 - A **single global background normalization nuisance** (β ~ Gaussian(1, σ_rel)) is profiled jointly across all bins. See the *Background Normalization Model* slide.

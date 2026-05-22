@@ -84,6 +84,13 @@ parser.add_argument("--test", action=argparse.BooleanOptionalAction)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation backend for signal template convolution. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
+)
 
 args = parser.parse_args()
 
@@ -173,6 +180,7 @@ run = compute_reco_workflow(
         "DEFAULT_SIGNAL_AZIMUTH": ["mean", "day", "night"],
         "PARTICLE_TYPE": "signal",
         "PARTICLE_WEIGHTING": "volume",
+        "OSCILLATION_BACKEND": args.oscillation_backend,
     } if "marley" in args.name else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"},
     workflow="SIGNIFICANCE",
     rm_branches=False,
@@ -189,15 +197,20 @@ for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
-    (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
-        dm2=None,
-        sin13=None,
-        sin12=None,
-        path=f"{info['PATH']}/data/OSCILLATION/pkl/rebin/",
-        ext="pkl",
-        auto=args.test == False,
-        debug=args.debug,
-    )
+    if args.oscillation_backend == "file":
+        (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
+            dm2=None,
+            sin13=None,
+            sin12=None,
+            path=f"{info['PATH']}/data/OSCILLATION/pkl/rebin/",
+            ext="pkl",
+            auto=args.test == False,
+            debug=args.debug,
+        )
+    else:
+        dm2_list   = [analysis_info["SOLAR_DM2"]]
+        sin13_list = [analysis_info["SIN13"]]
+        sin12_list = [analysis_info["SIN12"]]
 
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
@@ -346,9 +359,21 @@ for config in configs:
             if args.debug:
                 rprint(f"dm2: {dm2:.3e}, sin13: {sin13:.3e}, sin12: {sin12:.3e}")
 
-            oscillation_df = pd.read_pickle(
-                f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
-            )
+            if args.oscillation_backend == "file":
+                oscillation_df = pd.read_pickle(
+                    f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
+                )
+            else:
+                from lib.lib_osc import get_oscillation_map
+                osc_map = get_oscillation_map(
+                    backend=args.oscillation_backend,
+                    dm2=[float(dm2)],
+                    sin13=[float(sin13)],
+                    sin12=[float(sin12)],
+                    output="df",
+                    debug=args.debug,
+                )
+                oscillation_df = next(iter(osc_map.values()))
 
             convolved = np.dot(oscillation_df.values, h.T)
 

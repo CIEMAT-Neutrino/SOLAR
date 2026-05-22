@@ -150,9 +150,12 @@ def compute_component_sigma(df: pd.DataFrame, component: str, strategy_fn):
 # analysis.json patcher
 # ---------------------------------------------------------------------------
 
-def _patch_analysis_json(analysis: str, recommended_sigma: float) -> bool:
-    """Write recommended_sigma into every STAGES.*.dimensions.1d.sigma entry
-    under SMOOTHING.ANALYSES.{analysis} in import/analysis.json."""
+def _patch_analysis_json(config: str, name: str, analysis: str, recommended_sigma: float) -> bool:
+    """Write recommended_sigma into analysis.json:
+    1. SMOOTHING.CONFIG_OVERRIDES.{config}.{name}.{analysis} — per-config/name record
+       (runtime sigma delivered via SOLAR_SMOOTHING_SIGMA_{ANALYSIS} env var by orchestrator).
+    2. SMOOTHING.ANALYSES.{analysis}.STAGES.*.dimensions.1d.sigma — global fallback default.
+    """
     analysis_json_path = Path(str(root)) / "import" / "analysis.json"
     if not analysis_json_path.exists():
         return False
@@ -160,18 +163,29 @@ def _patch_analysis_json(analysis: str, recommended_sigma: float) -> bool:
         data = json.loads(analysis_json_path.read_text())
     except Exception:
         return False
+
+    sigma_val = round(float(recommended_sigma), 4)
+
+    # Per-config/name override record
+    (
+        data.setdefault("SMOOTHING", {})
+        .setdefault("CONFIG_OVERRIDES", {})
+        .setdefault(config, {})
+        .setdefault(name, {})[analysis.upper()]
+    ) = {"recommended_sigma": sigma_val}
+
+    # Global fallback: update STAGES sigma for this analysis
     stages = (
         data.get("SMOOTHING", {})
         .get("ANALYSES", {})
         .get(analysis.upper(), {})
         .get("STAGES", {})
     )
-    if not stages:
-        return False
     for stage_cfg in stages.values():
         dims = stage_cfg.get("dimensions", {})
         if "1d" in dims:
-            dims["1d"]["sigma"] = round(float(recommended_sigma), 4)
+            dims["1d"]["sigma"] = sigma_val
+
     try:
         analysis_json_path.write_text(json.dumps(data, indent=2))
     except Exception:
@@ -271,7 +285,7 @@ def run_optimization(config: str, name: str, energy: str, folder: str,
     )
 
     if patch:
-        patched = _patch_analysis_json(analysis, result["recommended_sigma"])
+        patched = _patch_analysis_json(config, name, analysis, result["recommended_sigma"])
         if patched:
             rprint(
                 f"[green][SMOOTHING][/green] Patched import/analysis.json: "

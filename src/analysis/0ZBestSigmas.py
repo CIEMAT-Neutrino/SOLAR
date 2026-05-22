@@ -40,43 +40,6 @@ def _pick_first_row(df: pd.DataFrame):
     return df.iloc[0]
 
 
-def _deep_merge_dict(base: dict, updates: dict) -> dict:
-    """Recursively merge updates into base and return merged dictionary."""
-    merged = dict(base)
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge_dict(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def _merge_and_write_json(path: str, updates: dict, debug: bool = True) -> None:
-    """Load existing JSON (if any), merge updates, remove old file, and write new content."""
-    existing_payload = {}
-
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f_in:
-                loaded = json.load(f_in)
-                if isinstance(loaded, dict):
-                    existing_payload = loaded
-        except (OSError, json.JSONDecodeError) as exc:
-            rprint(
-                f"[yellow][WARNING][/yellow] Could not read existing JSON {path}: {exc}. Replacing file content."
-            )
-
-    merged_payload = _deep_merge_dict(existing_payload, updates)
-
-    if os.path.exists(path):
-        os.remove(path)
-
-    with open(path, "w") as f_out:
-        json.dump(merged_payload, f_out, indent=2)
-
-    if debug:
-        rprint(f"Saved JSON summary to {path}")
-
 
 def save_sigma_summary_json(
     sigma_results,
@@ -93,8 +56,6 @@ def save_sigma_summary_json(
         f"{root}/data/analysis/best-sigma-json/{analysis_dir}/{folder.lower()}/{config}/{name}",
         f"{root}/data/analysis/{analysis_dir}-json/{folder.lower()}/{config}/{name}",
     ]
-    if analysis_dir != "daynight":
-        local_out_dirs.append(f"{root}/data/analysis/daynight-json/{folder.lower()}/{config}/{name}")
 
     payload = {}
     for (cfg, sample_name, energy_label), values in sigma_results.items():
@@ -108,7 +69,7 @@ def save_sigma_summary_json(
     try:
         if not os.path.exists(pnfs_out_dir):
             os.makedirs(pnfs_out_dir)
-        _merge_and_write_json(pnfs_out_path, payload, debug=debug)
+        merge_and_write_json(pnfs_out_path, payload, debug=debug)
     except OSError as exc:
         rprint(
             f"[yellow][WARNING][/yellow] Could not write JSON summary to PNFS path {pnfs_out_path}: {exc}"
@@ -119,7 +80,7 @@ def save_sigma_summary_json(
         try:
             if not os.path.exists(local_out_dir):
                 os.makedirs(local_out_dir)
-            _merge_and_write_json(local_out_path, payload, debug=debug)
+            merge_and_write_json(local_out_path, payload, debug=debug)
         except OSError as exc:
             rprint(
                 f"[yellow][WARNING][/yellow] Could not write JSON summary to local path {local_out_path}: {exc}"

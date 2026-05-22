@@ -302,6 +302,88 @@ def compute_particle_surface(
     return run, output, new_branches
 
 
+def _precompute_osc_result(dm2: float, sin13: float, sin12: float, backend: str):
+    """
+    Compute P_ee(E, cos_nadir) once using Prob3++ or NuFast-Earth.
+    Returns (OscResult, nadir_pdf) for reuse across all (comp, azimuth) pairs.
+    """
+    from lib.lib_osc_backends import compute_prob3, compute_nufast, get_nadir_pdf_nufast
+    from lib.lib_osc import load_analysis_info
+
+    analysis_info = load_analysis_info(str(root))
+    n_bins  = analysis_info.get("NADIR_BINS",   40)
+    n_range = analysis_info.get("NADIR_RANGE",  [-1, 1])
+    e_bins  = analysis_info.get("ENERGY_BINS",  120)
+    e_range = analysis_info.get("ENERGY_RANGE", [0, 30])
+
+    energy_edges  = np.linspace(e_range[0], e_range[1], e_bins  + 1)
+    nadir_edges   = np.linspace(n_range[0], n_range[1], n_bins  + 1)
+    nadir_centers = 0.5 * (nadir_edges[1:] + nadir_edges[:-1])
+
+    if backend == "prob3":
+        osc_result = compute_prob3(dm2, sin13, sin12, energy_edges, nadir_edges)
+    elif backend == "nufast":
+        osc_result = compute_nufast(dm2, sin13, sin12, energy_edges, nadir_edges)
+    else:
+        raise ValueError(f"Unknown oscillation backend for on-the-fly weighting: {backend!r}")
+
+    nadir_pdf = get_nadir_pdf_nufast(nadir_centers)
+    return osc_result, nadir_pdf
+
+
+def _compute_osc_kde_and_exposure(
+    osc_result, nadir_pdf: np.ndarray, comp: str, azimuth: str
+):
+    """
+    Build oscillation-weighted KDE and exposure dict for one (comp, azimuth) pair.
+
+    Replaces pkl loading in compute_true_weights when OSCILLATION_BACKEND != 'file'.
+    Returns (kde_p, exposure_dict) matching the format expected by normalize_true_weights.
+    """
+    from sklearn.neighbors import KernelDensity
+    from lib.lib_solar import get_detected_solar_spectrum
+    from lib import energy_centers as _ec, ebin as _ebin
+
+    # P_ee(E, cos_nadir): shape (n_nadir, n_energy)
+    pee_2d   = osc_result.night.values
+    n_centers = osc_result.night.index.values
+
+    if azimuth == "mean":
+        mask = np.ones(len(n_centers), dtype=bool)
+    elif azimuth == "day":
+        mask = n_centers > 0.0
+    elif azimuth == "night":
+        mask = n_centers <= 0.0
+    else:
+        raise ValueError(f"Unknown azimuth category: {azimuth!r}")
+
+    w     = nadir_pdf[mask]
+    w_sum = w.sum()
+    if w_sum > 0:
+        pee_e = (pee_2d[mask, :] * w[:, np.newaxis]).sum(axis=0) / w_sum
+    else:
+        pee_e = np.zeros(pee_2d.shape[1])
+
+    _comp_components = {"comb": ["b8", "hep"], "b8": ["b8"], "hep": ["hep"]}
+    eff_flux = get_detected_solar_spectrum(
+        bins=_ec, mass=1e9, components=_comp_components[comp]
+    )
+
+    weighted_flux = np.clip(eff_flux * SECONDS_PER_YEAR * pee_e, 0.0, None)
+
+    kde = KernelDensity(bandwidth=_ebin, kernel="gaussian", algorithm="kd_tree")
+    kde.fit(_ec[:, None], sample_weight=weighted_flux)
+
+    counts = float(np.sum(weighted_flux))
+    return kde, {
+        "counts":             counts,
+        "exposure":           1.0,
+        "years":              1.0,
+        "detector_mass_kton": 1.0,
+        "time_seconds":       float(SECONDS_PER_YEAR),
+    }
+
+
 def compute_true_weights(
     run: dict[str, dict],
     configs: dict[str, list[str]],
@@ -356,33 +438,55 @@ def compute_true_weights(
                 continue
 
             elif params["PARTICLE_TYPE"] == "signal":
+                _osc_backend = params.get("OSCILLATION_BACKEND", "file")
+                _osc_result_cache = None
+                _nadir_pdf_cache  = None
+                if _osc_backend != "file" and "osc" in params.get("DEFAULT_SIGNAL_WEIGHT", []):
+                    _osc_result_cache, _nadir_pdf_cache = _precompute_osc_result(
+                        params["DEFAULT_SIGNAL_DM2"],
+                        params["DEFAULT_SIGNAL_SIN13"],
+                        params["DEFAULT_SIGNAL_SIN12"],
+                        _osc_backend,
+                    )
                 for (comp, label), osc in product(
                     zip(["comb", "b8", "hep"], ["", "b8", "hep"]),
                     params["DEFAULT_SIGNAL_WEIGHT"],
                 ):
                     exposure[(label, osc)] = dict()
                     if osc == "osc":
-                        dm2 = f"{params['DEFAULT_SIGNAL_DM2']:.3e}"
-                        sin13 = f"{params['DEFAULT_SIGNAL_SIN13']:.3e}"
-                        sin12 = f"{params['DEFAULT_SIGNAL_SIN12']:.3e}"
-                        for azimuth in params["DEFAULT_SIGNAL_AZIMUTH"]:
-                            exposure[(label, osc)][osc_names[azimuth]] = pickle.load(
-                                open(
-                                    f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_exposure_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
-                                    "rb",
+                        if _osc_backend != "file":
+                            for azimuth in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                                kde_p, exp_dict = _compute_osc_kde_and_exposure(
+                                    _osc_result_cache, _nadir_pdf_cache, comp, azimuth
                                 )
-                            )
-                            kde_p = pickle.load(
-                                open(
-                                    f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_kde_p_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
-                                    "rb",
+                                exposure[(label, osc)][osc_names[azimuth]] = exp_dict
+                                run[tree][
+                                    f"SignalParticleWeight{label}Osc{osc_names[azimuth]}"
+                                ][idx] = evaluate_1d_pdf(
+                                    kde_p, run[tree]["SignalParticleP"][idx]
                                 )
-                            )
-                            run[tree][
-                                f"SignalParticleWeight{label}Osc{osc_names[azimuth]}"
-                            ][idx] = evaluate_1d_pdf(
-                                kde_p, run[tree]["SignalParticleP"][idx]
-                            )
+                        else:
+                            dm2   = f"{params['DEFAULT_SIGNAL_DM2']:.3e}"
+                            sin13 = f"{params['DEFAULT_SIGNAL_SIN13']:.3e}"
+                            sin12 = f"{params['DEFAULT_SIGNAL_SIN12']:.3e}"
+                            for azimuth in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                                exposure[(label, osc)][osc_names[azimuth]] = pickle.load(
+                                    open(
+                                        f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_exposure_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
+                                        "rb",
+                                    )
+                                )
+                                kde_p = pickle.load(
+                                    open(
+                                        f"{info['PATH']}/signal/osc/azimuth_{azimuth}/{config}/{config}_{name.split('_')[0]}_{comp}_kde_p_azimuth_{azimuth}_dm2_{dm2}_sin13_{sin13}_sin12_{sin12}.pkl",
+                                        "rb",
+                                    )
+                                )
+                                run[tree][
+                                    f"SignalParticleWeight{label}Osc{osc_names[azimuth]}"
+                                ][idx] = evaluate_1d_pdf(
+                                    kde_p, run[tree]["SignalParticleP"][idx]
+                                )
 
                     if osc == "truth":
                         exposure[(label, osc)]["truth"] = pickle.load(

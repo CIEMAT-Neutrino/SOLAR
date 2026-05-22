@@ -4,7 +4,12 @@ from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 
-from .lib_default import load_analysis_info
+from .lib_default import load_analysis_info, get_folder_flags
+
+
+def folder_applies_z_fiducial(root: str, folder: str) -> bool:
+    """Return True if Z endcap rejection uses a geometric fiducial cut (z_endcap_rejection == 'fiducial')."""
+    return get_folder_flags(root, folder)["z_endcap_rejection"] == "fiducial"
 
 
 DEFAULT_FIDUCIALIZATION_CONFIG: Dict[str, Any] = {

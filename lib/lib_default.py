@@ -1,11 +1,11 @@
 import json
 import os
 import numpy as np
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 
 DEFAULT_ANALYSIS_THRESHOLDS = {
-    "DAYNIGHT": {"SIGNIFICANCE": 0.0},
+    "DAYNIGHT": {"SIGNIFICANCE": 0.0, "MC": 0.0},
     "HEP": {"SIGNIFICANCE": 0.0, "MC": 0.0},
     "SENSITIVITY": {"SIGNIFICANCE": 0.0, "MC": 0.0},
     "FIDUCIALIZATION": {"MC": 0.0},
@@ -66,6 +66,36 @@ def get_analysis_threshold(
     return float(value)
 
 
+def load_folder_config(root: str) -> Dict[str, Any]:
+    """Load folder mode configuration from analysis/folder_configs.json."""
+    with open(f"{root}/analysis/folder_configs.json") as f:
+        return json.load(f)
+
+
+def get_folder_choices(root: str) -> List[str]:
+    """Return the list of valid folder names."""
+    return load_folder_config(root)["FOLDER_CHOICES"]
+
+
+def get_default_folder(root: str) -> str:
+    """Return the default folder name."""
+    return load_folder_config(root)["DEFAULT_FOLDER"]
+
+
+def get_folder_flags(root: str, folder: str) -> Dict[str, Any]:
+    """Return the flag dict for a given folder (apply_z_fiducial, apply_surface_cut, apply_reduction, path_key)."""
+    config = load_folder_config(root)
+    folders = config.get("FOLDERS", {})
+    if folder not in folders:
+        raise KeyError(f"Unknown folder '{folder}'. Valid: {list(folders)}")
+    return folders[folder]
+
+
+def folder_path_key(folder: str) -> str:
+    """Return the lowercase path component for a folder (e.g. 'Nominal' → 'nominal')."""
+    return folder.lower()
+
+
 def get_default_nhits(root: str, variable: str = "NHITS"):
     """
     This function returns the default energy binning used in the analysis.
@@ -83,3 +113,29 @@ def get_default_energies(root: str, variable: str = "ENERGY"):
     energy_edges = np.linspace(e_range[0], e_range[-1], e_bins + 1)
     energy_centers = (energy_edges[1:] + energy_edges[:-1]) / 2
     return energy_edges, energy_centers, energy_edges[1] - energy_edges[0]
+
+
+DEFAULT_WORKFLOW_FLAGS: Dict[str, Dict[str, bool]] = {
+    "HEP": {
+        "pl_isotonic": False,
+        "pl_signal_bands": False,
+        "significance_bins": False,
+    },
+    "DAYNIGHT": {
+        "background_error": False,
+        "significance_bins": False,
+    },
+    "SENSITIVITY": {},
+}
+
+
+def get_workflow_flags(root: str, analysis_name: str) -> Dict[str, bool]:
+    """Return workflow feature flags for the given analysis, with defaults applied.
+
+    Flags default to False (features off). Override via WORKFLOW section in analysis.json.
+    """
+    analysis_key = str(analysis_name).upper()
+    analysis_info = load_analysis_info(root)
+    configured = analysis_info.get("WORKFLOW", {}).get(analysis_key, {})
+    defaults = DEFAULT_WORKFLOW_FLAGS.get(analysis_key, {})
+    return {**defaults, **configured}

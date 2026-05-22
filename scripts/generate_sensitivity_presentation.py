@@ -1,12 +1,22 @@
 import argparse
+import json
 import re
 import textwrap
+
+try:
+    import numpy as np
+    import pandas as pd
+    _HAS_PANDAS = True
+except ImportError:
+    _HAS_PANDAS = False
 from presentation_common import (
     DEFAULT_ENERGY,
     ROOT,
     STANDARD_CONFIGS,
+    compute_fiducial_mass_kt,
     config_alias,
     default_pdf_export_enabled,
+    energy_candidates,
     export_marp_pdf,
     output_energy_label,
     pick_most_recent,
@@ -49,14 +59,36 @@ def parse_args():
 def output_markdown_path(energy, folder):
     folder_label = folder.title()
     if energy == DEFAULT_ENERGY:
-        return ROOT / "presentations" / f"{folder_label}SensitivitySignificanceWorkflow.md"
-    return ROOT / "presentations" / f"{energy}{folder_label}SensitivitySignificanceWorkflow.md"
+        return ROOT / "output" / "presentations" / f"{folder_label}SensitivitySignificanceWorkflow.md"
+    return ROOT / "output" / "presentations" / f"{energy}{folder_label}SensitivitySignificanceWorkflow.md"
 
 
 
 def _relative(path_obj):
     return path_obj.relative_to(ROOT).as_posix()
 
+
+def fmt_float(value, digits=3):
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def fmt_int(value):
+    if value is None:
+        return "-"
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def read_json(path):
+    with open(path) as fh:
+        return json.load(fh)
 
 
 def _extract_cut_info(filename):
@@ -134,6 +166,42 @@ def _gather_component_plot(folder, config_key, label, energy, cut_info):
     if selected is None:
         return None
     return _relative(selected)
+
+
+def gather_significance_specs(folder, energy):
+    plot_dir = ROOT / "images" / "analysis" / "sensitivity"
+    energy_label = output_energy_label(energy)
+    specs = []
+    for config_key, display_name in STANDARD_CONFIGS:
+        sig_dir = plot_dir / config_key / "marley" / folder
+        path = _find_latest(
+            [sig_dir],
+            [f"{config_key}_marley_{energy_label}_Sensitivity_Significance_Exposure_*.png"],
+        )
+        specs.append({
+            "name": display_name,
+            "config": config_key,
+            "path": _relative(path) if path is not None else None,
+        })
+    return specs
+
+
+def render_significance_slides(specs):
+    slides = []
+    for spec in specs:
+        if spec["path"]:
+            slides.append("\n".join([
+                f"### {spec['name']}",
+                "",
+                "<div class=\"center\">",
+                f"  <img src=\"../../{spec['path']}\">",
+                "</div>",
+            ]))
+        else:
+            slides.append(f"### {spec['name']}\n\nNo significance plot found for {spec['name']}.")
+    if not slides:
+        return "### Significance plots\n\nNo Sensitivity significance plots were found."
+    return "\n\n---\n\n".join(slides)
 
 
 def gather_result_specs(folder, energy):
@@ -246,7 +314,7 @@ def render_results_slides(specs):
                         f"### {spec['name']}",
                         "",
                         "<div class=\"center\">",
-                        f"  <img src=\"../{spec['primary']}\">",
+                        f"  <img src=\"../../{spec['primary']}\">",
                         "</div>",
                     ]
                 )
@@ -273,8 +341,8 @@ def render_component_pair_slides(specs, left_key, right_key, left_label, right_l
         left = spec.get(left_key)
         right = spec.get(right_key)
         if left or right:
-            left_content = f"    <img src=\"../{left}\">" if left else "    <p>Plot not available.</p>"
-            right_content = f"    <img src=\"../{right}\">" if right else "    <p>Plot not available.</p>"
+            left_content = f"    <img src=\"../../{left}\">" if left else "    <p>Plot not available.</p>"
+            right_content = f"    <img src=\"../../{right}\">" if right else "    <p>Plot not available.</p>"
             slides.append(
                 "\n".join(
                     [
@@ -322,7 +390,7 @@ def render_template_slides(template_specs):
                         f"### {display_name} Templates",
                         "",
                         "<div class=\"center\">",
-                        f"  <img src=\"../{background_plot}\">",
+                        f"  <img src=\"../../{background_plot}\">",
                         "</div>",
                     ]
                 )
@@ -345,7 +413,7 @@ def render_template_slides(template_specs):
                         f"### {display_name} Signal Template",
                         "",
                         "<div class=\"center\">",
-                        f"  <img src=\"../{signal_plot}\">",
+                        f"  <img src=\"../../{signal_plot}\">",
                         "</div>",
                     ]
                 )
@@ -364,13 +432,185 @@ def render_template_slides(template_specs):
     return "\n\n---\n\n".join(slides)
 
 
-def render_cut_table(folder, specs):
+def gather_fiducial_rows(energy):
+    fid_rows = []
+    for folder in ["nominal", "reduced", "truncated"]:
+        path = ROOT / "data" / "solar" / "fiducial" / folder / "BestFiducials.json"
+        if not path.exists():
+            continue
+        payload = read_json(path)
+        for cfg, analyses in payload.items():
+            sens = analyses.get("SENSITIVITY", {})
+            if not sens:
+                continue
+            selected_key = None
+            for candidate in energy_candidates(energy):
+                if candidate in sens:
+                    selected_key = candidate
+                    break
+            if selected_key is None:
+                continue
+            vals = sens[selected_key]
+            fid_rows.append(
+                {
+                    "Folder": folder,
+                    "Config": cfg,
+                    "FidX": vals.get("FiducialX"),
+                    "FidY": vals.get("FiducialY"),
+                    "FidZ": vals.get("FiducialZ"),
+                    "BeforeFid": vals.get("NoFiducialSignificance", vals.get("RawSignificance")),
+                    "AfterFid": vals.get("BestFiducialSignificance", vals.get("SmoothedSignificance")),
+                    "Exposure": compute_fiducial_mass_kt(
+                        cfg,
+                        vals.get("FiducialX"),
+                        vals.get("FiducialY"),
+                        vals.get("FiducialZ"),
+                    ),
+                }
+            )
+    return sorted(fid_rows, key=lambda row: (row["Folder"], row["Config"]))
+
+
+def _find_fiducial_plot(folder, config_key, label, energy):
+    root_dir = ROOT / "images" / "solar" / "fiducial"
+    energy_label = output_energy_label(energy)
+    candidate_dirs = [
+        root_dir / folder / config_key / "marley",
+        root_dir / config_key / "marley" / folder,
+        root_dir / config_key / folder,
+        root_dir / folder / config_key,
+    ]
+    patterns = [
+        f"{config_key}_marley_{energy_label}_SENSITIVITY_{label}Fiducial_Significance*.png",
+        f"{config_key}_{energy_label}_SENSITIVITY_{label}Fiducial_Significance*.png",
+    ]
+    candidates = []
+    for base_dir in candidate_dirs:
+        if not base_dir.exists():
+            continue
+        for pattern in patterns:
+            candidates.extend(base_dir.glob(pattern))
+    expected = pick_most_recent(candidates)
+    if expected is not None:
+        return _relative(expected)
+    return None
+
+
+def gather_fiducial_plot_specs(folder, energy):
+    specs = []
+    for config_key, display_name in STANDARD_CONFIGS:
+        best_plot = _find_fiducial_plot(folder, config_key, "Best", energy)
+        no_plot = _find_fiducial_plot(folder, config_key, "No", energy)
+        specs.append(
+            {
+                "name": display_name,
+                "config": config_key,
+                "folder": folder,
+                "best": best_plot,
+                "no": no_plot,
+            }
+        )
+    return specs
+
+
+def render_fiducial_plot_slides(specs):
+    slides = []
+    for spec in specs:
+        if spec["best"] or spec["no"]:
+            best_img = (
+                f"    <img src=\"../../{spec['best']}\">"
+                if spec["best"]
+                else "    <p>Best fiducial plot not available.</p>"
+            )
+            no_img = (
+                f"    <img src=\"../../{spec['no']}\">"
+                if spec["no"]
+                else "    <p>No fiducial plot not available.</p>"
+            )
+            slides.append(
+                "\n".join(
+                    [
+                        f"### {spec['name']}",
+                        "",
+                        "<div class=\"two-col\">",
+                        "  <div>",
+                        "    <p><strong>No Fiducial</strong></p>",
+                        no_img,
+                        "  </div>",
+                        "  <div>",
+                        "    <p><strong>Best Fiducial</strong></p>",
+                        best_img,
+                        "  </div>",
+                        "</div>",
+                    ]
+                )
+            )
+
+    if not slides:
+        return "### Fiducial plots\n\nNo fiducial optimization plots were found for this folder."
+
+    return "\n\n---\n\n".join(slides)
+
+
+def render_fid_table(folder, rows):
+    filtered_rows = [row for row in rows if str(row.get("Folder", "")).lower() == folder]
+    title = "Fiducial Optimization Summary" if folder == "truncated" else f"Fiducial Optimization Summary ({folder.title()})"
+    lines = [
+        f"### {title}",
+        "",
+        "| Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    if not filtered_rows:
+        lines.append("| *(no SENSITIVITY entries found)* | - | - | - | - | - | - |")
+        return "\n".join(lines)
+    for row in filtered_rows:
+        lines.append(
+            "| "
+            + f"{config_alias(row['Config'])} | {fmt_int(row['FidX'])} | {fmt_int(row['FidY'])} | {fmt_int(row['FidZ'])} | {fmt_float(row['BeforeFid'])} | {fmt_float(row['AfterFid'])} | {fmt_float(row.get('Exposure'), digits=2)} |"
+        )
+    return "\n".join(lines)
+
+
+def gather_sensitivity_significance_rows(folder, energy):
+    """Read Sensitivity_Significance.pkl for each config and return {config: Z_1D}.
+
+    Z_1D = sqrt(sum(per-bin AsimovTS)) — 1D projected Asimov significance for the
+    best-sensitivity-score cut (NHits/OpHits/AdjCl) stored in the pkl.
+    """
+    if not _HAS_PANDAS:
+        return {}
+    result = {}
+    energy_label = output_energy_label(energy)
+    for config_key, _ in STANDARD_CONFIGS:
+        pkl_path = (
+            ROOT / "data" / "analysis" / "sensitivity"
+            / config_key / "marley" / folder
+            / f"{config_key}_marley_Sensitivity_Significance.pkl"
+        )
+        if not pkl_path.exists():
+            continue
+        try:
+            df = pd.read_pickle(pkl_path)
+            if df.empty:
+                continue
+            row = df.iloc[0]
+            sig = np.asarray(row["Significance"], dtype=float)
+            z = float(np.sqrt(np.nansum(sig)))
+            result[config_key] = z
+        except Exception:
+            pass
+    return result
+
+
+def render_cut_table(folder, specs, sig_rows=None):
+    sig_rows = sig_rows or {}
     title = "Selected Sensitivity Cuts by Config" if folder == "truncated" else f"Selected Sensitivity Cuts by Config ({folder.title()})"
     lines = [
         f"### {title}",
         "",
-        "| Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
 
     has_any = False
@@ -381,23 +621,42 @@ def render_cut_table(folder, specs):
         adjcl = values.get("AdjCl", "-")
         signal = values.get("Signal", "-")
         bkg = values.get("Bkg", "-")
+        z = sig_rows.get(spec["config"])
+        z_str = fmt_float(z, digits=2) if z is not None else "-"
         if values:
             has_any = True
         lines.append(
-            f"| {config_alias(spec['config'])} | {nhits} | {ophits} | {adjcl} | {signal} | {bkg} |"
+            f"| {config_alias(spec['config'])} | {nhits} | {ophits} | {adjcl} | {signal} | {bkg} | {z_str} |"
         )
 
     if not has_any:
-        lines.append("| *(no parsable cut metadata found in selected filenames)* | - | - | - | - | - |")
+        lines.append("| *(no parsable cut metadata found in selected filenames)* | - | - | - | - | - | - |")
     return "\n".join(lines)
 
 
-def render_folder_sections(folder, result_specs, template_specs):
+def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None):
     is_main = folder == "truncated"
+    fid_title = "Fiducialization" if is_main else f"Fiducialization ({folder.title()})"
     sin12_title = "Main Result: Contour Grids (sin12)" if is_main else f"Contour Grids (sin12, {folder.title()})"
     sin13_title = "Contour Grids (sin13)" if is_main else f"Contour Grids (sin13, {folder.title()})"
     templates_title = "Template Building" if is_main else f"Template Building ({folder.title()})"
-    return f"""## {sin12_title}
+    sig_title = "Significance Spectra" if is_main else f"Significance Spectra ({folder.title()})"
+    fid_rows = fid_rows or []
+    fid_specs = fid_specs or []
+    significance_specs = significance_specs or []
+    return f"""## {fid_title}
+
+---
+
+{render_fiducial_plot_slides(fid_specs)}
+
+---
+
+{render_fid_table(folder, fid_rows)}
+
+---
+
+## {sin12_title}
 
 ---
 
@@ -413,6 +672,14 @@ def render_folder_sections(folder, result_specs, template_specs):
 
 ---
 
+## {sig_title}
+
+---
+
+{render_significance_slides(significance_specs)}
+
+---
+
 ## {templates_title}
 
 ---
@@ -421,7 +688,7 @@ def render_folder_sections(folder, result_specs, template_specs):
 
 ---
 
-{render_cut_table(folder, result_specs)}
+{render_cut_table(folder, result_specs, sig_rows=sig_rows)}
 """
 
 
@@ -435,9 +702,9 @@ For each oscillation point $(\\Delta m^2,\\, \\sin^2\\theta_{13},\\, \\sin^2\\th
 $$
 T^{\\mathrm{sig}}_{ij}(\\vec{\\theta}) = T \\cdot M_{\\mathrm{det}} \\cdot \\left[ P(\\vec{\\theta})\\, H \\right]_{ij}
 $$
-where $i$ indexes azimuth bins and $j$ indexes energy bins ([src/analysis/14SensitivitySignalTemplate.py](../src/analysis/14SensitivitySignalTemplate.py)).
+where $i$ indexes azimuth bins and $j$ indexes energy bins ([src/analysis/14SensitivitySignalTemplate.py](../../src/analysis/14SensitivitySignalTemplate.py)).
 
-The background template $T^{\\mathrm{bkg}}_{ij}$ is independent of oscillation parameters ([src/analysis/14SensitivityBackgroundTemplate.py](../src/analysis/14SensitivityBackgroundTemplate.py)).
+The background template $T^{\\mathrm{bkg}}_{ij}$ is independent of oscillation parameters ([src/analysis/14SensitivityBackgroundTemplate.py](../../src/analysis/14SensitivityBackgroundTemplate.py)).
 
 ---
 
@@ -465,7 +732,7 @@ $$
 Expected model: $e_{ij} = (1+A_{\\mathrm{bkg}})\\,T^{\\mathrm{bkg}}_{ij} + (1+A_{\\mathrm{pred}})\\,p_{ij}$.
 Per-bin deviance: $\\Delta\\ell_{ij} = e_{ij} - o_{ij} + o_{ij}\\ln(o_{ij}/e_{ij})$ for $o_{ij}>0$, else $\\Delta\\ell_{ij} = e_{ij}$.
 
-Implemented in [lib/lib_root.py: Sensitivity_Fitter](../lib/lib_root.py). Minimized with [iminuit (Minuit)](https://iminuit.readthedocs.io/en/stable/).
+Implemented in [lib/lib_root.py: Sensitivity_Fitter](../../lib/lib_root.py). Minimized with [iminuit (Minuit)](https://iminuit.readthedocs.io/en/stable/).
 
 ---
 
@@ -502,7 +769,7 @@ Higher score = better discrimination between solar and reactor hypotheses. The b
 
 ### Implemented Improvements
 
-Improvements 2–5 implemented in [lib/lib_root.py](../lib/lib_root.py) and [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py):
+Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py):
 
 1. **Replace heuristic score with profile-LR** *(proposed, not yet implemented)*: use $\\Delta\\chi^2 = \\chi^2_{\\mathrm{null}} - \\chi^2_{\\mathrm{best}}$ and report $Z = \\sqrt{\\Delta\\chi^2}$ (Wilks theorem) instead of average cross-hypothesis $\\chi^2$.
 2. ✅ **Barlow-Beeston mask** (`bb_mask = bkg > 0`): bins where the background template is zero are excluded from the fit, preventing spurious large deviance contributions from zero-MC-support bins.
@@ -514,19 +781,19 @@ Improvements 2–5 implemented in [lib/lib_root.py](../lib/lib_root.py) and [src
 
 ### Sensitivity Fit Summary
 
-- [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py) builds Asimov maps from signal + background templates, then fits each oscillation-grid point against solar and reactor reference templates with free normalizations.
+- [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py) builds Asimov maps from signal + background templates, then fits each oscillation-grid point against solar and reactor reference templates with free normalizations.
 - The fit minimizes the **Baker-Cousins Poisson deviance** ([Baker & Cousins 1984](https://doi.org/10.1016/0029-554X(84)90016-4)) — identical in form to the per-bin LLR in the HEP profile-likelihood, extended to 2D (energy \xd7 azimuth).
 - Penalty terms $(A_{\\mathrm{pred}}/\\sigma_{\\mathrm{pred}})^2 + (A_{\\mathrm{bkg}}/\\sigma_{\\mathrm{bkg}})^2$ play the same role as HEP's $[(\\hat{\\beta}-1)/\\sigma_{\\mathrm{rel}}]^2$; HEP solves analytically, Sensitivity solves numerically.
-- Improvements 2–5 implemented in [lib/lib_root.py](../lib/lib_root.py): BB mask, no `abs()`, ±10σ limits, scipy L-BFGS-B joint 2D minimization.
-- Full mathematical derivations: [docs/hep\\_likelihood\\_derivation.tex](../docs/hep_likelihood_derivation.tex)."""
+- Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py): BB mask, no `abs()`, ±10σ limits, scipy L-BFGS-B joint 2D minimization.
+- Full mathematical derivations: [docs/hep\\_likelihood\\_derivation.tex](../../docs/hep_likelihood_derivation.tex)."""
 
 
-def build_markdown(energy, folder, folder_specs, folder_templates):
+def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None):
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
     energy_label = output_energy_label(energy)
     coverage = sum(1 for item in folder_specs if item.get("primary"))
     selected_title = folder.title()
-    selected_sections = render_folder_sections(folder, folder_specs, folder_templates)
+    selected_sections = render_folder_sections(folder, folder_specs, folder_templates, fid_rows=fid_rows, fid_specs=fid_specs, significance_specs=significance_specs, sig_rows=sig_rows)
 
     text = textwrap.dedent(
         f"""
@@ -558,19 +825,19 @@ def build_markdown(energy, folder, folder_specs, folder_templates):
 
     ### Workflow
 
-    - Orchestrator: [src/analysis/10SensitivityAnalysis.py](../src/analysis/10SensitivityAnalysis.py)
-    - Step 1 (Background template): [src/analysis/14SensitivityBackgroundTemplate.py](../src/analysis/14SensitivityBackgroundTemplate.py)
-    - Step 2 (Signal template): [src/analysis/14SensitivitySignalTemplate.py](../src/analysis/14SensitivitySignalTemplate.py)
-    - Step 3 (Grid fit scan and best-cut storage): [src/analysis/14Sensitivity.py](../src/analysis/14Sensitivity.py)
-    - Step 4 (Contour rendering): [src/analysis/14SensitivityContourPlot.py](../src/analysis/14SensitivityContourPlot.py)
+    - Orchestrator: [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10SensitivityAnalysis.py)
+    - Step 1 (Background template): [src/analysis/14SensitivityBackgroundTemplate.py](../../src/analysis/14SensitivityBackgroundTemplate.py)
+    - Step 2 (Signal template): [src/analysis/14SensitivitySignalTemplate.py](../../src/analysis/14SensitivitySignalTemplate.py)
+    - Step 3 (Grid fit scan and best-cut storage): [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py)
+    - Step 4 (Contour rendering): [src/analysis/14SensitivityContourPlot.py](../../src/analysis/14SensitivityContourPlot.py)
 
     ---
 
     ### Workflow Outputs
 
-    - Main contour grids (sin12/sin13): [images/analysis/sensitivity](../images/analysis/sensitivity)
-    - Signal/background templates (figures): [images/analysis/sensitivity/templates](../images/analysis/sensitivity/templates)
-    - Grid-scan data products (PKL): [data/analysis/sensitivity](../data/analysis/sensitivity)
+    - Main contour grids (sin12/sin13): [images/analysis/sensitivity](../../images/analysis/sensitivity)
+    - Signal/background templates (figures): [images/analysis/sensitivity/templates](../../images/analysis/sensitivity/templates)
+    - Grid-scan data products (PKL): [data/analysis/sensitivity](../../data/analysis/sensitivity)
     - Remote workflow outputs (PNFS): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY)
 
     ---
@@ -590,7 +857,7 @@ def build_markdown(energy, folder, folder_specs, folder_templates):
 - Cut table values are parsed from selected result filenames when available.
 - Re-run script to refresh this folder after each workflow run:
     - /usr/bin/python3 scripts/generate_sensitivity_presentation.py --folder {folder}
-- Full mathematical derivations: [docs/hep\_likelihood\_derivation.tex](../docs/hep_likelihood_derivation.tex)
+- Full mathematical derivations: [docs/hep\_likelihood\_derivation.tex](../../docs/hep_likelihood_derivation.tex)
 """
     )
 
@@ -607,12 +874,20 @@ def main():
 
     folder_specs = gather_result_specs(args.folder, args.energy)
     folder_templates = gather_template_specs(args.folder, args.energy, folder_specs)
+    fid_rows = gather_fiducial_rows(args.energy)
+    fid_specs = gather_fiducial_plot_specs(args.folder, args.energy)
+    significance_specs = gather_significance_specs(args.folder, args.energy)
+    sig_rows = gather_sensitivity_significance_rows(args.folder, args.energy)
 
     markdown = build_markdown(
         args.energy,
         args.folder,
         folder_specs,
         folder_templates,
+        fid_rows=fid_rows,
+        fid_specs=fid_specs,
+        significance_specs=significance_specs,
+        sig_rows=sig_rows,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

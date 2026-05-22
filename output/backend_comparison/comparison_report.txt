@@ -1,0 +1,14 @@
+Oscillogram Backend Comparison Report
+==================================================
+Parameters: dm2=6.000e-05  sin13=2.100e-02  sin12=3.030e-01
+Grid: 120 energy × 40 nadir
+
+Night P_ee differences (Prob3++ - NuFast-Earth):
+  max |ΔP_ee| = 0.012295
+  mean|ΔP_ee| = 0.001298
+  RMS         = 0.001923
+
+Timing (ms per call, n=1):
+  Prob3++:      15.80 ± 0.00 ms
+  NuFast-Earth: 4.62 ± 0.00 ms
+  Speedup:      3.42x (NuFast-Earth faster)

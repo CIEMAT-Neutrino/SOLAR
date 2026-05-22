@@ -27,6 +27,12 @@ from .lib_default import (
     get_default_nhits,
     load_analysis_info,
     get_analysis_threshold,
+    load_folder_config,
+    get_folder_choices,
+    get_default_folder,
+    get_folder_flags,
+    folder_path_key,
+    get_workflow_flags,
 )
 from .lib_filter import (
     compute_filtered_run,
@@ -114,7 +120,7 @@ hep_rebin_centers = (hep_rebin[1:] + hep_rebin[:-1]) / 2
 sensitivity_rebin = np.arange(0, 31, 1)
 sensitivity_rebin_centers = (sensitivity_rebin[1:] + sensitivity_rebin[:-1]) / 2
 
-daynight_rebin = np.arange(0, 32, 2)
+daynight_rebin = np.arange(0, 31, 1)
 daynight_rebin_centers = (daynight_rebin[1:] + daynight_rebin[:-1]) / 2
 
 pio.templates.default = "none"

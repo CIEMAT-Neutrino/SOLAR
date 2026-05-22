@@ -1,0 +1,48 @@
+{
+  "FOLDER_CHOICES": ["Nominal", "Reduced", "Truncated"],
+  "DEFAULT_FOLDER": "Truncated",
+  "FOLDERS": {
+    "Nominal": {
+      "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction.",
+      "z_endcap_rejection": "fiducial",
+      "apply_reduction": false,
+      "path_key": "nominal",
+      "reduction_threshold_mev": 0.0,
+      "reduction_factors": {
+        "marley": 1,
+        "gamma": 1,
+        "neutron": 1,
+        "alpha": 1,
+        "radiological": 1
+      }
+    },
+    "Reduced": {
+      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. Statistical reduction factor applied per component above reduction_threshold_mev.",
+      "z_endcap_rejection": "surface",
+      "apply_reduction": true,
+      "path_key": "reduced",
+      "reduction_threshold_mev": 3.5,
+      "reduction_factors": {
+        "marley": 1,
+        "gamma": 10,
+        "neutron": 1,
+        "alpha": 1,
+        "radiological": 1
+      }
+    },
+    "Truncated": {
+      "description": "Truncated dataset. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. No statistical reduction.",
+      "z_endcap_rejection": "surface",
+      "apply_reduction": false,
+      "path_key": "truncated",
+      "reduction_threshold_mev": 0.0,
+      "reduction_factors": {
+        "marley": 1,
+        "gamma": 1,
+        "neutron": 1,
+        "alpha": 1,
+        "radiological": 1
+      }
+    }
+  }
+}

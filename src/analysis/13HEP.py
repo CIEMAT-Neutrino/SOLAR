@@ -207,11 +207,6 @@ def _hep_profile_step(
 
 # ---------------------------------------------------------------------------
 
-data_path = f"{root}/data/solar/"
-save_path = f"{root}/images/hep"
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
 parser = argparse.ArgumentParser(
     description="Perform the HEP significance analysis for a given configuration and name"
 )
@@ -260,18 +255,24 @@ if args.debug:
     rprint(args)
 explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
 
-components = ["neutron", "gamma", "radiological", "8B", "hep"]
-background_components = ["neutron", "gamma", "radiological", "8B"]
 background_config = get_background_config(str(root))
 essential_map = {
     str(component).lower(): bool(is_essential)
     for component, is_essential in background_config.get("ESSENTIAL", {}).items()
 }
+_hep_bkg_components = get_background_samples(str(root), "HEP")
+components = _hep_bkg_components + ["8B", "hep"]
+background_components = _hep_bkg_components + ["8B"]
 essential_background_components = [
     component
-    for component in background_components
+    for component in _hep_bkg_components
     if essential_map.get(component.lower(), False)
 ]
+_n_bkg = len(_hep_bkg_components)
+_component_oscs = ["Truth"] * _n_bkg + ["Osc", "Osc"]
+_component_uncertainties = (
+    [args.background_uncertainty] * _n_bkg + [args.signal_uncertainty, args.signal_uncertainty]
+)
 threshold_idx = np.where(hep_rebin_centers >= args.threshold)[0][0]
 exposure_grid = np.logspace(-1, np.log10(args.exposure), 100)
 smoothing_config = get_smoothing_config(
@@ -280,6 +281,7 @@ smoothing_config = get_smoothing_config(
 smoothing_info = smoothing_metadata(smoothing_config)
 adaptive_rebin_config = get_adaptive_rebin_config(str(root), analysis_name="HEP")
 adaptive_rebin_info = adaptive_rebin_metadata(adaptive_rebin_config)
+_workflow = get_workflow_flags(str(root), "HEP")
 if args.debug:
     rprint(
         f"[cyan][INFO][/cyan] Threshold {args.threshold} found to correspond to index {threshold_idx} of {len(hep_rebin_centers)} with value {hep_rebin_centers[threshold_idx]:.2f} MeV"
@@ -340,9 +342,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
             * (plot_df["AdjCl"] == int(adjcl))
         ]
         if this_df.empty:
-            rprint(
-                f"[yellow][WARNING] No data for {energy} with {nhit} nhits and {ophit} ophits {adjcl} adjcl[/yellow]"
-            )
+            if args.debug:
+                rprint(
+                    f"[yellow][WARNING] No data for {energy} with {nhit} nhits and {ophit} ophits {adjcl} adjcl[/yellow]"
+                )
             continue
         cuts_with_any_data += 1
 
@@ -356,23 +359,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
         mc_sums = {}
 
         for idx, (component, osc, uncertainty_error) in enumerate(
-            zip(
-                components,
-                ["Truth", "Truth", "Truth", "Osc", "Osc"],
-                [
-                    args.background_uncertainty,
-                    args.background_uncertainty,
-                    args.background_uncertainty,
-                    args.signal_uncertainty,
-                    args.signal_uncertainty,
-                ],
-            )
+            zip(components, _component_oscs, _component_uncertainties)
         ):
             comp_df = this_df.loc[this_df["Component"] == component].copy()
             if comp_df.empty:
-                rprint(
-                    f"[yellow][WARNING] No data for {component} in {energy} with {nhit} nhits and {ophit} ophits {adjcl} adjcl[/yellow]"
-                )
+                if args.debug:
+                    rprint(
+                        f"[yellow][WARNING] No data for {component} in {energy} with {nhit} nhits and {ophit} ophits {adjcl} adjcl[/yellow]"
+                    )
                 continue
             comp_df = comp_df.fillna(0)
             this_comp_df = comp_df.loc[
@@ -417,13 +411,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 )
 
         has_all_components = True
-        for component, osc in [
-            ("neutron", "Truth"),
-            ("gamma", "Truth"),
-            ("radiological", "Truth"),
-            ("8B", "Osc"),
-            ("hep", "Osc"),
-        ]:
+        for component, osc in (
+            [(c, "Truth") for c in _hep_bkg_components] + [("8B", "Osc"), ("hep", "Osc")]
+        ):
             comp_df = this_df.loc[
                 (this_df["Component"] == component)
                 * (this_df["Oscillation"] == osc)
@@ -535,21 +525,40 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 smoothed_asimov_significances[kdx].append(smoothed["asimov_rebinned"])
                 smoothed_rebinned_bins[kdx].append(smoothed["n_bins"])
 
-            for kdx in range(3):
-                raw_profile_significances[kdx].append(_hep_profile_step(
+            if _workflow["pl_signal_bands"]:
+                for kdx in range(3):
+                    raw_profile_significances[kdx].append(_hep_profile_step(
+                        raw_signal_rate, raw_background_rate, args.background_uncertainty,
+                        factor,
+                        fluctuation_sigma=_pl_fluctuations[kdx],
+                        signal_norm_frac=args.signal_uncertainty,
+                        perm_mask=pl_bin_mask,
+                    ))
+                    smoothed_profile_significances[kdx].append(_hep_profile_step(
+                        smoothed_signal_rate, smoothed_background_rate, args.background_uncertainty,
+                        factor,
+                        fluctuation_sigma=_pl_fluctuations[kdx],
+                        signal_norm_frac=args.signal_uncertainty,
+                        perm_mask=pl_bin_mask,
+                    ))
+            else:
+                _raw_pl_val = _hep_profile_step(
                     raw_signal_rate, raw_background_rate, args.background_uncertainty,
                     factor,
-                    fluctuation_sigma=_pl_fluctuations[kdx],
+                    fluctuation_sigma=0.0,
                     signal_norm_frac=args.signal_uncertainty,
                     perm_mask=pl_bin_mask,
-                ))
-                smoothed_profile_significances[kdx].append(_hep_profile_step(
+                )
+                _smth_pl_val = _hep_profile_step(
                     smoothed_signal_rate, smoothed_background_rate, args.background_uncertainty,
                     factor,
-                    fluctuation_sigma=_pl_fluctuations[kdx],
+                    fluctuation_sigma=0.0,
                     signal_norm_frac=args.signal_uncertainty,
                     perm_mask=pl_bin_mask,
-                ))
+                )
+                for kdx in range(3):
+                    raw_profile_significances[kdx].append(_raw_pl_val)
+                    smoothed_profile_significances[kdx].append(_smth_pl_val)
 
             if smoothed_asimov_significances[1][-1] > sigmamax:
                 sigmamax = smoothed_asimov_significances[1][-1]
@@ -616,25 +625,26 @@ for config, name, energy in product(args.config, args.name, args.energy):
             smoothed_display["starts_adaptive"],
         )
 
-        # Capture pre-isotonic curves for diagnostics before overwriting.
-        raw_profile_pre_isotonic      = [list(arr) for arr in raw_profile_significances]
-        smoothed_profile_pre_isotonic = [list(arr) for arr in smoothed_profile_significances]
+        if _workflow["pl_isotonic"]:
+            # Capture pre-isotonic curves for diagnostics before overwriting.
+            raw_profile_pre_isotonic      = [list(arr) for arr in raw_profile_significances]
+            smoothed_profile_pre_isotonic = [list(arr) for arr in smoothed_profile_significances]
 
-        # Enforce monotonicity on PL curves via isotonic regression (PAVA).
-        # Isotonic regression minimises the L2 distance from the computed values
-        # subject to a non-decreasing constraint, giving the smoothest monotone
-        # curve consistent with the data — unlike a running maximum, which freezes
-        # every transient solver spike into a permanent plateau.
-        for _kdx in range(3):
-            raw_profile_significances[_kdx]      = _isotonic_monotone(raw_profile_significances[_kdx])
-            smoothed_profile_significances[_kdx] = _isotonic_monotone(smoothed_profile_significances[_kdx])
+            # Enforce monotonicity on PL curves via isotonic regression (PAVA).
+            # Isotonic regression minimises the L2 distance from the computed values
+            # subject to a non-decreasing constraint, giving the smoothest monotone
+            # curve consistent with the data — unlike a running maximum, which freezes
+            # every transient solver spike into a permanent plateau.
+            for _kdx in range(3):
+                raw_profile_significances[_kdx]      = _isotonic_monotone(raw_profile_significances[_kdx])
+                smoothed_profile_significances[_kdx] = _isotonic_monotone(smoothed_profile_significances[_kdx])
 
-        for _sigs in (raw_profile_significances, smoothed_profile_significances):
-            _upper   = np.asarray(_sigs[0])
-            _nominal = np.asarray(_sigs[1])
-            _lower   = np.asarray(_sigs[2])
-            _sigs[0] = np.maximum(_upper,   _nominal).tolist()
-            _sigs[2] = np.minimum(_lower,   _nominal).tolist()
+            for _sigs in (raw_profile_significances, smoothed_profile_significances):
+                _upper   = np.asarray(_sigs[0])
+                _nominal = np.asarray(_sigs[1])
+                _lower   = np.asarray(_sigs[2])
+                _sigs[0] = np.maximum(_upper,   _nominal).tolist()
+                _sigs[2] = np.minimum(_lower,   _nominal).tolist()
 
         crossing_summary = compute_crossing_summary(
             exposure_grid,
@@ -710,12 +720,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "RawProfileLikelihood+Error": raw_profile_significances[0],
                 "RawProfileLikelihood":       raw_profile_significances[1],
                 "RawProfileLikelihood-Error": raw_profile_significances[2],
-                "PreIsotonicProfileLikelihood+Error":    smoothed_profile_pre_isotonic[0],
-                "PreIsotonicProfileLikelihood":          smoothed_profile_pre_isotonic[1],
-                "PreIsotonicProfileLikelihood-Error":    smoothed_profile_pre_isotonic[2],
-                "RawPreIsotonicProfileLikelihood+Error": raw_profile_pre_isotonic[0],
-                "RawPreIsotonicProfileLikelihood":       raw_profile_pre_isotonic[1],
-                "RawPreIsotonicProfileLikelihood-Error": raw_profile_pre_isotonic[2],
+                **({
+                    "PreIsotonicProfileLikelihood+Error":    smoothed_profile_pre_isotonic[0],
+                    "PreIsotonicProfileLikelihood":          smoothed_profile_pre_isotonic[1],
+                    "PreIsotonicProfileLikelihood-Error":    smoothed_profile_pre_isotonic[2],
+                    "RawPreIsotonicProfileLikelihood+Error": raw_profile_pre_isotonic[0],
+                    "RawPreIsotonicProfileLikelihood":       raw_profile_pre_isotonic[1],
+                    "RawPreIsotonicProfileLikelihood-Error": raw_profile_pre_isotonic[2],
+                } if _workflow["pl_isotonic"] else {}),
                 **smoothing_info,
                 **adaptive_rebin_info,
                 **crossing_summary,
@@ -723,74 +735,75 @@ for config, name, energy in product(args.config, args.name, args.energy):
             }
         )
 
-        no_rebin_energy = np.asarray(hep_rebin_centers[threshold_idx:], dtype=float)
-        no_rebin_width = float(np.median(np.diff(no_rebin_energy))) if len(no_rebin_energy) > 1 else 1.0
-        for bin_idx, (energy_value, raw_asimov_value, asimov_value, raw_gauss_value, gauss_value) in enumerate(
-            zip(
-                no_rebin_energy,
-                raw_asimov_spectrum,
-                smoothed_asimov_spectrum,
-                raw_gaussian_spectrum,
-                smoothed_gaussian_spectrum,
-            )
-        ):
-            significance_bins.append(
-                {
-                    "Config": config,
-                    "Name": name,
-                    "EnergyLabel": energy,
-                    "NHits": int(nhit),
-                    "OpHits": int(ophit),
-                    "AdjCl": int(adjcl),
-                    "Threshold": float(args.threshold),
-                    "ExposureYears": float(args.exposure),
-                    "BinMode": "NoRebin",
-                    "BinIndex": int(bin_idx),
-                    "RecoEnergy": float(energy_value),
-                    "BinWidth": float(no_rebin_width),
-                    "RawAsimov": float(raw_asimov_value),
-                    "Asimov": float(asimov_value),
-                    "RawGaussian": float(raw_gauss_value),
-                    "Gaussian": float(gauss_value),
-                    **smoothing_info,
-                    **adaptive_rebin_info,
-                }
-            )
+        if _workflow["significance_bins"]:
+            no_rebin_energy = np.asarray(hep_rebin_centers[threshold_idx:], dtype=float)
+            no_rebin_width = float(np.median(np.diff(no_rebin_energy))) if len(no_rebin_energy) > 1 else 1.0
+            for bin_idx, (energy_value, raw_asimov_value, asimov_value, raw_gauss_value, gauss_value) in enumerate(
+                zip(
+                    no_rebin_energy,
+                    raw_asimov_spectrum,
+                    smoothed_asimov_spectrum,
+                    raw_gaussian_spectrum,
+                    smoothed_gaussian_spectrum,
+                )
+            ):
+                significance_bins.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "EnergyLabel": energy,
+                        "NHits": int(nhit),
+                        "OpHits": int(ophit),
+                        "AdjCl": int(adjcl),
+                        "Threshold": float(args.threshold),
+                        "ExposureYears": float(args.exposure),
+                        "BinMode": "NoRebin",
+                        "BinIndex": int(bin_idx),
+                        "RecoEnergy": float(energy_value),
+                        "BinWidth": float(no_rebin_width),
+                        "RawAsimov": float(raw_asimov_value),
+                        "Asimov": float(asimov_value),
+                        "RawGaussian": float(raw_gauss_value),
+                        "Gaussian": float(gauss_value),
+                        **smoothing_info,
+                        **adaptive_rebin_info,
+                    }
+                )
 
-        adaptive_energy_axis = np.asarray(adaptive_energy_axis_display, dtype=float)
-        adaptive_widths = np.asarray(adaptive_bin_widths_display, dtype=float)
-        for bin_idx, (energy_value, width_value, raw_asimov_value, asimov_value, raw_gauss_value, gauss_value) in enumerate(
-            zip(
-                adaptive_energy_axis,
-                adaptive_widths,
-                raw_asimov_adaptive_spectrum,
-                smoothed_asimov_adaptive_spectrum,
-                raw_gaussian_adaptive_spectrum,
-                smoothed_gaussian_adaptive_spectrum,
-            )
-        ):
-            significance_bins.append(
-                {
-                    "Config": config,
-                    "Name": name,
-                    "EnergyLabel": energy,
-                    "NHits": int(nhit),
-                    "OpHits": int(ophit),
-                    "AdjCl": int(adjcl),
-                    "Threshold": float(args.threshold),
-                    "ExposureYears": float(args.exposure),
-                    "BinMode": "AdaptiveRebin",
-                    "BinIndex": int(bin_idx),
-                    "RecoEnergy": float(energy_value),
-                    "BinWidth": float(width_value),
-                    "RawAsimov": float(raw_asimov_value),
-                    "Asimov": float(asimov_value),
-                    "RawGaussian": float(raw_gauss_value),
-                    "Gaussian": float(gauss_value),
-                    **smoothing_info,
-                    **adaptive_rebin_info,
-                }
-            )
+            adaptive_energy_axis = np.asarray(adaptive_energy_axis_display, dtype=float)
+            adaptive_widths = np.asarray(adaptive_bin_widths_display, dtype=float)
+            for bin_idx, (energy_value, width_value, raw_asimov_value, asimov_value, raw_gauss_value, gauss_value) in enumerate(
+                zip(
+                    adaptive_energy_axis,
+                    adaptive_widths,
+                    raw_asimov_adaptive_spectrum,
+                    smoothed_asimov_adaptive_spectrum,
+                    raw_gaussian_adaptive_spectrum,
+                    smoothed_gaussian_adaptive_spectrum,
+                )
+            ):
+                significance_bins.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "EnergyLabel": energy,
+                        "NHits": int(nhit),
+                        "OpHits": int(ophit),
+                        "AdjCl": int(adjcl),
+                        "Threshold": float(args.threshold),
+                        "ExposureYears": float(args.exposure),
+                        "BinMode": "AdaptiveRebin",
+                        "BinIndex": int(bin_idx),
+                        "RecoEnergy": float(energy_value),
+                        "BinWidth": float(width_value),
+                        "RawAsimov": float(raw_asimov_value),
+                        "Asimov": float(asimov_value),
+                        "RawGaussian": float(raw_gauss_value),
+                        "Gaussian": float(gauss_value),
+                        **smoothing_info,
+                        **adaptive_rebin_info,
+                    }
+                )
 
     if args.debug:
         rprint(f"Maximum significance for {energy}: {sigmamax:.2f} sigma")
@@ -830,13 +843,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
         rm=args.rewrite,
         debug=args.debug,
     )
-    significance_bins_df = pd.DataFrame(significance_bins)
-    save_df(
-        significance_bins_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
-        config,
-        name,
-        filename=f"{energy}_HEP_SignificanceBins",
-        rm=args.rewrite,
-        debug=args.debug,
-    )
+    if _workflow["significance_bins"]:
+        significance_bins_df = pd.DataFrame(significance_bins)
+        save_df(
+            significance_bins_df,
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+            config,
+            name,
+            filename=f"{energy}_HEP_SignificanceBins",
+            rm=args.rewrite,
+            debug=args.debug,
+        )

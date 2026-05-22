@@ -37,6 +37,12 @@ parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument(
+    "--mc_threshold",
+    type=float,
+    default=get_analysis_threshold(str(root), "DAYNIGHT", stage="MC", fallback=0.0),
+    help="Minimum summed MCCounts required for every essential background component after cuts",
+)
+parser.add_argument(
     "--threshold",
     type=float,
     default=get_analysis_threshold(str(root), "DAYNIGHT", stage="SIGNIFICANCE", fallback=0.0),
@@ -67,12 +73,25 @@ explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
 #     is asymmetric around the nominal prediction.
 asymmetry_scales = [1.0 + args.earth_density_band, 1.0, 1.0 - args.earth_density_band]
 
-threshold_idx = np.where(daynight_rebin_centers > args.threshold)[0][0]
+background_config = get_background_config(str(root))
+essential_map = {
+    str(component).lower(): bool(is_essential)
+    for component, is_essential in background_config.get("ESSENTIAL", {}).items()
+}
+daynight_background_components = get_background_samples(str(root), "DAYNIGHT")
+essential_background_components = [
+    component
+    for component in daynight_background_components
+    if essential_map.get(component.lower(), False)
+]
+
+threshold_idx = np.where(daynight_rebin_centers >= args.threshold)[0][0]
 exposure_grid = np.logspace(-1, np.log10(args.exposure), 100)
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance"
 )
 smoothing_info = smoothing_metadata(smoothing_config)
+_workflow = get_workflow_flags(str(root), "DAYNIGHT")
 if args.debug:
     rprint(
         f"[cyan][INFO][/cyan] Threshold {args.threshold} found to correspond to index {threshold_idx}"
@@ -122,9 +141,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
             * (plot_df["AdjCl"] == adjcl_value)
         ]
         if this_df.empty:
-            rprint(
-                f"[yellow][WARNING] No data for {energy} with {nhit_value} nhits and {ophit_value} ophits {adjcl_value} adjcl[/yellow]"
-            )
+            if args.debug:
+                rprint(
+                    f"[yellow][WARNING] No data for {energy} with {nhit_value} nhits and {ophit_value} ophits {adjcl_value} adjcl[/yellow]"
+                )
             continue
 
         raw_background = np.zeros(len(daynight_rebin_centers) - threshold_idx, dtype=float)
@@ -133,13 +153,15 @@ for config, name, energy in product(args.config, args.name, args.energy):
         raw_signal_night = None
         smoothed_signal_day = None
         smoothed_signal_night = None
+        mc_sums = {}
 
         for component in components:
             comp_df = this_df.loc[this_df["Component"] == component].copy()
             if comp_df.empty:
-                rprint(
-                    f"[yellow][WARNING] No data for {component} in {energy} with {nhit_value} nhits, {ophit_value} ophits, {adjcl_value} adjcl[/yellow]"
-                )
+                if args.debug:
+                    rprint(
+                        f"[yellow][WARNING] No data for {component} in {energy} with {nhit_value} nhits, {ophit_value} ophits, {adjcl_value} adjcl[/yellow]"
+                    )
                 continue
             comp_df = comp_df.fillna(0)
             component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
@@ -178,8 +200,23 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 )
                 raw_background += raw_counts
                 smoothed_background += smooth_histogram_with_config(raw_counts, component_smoothing_config)
+                if "MCCounts" in comp_df.columns:
+                    mc_counts = np.sum(
+                        np.asarray(
+                            [np.asarray(row["MCCounts"][threshold_idx:], dtype=float) for _, row in comp_df.iterrows()],
+                        ),
+                        axis=0,
+                    )
+                    mc_sums[component] = float(np.sum(mc_counts))
 
         if raw_signal_day is None or raw_signal_night is None or smoothed_signal_day is None or smoothed_signal_night is None:
+            continue
+
+        has_required_background_mc = all(
+            mc_sums.get(component, 0.0) >= args.mc_threshold
+            for component in essential_background_components
+        )
+        if not has_required_background_mc:
             continue
 
         found_sigma2 = False
@@ -214,20 +251,23 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
                 # "ErrorGaussian" includes the Poisson statistical uncertainty on the
                 # background count (absolute: sqrt(N_bkg), not relative 1/sqrt(N_bkg)).
-                raw_gaussian_error = evaluate_significance(
-                    raw_signal,
-                    raw_background_total,
-                    background_uncertainty=np.where(
-                        factor * DAY_FRACTION * raw_background > 0,
-                        np.sqrt(factor * DAY_FRACTION * raw_background),
-                        0.0,
-                    ),
-                    type="gaussian",
-                )
-                raw_gaussian_error = np.nan_to_num(raw_gaussian_error, nan=0.0)
-                raw_gaussian_error_significances[kdx].append(
-                    float(np.sqrt(np.sum(np.power(raw_gaussian_error, 2))))
-                )
+                if _workflow["background_error"]:
+                    raw_gaussian_error = evaluate_significance(
+                        raw_signal,
+                        raw_background_total,
+                        background_uncertainty=np.where(
+                            factor * DAY_FRACTION * raw_background > 0,
+                            np.sqrt(factor * DAY_FRACTION * raw_background),
+                            0.0,
+                        ),
+                        type="gaussian",
+                    )
+                    raw_gaussian_error = np.nan_to_num(raw_gaussian_error, nan=0.0)
+                    raw_gaussian_error_significances[kdx].append(
+                        float(np.sqrt(np.sum(np.power(raw_gaussian_error, 2))))
+                    )
+                else:
+                    raw_gaussian_error_significances[kdx].append(0.0)
 
                 raw_gaussian = evaluate_significance(
                     raw_signal,
@@ -247,20 +287,23 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 )
                 smoothed_signal = np.where(smoothed_background_total == 0, 0, smoothed_signal)
 
-                smoothed_gaussian_error = evaluate_significance(
-                    smoothed_signal,
-                    smoothed_background_total,
-                    background_uncertainty=np.where(
-                        factor * DAY_FRACTION * smoothed_background > 0,
-                        np.sqrt(factor * DAY_FRACTION * smoothed_background),
-                        0.0,
-                    ),
-                    type="gaussian",
-                )
-                smoothed_gaussian_error = np.nan_to_num(smoothed_gaussian_error, nan=0.0)
-                smoothed_gaussian_error_significances[kdx].append(
-                    float(np.sqrt(np.sum(np.power(smoothed_gaussian_error, 2))))
-                )
+                if _workflow["background_error"]:
+                    smoothed_gaussian_error = evaluate_significance(
+                        smoothed_signal,
+                        smoothed_background_total,
+                        background_uncertainty=np.where(
+                            factor * DAY_FRACTION * smoothed_background > 0,
+                            np.sqrt(factor * DAY_FRACTION * smoothed_background),
+                            0.0,
+                        ),
+                        type="gaussian",
+                    )
+                    smoothed_gaussian_error = np.nan_to_num(smoothed_gaussian_error, nan=0.0)
+                    smoothed_gaussian_error_significances[kdx].append(
+                        float(np.sqrt(np.sum(np.power(smoothed_gaussian_error, 2))))
+                    )
+                else:
+                    smoothed_gaussian_error_significances[kdx].append(0.0)
 
                 smoothed_gaussian = evaluate_significance(
                     smoothed_signal,
@@ -373,27 +416,28 @@ for config, name, energy in product(args.config, args.name, args.energy):
             }
         )
 
-        significance_energy = np.asarray(daynight_rebin_centers[threshold_idx:], dtype=float)
-        for bin_idx, (energy_value, raw_value, smooth_value) in enumerate(
-            zip(significance_energy, raw_gaussian_spectrum, smoothed_gaussian_spectrum)
-        ):
-            significance_bins.append(
-                {
-                    "Config": config,
-                    "Name": name,
-                    "EnergyLabel": energy,
-                    "NHits": nhit_value,
-                    "OpHits": ophit_value,
-                    "AdjCl": adjcl_value,
-                    "Threshold": float(args.threshold),
-                    "ExposureYears": float(args.exposure),
-                    "BinIndex": int(bin_idx),
-                    "RecoEnergy": float(energy_value),
-                    "RawGaussian": float(raw_value),
-                    "Gaussian": float(smooth_value),
-                    **smoothing_info,
-                }
-            )
+        if _workflow["significance_bins"]:
+            significance_energy = np.asarray(daynight_rebin_centers[threshold_idx:], dtype=float)
+            for bin_idx, (energy_value, raw_value, smooth_value) in enumerate(
+                zip(significance_energy, raw_gaussian_spectrum, smoothed_gaussian_spectrum)
+            ):
+                significance_bins.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "EnergyLabel": energy,
+                        "NHits": nhit_value,
+                        "OpHits": ophit_value,
+                        "AdjCl": adjcl_value,
+                        "Threshold": float(args.threshold),
+                        "ExposureYears": float(args.exposure),
+                        "BinIndex": int(bin_idx),
+                        "RecoEnergy": float(energy_value),
+                        "RawGaussian": float(raw_value),
+                        "Gaussian": float(smooth_value),
+                        **smoothing_info,
+                    }
+                )
 
     if args.debug:
         rprint(f"Maximum significance for {energy}: {sigmamax:.2f} sigma")
@@ -407,13 +451,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
         rm=args.rewrite,
         debug=args.debug,
     )
-    significance_bins_df = pd.DataFrame(significance_bins)
-    save_df(
-        significance_bins_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
-        config=config,
-        name=name,
-        filename=f"{energy}_DayNight_SignificanceBins",
-        rm=args.rewrite,
-        debug=args.debug,
-    )
+    if _workflow["significance_bins"]:
+        significance_bins_df = pd.DataFrame(significance_bins)
+        save_df(
+            significance_bins_df,
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+            config=config,
+            name=name,
+            filename=f"{energy}_DayNight_SignificanceBins",
+            rm=args.rewrite,
+            debug=args.debug,
+        )

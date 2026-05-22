@@ -58,6 +58,37 @@ def load_contour_csv(
     return data
 
 
+def deep_merge_dict(base: dict, updates: dict) -> dict:
+    """Recursively merge updates into base, returning a new dict."""
+    merged = dict(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def merge_and_write_json(path: str, updates: dict, debug: bool = False) -> None:
+    """Load existing JSON at path (if any), deep-merge updates, and write back."""
+    existing: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f_in:
+                loaded = json.loads(f_in.read())
+                if isinstance(loaded, dict):
+                    existing = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
+    merged = deep_merge_dict(existing, updates)
+    if os.path.exists(path):
+        os.remove(path)
+    with open(path, "w") as f_out:
+        json.dump(merged, f_out, indent=2)
+    if debug:
+        rprint(f"Saved JSON to {path}")
+
+
 def prepare_file_save(
     path: str,
     config: Optional[str] = None,

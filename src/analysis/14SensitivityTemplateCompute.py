@@ -53,6 +53,13 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation backend forwarded to BackgroundTemplate and SignalTemplate.",
+)
 args = parser.parse_args()
 
 
@@ -77,6 +84,7 @@ def build_common_args() -> List[str]:
         "--rewrite" if args.rewrite else "--no-rewrite",
         "--debug" if args.debug else "--no-debug",
         "--no-plot",
+        "--oscillation_backend", args.oscillation_backend,
     ]
     if args.nhits is not None:
         common.extend(["--nhits", str(args.nhits)])

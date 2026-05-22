@@ -84,6 +84,13 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation backend. 'file' uses pre-computed pkl files for the nadir axis; 'prob3'/'nufast' derive it from analysis.json.",
+)
 
 args = parser.parse_args()
 if args.debug:
@@ -168,18 +175,22 @@ plot_df = explode(
 plot_df["Counts"] = plot_df["Counts"].replace(0, np.nan)
 plot_df["Counts/Energy"] = plot_df["Counts/Energy"].replace(0, np.nan)
 
-(dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
-    dm2=None,
-    sin13=None,
-    sin12=None,
-    path=f"{info['PATH']}/data/OSCILLATION/pkl/rebin/",
-    ext="pkl",
-)
-
-for dm2, sin13, sin12 in product(dm2_list, sin13_list, sin12_list):
-    oscillation_df = pd.read_pickle(
-        f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
+if args.oscillation_backend == "file":
+    (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
+        dm2=None,
+        sin13=None,
+        sin12=None,
+        path=f"{info['PATH']}/data/OSCILLATION/pkl/rebin/",
+        ext="pkl",
     )
+    for dm2, sin13, sin12 in product(dm2_list, sin13_list, sin12_list):
+        oscillation_df = pd.read_pickle(
+            f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
+        )
+else:
+    nadir_edges = np.linspace(-1.0, 1.0, analysis_info["NADIR_BINS"] + 1)
+    nadir_centers = 0.5 * (nadir_edges[1:] + nadir_edges[:-1])
+    oscillation_df = pd.DataFrame(index=nadir_centers)
 
 cut_entries = []
 if args.nhits is not None and args.adjcls is not None and args.ophits is not None:

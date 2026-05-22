@@ -36,21 +36,25 @@ parser.add_argument(
     type=float,
     help="The dm2 value for the analysis",
     default=None,
-    choices=[7.4e-5, 6.0e-5],
 )
 parser.add_argument(
     "--sin13",
     type=float,
     help="The sin^2(13) value for the analysis",
     default=None,
-    choices=[0.021],
 )
 parser.add_argument(
     "--sin12",
     type=float,
     help="The sin^2(12) value for the analysis",
     default=None,
-    choices=[0.303],
+)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    help="Oscillation backend: 'file' (pre-computed pkl scan), 'prob3', or 'nufast' (config grid)",
+    default=None,
+    choices=["file", "prob3", "nufast"],
 )
 parser.add_argument(
     "--folder",
@@ -129,7 +133,7 @@ name = args.name
 configs = {config: [name]}
 
 threshold = args.threshold
-thld = np.where(sensitivity_rebin_centers > threshold)[0][0]
+thld = np.where(sensitivity_rebin_centers >= threshold)[0][0]
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="SENSITIVITY", dimensions="2d", stage="significance"
 )
@@ -184,6 +188,7 @@ def resolve_background_template(background_path: str, config: str, nhits: int, a
         f"using NHits{best_cuts.get('NHits')} AdjCl{best_cuts.get('AdjCl')} OpHits{best_cuts.get('OpHits')} instead"
     )
     return best
+
 
 
 def _load_best_cut_map(info: dict, args, config: str, name: str):
@@ -367,6 +372,7 @@ for config in configs:
 
         cut_entries = _resolve_cut_entries(paths, info, args, analysis_info, config, name)
 
+        osc_backend = args.oscillation_backend or analysis_info.get("OSCILLATION_BACKEND", "file")
         (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
             dm2=args.dm2,
             sin13=args.sin13,
@@ -375,6 +381,7 @@ for config in configs:
             ext="pkl",
             auto=args.dm2 is None and args.sin13 is None and args.sin12 is None,
             debug=args.debug,
+            backend=osc_backend,
         )
         cut_quality = []
 
@@ -599,3 +606,18 @@ for config in configs:
             rprint(
                 f"[cyan][INFO][/cyan] SENSITIVITY Cuts: NHits={best['NHits']} AdjCl={best['AdjCl']} OpHits={best['OpHits']} (score={best['Score']:.2f})"
             )
+
+            json_payload: dict = {}
+            for (cfg, nm, en), values in best_payload.items():
+                json_payload.setdefault(cfg, {}).setdefault(nm, {})[en] = values
+            for local_dir in [
+                f"{root}/data/analysis/sensitivity-json/{args.folder.lower()}/{config}/{name}",
+                f"{root}/data/analysis/best-sigma-json/sensitivity/{args.folder.lower()}/{config}/{name}",
+            ]:
+                if not os.path.exists(local_dir):
+                    os.makedirs(local_dir)
+                merge_and_write_json(
+                    f"{local_dir}/{config}_{name}_highest_Sensitivity.json",
+                    json_payload,
+                    debug=args.debug,
+                )

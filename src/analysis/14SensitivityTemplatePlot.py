@@ -69,6 +69,13 @@ parser.add_argument("--exposure", type=float, default=30)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation backend used when computing templates. Determines fallback for nadir axis when pkl is absent.",
+)
 args = parser.parse_args()
 
 
@@ -177,8 +184,12 @@ def load_oscillation_axis() -> np.ndarray:
         f"{info['PATH']}/data/OSCILLATION/pkl/rebin/"
         f"osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
     )
-    if not os.path.exists(osc_path):
-        raise FileNotFoundError(f"Missing oscillation axis pickle: {osc_path}")
+    if args.oscillation_backend != "file" or not os.path.exists(osc_path):
+        nadir_bins  = analysis_info.get("NADIR_BINS",  40)
+        nadir_range = analysis_info.get("NADIR_RANGE", [-1.0, 1.0])
+        nadir_edges   = np.linspace(nadir_range[0], nadir_range[1], nadir_bins + 1)
+        nadir_centers = 0.5 * (nadir_edges[1:] + nadir_edges[:-1])
+        return nadir_centers.astype(float)
     oscillation_df = pd.read_pickle(osc_path)
     return np.asarray(list(oscillation_df.index), dtype=float)
 

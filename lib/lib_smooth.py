@@ -1,4 +1,5 @@
 import json
+import os
 from copy import deepcopy
 from typing import Any, Dict, Optional, Tuple
 
@@ -77,6 +78,8 @@ def get_smoothing_config(
     energy: Optional[str] = None,
     dimensions: Any = "1d",
     stage: Optional[str] = None,
+    config_name: Optional[str] = None,
+    sample_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     analysis_info = load_analysis_info(root)
     config = deepcopy(DEFAULT_SMOOTHING_CONFIG)
@@ -124,6 +127,46 @@ def get_smoothing_config(
     config["method"] = _normalize_method(
         config.get("method"), config.get("enabled", False)
     )
+
+    # Per-config/name sigma from CONFIG_OVERRIDES (written by optimize_smoothing.py --patch).
+    # Active only when config_name and sample_name are provided; lower priority than env var.
+    if analysis_name is not None and config_name is not None and sample_name is not None:
+        _env_key = f"SOLAR_SMOOTHING_SIGMA_{str(analysis_name).upper()}"
+        if _env_key not in os.environ:
+            _co = smoothing_info.get("CONFIG_OVERRIDES", {})
+            _recommended = (
+                _co.get(str(config_name), {})
+                .get(str(sample_name), {})
+                .get(str(analysis_name).upper(), {})
+                .get("recommended_sigma")
+            )
+            if _recommended is not None:
+                try:
+                    _sigma = float(_recommended)
+                    if _sigma > 0:
+                        if dimension_key == "1d":
+                            config["params"]["sigma"] = _sigma
+                        else:
+                            config["params"]["sigma_x"] = _sigma
+                except (ValueError, TypeError):
+                    pass
+
+    # Per-config/name sigma override: set by orchestrator via env var after optimization.
+    # Takes priority over analysis.json values so each production uses its own bandwidth.
+    if analysis_name is not None:
+        env_sigma_str = os.environ.get(f"SOLAR_SMOOTHING_SIGMA_{str(analysis_name).upper()}")
+        if env_sigma_str is not None:
+            try:
+                env_sigma = float(env_sigma_str)
+                if env_sigma > 0:
+                    if dimension_key == "1d":
+                        config["params"]["sigma"] = env_sigma
+                    else:
+                        config["params"]["sigma_x"] = env_sigma
+                        config["params"]["sigma_y"] = env_sigma
+            except (ValueError, TypeError):
+                pass
+
     return config
 
 
@@ -422,6 +465,12 @@ def build_adaptive_tail_starts(
     min_group_bins = max(1, int(config.get("min_group_bins", 1)))
     max_group_bins = max(0, int(config.get("max_group_bins", 0)))
     objective = str(config.get("objective", "max_sigma_proxy")).strip().lower()
+
+    if objective == "max_sigma_proxy":
+        zeros = np.zeros_like(signal)
+        return _build_adaptive_tail_starts_max_sigma_proxy(
+            signal, zeros, zeros, signal, threshold, min_group_bins, max_group_bins,
+        )
 
     if objective == "greedy_tail":
         return _build_adaptive_tail_starts_greedy(

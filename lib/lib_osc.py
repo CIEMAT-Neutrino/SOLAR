@@ -103,6 +103,7 @@ def get_oscillation_datafiles(
     ext: str = "root",
     auto: bool = False,
     debug: bool = False,
+    backend: str = "file",
 ):
     """
     This function can be used to obtain the oscillation data files for DUNE's solar analysis.
@@ -119,6 +120,25 @@ def get_oscillation_datafiles(
     Returns:
         (found_dm2,found_sin13,found_sin12): tuple containing the dm2, sin13 and sin12 values of the found oscillation data files.
     """
+    if backend != "file":
+        from itertools import product as _product
+        analysis_info = load_analysis_info(str(root))
+        grid = analysis_info.get("OSCILLATION_GRID", {})
+        dm2_vals   = [dm2]   if dm2   is not None else grid.get("dm2",   [analysis_info["SOLAR_DM2"]])
+        sin13_vals = [sin13] if sin13 is not None else grid.get("sin13", [analysis_info["SIN13"]])
+        sin12_vals = [sin12] if sin12 is not None else grid.get("sin12", [analysis_info["SIN12"]])
+        if isinstance(dm2_vals,   float): dm2_vals   = [dm2_vals]
+        if isinstance(sin13_vals, float): sin13_vals = [sin13_vals]
+        if isinstance(sin12_vals, float): sin12_vals = [sin12_vals]
+        params = list(_product(dm2_vals, sin13_vals, sin12_vals))
+        if debug:
+            rprint(f"[cyan]get_oscillation_datafiles backend={backend}: {len(params)} grid point(s) from OSCILLATION_GRID[/cyan]")
+        return (
+            [p[0] for p in params],
+            [p[1] for p in params],
+            [p[2] for p in params],
+        )
+
     data_files = glob.glob(f"{path}" + "*_dm2_*_sin13_*_sin12_*")
     string_dm2, trash, string_sin13, trash, string_sin12 = zip(
         *[
@@ -177,6 +197,81 @@ def get_oscillation_datafiles(
     return (found_dm2, found_sin13, found_sin12)
 
 
+def _get_oscillation_map_computed(
+    dm2=None, sin13=None, sin12=None,
+    output="df", backend="prob3",
+    separate_day_night=False, debug=False,
+):
+    """
+    Compute oscillation maps on-the-fly using prob3 or nufast backend.
+    Returns same dict structure as get_oscillation_map(backend="file").
+    """
+    from lib.lib_osc_backends import (
+        compute_prob3, compute_nufast,
+        get_nadir_pdf_file, get_nadir_pdf_nufast,
+        combine_day_night,
+    )
+    analysis_info = load_analysis_info(str(root))
+
+    if dm2 is None:   dm2   = [analysis_info["SOLAR_DM2"]]
+    if sin13 is None: sin13 = [analysis_info["SIN13"]]
+    if sin12 is None: sin12 = [analysis_info["SIN12"]]
+    if isinstance(dm2,   float): dm2   = [dm2]
+    if isinstance(sin13, float): sin13 = [sin13]
+    if isinstance(sin12, float): sin12 = [sin12]
+
+    e_range = analysis_info.get("OSC_ENERGY_RANGE", analysis_info.get("RECO_ENERGY_RANGE", [0, 30]))
+    e_bins  = analysis_info.get("OSC_ENERGY_BINS",   120)
+    energy_edges = np.linspace(e_range[0], e_range[1], e_bins + 1)
+    nadir_edges = np.linspace(-1.0, 1.0, analysis_info["NADIR_BINS"] + 1)
+    nadir_centers = 0.5 * (nadir_edges[1:] + nadir_edges[:-1])
+
+    latitude_deg = analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
+
+    if backend == "nufast":
+        nadir_pdf = get_nadir_pdf_nufast(nadir_centers, latitude_deg)
+    else:
+        try:
+            nadir_pdf = get_nadir_pdf_file(nadir_centers=nadir_centers)
+        except Exception:
+            nadir_pdf = get_nadir_pdf_nufast(nadir_centers, latitude_deg)
+
+    result_dict = {}
+    for dm2_v, sin13_v, sin12_v in zip(dm2, sin13, sin12):
+        key = (float("%.3e" % dm2_v), sin13_v, float("%.3e" % sin12_v))
+        if debug:
+            print_colored(f"Computing oscillogram [{backend}]: dm2={key[0]:.3e} sin13={key[1]:.3e} sin12={key[2]:.3e}", "DEBUG")
+
+        if backend == "prob3":
+            osc = compute_prob3(key[0], key[1], key[2], energy_edges, nadir_edges)
+        else:
+            osc = compute_nufast(key[0], key[1], key[2], energy_edges, nadir_edges,
+                                 latitude_deg=latitude_deg)
+
+        if separate_day_night:
+            result_dict[key] = osc
+        else:
+            df = combine_day_night(osc, nadir_pdf)  # mirrors process_oscillation_map()
+            if output in ("interp1d", "interp2d"):
+                from scipy import interpolate as _interp
+                osc_map_x = df.columns.to_list()
+                osc_map_y = df.index.to_list()
+                if output == "interp1d":
+                    result_dict[key] = _interp.interp1d(
+                        osc_map_x, np.sum(df.values, axis=0),
+                        kind="linear", fill_value="extrapolate",
+                    )
+                else:
+                    result_dict[key] = _interp.RegularGridInterpolator(
+                        (osc_map_x, osc_map_y), df.to_numpy().T,
+                        method="linear", bounds_error=False, fill_value=1e-6,
+                    )
+            else:
+                result_dict[key] = df
+
+    return result_dict
+
+
 def get_oscillation_map(
     path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/",
     dm2: Optional[list[float]] = None,
@@ -189,6 +284,8 @@ def get_oscillation_map(
     output: str = "df",
     save: bool = False,
     debug: bool = False,
+    backend: str = "file",
+    separate_day_night: bool = False,
 ):
     """
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
@@ -209,6 +306,15 @@ def get_oscillation_map(
     Returns:
         interp_dict (dict): Dictionary containing the interpolation functions for each dm2, sin13 and sin12 value.
     """
+
+    # ── Non-file backends ────────────────────────────────────────────────────
+    if backend in ("prob3", "nufast"):
+        return _get_oscillation_map_computed(
+            dm2=dm2, sin13=sin13, sin12=sin12,
+            output=output, backend=backend,
+            separate_day_night=separate_day_night,
+            debug=debug,
+        )
 
     df_dict = {}
     interp_dict = {}

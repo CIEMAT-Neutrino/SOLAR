@@ -44,7 +44,7 @@ parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralA
 parser.add_argument("--name", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--exposure", type=float, default=30)
-parser.add_argument("--signal_uncertainty", type=float, default=0.04)
+parser.add_argument("--signal_uncertainty", type=float, default=0.3)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
 parser.add_argument(
     "--energy",
@@ -124,9 +124,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
         "Name",
         "EnergyLabel",
         "Variable",
+        "SpectrumType",
         "Exposure",
         "Significance",
-        "RawSignificance",
     ]
     missing_columns = [col for col in required_columns if col not in exposure_df.columns]
     if missing_columns:
@@ -160,19 +160,25 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     significance_max = 0.0
     for variable in reference_variables:
-        row = exposure_rows.loc[exposure_rows["Variable"] == variable]
-        if row.empty:
+        smoothed_row = exposure_rows.loc[
+            (exposure_rows["Variable"] == variable) & (exposure_rows["SpectrumType"] == "Smoothed")
+        ]
+        raw_row = exposure_rows.loc[
+            (exposure_rows["Variable"] == variable) & (exposure_rows["SpectrumType"] == "Raw")
+        ]
+        if smoothed_row.empty and raw_row.empty:
             continue
 
-        xvals = np.asarray(row["Exposure"].values[0], dtype=float)
+        base_row = smoothed_row if not smoothed_row.empty else raw_row
+        xvals = np.asarray(base_row["Exposure"].values[0], dtype=float)
         yvals = np.nan_to_num(
-            np.asarray(row["Significance"].values[0], dtype=float),
+            np.asarray(smoothed_row["Significance"].values[0] if not smoothed_row.empty else np.zeros_like(xvals), dtype=float),
             nan=0.0,
             posinf=0.0,
             neginf=0.0,
         )
         yraw = np.nan_to_num(
-            np.asarray(row["RawSignificance"].values[0], dtype=float),
+            np.asarray(raw_row["Significance"].values[0] if not raw_row.empty else np.zeros_like(xvals), dtype=float),
             nan=0.0,
             posinf=0.0,
             neginf=0.0,
@@ -180,19 +186,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
         y_upper = None
         y_lower = None
         if (
-            "SignificanceError+" in row.columns
-            and "SignificanceError-" in row.columns
-            and len(row["SignificanceError+"].values) > 0
-            and len(row["SignificanceError-"].values) > 0
+            not smoothed_row.empty
+            and "SignificanceError+" in smoothed_row.columns
+            and "SignificanceError-" in smoothed_row.columns
+            and smoothed_row["SignificanceError+"].values[0] is not None
+            and smoothed_row["SignificanceError-"].values[0] is not None
         ):
             err_plus = np.nan_to_num(
-                np.asarray(row["SignificanceError+"].values[0], dtype=float),
+                np.asarray(smoothed_row["SignificanceError+"].values[0], dtype=float),
                 nan=0.0,
                 posinf=0.0,
                 neginf=0.0,
             )
             err_minus = np.nan_to_num(
-                np.asarray(row["SignificanceError-"].values[0], dtype=float),
+                np.asarray(smoothed_row["SignificanceError-"].values[0], dtype=float),
                 nan=0.0,
                 posinf=0.0,
                 neginf=0.0,
@@ -251,15 +258,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
         row=1,
         col=1,
     )
-
-    # for sigma, cl in zip([1, 2, 3, 4, 5], [0.6827, 0.9545, 0.9973, 0.9999, 0.999999]):
-    #     fig.add_hline(y=sigma, line_dash="dash", line_color="grey")
-    #     fig.add_annotation(
-    #         x=max(0.5, args.exposure * 0.1),
-    #         y=sigma + 0.2,
-    #         text=f"{100 * cl:.2f}% CL",
-    #         showarrow=False,
-    #     )
 
     fig.update_layout(
         legend_title_text="",

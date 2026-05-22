@@ -52,6 +52,13 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--oscillation_backend",
+    type=str,
+    choices=["file", "prob3", "nufast"],
+    default="file",
+    help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -120,6 +127,7 @@ run = compute_reco_workflow(
             "DEFAULT_SIGNAL_AZIMUTH": ["mean", "day", "night"],
             "PARTICLE_TYPE": "signal",
             "PARTICLE_WEIGHTING": "volume",
+            "OSCILLATION_BACKEND": args.oscillation_backend,
         }
         if "marley" in args.name
         else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
