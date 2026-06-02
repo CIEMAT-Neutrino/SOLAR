@@ -277,10 +277,11 @@ for config in configs:
         best_cuts_by_analysis = {}
         if args.nhits is None and args.ophits is None and args.adjcls is None and (args.export_raw or args.best_cuts_only):
             for analysis in args.analysis:
-                # Best cuts are config/folder level (combined all-samples optimization)
-                # All samples use same cuts; Pass 3 applies them to each sample
-                cuts = _load_best_cuts(analysis, args.folder, config)
-                best_cuts_by_analysis[analysis] = cuts.get(energy, {})
+                # Best cuts only exist for Sensitivity (04_best_cuts.py)
+                # DayNight/HEP don't have best cuts JSON files
+                if analysis == "Sensitivity":
+                    cuts = _load_best_cuts(analysis, args.folder, config)
+                    best_cuts_by_analysis[analysis] = cuts.get(energy, {})
 
         # Build scan ranges: full grid by default; reduced to best-cut tuples for Pass 3.
         if args.best_cuts_only:
