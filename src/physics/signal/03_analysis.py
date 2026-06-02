@@ -18,7 +18,10 @@ _ANALYSIS_LOCAL_DIR = {
 
 
 def _load_best_cuts(analysis, folder, config):
-    """Load best cuts from combined (all-samples) optimization. Not sample-specific."""
+    """Load best cuts from combined (all-samples) optimization. Not sample-specific.
+
+    Returns dict: {energy: {NHits, AdjCl, OpHits, Score, ...}}
+    """
     dir_name = _ANALYSIS_LOCAL_DIR.get(analysis)
     if not dir_name:
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: unknown analysis '{analysis}' — no best cuts loaded")
@@ -28,10 +31,10 @@ def _load_best_cuts(analysis, folder, config):
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: file not found — {path}")
         return {}
     d = json.load(open(path))
-    # Best cuts are config/folder level (all samples combined), not per-sample
-    result = d.get(analysis, {}) if isinstance(d, dict) and analysis in d else d
+    # JSON structure: {config: {energy: {NHits, AdjCl, OpHits, ...}}}
+    result = d.get(config, {})
     if not result:
-        rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: JSON exists but no entry for {analysis} — {path}")
+        rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: JSON exists but no entry for {config} — {path}")
     return result
 
 
