@@ -448,6 +448,11 @@ def test_statistic_args_for() -> List[str]:
     return ["--test_statistic", args.test_statistic]
 
 
+def reference_args_for(reference: str) -> List[str]:
+    # Omit --reference when --all_metrics enabled to show all available metrics
+    return [] if args.all_metrics else ["--reference", reference]
+
+
 def nuisance_profile_args_for(profile_name: str) -> List[str]:
     return ["--nuisance_profile", profile_name]
 
@@ -753,11 +758,11 @@ def run_hep_stage(config: str, folder: str, name: str):
         )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--reference", hep_significance_reference],
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure"] + reference_args_for(hep_significance_reference),
     )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--reference", hep_significance_reference, "--pkl_label", "highest_spiked"],
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--pkl_label", "highest_spiked"] + reference_args_for(hep_significance_reference),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -779,7 +784,7 @@ def run_hep_stage(config: str, folder: str, name: str):
     run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"])
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin", "--reference", hep_significance_reference],
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference),
     )
 
     # HEP stage summary
