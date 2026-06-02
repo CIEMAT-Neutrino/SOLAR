@@ -598,15 +598,16 @@ for config in configs:
 
             json_payload: dict = {}
             for (cfg, nm, en), values in best_payload.items():
-                json_payload.setdefault(cfg, {}).setdefault(nm, {})[en] = values
+                # Flatten to config/energy level (all samples combined)
+                json_payload.setdefault(cfg, {}).setdefault(en, {}).update(values)
             for local_dir in [
-                f"{root}/data/analysis/sensitivity-json/{args.folder.lower()}/{config}/{name}",
-                f"{root}/data/analysis/best-sigma-json/sensitivity/{args.folder.lower()}/{config}/{name}",
+                f"{root}/data/analysis/sensitivity-json/{args.folder.lower()}/{config}",
+                f"{root}/data/analysis/best-sigma-json/sensitivity/{args.folder.lower()}/{config}",
             ]:
                 if not os.path.exists(local_dir):
                     os.makedirs(local_dir)
                 merge_and_write_json(
-                    f"{local_dir}/{config}_{name}_highest_Sensitivity.json",
+                    f"{local_dir}/{config}_highest_Sensitivity.json",
                     json_payload,
                     debug=args.debug,
                 )
