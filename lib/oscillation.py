@@ -690,9 +690,9 @@ def rebin_df(
     """
     analysis_info = load_analysis_info(str(root))
     energy_edges = np.linspace(
-        analysis_info["RECO_ENERGY_RANGE"][0],
-        analysis_info["RECO_ENERGY_RANGE"][1],
-        analysis_info["RECO_ENERGY_BINS"] + 1,
+        analysis_info["OSC_ENERGY_RANGE"][0],
+        analysis_info["OSC_ENERGY_RANGE"][1],
+        analysis_info["OSC_ENERGY_BINS"] + 1,
     )
     energy_centers = (energy_edges[1:] + energy_edges[:-1]) / 2
 
