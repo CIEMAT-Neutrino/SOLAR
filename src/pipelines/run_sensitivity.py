@@ -483,6 +483,14 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             + ["--mc_threshold", str(args.fiducial_mc_threshold)],
         )
 
+    # Visualize fiducial results before lengthy analysis
+    plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", available_names[0]]
+    run_analysis_script(
+        "src/physics/common/significance_plot.py",
+        plot_base_args + energy_args_for(args.energy) + exposure_arg_for()
+        + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis],
+    )
+
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
     if args.rebin:
         for name in available_names:
