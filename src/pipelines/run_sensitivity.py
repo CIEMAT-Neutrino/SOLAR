@@ -257,7 +257,7 @@ parser.add_argument(
     "--all_metrics",
     action=argparse.BooleanOptionalAction,
     default=False,
-    help="Override config defaults and run all possible metric combinations in 01_daynight.py, 01_hep.py, and 06_significance.py. Pass --all_metrics to enable.",
+    help="Override config defaults and run all test statistic metrics in 01_daynight.py and 01_hep.py (Gaussian, Asimov, etc). Pass --all_metrics to enable.",
 )
 parser.add_argument(
     "--test_statistic",
@@ -843,7 +843,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + all_metrics_args_for(),
+                    background_base_args + energy_args + nuisance_profile_args_for(profile_name) + oscillation_args_for(),
                 )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
