@@ -254,6 +254,22 @@ parser.add_argument(
     help="Run full cut scan in signal/03_analysis.py (rebinned DataFrames + AnalysisMask). Pass --no-rebin to skip; raw array and FiducializationMask export always runs.",
 )
 parser.add_argument(
+    "--all_metrics",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Override config defaults and run all possible metric combinations in 01_daynight.py, 01_hep.py, and 06_significance.py. Pass --all_metrics to enable.",
+)
+parser.add_argument(
+    "--test_statistic",
+    type=str,
+    choices=["asimov", "gaussian", "all"],
+    default="asimov",
+    help=(
+        "DayNight test statistic: 'asimov' (default), 'gaussian', or 'all' for both. "
+        "Controls which significance metrics are computed in 01_daynight.py."
+    ),
+)
+parser.add_argument(
     "--verbose",
     type=str,
     choices=["quiet", "normal", "verbose"],
@@ -280,7 +296,7 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help=(
         "Oscillation backend propagated to all workflow stages. "
         "'file' uses pre-computed pkl oscillograms; "
@@ -424,6 +440,14 @@ def stacked_args_for() -> List[str]:
     return ["--stacked"] if args.stacked else ["--no-stacked"]
 
 
+def all_metrics_args_for() -> List[str]:
+    return ["--all_metrics"] if args.all_metrics else []
+
+
+def test_statistic_args_for() -> List[str]:
+    return ["--test_statistic", args.test_statistic]
+
+
 def nuisance_profile_args_for(profile_name: str) -> List[str]:
     return ["--nuisance_profile", profile_name]
 
@@ -459,29 +483,33 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             + ["--mc_threshold", str(args.fiducial_mc_threshold)],
         )
 
-    # Pass 1: always runs — export raw arrays + FiducializationMask per analysis; no cut scan
-    for name in available_names:
-        sample_args = base_args + ["--name", name]
-        run_analysis_script(
-            "src/physics/signal/03_analysis.py",
-            sample_args
-            + analysis_selection_args
-            + energy_args
-            + cut_args
-            + oscillation_args_for()
-            + ["--export_fiducial", "--skip_scan", "--no-plot"],
-        )
-
-    # Pass 2: full cut scan → rebinned DataFrames + AnalysisMask at best cuts
+    # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
     if args.rebin:
         for name in available_names:
             sample_args = base_args + ["--name", name]
             run_analysis_script(
                 "src/physics/signal/03_analysis.py",
-                sample_args + analysis_selection_args + energy_args + cut_args + oscillation_args_for(),
+                sample_args
+                + analysis_selection_args
+                + energy_args
+                + cut_args
+                + oscillation_args_for()
+                + ["--export_fiducial"],
             )
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/03_analysis.py cut scan (--no-rebin).")
+        # Still export raw arrays + FiducializationMask even when skipping cut scan
+        for name in available_names:
+            sample_args = base_args + ["--name", name]
+            run_analysis_script(
+                "src/physics/signal/03_analysis.py",
+                sample_args
+                + analysis_selection_args
+                + energy_args
+                + cut_args
+                + oscillation_args_for()
+                + ["--export_fiducial", "--skip_scan", "--no-plot"],
+            )
 
 
 
@@ -501,8 +529,16 @@ def _set_smoothing_env(analysis_name: str, config: str, name: str, folder: str) 
                 s = float(data.get("recommended_sigma", 0.0))
                 if s > 0:
                     sigmas.append(s)
-            except Exception:
-                pass
+                elif s == 0.0:
+                    rprint(
+                        f"[yellow][WARNING][/yellow] Smoothing sigma=0.0 in {sigma_path} "
+                        "(key 'recommended_sigma' missing or zero) — not applied."
+                    )
+            except Exception as _exc:
+                rprint(
+                    f"[yellow][WARNING][/yellow] Could not read smoothing sigma from "
+                    f"{sigma_path}: {_exc} — skipping."
+                )
     if sigmas:
         sigma = max(sigmas)
         os.environ[f"SOLAR_SMOOTHING_SIGMA_{analysis_name.upper()}"] = str(sigma)
@@ -553,7 +589,7 @@ def run_daynight_stage(config: str, folder: str, name: str):
                 "--day_fraction", str(args.day_fraction),
                 "--day_fraction_band", str(args.day_fraction_band),
             ]
-            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args)
+            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + test_statistic_args_for() + all_metrics_args_for())
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference],
@@ -701,7 +737,7 @@ def run_hep_stage(config: str, folder: str, name: str):
         if args.significance:
             run_analysis_script(
                 "src/physics/hep/01_hep.py",
-                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)],
+                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for(),
             )
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
@@ -738,6 +774,18 @@ def run_hep_stage(config: str, folder: str, name: str):
         analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin", "--reference", hep_significance_reference],
     )
 
+    # HEP stage summary
+    rprint(
+        "\n[cyan][INFO][/cyan] HEP stage outputs (with --all_metrics, additional metric variants will appear):"
+        "\n  • exposure_plot (main) — exposure vs significance curve"
+        "\n  • exposure_plot (highest_spiked) — same with spiked cuts only"
+        "\n  • significance_plot (main) — 2D contours [reference={hep_significance_reference}]"
+        "\n  • significance_plot (highest_spiked) — 2D contours for spiked cuts only"
+        "\n  • significance_comparison — Gaussian vs Asimov overlay"
+        "\n  • exposure_plot (comparison mode) — exposure comparison across metrics"
+        "\n  • exposure_plot (rebin mode) — rebinned energy intervals"
+    )
+
 
 
 def run_sensitivity_stage(config: str, folder: str, name: str):
@@ -760,7 +808,6 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
     else:
         profile_names = [_default_profile] if _default_profile in _nuisance_profiles else _all_profiles[:1]
 
-    run_analysis_script("src/physics/common/significance_plot.py", plot_base_args + energy_args_for(args.energy) + exposure_arg_for() + ["--analysis", "Fiducial", "--fiducial-analyses", "Sensitivity"])
     for energy in args.energy:
         energy_args = common_analysis_args_for([energy])
         if args.computation and args.significance:
@@ -783,7 +830,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + nuisance_profile_args_for(profile_name) + oscillation_args_for(),
+                    background_base_args + energy_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + all_metrics_args_for(),
                 )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
@@ -863,6 +910,12 @@ for config, folder in product(args.config, args.folder):
     rprint(f"Processing config={config} folder={folder} analyses={','.join(args.analysis)}")
     run_shared_prerequisites(config, folder, available_names)
 
+    # Show fiducial selections early, right after best_fiducial optimization completes
+    if args.plot:
+        rprint("\n[cyan][INFO][/cyan] Displaying fiducial selections...")
+        plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", "marley"]
+        run_analysis_script("src/physics/common/significance_plot.py", plot_base_args + energy_args_for(args.energy) + exposure_arg_for() + ["--analysis", "Fiducial", "--fiducial-analyses", "DayNight", "HEP", "Sensitivity"])
+
     for name in available_names:
         if "marley" not in name:
             continue
@@ -872,5 +925,22 @@ for config, folder in product(args.config, args.folder):
             run_hep_stage(config, folder, name)
         if "Sensitivity" in args.analysis:
             run_sensitivity_stage(config, folder, name)
+
+    # Pass 3: post-analysis — export AnalysisMask at best cuts for all productions
+    # Best-cuts JSONs exist for marley; apply same cuts to all samples
+    if args.computation:
+        base_args = base_args_for(config, folder, include_background=False)
+        analysis_selection_args = ["--analysis", *args.analysis]
+        energy_args = energy_args_for(args.energy)
+        for name in available_names:
+            sample_args = base_args + ["--name", name]
+            run_analysis_script(
+                "src/physics/signal/03_analysis.py",
+                sample_args
+                + analysis_selection_args
+                + energy_args
+                + oscillation_args_for()
+                + ["--best_cuts_only", "--no-plot"],
+            )
 
 run_presentations()
