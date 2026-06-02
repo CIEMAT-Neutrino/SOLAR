@@ -592,7 +592,6 @@ def run_daynight_stage(config: str, folder: str, name: str):
     reference = args.reference or "Smoothed"
     uncertainty_args = uncertainty_args_for("DAYNIGHT")
 
-    run_analysis_script("src/physics/common/significance_plot.py", plot_base_args + energy_args_for(args.energy) + exposure_arg_for() + ["--analysis", "Fiducial", "--fiducial-analyses", "DayNight"])
     if args.computation:
         if args.significance:
             daynight_args = [
@@ -745,7 +744,6 @@ def run_hep_stage(config: str, folder: str, name: str):
             f"for config={config} folder={folder}."
         )
 
-    run_analysis_script("src/physics/common/significance_plot.py", plot_base_args + energy_args_for(args.energy) + exposure_arg_for() + ["--analysis", "Fiducial", "--fiducial-analyses", "HEP"])
     if args.computation:
         if args.significance:
             run_analysis_script(
@@ -924,10 +922,6 @@ for config, folder in product(args.config, args.folder):
     run_shared_prerequisites(config, folder, available_names)
 
     # Show fiducial selections early, right after best_fiducial optimization completes
-    if args.plot:
-        rprint("\n[cyan][INFO][/cyan] Displaying fiducial selections...")
-        plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", "marley"]
-        run_analysis_script("src/physics/common/significance_plot.py", plot_base_args + energy_args_for(args.energy) + exposure_arg_for() + ["--analysis", "Fiducial", "--fiducial-analyses", "DayNight", "HEP", "Sensitivity"])
 
     for name in available_names:
         if "marley" not in name:
