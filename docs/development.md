@@ -29,4 +29,4 @@ make html
 
 - Many scripts assume existing DUNE-produced ROOT outputs and configuration-dependent filesystem paths.
 - `scripts/setup.sh` is aimed at shared CIEMAT storage workflows using `sshfs` mounts.
-- Generated products typically land in `data/`, `images/`, and sometimes `presentations/`.
+- Generated products typically land in `data/`, `images/`, and sometimes `output/presentations/`.

@@ -1,0 +1,109 @@
+{
+  "SMOOTHING": {
+    "preserve_integral": true,
+    "qa": true,
+    "report": true,
+    "ANALYSES": {
+      "DAYNIGHT": {
+        "enabled": true,
+        "method": "gaussian",
+        "STAGES": {
+          "FIDUCIAL": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.4318
+              }
+            }
+          },
+          "SIGNIFICANCE": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.4318
+              }
+            }
+          }
+        }
+      },
+      "HEP": {
+        "enabled": true,
+        "method": "gaussian",
+        "STAGES": {
+          "FIDUCIAL": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological", "8B"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.6191
+              }
+            }
+          },
+          "SIGNIFICANCE": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological", "8B"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.6191
+              }
+            }
+          }
+        }
+      },
+      "SENSITIVITY": {
+        "enabled": true,
+        "method": "gaussian",
+        "STAGES": {
+          "FIDUCIAL": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.5968
+              }
+            }
+          },
+          "SIGNIFICANCE": {
+            "component_mode": "only",
+            "components": ["gamma", "neutron", "radiological"],
+            "dimensions": {
+              "1d": {
+                "sigma": 0.5968
+              }
+            }
+          }
+        }
+      }
+    },
+    "CONFIG_OVERRIDES": {
+      "hd_1x2x6_centralAPA": {
+        "marley": {
+          "DAYNIGHT": {
+            "recommended_sigma": 0.5759
+          },
+          "HEP": {
+            "recommended_sigma": 0.8474
+          },
+          "SENSITIVITY": {
+            "recommended_sigma": 0.9546
+          }
+        }
+      },
+      "hd_1x2x6_lateralAPA": {
+        "marley": {
+          "DAYNIGHT": {
+            "recommended_sigma": 0.4318
+          },
+          "HEP": {
+            "recommended_sigma": 0.6191
+          },
+          "SENSITIVITY": {
+            "recommended_sigma": 0.5968
+          }
+        }
+      }
+    }
+  }
+}

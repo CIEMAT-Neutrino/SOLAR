@@ -1,0 +1,110 @@
+{
+  "DEFAULT_NUISANCE_PROFILE": "full",
+  "NUISANCE_PROFILES": {
+    "full": {
+      "MARGINALIZE_SIN13": true,
+      "ENERGY_SCALE_UNCERTAINTY": true
+    },
+    "marginalize_sin13": {
+      "MARGINALIZE_SIN13": true,
+      "ENERGY_SCALE_UNCERTAINTY": false
+    },
+    "energy_scale": {
+      "MARGINALIZE_SIN13": false,
+      "ENERGY_SCALE_UNCERTAINTY": true
+    },
+    "nominal": {
+      "MARGINALIZE_SIN13": false,
+      "ENERGY_SCALE_UNCERTAINTY": false
+    }
+  },
+  "SIGNAL_ERROR": 0.04,
+  "BACKGROUND_ERROR": 0.02,
+  "ANALYSIS_THRESHOLDS": {
+    "DAYNIGHT": {
+      "SIGNIFICANCE": 0.0,
+      "MC": 20
+    },
+    "HEP": {
+      "SIGNIFICANCE": 0.0,
+      "MC": 20
+    },
+    "SENSITIVITY": {
+      "SIGNIFICANCE": 0.0,
+      "MC": 20
+    },
+    "FIDUCIALIZATION": {
+      "MC": 100
+    }
+  },
+  "ANALYSIS_UNCERTAINTIES": {
+    "DAYNIGHT": {
+      "signal_uncertainty": 0.00,
+      "background_uncertainty": 0.02
+    },
+    "HEP": {
+      "signal_uncertainty": 0.3,
+      "background_uncertainty": 0.02
+    },
+    "SENSITIVITY": {
+      "signal_uncertainty": 0.04,
+      "background_uncertainty": 0.02
+    }
+  },
+  "BEST_SIGMA_SIGNIFICANCE_REFERENCE": {
+    "DAYNIGHT": "Asimov",
+    "HEP": "ProfileLikelihood",
+    "SENSITIVITY": "Asimov"
+  },
+  "WORKFLOW": {
+    "HEP": {
+      "pl_isotonic": false,
+      "pl_signal_bands": true,
+      "pl_conservative_sigma": 1,
+      "significance_bins": false,
+      "DEFAULT_METRIC": "profile_likelihood",
+      "METRICS": {
+        "asimov": false,
+        "gaussian": false,
+        "profile_likelihood": true,
+        "significance_bins": false
+      }
+    },
+    "DAYNIGHT": {
+      "background_error": true,
+      "significance_bins": true,
+      "DEFAULT_METRIC": "gaussian",
+      "METRICS": {
+        "gaussian": true,
+        "asimov": true,
+        "raw_variants": false,
+        "error_bands": true,
+        "significance_bins": true
+      }
+    },
+    "SENSITIVITY": {
+      "DEFAULT_METRIC": "sin12",
+      "METRICS": {
+        "sin12": true,
+        "sin13": false,
+        "templates": false,
+        "nuisance_comparison": false,
+        "significance_spectra": false
+      }
+    }
+  },
+  "ADAPTIVE_REBIN": {
+    "ANALYSES": {
+      "HEP": {
+        "enabled": true,
+        "min_expected_events": 1.0,
+        "min_count_probability": 0.7,
+        "min_group_bins": 1,
+        "max_group_bins": 0,
+        "objective": "max_sigma_proxy",
+        "isolate_detectable_bins": false,
+        "report": false
+      }
+    }
+  }
+}

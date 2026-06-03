@@ -469,7 +469,7 @@ def compute_true_weights(
                         new_branches.append(f"SignalParticleWeight{new_weight}")
 
                     if osc == "osc":
-                        for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                        for osc_name in params["DEFAULT_SIGNAL_NADIR"]:
                             run[tree][
                                 f"SignalParticleWeight{new_weight}Osc{osc_names[osc_name]}"
                             ] = run[tree]["SignalParticleWeight"].copy()
@@ -493,15 +493,29 @@ def compute_true_weights(
 
                 if "osc" in params.get("DEFAULT_SIGNAL_WEIGHT", []):
                     _ai_ref = load_analysis_info(str(root))
-                    if "DEFAULT_SIGNAL_DM2"   not in params and "SOLAR_DM2" not in _ai_ref:
-                        raise SystemExit("[weights] 'SOLAR_DM2' missing from physics.json and not overridden via params.")
-                    if "DEFAULT_SIGNAL_SIN13" not in params and "SIN13"     not in _ai_ref:
-                        raise SystemExit("[weights] 'SIN13' missing from physics.json and not overridden via params.")
-                    if "DEFAULT_SIGNAL_SIN12" not in params and "SIN12"     not in _ai_ref:
-                        raise SystemExit("[weights] 'SIN12' missing from physics.json and not overridden via params.")
-                    _dm2   = params.get("DEFAULT_SIGNAL_DM2",   _ai_ref["SOLAR_DM2"])
-                    _sin13 = params.get("DEFAULT_SIGNAL_SIN13", _ai_ref["SIN13"])
-                    _sin12 = params.get("DEFAULT_SIGNAL_SIN12", _ai_ref["SIN12"])
+                    for _req in ("SOLAR_DM2", "SIN13", "SIN12"):
+                        if _req not in _ai_ref:
+                            raise SystemExit(
+                                f"[weights] '{_req}' missing from physics.json. "
+                                "Cannot compute oscillation weights."
+                            )
+                    if _osc_backend == "file":
+                        # File backend: oscillograms pre-calculated at fixed grid points.
+                        # Best-fit point is locked to physics.json — param overrides ignored.
+                        if any(k in params for k in ("DEFAULT_SIGNAL_DM2", "DEFAULT_SIGNAL_SIN13", "DEFAULT_SIGNAL_SIN12")):
+                            rprint(
+                                "[yellow][WARNING][/yellow] weights: DEFAULT_SIGNAL_DM2/SIN13/SIN12 "
+                                "param overrides ignored for 'file' backend — oscillograms are "
+                                "pre-calculated; best-fit point locked to physics.json."
+                            )
+                        _dm2   = _ai_ref["SOLAR_DM2"]
+                        _sin13 = _ai_ref["SIN13"]
+                        _sin12 = _ai_ref["SIN12"]
+                    else:
+                        # prob3 / nufast: compute on-the-fly; best-fit point is free.
+                        _dm2   = params.get("DEFAULT_SIGNAL_DM2",   _ai_ref["SOLAR_DM2"])
+                        _sin13 = params.get("DEFAULT_SIGNAL_SIN13", _ai_ref["SIN13"])
+                        _sin12 = params.get("DEFAULT_SIGNAL_SIN12", _ai_ref["SIN12"])
 
                     if _osc_backend != "file":
                         # prob3 / nufast: compute P_ee from first principles
@@ -519,11 +533,11 @@ def compute_true_weights(
                             _pee_2d_cache, _n_centers_cache, _nadir_pdf_cache = \
                                 _load_osc_pkl_as_pee(info, _dm2, _sin13, _sin12)
                         except FileNotFoundError as _exc:
-                            rprint(
-                                f"[red][ERROR][/red] Oscillation pkl missing for "
+                            raise SystemExit(
+                                f"[weights] Oscillation pkl missing for "
                                 f"dm2={_dm2:.3e} sin13={_sin13:.3e} sin12={_sin12:.3e}. "
-                                f"Run 01_process_oscillation.py first.\n  {_exc}"
-                            )
+                                f"Run 01_process_oscillation.py --rewrite first.\n  {_exc}"
+                            ) from _exc
 
                 for (comp, label), osc in product(
                     zip(["comb", "b8", "hep"], ["", "b8", "hep"]),
@@ -537,7 +551,7 @@ def compute_true_weights(
                                 f"skipping osc weights for {name} ({_osc_backend} backend)."
                             )
                         else:
-                            for nadir_slice in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            for nadir_slice in params["DEFAULT_SIGNAL_NADIR"]:
                                 kde_p, exp_dict = _compute_osc_kde_and_exposure(
                                     _pee_2d_cache,
                                     _n_centers_cache,
@@ -787,7 +801,7 @@ def normalize_true_weights(
                     this_weight_name = None
                     if osc == "osc":
                         if params["PARTICLE_TYPE"] == "signal":
-                            for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            for osc_name in params["DEFAULT_SIGNAL_NADIR"]:
                                 this_weight_name = f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
                                 this_exposure = exposure[(weight, "osc")][
                                     osc_names[osc_name]
@@ -961,7 +975,7 @@ def normalize_true_weights(
 #             if params is not None:
 #                 for osc in params["DEFAULT_SIGNAL_WEIGHT"]:
 #                     if osc == "osc":
-#                         for osc_name in params["DEFAULT_SIGNAL_AZIMUTH"]:
+#                         for osc_name in params["DEFAULT_SIGNAL_NADIR"]:
 #                             run["Reco"][
 #                                 f"SignalParticleWeight{weight}Osc{osc_names[osc_name]}"
 #                             ] = run["Truth"][

@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.lib_osc_backends import (
+from lib.oscillation_backends import (
     OscResult,
     compute_prob3,
     compute_nufast,

@@ -43,8 +43,18 @@
     },
     "Reco": {
         "VECTORS": {},
-        "INTEGERS": {},
-        "DOUBLES": {},
+        "INTEGERS": {
+            "Event": 1,
+            "Flag": 1,
+            "MainPDG": 0
+        },
+        "DOUBLES": {
+            "RecoX": 0,
+            "RecoY": 0,
+            "RecoZ": 0,
+            "Charge": 0,
+            "MatchedOpFlashPur": 0
+        },
         "STRINGS": {},
         "BOOLS": {}
     }

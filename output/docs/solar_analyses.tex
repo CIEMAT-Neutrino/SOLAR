@@ -1,0 +1,1334 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\geometry{margin=2.5cm}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+\title{%
+  SOLAR/DUNE Significance Analyses\\
+  \large Mathematical Derivations: Day-Night, HEP, and Sensitivity%
+}
+\author{SOLAR/DUNE Analysis}
+\date{May 2026}
+
+%% ── Shared notation macros ────────────────────────────────────────────────
+%% Rate / count scalars
+\newcommand{\Ecal}{\mathcal{E}}          % exposure factor  T M_det
+\newcommand{\Mdet}{M_{\mathrm{det}}}     % active detector mass [kt]
+\newcommand{\rc}{r_{i}^{c}}             % rate histogram bin i component c
+\newcommand{\muc}{\mu_{i}^{c}}           % expected count  = E r^c
+\newcommand{\si}{s_{i}}                  % signal count in bin i
+\newcommand{\bi}{b_{i}}                  % background count
+\newcommand{\nni}{n_{i}}                 % observed/Asimov count
+
+%% Gaussian / Asimov significance
+\newcommand{\ZG}{Z^{\mathrm{G}}_{i}}
+\newcommand{\ZGerr}{Z^{\mathrm{G,err}}_{i}}
+\newcommand{\ZA}{Z_A}
+\newcommand{\ZAsig}{Z_A^{\sigma}}
+
+%% Day-night specifics
+\newcommand{\fd}{f}                      % day fraction
+\newcommand{\fn}{g}                      % night fraction  = 1-f
+\newcommand{\Beff}{B^{\mathrm{eff}}_{i}} % effective two-sample background
+\newcommand{\seff}{\sigma^{\mathrm{eff}}_{i}} % effective uncertainty
+\newcommand{\epstot}{\varepsilon_{\mathrm{tot}}} % combined asymmetry band
+
+%% Profile-likelihood (HEP)
+\newcommand{\bhat}{\hat{\beta}}
+\newcommand{\srel}{\sigma_{\mathrm{rel}}}
+\newcommand{\srelsq}{\sigma_{\mathrm{rel}}^{2}}
+\newcommand{\Btot}{B_{\mathrm{tot}}}
+\newcommand{\Ntot}{N_{\mathrm{tot}}}
+\newcommand{\minexp}{\epsilon_{\min}}
+
+%% Sensitivity specifics
+\newcommand{\Tsig}{T^{\mathrm{sig}}_{ij}}
+\newcommand{\Tbkg}{T^{\mathrm{bkg}}_{ij}}
+\newcommand{\Apred}{A_{\mathrm{pred}}}
+\newcommand{\Abkg}{A_{\mathrm{bkg}}}
+\newcommand{\spred}{\sigma_{\mathrm{pred}}}
+\newcommand{\sbkg}{\sigma_{\mathrm{bkg}}}
+\newcommand{\eij}{e_{ij}}
+\newcommand{\oij}{o_{ij}}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\section{Overview and Scientific Goals}
+\label{sec:overview}
+
+This document presents the mathematical derivations underlying the three
+significance analyses in the SOLAR/DUNE software framework,
+ordered from simplest to most complex:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Day-Night Asymmetry} (\texttt{12DayNight.py}):
+    searches for a time-modulated excess of solar neutrinos during nighttime
+    relative to daytime, driven by the MSW matter effect inside the Earth.
+    Significance is computed from both a Gaussian approximation on the
+    rate-difference spectrum and a two-sample Poisson log-likelihood ratio
+    (Asimov).
+
+  \item \textbf{HEP Discovery} (\texttt{13HEP.py}):
+    searches for the hep solar neutrino flux ($^3\mathrm{He}+p \to
+    {}^4\mathrm{He}+e^++\nu_e$) as an absolute excess above background.
+    Three significance estimators are computed: Gaussian, Asimov, and a
+    profile-likelihood (PL) significance with a single global background
+    nuisance, analytically profiled.
+
+  \item \textbf{Sensitivity} (\texttt{14Sensitivity.py}):
+    maps the 2D sensitivity contour in the oscillation-parameter plane
+    $(\Delta m^2,\,\sin^2\theta_{12})$.
+    A Baker-Cousins Poisson deviance with two normalization nuisances
+    is minimized numerically over 2D templates in energy and azimuth.
+\end{enumerate}
+
+The three analyses share common ingredients (histogram smoothing, thresholds,
+adaptive rebinning for HEP) but differ in the statistical complexity of their
+model.  Table~\ref{tab:comparison} (Section~\ref{sec:comparison}) summarizes
+the key differences.
+
+\medskip
+\noindent\textbf{Common notation.}
+Throughout, $T$ is the exposure in kt$\cdot$yr,
+$\Mdet$ the active detector mass in kt,
+and the exposure factor is $\Ecal = T\,\Mdet$.
+Index $i$ runs over energy bins; index $j$ over azimuth bins (Sensitivity
+only).  Component label $c$ identifies one physical process (signal,
+neutron, gamma, radiological, ${}^8\mathrm{B}$).
+
+% ===========================================================================
+\section{Common Ingredients}
+\label{sec:common}
+
+\subsection{Rate Histograms and Exposure Scaling}
+\label{sec:rates}
+
+All three analyses work with per-unit-exposure, per-unit-mass rate
+histograms $\rc$ (units: $(\mathrm{yr\cdot kt\cdot MeV})^{-1}$,
+integrated over the bin width $\Delta E$).
+Expected event counts at exposure $\Ecal$ are:
+\begin{equation}
+  \muc = \Ecal\,\rc = T\,\Mdet\,\rc.
+  \label{eq:rate_to_counts}
+\end{equation}
+All analyses apply a reconstructed-energy threshold $E_{\mathrm{th}}$
+(configured in \texttt{analysis/config.json});
+only bins with $E_i \ge E_{\mathrm{th}}$ enter the significance computation.
+
+\subsection{Histogram Smoothing}
+\label{sec:smoothing}
+
+Each rate histogram $\rc$ is convolved with a one-dimensional Gaussian
+kernel before entering the significance computation:
+\begin{equation}
+  \tilde{r}_{i}^{c} = \sum_{j} G_\sigma(i-j)\, r_j^{c},
+  \qquad
+  G_\sigma(k) = \frac{1}{\sqrt{2\pi}\,\sigma}
+    \exp\!\left(-\frac{k^2}{2\sigma^2}\right),
+  \label{eq:gaussian_smooth}
+\end{equation}
+implemented via \texttt{scipy.ndimage.gaussian\_filter1d} with
+\texttt{mode=`nearest'}.
+Whether smoothing is applied to a given component, and the width $\sigma$,
+are configured in \texttt{analysis/smoothing.json} under
+\texttt{SMOOTHING.ANALYSES.\{ANALYSIS\}.STAGES}.
+Separate stages are provided for the fiducial scan and the significance
+computation.
+
+\medskip
+\noindent\textbf{Non-negativity clipping.}
+Gaussian convolution at distribution tails can produce small negative values.
+Negative rates are unphysical and cause profile-likelihood divergences
+at high exposure (Section~\ref{sec:pl_numerical}).
+All smoothed rates are therefore clipped to zero before any significance
+computation:
+\begin{equation}
+  \tilde{r}_{i}^{c} \leftarrow \max\!\left(0,\,\tilde{r}_{i}^{c}\right).
+  \label{eq:clip}
+\end{equation}
+
+\subsection{Per-Component Background Error Model}
+\label{sec:bkg_error}
+
+For each background component $c$ the absolute uncertainty on the raw
+rate in bin $i$ combines MC-statistical and systematic contributions in
+quadrature:
+\begin{equation}
+  \sigma_{i}^{c}
+  = r_i^{c}\,
+    \sqrt{\left(\frac{\delta_i^c}{r_i^c}\right)^{\!2}
+          + \left(\srel^c\right)^2},
+  \label{eq:bin_error}
+\end{equation}
+where $\delta_i^c / r_i^c$ is the relative histogram statistical error
+and $\srel^c$ is the relative systematic uncertainty
+(\texttt{--background\_uncertainty}, typically 2\%).
+The total combined background uncertainty in bin $i$ is:
+\begin{equation}
+  \sigma_i^{\mathrm{bkg}} = \sqrt{\sum_c \bigl(\sigma_i^c\bigr)^2},
+  \label{eq:combined_error}
+\end{equation}
+also convolved with the component-specific smoothing kernel.
+For signal components (hep, ${}^8$B) the corresponding quantity uses the
+signal systematic $\srel^{\mathrm{sig}} = 30\%$ (HEP) or $4\%$ (Sensitivity).
+
+% ===========================================================================
+\section{Day-Night Asymmetry Analysis}
+\label{sec:daynight}
+
+\subsection{Physical Observable: MSW-Enhanced Day-Night Effect}
+\label{sec:dn_physics}
+
+Solar $\nu_e$ produced in the solar core oscillate in vacuum on their way to
+Earth.  During nighttime passages the neutrinos traverse the Earth's interior
+and experience additional matter-induced (MSW) oscillations that partially
+restore the $\nu_e$ flavour component.  This creates a night-time excess
+characterised by the asymmetry:
+\begin{equation}
+  \Delta_{\mathrm{DN}} \equiv \frac{N_{\mathrm{night}} - N_{\mathrm{day}}}
+    {{\tfrac{1}{2}(N_{\mathrm{night}} + N_{\mathrm{day}})}}.
+  \label{eq:dn_asymmetry}
+\end{equation}
+The size of $\Delta_{\mathrm{DN}}$ depends on the Earth electron-density
+profile through the MSW potential $V = \sqrt{2}\,G_F\, n_e(r)$
+and on the oscillation parameters $(\Delta m^2,\,\sin^2\theta_{12})$.
+
+\subsection{Two-Period Signal and Background Model}
+\label{sec:dn_model}
+
+Let $\fd \in (0,1)$ be the fraction of total exposure attributed to
+daytime and $\fn = 1 - \fd$ the nighttime fraction
+($\fd = 0.5$ by default; the SURF latitude of $44.35^\circ$N gives
+$\fd \approx 0.493$ averaged over a full year).
+The oscillation-weighted solar rates split into day and night components:
+\begin{align}
+  r_i^{\mathrm{day}} &= \text{solar rate in daytime sky exposure},\\
+  r_i^{\mathrm{night}} &= \text{solar rate in nighttime (Earth-crossing) exposure}.
+\end{align}
+Isotropic backgrounds (cosmogenic, geological, detector-intrinsic) are
+assumed time-uniform and therefore split proportionally between periods.
+
+Event counts observed in day and night periods are:
+\begin{align}
+  n_i^{\mathrm{night}} &= \Ecal\bigl(\fn\, r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}}\bigr),
+  \label{eq:dn_n_night}\\
+  n_i^{\mathrm{day}}   &= \Ecal\bigl(\fd\, r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}}\bigr).
+  \label{eq:dn_n_day}
+\end{align}
+
+The \textbf{asymmetry signal} at scale factor $\xi$ (Section~\ref{sec:dn_band}) is:
+\begin{equation}
+  \si = \Ecal\cdot\xi\cdot\bigl(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}\bigr).
+  \label{eq:dn_signal}
+\end{equation}
+
+\subsection{Effective Two-Sample Background}
+\label{sec:dn_effective_bkg}
+
+For a two-sample rate-difference test with unequal period lengths $\fd$ and
+$\fn$, the optimal significance statistic requires an
+\emph{inverse-fraction-weighted} effective background:
+\begin{equation}
+  \Beff = \frac{n_i^{\mathrm{night}}}{\fn^2}
+         + \frac{n_i^{\mathrm{day}}}{\fd^2}.
+  \label{eq:dn_Beff}
+\end{equation}
+In the equal-period limit $\fd=\fn=\tfrac{1}{2}$ and with $\si\ll\Beff$,
+this reduces to $\Beff \approx 4\Ecal r_i^{\mathrm{bkg}}$ and the Gaussian
+significance becomes the familiar $s_i / \sqrt{b_i}$ form.
+Bins where $\Beff = 0$ are zeroed.
+
+\subsection{Gaussian Significance}
+\label{sec:dn_gaussian}
+
+Two Gaussian estimators are computed per bin.
+
+\medskip
+\noindent\textbf{Simple Gaussian} (no additional background uncertainty):
+\begin{equation}
+  \ZG = \frac{\si}{\sqrt{\Beff}},
+  \label{eq:dn_simple_gaussian}
+\end{equation}
+
+\noindent\textbf{Error Gaussian}
+(with combined background uncertainty $\seff$, see
+Section~\ref{sec:dn_bkg_uncertainty}):
+\begin{equation}
+  \ZGerr = \frac{\si}{\sqrt{\Beff + \bigl(\seff\bigr)^2}},
+  \label{eq:dn_error_gaussian}
+\end{equation}
+The global significance is the quadrature sum over all bins above threshold:
+\begin{equation}
+  Z = \sqrt{\sum_{i \ge i_{\mathrm{th}}} \!\left(Z_i\right)^2}.
+  \label{eq:dn_global}
+\end{equation}
+Both raw and Gaussian-smoothed rate versions are used,
+producing four output curves per cut per asymmetry-scale value
+(\texttt{RawGaussian}, \texttt{RawErrorGaussian},
+\texttt{Gaussian}, \texttt{ErrorGaussian})
+plus upper/lower band variants (Section~\ref{sec:dn_band}).
+
+\subsection{Background Uncertainty for the Rate-Difference Test}
+\label{sec:dn_bkg_uncertainty}
+
+Three independent noise sources are combined in quadrature per period and
+per bin, then merged into an effective uncertainty:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Poisson statistical}: $\sqrt{N_{\mathrm{bkg},\,p}}$,
+    where $N_{\mathrm{bkg},\,p} = \Ecal\,f_p\,r_i^{\mathrm{bkg}}$ is the
+    background count in period $p \in \{\mathrm{day, night}\}$.
+  \item \textbf{Normalization systematic}:
+    $\srel^{\mathrm{bkg}}\,N_{\mathrm{bkg},\,p}$
+    (\texttt{--background\_uncertainty}).
+  \item \textbf{Day-fraction systematic}:
+    $\delta_f\,\Ecal\,r_i^{\mathrm{bkg}}$
+    (\texttt{--day\_fraction\_band}, $\delta_f = 0.01$ by default),
+    reflecting uncertainty in the solar zenith angle cut and the run schedule.
+\end{enumerate}
+
+Per-period uncertainties:
+\begin{equation}
+  \sigma_{p,i}
+  = \sqrt{N_{\mathrm{bkg},\,p,i}
+          + \bigl(\srel^{\mathrm{bkg}}\,N_{\mathrm{bkg},\,p,i}\bigr)^2
+          + \bigl(\delta_f\,\Ecal\,r_i^{\mathrm{bkg}}\bigr)^2}.
+  \label{eq:dn_sigma_period}
+\end{equation}
+
+Combining across periods via inverse-fraction weighting (mirroring
+Eq.~\eqref{eq:dn_Beff}):
+\begin{equation}
+  \seff =
+  \sqrt{\left(\frac{\sigma_{\mathrm{night},i}}{\fn}\right)^{\!2}
+       +\left(\frac{\sigma_{\mathrm{day},i}}{\fd}\right)^{\!2}},
+  \label{eq:dn_sigma_eff}
+\end{equation}
+set to zero wherever $\Beff = 0$.
+
+\subsection{Two-Sample Poisson Asimov Significance}
+\label{sec:dn_asimov}
+
+The Day-Night analysis also computes a two-sample Poisson log-likelihood
+ratio (Asimov) as an alternative to the Gaussian estimators.
+Under the signal hypothesis (asymmetry scale $\xi$), the Asimov
+(expected) observed counts are $n_i^{\mathrm{night}}$ and
+$n_i^{\mathrm{day}}$ from Eqs.~\eqref{eq:dn_n_night}--\eqref{eq:dn_n_day}.
+The null hypothesis $H_0$ assumes no asymmetry: both periods share the same
+per-bin total rate, allocated proportionally to period length:
+\begin{equation}
+  h_{0,i}^{\mathrm{night}} = \fn\,(n_i^{\mathrm{night}} + n_i^{\mathrm{day}}),
+  \qquad
+  h_{0,i}^{\mathrm{day}}   = \fd\,(n_i^{\mathrm{night}} + n_i^{\mathrm{day}}).
+  \label{eq:dn_h0}
+\end{equation}
+The two-sample log-likelihood ratio is:
+\begin{equation}
+  q_i
+  = 2\!\left[
+    n_i^{\mathrm{night}}\ln\frac{n_i^{\mathrm{night}}}{h_{0,i}^{\mathrm{night}}}
+    +
+    n_i^{\mathrm{day}}\ln\frac{n_i^{\mathrm{day}}}{h_{0,i}^{\mathrm{day}}}
+  \right],
+  \label{eq:dn_llr_bin}
+\end{equation}
+defined as zero whenever any count or null hypothesis count is non-positive.
+The global Asimov significance is:
+\begin{equation}
+  \ZA = \sqrt{\max\!\left(0,\,\sum_{i \ge i_{\mathrm{th}}} q_i\right)}.
+  \label{eq:dn_asimov_global}
+\end{equation}
+This is the natural two-sample extension of the HEP Asimov formula
+(Section~\ref{sec:hep_gaussian_asimov}).
+
+\subsection{Asymmetry Uncertainty Band}
+\label{sec:dn_band}
+
+Two independent sources of uncertainty on the predicted asymmetry amplitude
+are combined in quadrature to define a total band $\epstot$:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Earth density band} $\varepsilon_{\oplus}$
+    (\texttt{--earth\_density\_band}, default $0.13$):
+    fractional uncertainty from PREM-based oscillation probability calculations.
+  \item \textbf{Oscillation parameter band} $\varepsilon_{\mathrm{osc}}$
+    (\texttt{--oscillation\_band}, default $0.05$):
+    residual uncertainty from PDG $\theta_{12}$ and $\Delta m^2_{21}$ ranges.
+\end{enumerate}
+\begin{equation}
+  \epstot
+  = \sqrt{\varepsilon_{\oplus}^2 + \varepsilon_{\mathrm{osc}}^2}
+  \approx 0.138 \;\text{(defaults)}.
+  \label{eq:dn_band}
+\end{equation}
+Three scale factors bracket the full predicted range:
+\begin{equation}
+  \xi \in \{1+\epstot,\;1,\;1-\epstot\}.
+  \label{eq:dn_xi}
+\end{equation}
+The scale acts on the asymmetry signal only (Eq.~\eqref{eq:dn_signal}),
+leaving the total event rate and the background unchanged.
+This produces three significance curves (upper, nominal, lower) for each
+estimator.
+
+\subsection{Results}
+\label{sec:dn_results}
+
+Figures~\ref{fig:dn_central_exposure}--\ref{fig:dn_lateral_significance}
+show the Day-Night analysis outputs for both HD configurations using the
+SolarEnergy estimator at the nominal selection.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{dn_central_exposure}
+  \caption{centralAPA: exposure needed for $3\sigma$ and $5\sigma$ discovery as a function of day-night asymmetry magnitude.}
+  \label{fig:dn_central_exposure}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{dn_central_significance}
+  \caption{centralAPA: significance vs.\ exposure at 30\,kt$\cdot$yr for nominal, upper, and lower asymmetry bands.}
+  \label{fig:dn_central_significance}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{dn_lateral_exposure}
+  \caption{lateralAPA: exposure threshold for $3\sigma$ and $5\sigma$ Day-Night discovery.}
+  \label{fig:dn_lateral_exposure}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{dn_lateral_significance}
+  \caption{lateralAPA: significance vs.\ exposure at 30\,kt$\cdot$yr.}
+  \label{fig:dn_lateral_significance}
+\end{minipage}
+\end{figure}
+
+% ===========================================================================
+\section{HEP Discovery Analysis}
+\label{sec:hep}
+
+\subsection{Signal and Background Model}
+\label{sec:hep_signal}
+
+The HEP analysis searches for an absolute rate excess of hep solar neutrinos
+above a known background in a one-dimensional energy spectrum above
+$E_{\mathrm{th}}$.
+Signal (hep) and total background event counts in bin $i$ are:
+\begin{align}
+  \si &= \Ecal\, r_i^{\mathrm{hep}},
+  \label{eq:hep_signal}\\
+  \bi &= \Ecal\sum_{c\neq\mathrm{hep}} r_i^c
+       = \Ecal\bigl(r_i^{\gamma} + r_i^{n} + r_i^{\mathrm{rad}} + r_i^{{}^8\mathrm{B}}\bigr).
+  \label{eq:hep_background}
+\end{align}
+The Asimov dataset sets observed counts to $\nni = \si + \bi$.
+
+\subsection{Background Error Aggregation}
+\label{sec:hep_bkg_error}
+
+Each background component $c$ contributes an absolute uncertainty
+$\sigma_i^c$ (Eq.~\eqref{eq:bin_error}).
+The combined error and its smoothed counterpart enter the significance
+computation as:
+\begin{equation}
+  \sigma_i^{\mathrm{bkg}} = \sqrt{\sum_{c \neq \mathrm{hep}} \bigl(\sigma_i^c\bigr)^2}.
+  \label{eq:hep_combined_err}
+\end{equation}
+
+\subsection{Adaptive Tail Rebinning}
+\label{sec:rebin}
+
+\subsubsection{Detection Threshold}
+\label{sec:detection_threshold}
+
+A bin (or merged group) is declared \emph{detectable} if the expected
+(conservatively shifted) signal exceeds:
+\begin{equation}
+  T_{\mathrm{det}} = \max\!\left(T_{\mathrm{min}},\;-\ln(1-p_{\mathrm{min}})\right),
+  \label{eq:detection_threshold}
+\end{equation}
+with defaults $T_{\mathrm{min}}=1.0$ and $p_{\mathrm{min}}=1-e^{-1}$,
+giving $T_{\mathrm{det}}=1.0$.
+The Poisson interpretation: $P(\ge 1;\lambda)\ge p \Leftrightarrow \lambda\ge -\ln(1-p)$.
+
+The conservative (downward-fluctuated) detectable signal is:
+\begin{equation}
+  s_i^{\mathrm{det}} = \si\,(1 - d\cdot\srel^{\mathrm{sig}}),
+  \quad d \in \{2.9,\;3.0,\;3.1\},
+  \label{eq:detectable_signal}
+\end{equation}
+where the three values of $d$ correspond to the upper (+), nominal, and
+lower ($-$) error bands respectively.
+
+\subsubsection{Greedy Algorithm and Monotonicity Enforcement}
+
+Bins are merged from the high-energy tail inward until each group exceeds
+$T_{\mathrm{det}}$.  Groups below $T_{\mathrm{det}}$ are zeroed out.
+To guarantee a non-decreasing significance vs.\ exposure curve, if the
+current step's optimal binning yields lower Asimov significance than the
+previous step the previous binning is retained:
+\begin{equation}
+  \mathcal{B}(t) =
+  \begin{cases}
+    \mathcal{B}^*(t) & Z_A(\mathcal{B}^*(t),t) \ge Z_A(\mathcal{B}(t{-}1),t{-}1),\\
+    \mathcal{B}(t-1) & \text{otherwise.}
+  \end{cases}
+  \label{eq:monotone_rebin}
+\end{equation}
+
+\subsection{Gaussian and Asimov Significance}
+\label{sec:hep_gaussian_asimov}
+
+With $\si$ and $\bi$ from Eqs.~\eqref{eq:hep_signal}--\eqref{eq:hep_background}
+and combined background uncertainty $\sigma_i^{\mathrm{bkg}}$,
+the per-bin Gaussian estimator is:
+\begin{equation}
+  \ZG = \frac{\si}{\sqrt{\bi + \bigl(\sigma_i^{\mathrm{bkg}}\bigr)^2}},
+  \label{eq:hep_gaussian}
+\end{equation}
+and the global significance is Eq.~\eqref{eq:dn_global}.
+
+The Asimov significance \cite{Cowan2010}, with and without background uncertainty, is:
+\begin{align}
+  Z_A &= \sqrt{2\left[(\si+\bi)\ln\!\left(1+\frac{\si}{\bi}\right) - \si\right]},
+  \label{eq:asimov_simple}\\
+  Z_A^{\sigma} &= \sqrt{2\left[
+    (\si+\bi)\ln\!\frac{(\si+\bi)(\bi+(\sigma_i^{\mathrm{bkg}})^2)}
+                       {\bi^2+(\si+\bi)(\sigma_i^{\mathrm{bkg}})^2}
+    -\frac{\bi^2}{(\sigma_i^{\mathrm{bkg}})^2}
+     \ln\!\left(1+\frac{(\sigma_i^{\mathrm{bkg}})^2 \si}{\bi(\bi+(\sigma_i^{\mathrm{bkg}})^2)}\right)
+  \right]}.
+  \label{eq:asimov_full}
+\end{align}
+These are computed both with and without adaptive tail rebinning.
+The profile-likelihood (Section~\ref{sec:pl}) is the primary metric.
+
+\subsection{Profile-Likelihood Significance}
+\label{sec:pl}
+
+\subsubsection{Test Statistic}
+\label{sec:pl_model}
+
+The profile-likelihood significance follows Cowan et al.\ \cite{Cowan2010}.
+The test statistic for the null hypothesis $\mu=0$ (no HEP signal) is:
+\begin{equation}
+  q_0 = -2\ln\!\frac{\mathcal{L}(0,\,\bhat)}{\mathcal{L}(\hat{s}+b,\,1)},
+  \label{eq:q0}
+\end{equation}
+evaluated at the Asimov point $\nni = \si + \bi$, with $\bhat$ the
+background scale factor profiled under the null.
+The median discovery significance is $Z = \sqrt{q_0}$.
+
+\subsubsection{Global Background Normalization Nuisance}
+\label{sec:pl_nuisance}
+
+A single global background scale factor $\beta$ — fully correlated across
+all bins — is constrained by a Gaussian penalty:
+\begin{equation}
+  \mathcal{L}(0,\beta)
+  = \prod_{i=1}^{K}
+      \frac{(\beta \bi)^{\nni} e^{-\beta \bi}}{\nni!}
+    \cdot\exp\!\left(-\frac{(\beta-1)^2}{2\srelsq}\right),
+  \label{eq:likelihood}
+\end{equation}
+where $\srel$ is the relative background uncertainty
+(\texttt{--background\_uncertainty}, typically 2\%).
+A global (fully correlated) $\beta$ avoids the $K$-parameter absorbing
+plateau that per-bin nuisances produce; the plateau ends at
+$T \sim 1/(B_{\mathrm{tot}}\srelsq)$ (typically sub-year),
+giving a physically correct PL curve.
+
+\subsubsection{Profiling \texorpdfstring{$\bhat$}{beta-hat}}
+\label{sec:betahat}
+
+The stationarity condition
+$\partial\ln\mathcal{L}/\partial\beta\big|_{\bhat}=0$
+at the Asimov point $\nni=\si+\bi$ gives:
+\begin{equation}
+  \Ntot = \bhat\Btot + \frac{\bhat-1}{\srelsq},
+  \quad
+  \Ntot = \sum_i \nni,\;\Btot = \sum_i \bi.
+  \label{eq:stationarity}
+\end{equation}
+Because $\beta$ is \emph{global}, the per-bin denominators $\beta\bi$
+factorize and the stationarity condition is a scalar equation.
+Rearranging:
+\begin{equation}
+  \bhat^2 + \left(\Btot\srelsq-1\right)\bhat - \Ntot\srelsq = 0,
+  \label{eq:beta_quadratic}
+\end{equation}
+with analytic positive root:
+\begin{equation}
+  \bhat = \frac{-(\Btot\srelsq-1)
+    + \sqrt{(\Btot\srelsq-1)^2 + 4\Ntot\srelsq}}{2}.
+  \label{eq:beta_solution}
+\end{equation}
+When $\Btot=0$ or $\srel=0$, $\bhat=1$ (no constraint active).
+
+\subsubsection{Log-Likelihood Ratio}
+\label{sec:llr}
+
+Substituting $\nni = \si+\bi$ into Eq.~\eqref{eq:q0}:
+\begin{equation}
+  q_0 = 2\sum_{i=1}^{K}
+    \left[\nni\ln\!\frac{\nni}{\bhat \bi} - (\nni-\bhat \bi)\right]
+    + \left(\frac{\bhat-1}{\srel}\right)^{\!2}.
+  \label{eq:q0_expanded}
+\end{equation}
+Each per-bin term is the Baker-Cousins Poisson deviance \cite{BakerCousins1984}
+between the Asimov observation $\nni$ and the null expectation $\bhat\bi$.
+This expression — a sum of Poisson deviances with a global nuisance penalty
+— is the structural prototype for the Sensitivity objective
+(Section~\ref{sec:sens_objective}), extended to 2D with two nuisances.
+
+\subsubsection{Numerical Stability}
+\label{sec:pl_numerical}
+
+When $S^2/B \ll 1$, naive subtraction of two $\mathcal{O}(N\log N)$
+log-likelihoods loses precision.  The stable per-bin form is:
+\begin{equation}
+  \Delta\ell_i = \nni\ln\!\frac{\nni}{\mu_i^{\mathrm{null}}}
+    - \bigl(\nni - \mu_i^{\mathrm{null}}\bigr),
+  \qquad
+  \mu_i^{\mathrm{null}} = \bhat \bi,
+  \label{eq:stable_llr}
+\end{equation}
+with a floor $\minexp=10^{-12}$ replacing zero denominators.
+
+\medskip
+\noindent\textbf{Negative-rate blowup.}
+If a smoothed rate is negative, $\bhat\bi<0$, the floor gives
+$\Delta\ell_i \approx \nni\ln(\nni/\minexp) \propto T$,
+causing a spurious superlinear spike.
+Clipping (Eq.~\eqref{eq:clip}) eliminates this path entirely.
+
+\subsection{Barlow-Beeston MC Mask}
+\label{sec:bb_mask}
+
+Bins with summed background MC count below $N_{\mathrm{MC}}^{\min}$
+(default 1.0) lack a reliable background model and are excluded by a
+static binary mask \cite{BarlowBeeston1993}:
+\begin{equation}
+  \mathcal{M}_i = \mathbf{1}\!\left[N_i^{\mathrm{MC}} \ge N_{\mathrm{MC}}^{\min}\right],
+  \qquad
+  \si \leftarrow \mathcal{M}_i \si,\quad \bi \leftarrow \mathcal{M}_i \bi.
+  \label{eq:bb_mask_hep}
+\end{equation}
+The mask is static (MC counts do not change with exposure), so it introduces
+no discrete transitions in the significance curve.
+The same mask is applied to both raw and smoothed histograms.
+
+\subsection{Profile-Likelihood Signal Bands and Post-Processing}
+\label{sec:pl_bands}
+
+Three signal normalizations are evaluated to produce $\pm1\sigma_s$ bands,
+using the same scale factor $d \in \{+1, 0, -1\}$ applied to the signal:
+\begin{equation}
+  s_i^{(d)} = \si\,(1 + d\cdot\srel^{\mathrm{sig}}).
+  \label{eq:signal_variation}
+\end{equation}
+Background is never shifted; $\bhat$ and its quadratic solution are
+unaffected.
+
+The raw PL significance curve $Z(T)$ is post-processed by two steps when
+\texttt{pl\_isotonic} is enabled (controlled by \texttt{analysis/config.json}
+under \texttt{WORKFLOW.HEP.pl\_isotonic}):
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Gaussian kernel smoothing} with $\sigma_{\mathrm{PL}}=6$
+    exposure-grid index units
+    (\texttt{scipy.ndimage.gaussian\_filter1d}), which suppresses numerical
+    oscillations from the PL solver at low signal-to-background ratio.
+  \item \textbf{Isotonic regression (PAVA)} \cite{Robertson1988}:
+    \begin{equation}
+      \min_{\{z_k\}}\sum_k(z_k-\tilde{Z}(T_k))^2
+      \quad\text{s.t.}\quad z_k\le z_{k+1},
+      \label{eq:pava}
+    \end{equation}
+    via \texttt{sklearn.isotonic.IsotonicRegression},
+    which enforces a non-decreasing significance curve while minimising the
+    $\ell^2$ deviation from the computed values.
+\end{enumerate}
+Pipeline: $Z \to \max(0,Z) \xrightarrow{\mathrm{Gauss}} \tilde{Z}
+          \xrightarrow{\mathrm{PAVA}} Z'$.
+After isotonic regression, upper/lower bands are enforced to remain
+above/below the nominal curve respectively:
+$Z'^{(+1)}\leftarrow\max(Z'^{(+1)}, Z'^{(0)})$ and
+$Z'^{(-1)}\leftarrow\min(Z'^{(-1)}, Z'^{(0)})$.
+Pre-PAVA curves are saved separately for diagnostic purposes.
+
+\subsection{Spike Detection and Best-Cut Selection}
+\label{sec:spike}
+
+A PL curve is declared \emph{spiked} if any consecutive step in the
+pre-isotonic columns exceeds $\Delta_{\max}$
+(\texttt{--max\_pl\_jump}, default $1\,\sigma$):
+\begin{equation}
+  \text{spiked} \;\Leftrightarrow\;
+  \max_k\!\left[Z_{\mathrm{pre}}(T_{k+1})-Z_{\mathrm{pre}}(T_k)\right]>\Delta_{\max}.
+  \label{eq:spike_criterion}
+\end{equation}
+The best cut maximises the reference significance over non-spiked cuts:
+\begin{equation}
+  (N^*,N_{\mathrm{op}}^*,N_{\mathrm{adj}}^*) =
+  \arg\max_{\text{not spiked}} Z_{\mathrm{ref}}(T_{\max}).
+  \label{eq:best_cut}
+\end{equation}
+
+\subsection{Results}
+\label{sec:hep_results}
+
+Figures~\ref{fig:hep_central_exposure}--\ref{fig:hep_lateral_adaptive}
+show HEP analysis outputs for both HD configurations (SolarEnergy, nominal).
+Each row presents: left, Gaussian/Asimov exposure comparison; right,
+profile-likelihood significance with adaptive rebinning.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_central_exposure}
+  \caption{centralAPA: Gaussian and Asimov exposure needed to reach $3\sigma$ and $5\sigma$ hep discovery.}
+  \label{fig:hep_central_exposure}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_central_pl_exposure}
+  \caption{centralAPA: profile-likelihood significance vs.\ exposure.}
+  \label{fig:hep_central_pl_exposure}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_central_pl_adaptive}
+  \caption{centralAPA: PL significance with and without adaptive rebinning.}
+  \label{fig:hep_central_pl_adaptive}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_central_asimov_adaptive}
+  \caption{centralAPA: Asimov significance with and without adaptive rebinning.}
+  \label{fig:hep_central_asimov_adaptive}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_lateral_exposure}
+  \caption{lateralAPA: Gaussian and Asimov exposure threshold for hep discovery.}
+  \label{fig:hep_lateral_exposure}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_lateral_pl_exposure}
+  \caption{lateralAPA: profile-likelihood significance vs.\ exposure.}
+  \label{fig:hep_lateral_pl_exposure}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_lateral_pl_adaptive}
+  \caption{lateralAPA: PL significance with and without adaptive rebinning.}
+  \label{fig:hep_lateral_pl_adaptive}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{hep_lateral_asimov_adaptive}
+  \caption{lateralAPA: Asimov significance with and without adaptive rebinning.}
+  \label{fig:hep_lateral_adaptive}
+\end{minipage}
+\end{figure}
+
+% ===========================================================================
+\section{Sensitivity Analysis}
+\label{sec:sensitivity}
+
+\subsection{Overview}
+\label{sec:sens_overview}
+
+The Sensitivity analysis maps how well the detector can distinguish between
+the solar ($\Delta m^2_\odot$) and reactor ($\Delta m^2_{\mathrm{react}}$)
+best-fit oscillation hypotheses.
+Rather than computing a single discovery significance it evaluates a
+$\chi^2$ surface over the oscillation-parameter grid
+$(\Delta m^2,\,\sin^2\theta_{13},\,\sin^2\theta_{12})$.
+
+Key differences from HEP:
+\begin{itemize}[leftmargin=*]
+  \item Histograms are \textbf{two-dimensional} (energy $\times$ azimuth $\cos\eta$).
+  \item \textbf{Two} normalization nuisances are floated: $\Apred$ (signal)
+    and $\Abkg$ (background).
+  \item The nuisance stationarity conditions have
+    \textbf{no closed-form solution} — unlike HEP's quadratic for $\bhat$
+    — requiring full 2D numerical minimization.
+  \item The goal is a $\chi^2$ \emph{map}, not a single significance.
+\end{itemize}
+
+\subsection{Two-Dimensional Template Construction}
+\label{sec:sens_templates}
+
+Signal and background are represented as 2D arrays with axes
+energy ($j=1,\ldots,J$) and azimuth ($i=1,\ldots,I$).
+
+\medskip
+\noindent\textbf{Signal template.}
+For oscillation parameters $\vec{\theta} = (\Delta m^2,\sin^2\theta_{13},\sin^2\theta_{12})$,
+the signal template at exposure $\Ecal$ is:
+\begin{equation}
+  \Tsig(\vec{\theta}) = \Ecal\cdot\Mdet\cdot\bigl[P(\vec{\theta})\,H\bigr]_{ij},
+  \label{eq:signal_template}
+\end{equation}
+where $P(\vec{\theta})$ is the oscillation-probability matrix
+(azimuth $\times$ neutrino flavour) and $H$ is the detector energy-response
+matrix (neutrino energy $\times$ reconstructed energy),
+implemented in \texttt{14SensitivitySignalTemplate.py}.
+
+\medskip
+\noindent\textbf{Background template.}
+The background template $\Tbkg$ is independent of oscillation parameters
+and is constructed from detector simulations in
+\texttt{14SensitivityBackgroundTemplate.py}.
+
+\subsection{Asimov Dataset Construction}
+\label{sec:sens_asimov}
+
+For each scan point $\vec{\theta}_k$ the Asimov observed dataset is:
+\begin{equation}
+  \oij(\vec{\theta}_k) = \Tsig(\vec{\theta}_k) + \Tbkg.
+  \label{eq:sens_asimov}
+\end{equation}
+Two \emph{reference} templates fixed at the solar and reactor best-fit
+points:
+\begin{equation}
+  p^{\mathrm{solar}}_{ij} = \Tsig(\vec{\theta}_{\odot}),
+  \qquad
+  p^{\mathrm{react}}_{ij} = \Tsig(\vec{\theta}_{\mathrm{react}}).
+  \label{eq:reference_templates}
+\end{equation}
+
+\subsection{Objective Function: Baker-Cousins Poisson Deviance}
+\label{sec:sens_objective}
+
+The fit minimizes a Baker-Cousins Poisson deviance \cite{BakerCousins1984}
+with two free normalization nuisances:
+\begin{equation}
+  \chi^2(\Apred,\Abkg)
+  = 2\sum_{i,j}\Delta\ell_{ij}
+    + \left(\frac{\Apred}{\spred}\right)^{\!2}
+    + \left(\frac{\Abkg}{\sbkg}\right)^{\!2},
+  \label{eq:sens_chisq}
+\end{equation}
+where the expected model is:
+\begin{equation}
+  \eij = (1+\Abkg)\,\Tbkg + (1+\Apred)\,p_{ij},
+  \label{eq:sens_expected}
+\end{equation}
+and the per-bin Poisson deviance is:
+\begin{equation}
+  \Delta\ell_{ij} =
+  \begin{cases}
+    \eij - \oij + \oij\ln(\oij/\eij) & \oij>0,\; \eij>0,\\
+    \eij & \oij=0,\; \eij>0,\\
+    0 & \eij=0 \;\text{(or masked)}.
+  \end{cases}
+  \label{eq:sens_deviance}
+\end{equation}
+Each term $\Delta\ell_{ij}\ge0$ by the Gibbs inequality; the sum is zero
+if and only if $\eij=\oij$ for all bins.
+
+\medskip
+\noindent\textbf{Structural connection to HEP.}
+Under $H_0$ (no signal, $p_{ij}=0$), Eq.~\eqref{eq:sens_chisq} reduces to
+the HEP log-likelihood ratio Eq.~\eqref{eq:q0_expanded} with one nuisance
+per normalisation parameter.  The Sensitivity objective is therefore the
+direct 2D two-nuisance generalization of the HEP test statistic.
+
+\subsection{Nuisance Parameters: Constraints and Non-Analyticity}
+\label{sec:sens_nuisances}
+
+The penalty terms in Eq.~\eqref{eq:sens_chisq} are Gaussian constraints
+identical in form to the HEP penalty $[(\bhat-1)/\srel]^2$, but with
+separate widths: $\spred = 4\%$ (signal flux uncertainty) and
+$\sbkg = 2\%$ (background uncertainty).
+These are configured via \texttt{analysis/config.json} under
+\texttt{ANALYSIS\_UNCERTAINTIES.SENSITIVITY}.
+
+\medskip
+\noindent\textbf{Why no analytic solution exists.}
+In HEP, $e_i = \beta\bi$ under $H_0$:
+the single global $\beta$ factors out and the stationarity condition
+collapses to the scalar quadratic Eq.~\eqref{eq:beta_quadratic}.
+
+In Sensitivity, $\eij=(1+\Abkg)\Tbkg+(1+\Apred)p_{ij}$ mixes $\Tbkg$
+and $p_{ij}$ in every bin.  The two stationarity conditions are:
+\begin{align}
+  \sum_{ij} p_{ij}\!\left(1-\frac{\oij}{\eij}\right)
+    &= -\frac{\Apred}{\spred^2},
+  \label{eq:sens_stat_pred}\\
+  \sum_{ij} \Tbkg\!\left(1-\frac{\oij}{\eij}\right)
+    &= -\frac{\Abkg}{\sbkg^2},
+  \label{eq:sens_stat_bkg}
+\end{align}
+which are jointly non-linear in $(\Apred,\Abkg)$ because $\eij$ in
+the denominators depends on both unknowns.  Full 2D minimization is
+required.
+
+\subsection{Barlow-Beeston Mask for 2D Templates}
+\label{sec:sens_bb}
+
+Bins where the background template is zero are excluded:
+\begin{equation}
+  \mathcal{M}_{ij} = \mathbf{1}\!\left[\Tbkg > 0\right],
+  \label{eq:sens_bb_mask}
+\end{equation}
+passed as \texttt{bb\_mask} to \texttt{Sensitivity\_Fitter}.
+This prevents spurious large deviance from signal-only bins
+lacking a reliable background model,
+following the same spirit as HEP's Barlow-Beeston mask
+(Section~\ref{sec:bb_mask}).
+
+\subsection{Minimization: scipy L-BFGS-B}
+\label{sec:sens_minimization}
+
+The objective Eq.~\eqref{eq:sens_chisq} is minimized over
+$(\Apred,\Abkg)$ using the L-BFGS-B algorithm
+\cite{ByrdEtAl1995,ZhuEtAl1997}:
+\begin{equation}
+  (\hat{A}_{\mathrm{pred}},\hat{A}_{\mathrm{bkg}})
+  = \arg\min_{\Apred,\Abkg}\chi^2(\Apred,\Abkg),
+  \label{eq:sens_minimize}
+\end{equation}
+with box constraints:
+\begin{equation}
+  |\Apred| \le 10\,\spred,
+  \qquad
+  |\Abkg| \le 10\,\sbkg.
+  \label{eq:sens_bounds}
+\end{equation}
+L-BFGS-B uses gradient information and is well-suited to smooth,
+convex objectives with box constraints.
+Implemented in \texttt{lib/lib\_root.py:Sensitivity\_Fitter.Fit}.
+
+\subsection{Oscillation Grid Scan and Cut Quality Score}
+\label{sec:sens_scan}
+
+For each analysis cut $(N_{\mathrm{hits}},N_{\mathrm{ophits}},N_{\mathrm{adjcl}})$
+and each grid point $\vec{\theta}_k$:
+\begin{enumerate}[leftmargin=*]
+  \item Construct the Asimov dataset $\oij(\vec{\theta}_k)$.
+  \item Minimize $\chi^2$ against $p^{\mathrm{solar}}$:
+    obtain $\chi^2_\odot(\vec{\theta}_k)$.
+  \item Minimize $\chi^2$ against $p^{\mathrm{react}}$:
+    obtain $\chi^2_{\mathrm{react}}(\vec{\theta}_k)$.
+\end{enumerate}
+
+The \textbf{cut quality score} is the average wrong-hypothesis $\chi^2$
+(larger $\Rightarrow$ better discrimination):
+\begin{equation}
+  \mathrm{Score}(\mathrm{cut}) =
+    \tfrac{1}{2}\!\left[
+      \chi^2_\odot(\vec{\theta}_{\mathrm{react}})
+      + \chi^2_{\mathrm{react}}(\vec{\theta}_\odot)
+    \right].
+  \label{eq:sens_score}
+\end{equation}
+The resulting $\chi^2$ surface over the oscillation grid gives the
+sensitivity contours.
+
+\subsection{Template Construction Pipeline}
+\label{sec:sens_pipeline}
+
+The 2D templates $T^{\mathrm{sig}}$ and $T^{\mathrm{bkg}}$ are assembled
+from three physical inputs via a two-stage convolution.
+Figures~\ref{fig:sens_conv_nadir}--\ref{fig:sens_conv_oscillogram} show the
+nadir time-fraction $p(\cos\eta)$ (earth geometry, fixed by DUNE latitude
+$44.35^\circ$) and the solar survival probability
+$P(\nu_e\!\to\!\nu_e;\,E_\nu^{\mathrm{true}},\cos\eta)$ computed at the
+best-fit oscillation parameters.
+Figures~\ref{fig:sens_conv_background1d}--\ref{fig:sens_conv_signal1d}
+present the 1D background spectrum $b(E_{\mathrm{reco}})$ from the selected
+cuts and the 1D marginal signal spectrum $s(E_{\mathrm{reco}})$ obtained by
+summing the oscillated signal over nadir bins.
+Figures~\ref{fig:sens_conv_background_template}--\ref{fig:sens_conv_signal_template}
+show the fully assembled 2D templates:
+$T^{\mathrm{bkg}}$ is formed by weighting $b(E_{\mathrm{reco}})$ by
+$p(\cos\eta)$ via \texttt{\_project\_1d\_to\_2d};
+$T^{\mathrm{sig}}$ is the result of the full convolution
+$T^{\mathrm{sig}} = P_{\nu_e\to\nu_e}\cdot h^T$,
+where $h$ is the $(E_{\mathrm{reco}}\times E_{\mathrm{true}})$ smearing matrix.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_nadir}
+  \caption{Nadir time-fraction $p(\cos\eta)$ at DUNE latitude ($44.35^\circ$N),
+    derived from solar ephemeris.  This distribution weights each nadir strip in
+    the 2D background template.}
+  \label{fig:sens_conv_nadir}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_oscillogram}
+  \caption{Solar-neutrino oscillogram $P(\nu_e\!\to\!\nu_e;\,E_\nu,\cos\eta)$
+    at best-fit parameters
+    ($\Delta m^2_{21}=6\times10^{-5}$\,eV$^2$, $\sin^2\theta_{12}=0.303$).
+    Each row is the survival-probability spectrum for one nadir bin.}
+  \label{fig:sens_conv_oscillogram}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_background1d}
+  \caption{1D background spectrum $b(E_{\mathrm{reco}})$ after optimal cut
+    selection, showing individual components and the smoothed total used as
+    input to the 2D background template.}
+  \label{fig:sens_conv_background1d}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_signal1d}
+  \caption{1D marginal signal spectrum $s(E_{\mathrm{reco}})=\sum_\eta T^{\mathrm{sig}}$
+    at solar best-fit parameters and $30\,\mathrm{kt}\!\cdot\!\mathrm{yr}$
+    exposure.}
+  \label{fig:sens_conv_signal1d}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_background_template}
+  \caption{2D background template $T^{\mathrm{bkg}}(\cos\eta,\,E_{\mathrm{reco}})$:
+    the 1D spectrum $b(E)$ tiled over nadir and reweighted by $p(\cos\eta)$.}
+  \label{fig:sens_conv_background_template}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_conv_signal_template}
+  \caption{2D signal template $T^{\mathrm{sig}}(\cos\eta,\,E_{\mathrm{reco}})$:
+    result of convolving the smearing matrix $h$ with the oscillogram
+    $P(\nu_e\!\to\!\nu_e)$.  The nadir-dependent wiggles encode the MSW
+    day-night modulation exploited by the log-likelihood ratio.}
+  \label{fig:sens_conv_signal_template}
+\end{minipage}
+\end{figure}
+
+\subsection{Results}
+\label{sec:sens_results}
+
+Figures~\ref{fig:sens_central_solar_sin12}--\ref{fig:sens_lateral_significance}
+show the Sensitivity analysis outputs for both HD configurations
+(SolarEnergy, nominal, $30\,\mathrm{kt}\!\cdot\!\mathrm{yr}$).
+The top row presents $\sin^2\theta_{12}$ contours for the solar and reactor
+hypotheses; the bottom row shows significance vs.\ exposure.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_central_solar_sin12}
+  \caption{centralAPA: $\Delta\chi^2$ contours in $(\sin^2\theta_{12},\,\Delta m^2_{21})$ under the solar oscillation hypothesis.}
+  \label{fig:sens_central_solar_sin12}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_central_react_sin12}
+  \caption{centralAPA: $\Delta\chi^2$ contours under the reactor oscillation hypothesis.}
+  \label{fig:sens_central_react_sin12}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_central_significance}
+  \caption{centralAPA: hypothesis-separation significance vs.\ exposure at 30\,kt$\cdot$yr.}
+  \label{fig:sens_central_significance}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_lateral_solar_sin12}
+  \caption{lateralAPA: $\Delta\chi^2$ contours under the solar hypothesis.}
+  \label{fig:sens_lateral_solar_sin12}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_lateral_react_sin12}
+  \caption{lateralAPA: $\Delta\chi^2$ contours under the reactor hypothesis.}
+  \label{fig:sens_lateral_react_sin12}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{sens_lateral_significance}
+  \caption{lateralAPA: hypothesis-separation significance vs.\ exposure.}
+  \label{fig:sens_lateral_significance}
+\end{minipage}
+\end{figure}
+
+% ===========================================================================
+\section{Comparison Across Analyses}
+\label{sec:comparison}
+
+Table~\ref{tab:comparison} summarizes the statistical model for each
+analysis.
+
+\begin{table}[ht]
+\centering
+\caption{Statistical model comparison: Day-Night, HEP, and Sensitivity.}
+\label{tab:comparison}
+\begin{tabular}{p{3.2cm}p{3.5cm}p{3.5cm}p{3.5cm}}
+\toprule
+Feature & Day-Night & HEP & Sensitivity \\
+\midrule
+Observable
+  & 1D rate-difference spectrum
+  & 1D energy spectrum
+  & 2D (energy $\times$ azimuth) \\
+Signal
+  & $\si{=}\Ecal\xi(r_i^{\rm night}{-}r_i^{\rm day})$
+  & $\si{=}\Ecal r_i^{\rm hep}$
+  & $\Tsig(\vec\theta)$ \\
+Goal
+  & Detect day-night asymmetry
+  & Discover hep flux
+  & Map $(\Delta m^2,\sin^2\theta)$ contour \\
+Significance type
+  & Gaussian, two-sample Asimov
+  & Gaussian, Asimov, PL
+  & $\chi^2$ surface \\
+Nuisances
+  & None (error propagated)
+  & $1\times\beta$ (background)
+  & $\Apred + \Abkg$ \\
+Nuisance solution
+  & ---
+  & Closed-form quadratic (Eq.~\ref{eq:beta_solution})
+  & L-BFGS-B (2D) \\
+Penalty form
+  & ---
+  & $[(\bhat{-}1)/\srel]^2$
+  & $(\Apred/\spred)^2{+}(\Abkg/\sbkg)^2$ \\
+Per-bin deviance
+  & Eq.~\eqref{eq:dn_llr_bin}
+  & Eq.~\eqref{eq:q0_expanded} per bin
+  & Eq.~\eqref{eq:sens_deviance} \\
+Effective background
+  & $\Beff$ (Eq.~\ref{eq:dn_Beff})
+  & $\bi = \Ecal\sum_{c\neq\mathrm{hep}} r_i^c$
+  & $\Tbkg$ (2D template) \\
+Barlow-Beeston mask
+  & No
+  & $N_i^{\rm MC}\ge N_{\rm MC}^{\min}$
+  & $\Tbkg>0$ \\
+Asymmetry/signal band
+  & $\xi\in\{1\pm\epstot,1\}$
+  & $d\in\{2.9,3.0,3.1\}$
+  & --- \\
+PL post-processing
+  & ---
+  & Gauss($\sigma{=}6$) + PAVA (optional)
+  & --- \\
+Spike filter
+  & ---
+  & $\Delta_{\max}$ on pre-PAVA
+  & --- \\
+Output
+  & $Z$ vs.\ exposure
+  & $Z$ vs.\ exposure
+  & $\chi^2$ map over grid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\medskip
+\noindent\textbf{Narrative progression.}
+The three analyses exhibit a clear progression in statistical complexity
+centred on the treatment of nuisance parameters.
+
+The Day-Night analysis makes no nuisance-parameter approximations:
+signal and background are evaluated exactly in two separate exposure
+intervals, and the asymmetry uncertainty is propagated analytically as a
+scale factor on the signal.
+The three-source background uncertainty in the Error Gaussian
+(Eq.~\eqref{eq:dn_sigma_period}) is the most detailed error propagation
+of the three analyses, but no LLR profiling is performed.
+
+The HEP analysis introduces the full profile-likelihood framework.
+The critical observation is that a single global $\beta$ correlated across
+all bins leads to a scalar stationarity equation, whose positive root is
+a closed-form quadratic.  This makes the PL computation exact and fast.
+PAVA post-processing and adaptive rebinning address practical numerical
+issues (oscillations at low $S/B$; low-statistics tail bins).
+
+The Sensitivity analysis takes the same Baker-Cousins Poisson deviance
+as HEP's per-bin LLR, but extends it to 2D and introduces a second
+nuisance $\Apred$ that couples the model both to signal and background
+simultaneously.  This coupling breaks the factorization that enabled the
+HEP quadratic, requiring a full numerical 2D minimization.
+The result is a $\chi^2$ map rather than a significance curve.
+
+% ===========================================================================
+\section{Summary of Significance Outputs}
+\label{sec:summary}
+
+Table~\ref{tab:methods} lists all significance output columns.
+
+\begin{table}[ht]
+\centering
+\caption{Significance output columns across analyses.}
+\label{tab:methods}
+\begin{tabular}{llllll}
+\toprule
+Analysis & Label & Histogram & Rebinning & Estimator & Monotone? \\
+\midrule
+\multicolumn{6}{l}{\textit{Day-Night}} \\
+ & \texttt{RawGaussian}              & Raw    & None & Gaussian         & No \\
+ & \texttt{RawErrorGaussian}         & Raw    & None & Gaussian+$\seff$ & No \\
+ & \texttt{Gaussian}                 & Smooth & None & Gaussian         & No \\
+ & \texttt{ErrorGaussian}            & Smooth & None & Gaussian+$\seff$ & No \\
+ & \texttt{RawAsimov}                & Raw    & None & Two-sample LLR   & No \\
+ & \texttt{Asimov}                   & Smooth & None & Two-sample LLR   & No \\
+\midrule
+\multicolumn{6}{l}{\textit{HEP}} \\
+ & \texttt{RawGaussianNoRebin}       & Raw    & None     & Gaussian & No \\
+ & \texttt{RawAsimovNoRebin}         & Raw    & None     & Asimov   & No \\
+ & \texttt{RawGaussian}              & Raw    & Adaptive & Gaussian & Yes \\
+ & \texttt{RawAsimov}                & Raw    & Adaptive & Asimov   & Yes \\
+ & \texttt{GaussianNoRebin}          & Smooth & None     & Gaussian & No \\
+ & \texttt{AsimovNoRebin}            & Smooth & None     & Asimov   & No \\
+ & \texttt{Gaussian}                 & Smooth & Adaptive & Gaussian & Yes \\
+ & \texttt{Asimov}                   & Smooth & Adaptive & Asimov   & Yes \\
+ & \texttt{RawProfileLikelihood}     & Raw    & None     & PL       & Yes (post) \\
+ & \texttt{ProfileLikelihood}        & Smooth & None     & PL       & Yes (post) \\
+ & \texttt{PreIsotonicProfileLikelihood}
+   & Smooth & None & PL (pre-PAVA) & No \\
+\midrule
+\multicolumn{6}{l}{\textit{Sensitivity}} \\
+ & \texttt{chi2\_solar/react} & 2D smooth & None & Baker-Cousins & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===========================================================================
+\section{Workflow Flags and Configuration}
+\label{sec:flags}
+
+\begin{table}[ht]
+\centering
+\caption{Orchestrator flags in \texttt{10SensitivityAnalysis.py}.}
+\label{tab:flags}
+\begin{tabular}{llp{8cm}}
+\toprule
+Flag & Default & Effect when disabled \\
+\midrule
+\texttt{--computation}     & True  & Skip all computation; run only plot macros \\
+\texttt{--significance}    & True  & Skip \texttt{12DayNight.py}, \texttt{13HEP.py}, \texttt{14Sensitivity*.py} \\
+\texttt{--fiducialization} & True  & Skip \texttt{0XFiducializeSignal.py}, \texttt{0YBestFiducial.py} \\
+\texttt{--rebin}           & True  & Skip \texttt{11AnalysisSignal.py} adaptive rebinning \\
+\texttt{--optimization}    & False & Run smoothing sigma optimizer \texttt{optimize\_smoothing.py} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\medskip\noindent
+Per-analysis workflow feature flags are controlled by
+\texttt{analysis/config.json} under \texttt{WORKFLOW.\{ANALYSIS\}}:
+
+\begin{table}[ht]
+\centering
+\caption{Per-analysis workflow feature flags.}
+\label{tab:analysis_flags}
+\begin{tabular}{llp{8cm}}
+\toprule
+Key & Default & Effect when true \\
+\midrule
+\texttt{DAYNIGHT.background\_error} & \texttt{true} &
+  Compute Error Gaussian curves (Eq.~\ref{eq:dn_error_gaussian}) \\
+\texttt{DAYNIGHT.significance\_bins} & \texttt{true} &
+  Save per-bin significance spectra at the display exposure \\
+\texttt{HEP.pl\_signal\_bands} & \texttt{true} &
+  Evaluate three signal normalizations for $\pm1\sigma_s$ PL bands \\
+\texttt{HEP.pl\_isotonic} & \texttt{false} &
+  Apply Gaussian+PAVA post-processing to PL curves \\
+\texttt{HEP.significance\_bins} & \texttt{false} &
+  Save per-bin significance spectra at the display exposure \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===========================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+\begin{thebibliography}{9}
+
+\bibitem{Cowan2010}
+G.~Cowan, K.~Cranmer, E.~Gross, O.~Vitells,
+\textit{Asymptotic formulae for likelihood-based tests of new physics},
+Eur.\ Phys.\ J.\ C \textbf{71} (2011) 1554.
+\url{https://arxiv.org/abs/1007.1727}
+
+\bibitem{BakerCousins1984}
+S.~Baker, R.D.~Cousins,
+\textit{Clarification of the use of chi-square and likelihood functions in fits to histograms},
+Nucl.\ Instrum.\ Meth.\ \textbf{221} (1984) 437--442.
+\url{https://doi.org/10.1016/0167-5087(84)90016-4}
+
+\bibitem{BarlowBeeston1993}
+R.~Barlow, C.~Beeston,
+\textit{Fitting using finite Monte Carlo samples},
+Comput.\ Phys.\ Commun.\ \textbf{77} (1993) 219--228.
+\url{https://doi.org/10.1016/0010-4655(93)90005-W}
+
+\bibitem{Robertson1988}
+T.~Robertson, F.T.~Wright, R.L.~Dykstra,
+\textit{Order Restricted Statistical Inference},
+Wiley, 1988.
+
+\bibitem{ByrdEtAl1995}
+R.H.~Byrd, P.~Lu, J.~Nocedal, C.~Zhu,
+\textit{A limited memory algorithm for bound constrained optimization},
+SIAM J.\ Sci.\ Comput.\ \textbf{16} (1995) 1190--1208.
+
+\bibitem{ZhuEtAl1997}
+C.~Zhu, R.H.~Byrd, P.~Lu, J.~Nocedal,
+\textit{Algorithm 778: L-BFGS-B: Fortran subroutines for large-scale bound-constrained optimization},
+ACM Trans.\ Math.\ Softw.\ \textbf{23} (1997) 550--560.
+
+\end{thebibliography}
+
+\end{document}

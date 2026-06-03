@@ -1,0 +1,46 @@
+\contentsline {section}{\numberline {1}Overview and Scientific Goals}{3}{section.1}%
+\contentsline {section}{\numberline {2}Common Ingredients}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Rate Histograms and Exposure Scaling}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Histogram Smoothing}{3}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Per-Component Background Error Model}{4}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Day-Night Asymmetry Analysis}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Physical Observable: MSW-Enhanced Day-Night Effect}{4}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Two-Period Signal and Background Model}{4}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Effective Two-Sample Background}{5}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Gaussian Significance}{5}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Background Uncertainty for the Rate-Difference Test}{5}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Two-Sample Poisson Asimov Significance}{6}{subsection.3.6}%
+\contentsline {subsection}{\numberline {3.7}Asymmetry Uncertainty Band}{6}{subsection.3.7}%
+\contentsline {subsection}{\numberline {3.8}Results}{7}{subsection.3.8}%
+\contentsline {section}{\numberline {4}HEP Discovery Analysis}{8}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Signal and Background Model}{8}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Background Error Aggregation}{8}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Adaptive Tail Rebinning}{8}{subsection.4.3}%
+\contentsline {subsubsection}{\numberline {4.3.1}Detection Threshold}{8}{subsubsection.4.3.1}%
+\contentsline {subsubsection}{\numberline {4.3.2}Greedy Algorithm and Monotonicity Enforcement}{8}{subsubsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.4}Gaussian and Asimov Significance}{9}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Profile-Likelihood Significance}{9}{subsection.4.5}%
+\contentsline {subsubsection}{\numberline {4.5.1}Test Statistic}{9}{subsubsection.4.5.1}%
+\contentsline {subsubsection}{\numberline {4.5.2}Global Background Normalization Nuisance}{9}{subsubsection.4.5.2}%
+\contentsline {subsubsection}{\numberline {4.5.3}Profiling $\hat {\beta }$}{9}{subsubsection.4.5.3}%
+\contentsline {subsubsection}{\numberline {4.5.4}Log-Likelihood Ratio}{10}{subsubsection.4.5.4}%
+\contentsline {subsubsection}{\numberline {4.5.5}Numerical Stability}{10}{subsubsection.4.5.5}%
+\contentsline {subsection}{\numberline {4.6}Barlow-Beeston MC Mask}{10}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Profile-Likelihood Signal Bands and Post-Processing}{11}{subsection.4.7}%
+\contentsline {subsection}{\numberline {4.8}Spike Detection and Best-Cut Selection}{11}{subsection.4.8}%
+\contentsline {subsection}{\numberline {4.9}Results}{11}{subsection.4.9}%
+\contentsline {section}{\numberline {5}Sensitivity Analysis}{11}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Overview}{11}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Two-Dimensional Template Construction}{12}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Asimov Dataset Construction}{13}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Objective Function: Baker-Cousins Poisson Deviance}{14}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Nuisance Parameters: Constraints and Non-Analyticity}{14}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}Barlow-Beeston Mask for 2D Templates}{14}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}Minimization: scipy L-BFGS-B}{15}{subsection.5.7}%
+\contentsline {subsection}{\numberline {5.8}Oscillation Grid Scan and Cut Quality Score}{15}{subsection.5.8}%
+\contentsline {subsection}{\numberline {5.9}Template Construction Pipeline}{15}{subsection.5.9}%
+\contentsline {subsection}{\numberline {5.10}Results}{16}{subsection.5.10}%
+\contentsline {section}{\numberline {6}Comparison Across Analyses}{16}{section.6}%
+\contentsline {section}{\numberline {7}Summary of Significance Outputs}{16}{section.7}%
+\contentsline {section}{\numberline {8}Workflow Flags and Configuration}{17}{section.8}%
+\contentsline {section}{References}{17}{section*.2}%

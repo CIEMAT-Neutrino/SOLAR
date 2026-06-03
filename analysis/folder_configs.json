@@ -1,6 +1,6 @@
 {
-  "FOLDER_CHOICES": ["Nominal", "Reduced", "Truncated"],
   "DEFAULT_FOLDER": "Truncated",
+  "FOLDER_CHOICES": ["Nominal", "Reduced", "Truncated"],
   "FOLDERS": {
     "Nominal": {
       "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction.",

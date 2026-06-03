@@ -136,12 +136,18 @@ def make_oscillation_grid(analysis_info: dict, dm2=None, sin13=None, sin12=None)
         pts = list(_product(dv, tv, sv))
         return ([p[0] for p in pts], [p[1] for p in pts], [p[2] for p in pts])
 
-    # Reference value lookup
+    # Reference value lookup — no hardcoded fallbacks; missing keys are fatal
+    for _req in ("SOLAR_DM2", "REACT_DM2", "SIN13", "SIN12"):
+        if _req not in analysis_info:
+            raise SystemExit(
+                f"[oscillation] '{_req}' missing from analysis config (physics.json). "
+                "Cannot build oscillation grid."
+            )
     _ref_map = {
-        "SOLAR_DM2": float(analysis_info.get("SOLAR_DM2", 6e-5)),
-        "REACT_DM2": float(analysis_info.get("REACT_DM2", 7.4e-5)),
-        "SIN13":     float(analysis_info.get("SIN13",     0.021)),
-        "SIN12":     float(analysis_info.get("SIN12",     0.303)),
+        "SOLAR_DM2": float(analysis_info["SOLAR_DM2"]),
+        "REACT_DM2": float(analysis_info["REACT_DM2"]),
+        "SIN13":     float(analysis_info["SIN13"]),
+        "SIN12":     float(analysis_info["SIN12"]),
     }
     # Always-included values per axis
     _axis_pins = {

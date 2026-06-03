@@ -15,8 +15,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.lib_osc import get_oscillation_map
-from lib.lib_osc_backends import OscResult
+from lib.oscillation import get_oscillation_map
+from lib.oscillation_backends import OscResult
 
 DM2   = 6.0e-5
 SIN13 = 0.021

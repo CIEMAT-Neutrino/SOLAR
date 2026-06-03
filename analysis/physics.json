@@ -11,7 +11,7 @@
   "SIN13": 0.021,
   "SIN12": 0.303,
   "DUNE_LATITUDE_DEG": 44.35,
-  "OSCILLATION_BACKEND": "file",
+  "OSCILLATION_BACKEND": "nufast",
   "OSCILLATION_GRID": {
     "ranges": {
       "dm2":   {"min": 2.0e-5, "max": 2.0e-4, "scale": "linear"},

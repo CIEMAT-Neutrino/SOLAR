@@ -10,7 +10,7 @@ Pipeline stages (run in order, each skippable):
   02  spectra          02_background_spectra.py     --no-spectra
   02  external PDF     02_background_spectra.py     --no-external-pdf
   03  surface PDF      03_background_pdf.py         --surface-pdf (off by default; legacy MC)
-  05  signal KDE       05_signal_azimuth_kde.py     --signal-kde (off by default; superseded)
+  05  signal KDE       05_signal_nadir_kde.py     --signal-kde (off by default; superseded)
   bkg solar bkg        solar_background.py          --no-background
   bkg bkg plot         solar_background_plot.py     (controlled by --no-plot)
 
@@ -151,7 +151,7 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help=(
-        "Run 05_signal_azimuth_kde.py (legacy pre-generation stage). "
+        "Run 05_signal_nadir_kde.py (legacy pre-generation stage). "
         "Off by default — lib/weights.py now computes signal KDE on-the-fly "
         "from the oscillation pkl at the best-fit point, making pre-generation "
         "unnecessary for all three oscillation backends. "
@@ -257,7 +257,7 @@ def run_signal_kde_stage(config: str, sig_names: List[str]):
         return
     for name in sig_names:
         run_truth_script(
-            "05_signal_azimuth_kde.py",
+            "05_signal_nadir_kde.py",
             ["--config", config, "--name", name, _rw(), _debug()],
         )
 

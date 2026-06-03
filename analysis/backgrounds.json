@@ -1,0 +1,70 @@
+{
+  "BACKGROUND_SAMPLES": {
+    "ESSENTIAL": {
+      "gamma":        true,
+      "alpha":        false,
+      "neutron":      true,
+      "radiological": false
+    },
+    "default":          ["gamma", "neutron", "radiological"],
+    "surface_filtered": ["gamma", "neutron"],
+    "ANALYSES": {
+      "DAYNIGHT":    ["gamma", "neutron", "radiological"],
+      "HEP":         ["gamma", "neutron", "radiological"],
+      "SENSITIVITY": ["gamma", "neutron", "radiological"]
+    },
+    "STYLE": {
+      "gamma":        {"label": "gamma",        "color": "black",             "reduction": 3},
+      "neutron":      {"label": "neutron",      "color": "rgb(15,133,84)",    "reduction": 2},
+      "alpha":        {"label": "alpha",        "color": "rgb(29, 105, 150)", "reduction": 1},
+      "radiological": {"label": "radiological", "color": "rgb(120, 94, 240)", "reduction": 1}
+    }
+  },
+  "SPECTRA": {
+    "REBIN_WIDTH": 100,
+    "SHIELDING": {
+      "vd_1x8x14_3view_30deg_shielded": {
+        "cavernwall_gamma": {
+          "reduction_factor": 0.284571618037,
+          "threshold_mev": 3.3
+        }
+      }
+    },
+    "SHIELDING_COMPARISONS": [
+      {
+        "corrected":  "vd_1x8x14_3view_30deg_shielded",
+        "reference":  "vd_1x8x14_3view_30deg_nominal"
+      }
+    ]
+  },
+  "PDF": {
+    "FLOOR": 1e-8,
+    "BINWIDTH_FACTOR": 0.02,
+    "GAMMA_MOMENTUM_THRESHOLD_MEV": 4.0,
+    "VALIDATION_SAMPLE": 1000,
+    "VALIDATION_SCALE": 1000
+  },
+  "DATA_PATHS": {
+    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth",
+    "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy"
+  },
+  "DEFAULT_CONFIGS": [
+    "hd_1x2x6_centralAPA",
+    "hd_1x2x6_lateralAPA",
+    "vd_1x8x14_3view_30deg_nominal",
+    "vd_1x8x14_3view_30deg_shielded"
+  ],
+  "TRUTH_PIPELINE": {
+    "PDF_BACKEND": "truth",
+    "BACKGROUND_NAMES": ["gamma", "neutron"],
+    "SIGNAL_NAMES": ["marley"],
+    "COMPARISON_CONFIGS": [
+      "hd_1x2x6_centralAPA",
+      "hd_1x2x6_lateralAPA",
+      "vd_1x8x14_3view_30deg_nominal",
+      "vd_1x8x14_3view_30deg_shielded"
+    ],
+    "FLUX_REGIONS_MEV": [[0, 2.7], [2.7, 8], [8, 14]],
+    "FLUX_REFERENCE_CONFIG": "vd_1x8x14_3view_30deg_nominal"
+  }
+}

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from lib.lib_df import rebin_df_columns
+from lib.dataframe import rebin_df_columns
 
 
 def test_rebin_df_columns_two_pass_preserves_counts_and_updates_density():

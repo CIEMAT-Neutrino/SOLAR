@@ -193,7 +193,7 @@ run = compute_reco_workflow(
     params=(
         {
             "DEFAULT_SIGNAL_WEIGHT": ["truth", "osc"],
-            "DEFAULT_SIGNAL_AZIMUTH": ["mean", "day", "night"],
+            "DEFAULT_SIGNAL_NADIR": ["mean", "day", "night"],
             "PARTICLE_TYPE": "signal",
             "PARTICLE_WEIGHTING": "volume",
             "OSCILLATION_BACKEND": args.oscillation_backend,

@@ -10,34 +10,34 @@ Common analysis-wide defaults, including smoothing and fiducialization rules, li
 
 ## 2. Run The Full Reconstruction Chain
 
-To execute the main workflow plus preselection, PDS, TPC, and vertex stages for one configuration and sample:
+To execute calibration, preselection, PDS, TPC, and vertex stages for one configuration and sample:
 
 ```bash
-python3 src/00All.py --config hd_1x2x6_centralAPA --name marley
+python3 src/pipelines/run_all.py --config hd_1x2x6_centralAPA --name marley
 ```
 
 This orchestrates:
 
-- `src/workflow/00AllWorkflow.py`
-- `src/preselection/10AllPreselection.py`
-- `src/PDS/20AllPDS.py`
-- `src/TPC/30AllTPC.py`
-- `src/vertex/40AllVertex.py`
+- `src/pipelines/run_calibration.py` — energy correction, calibration, discrimination, reconstruction, smearing
+- `src/pipelines/run_preselection.py` — production, efficiency, clustering
+- `src/pipelines/run_pds.py` — opflash, adj opflash, matched opflash, efficiency
+- `src/pipelines/run_tpc.py` — electron energy, adj clusters, energy resolution
+- `src/pipelines/run_vertex.py` — smearing, vertex distributions, fiducial, reconstruction
 
-If the workflow products already exist and you only want to rerun the downstream detector studies, you can start from:
+If the detector products already exist and you only want to rerun the downstream analysis studies, you can start from:
 
 ```bash
-python3 src/01Analysis.py --config hd_1x2x6_centralAPA --name marley
+python3 src/pipelines/run_analysis.py --config hd_1x2x6_centralAPA --name marley
 ```
 
 ## 3. Run The High-Level Solar Analyses
 
-The main analysis entry point is `src/analysis/10SensitivityAnalysis.py`. It can coordinate fiducial scans and the DayNight, HEP, and Sensitivity analyses in one pass.
+The main analysis entry point is `src/pipelines/run_sensitivity.py`. It can coordinate fiducial scans and the DayNight, HEP, and Sensitivity analyses in one pass.
 
 Example:
 
 ```bash
-python3 src/analysis/10SensitivityAnalysis.py \
+python3 src/pipelines/run_sensitivity.py \
   --config hd_1x2x6_centralAPA \
   --names marley gamma neutron \
   --analysis DayNight HEP Sensitivity \
@@ -47,12 +47,12 @@ python3 src/analysis/10SensitivityAnalysis.py \
 
 What it does today:
 
-- Builds fiducialized signal scans with `0XFiducializeSignal.py`.
-- Selects best fiducials with `0YBestFiducial.py`.
-- Produces per-analysis signal summaries with `11AnalysisSignal.py`.
-- Runs Day-Night products: `12DayNight.py`, exposure plots, significance plots, and best-sigma selection.
-- Runs HEP products: `13HEP.py`, exposure plots, significance plots, and best-sigma selection.
-- Runs oscillation sensitivity templates and contour plots: `14SensitivityBackgroundTemplate.py`, `14SensitivitySignalTemplate.py`, `14Sensitivity.py`, and `14SensitivityContourPlot.py`.
+- Builds fiducialized signal scans with `src/physics/signal/01_fiducialize.py`.
+- Selects best fiducials with `src/physics/signal/02_best_fiducial.py`.
+- Produces per-analysis signal summaries with `src/physics/signal/03_analysis.py`.
+- Runs Day-Night products: `src/physics/daynight/01_daynight.py`, exposure plots, significance plots, and best-sigma selection.
+- Runs HEP products: `src/physics/hep/01_hep.py`, exposure plots, significance plots, and best-sigma selection.
+- Runs oscillation sensitivity templates and contour plots: `src/physics/sensitivity/01_background_template.py`, `src/physics/sensitivity/02_signal_template.py`, `src/physics/sensitivity/06_significance.py`, and `src/physics/sensitivity/contour_plot.py`.
 
 Component policy note:
 
@@ -69,11 +69,11 @@ The repository writes intermediate and final artefacts into project-local folder
 
 - `data/` for processed arrays, scan products, and pickled analysis results.
 - `images/` for plots and figure outputs.
-- `presentations/` for presentation-ready material when used.
+- `output/presentations/` for presentation-ready material when used.
 
 ## 5. Validate New Smoothing Behaviour
 
-Recent analysis updates introduced config-driven Gaussian smoothing in `lib/lib_smooth.py`. The current regression coverage is:
+Recent analysis updates introduced config-driven Gaussian smoothing in `lib/smoothing.py`. The current regression coverage is:
 
 ```bash
 python3 -m pytest tests/test_smoothing.py

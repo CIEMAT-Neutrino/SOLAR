@@ -109,11 +109,11 @@ def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Name
 
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
 
-    # Sensitivity uses a flat directory structure, others use nested
+    # Sensitivity path: SENSITIVITY/{folder}/{config}/{name}/...
     if analysis_key == "SENSITIVITY":
         sigma_path = (
-            f"{info['PATH']}/{analysis_key}/{args.folder.lower()}/"
-            f"{config}_{name}_{getattr(args, 'pkl_label', 'highest')}_{analysis_key}.pkl"
+            f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}/"
+            f"{config}/{name}/{config}_{name}_{getattr(args, 'pkl_label', 'highest')}_{analysis_key}.pkl"
         )
     else:
         sigma_path = (
@@ -261,18 +261,19 @@ if args.analysis != "Sensitivity":
     if args.threshold is None:
         _analysis_key = "DAYNIGHT" if args.analysis == "DayNight" else args.analysis.upper()
         args.threshold = get_analysis_threshold(str(root), _analysis_key, stage="SIGNIFICANCE", fallback=0.0)
-    if args.signal_uncertainty is None or args.background_uncertainty is None:
-        _unc = analysis_info.get("ANALYSIS_UNCERTAINTIES", {}).get(
-            "DAYNIGHT" if args.analysis == "DayNight" else args.analysis.upper(), {}
+
+if args.signal_uncertainty is None or args.background_uncertainty is None:
+    _unc = analysis_info.get("ANALYSIS_UNCERTAINTIES", {}).get(
+        "DAYNIGHT" if args.analysis == "DayNight" else args.analysis.upper(), {}
+    )
+    if args.signal_uncertainty is None:
+        args.signal_uncertainty = float(
+            _unc.get("signal_uncertainty", analysis_info.get("SIGNAL_ERROR", 0.04))
         )
-        if args.signal_uncertainty is None:
-            args.signal_uncertainty = float(
-                _unc.get("signal_uncertainty", analysis_info.get("SIGNAL_ERROR", 0.04))
-            )
-        if args.background_uncertainty is None:
-            args.background_uncertainty = float(
-                _unc.get("background_uncertainty", analysis_info.get("BACKGROUND_ERROR", 0.02))
-            )
+    if args.background_uncertainty is None:
+        args.background_uncertainty = float(
+            _unc.get("background_uncertainty", analysis_info.get("BACKGROUND_ERROR", 0.02))
+        )
 
 # Energy defaults per analysis
 if args.energy is None:
@@ -636,6 +637,208 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     filename=figure_name, rm=args.rewrite, debug=args.plot)
 
     # ══════════════════════════════════════════════════════════════════════════
+    # HEP — rebin mode
+    # ══════════════════════════════════════════════════════════════════════════
+    elif args.analysis == "HEP" and args.mode in ["rebin", "all"]:
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        if cuts is None:
+            continue
+        nhits_value, ophits_value, adjcl_value = cuts
+
+        sigmas_df = pd.read_pickle(
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
+            f"/{config}/{name}/{config}_{name}_{energy}_HEP_Results.pkl"
+        )
+
+        required_sigma_columns = ["Config", "Name", "NHits", "OpHits", "AdjCl", "Exposure"]
+        missing_sigma_columns = [c for c in required_sigma_columns if c not in sigmas_df.columns]
+        if sigmas_df.empty or missing_sigma_columns:
+            rprint(f"[yellow][WARNING][/yellow] Invalid HEP results for {config} {name} {energy}")
+            continue
+
+        sigma_rows = sigmas_df.loc[
+            (sigmas_df["Config"] == config) * (sigmas_df["Name"] == name)
+            * (sigmas_df["NHits"] == int(nhits_value)) * (sigmas_df["OpHits"] == int(ophits_value))
+            * (sigmas_df["AdjCl"] == int(adjcl_value))
+        ].copy()
+
+        if sigma_rows.empty:
+            rprint(f"[yellow][WARNING][/yellow] Missing result row for {config} {name} {energy}")
+            continue
+
+        sigma_row = sigma_rows.iloc[0]
+        exposure_grid = _safe_array(sigma_row["Exposure"])
+
+        for significance_type in ["Asimov", "Gaussian"]:
+            curve_keys = {
+                ("Raw", "NoRebin"): f"Raw{significance_type}NoRebin",
+                ("Raw", "AdaptiveRebin"): f"Raw{significance_type}",
+                ("Smoothed", "NoRebin"): f"{significance_type}NoRebin",
+                ("Smoothed", "AdaptiveRebin"): f"{significance_type}",
+            }
+            missing = [k for k in curve_keys.values() if k not in sigma_row.index]
+            if missing:
+                continue
+
+            fig = make_subplots(rows=2, cols=1, row_heights=[0.7, 0.3], vertical_spacing=0,
+                               subplot_titles=(f"{significance_type} vs exposure ({energy})", ""))
+
+            significance_peak = 0.0
+            for spectrum_label, rebin_mode in [("Raw", "NoRebin"), ("Raw", "AdaptiveRebin"),
+                                               ("Smoothed", "NoRebin"), ("Smoothed", "AdaptiveRebin")]:
+                curve_key = curve_keys[(spectrum_label, rebin_mode)]
+                y_values = _safe_array(sigma_row[curve_key])
+                significance_peak = max(significance_peak, float(np.max(y_values)))
+                style = _REBIN_STYLE_MAP[(spectrum_label, rebin_mode)]
+                label = f"{spectrum_label} {rebin_mode}"
+
+                fig.add_trace(go.Scatter(
+                    x=exposure_grid, y=y_values, mode="lines", name=label,
+                    line=dict(color=style["color"], dash=style["dash"], width=style["width"]),
+                    line_shape="linear",
+                ), row=1, col=1)
+
+            fig = format_coustom_plotly(fig, title=f"Rebin Comparison - {args.folder} - {config}",
+                                       add_units=False, figsize=(800, 600), matches=("x", None), add_watermark=False)
+            fig.update_xaxes(title="", showticklabels=False, row=1, col=1)
+            fig.update_xaxes(title="Exposure (kT·year)", row=2, col=1)
+            fig.update_yaxes(title="Significance (σ)",
+                           range=[0, max(1.0, 1.1 * significance_peak)] if args.zoom else [0, 6],
+                           row=1, col=1)
+            fig.update_yaxes(title="Grouped bins", row=2, col=1)
+
+            figure_name = f"{energy}_HEP_{significance_type}_AdaptiveRebin_Comparison"
+            if args.threshold is not None:
+                figure_name += f"_Threshold_{args.threshold:.0f}"
+
+            save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+                       filename=figure_name, rm=args.rewrite, debug=args.plot)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # HEP — reference mode
+    # ══════════════════════════════════════════════════════════════════════════
+    elif args.analysis == "HEP" and args.mode in ["reference", "all"]:
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        if cuts is None:
+            continue
+        nhits_value, ophits_value, adjcl_value = cuts
+
+        significance_file = Path(data_path) / config / name / args.folder.lower() / f"{config}_{name}_HEP_Significance.pkl"
+        exposure_file = Path(data_path) / config / name / args.folder.lower() / f"{config}_{name}_HEP_Exposure.pkl"
+
+        if not significance_file.exists() or not exposure_file.exists():
+            rprint(f"[yellow][WARNING][/yellow] Missing HEP plot data for {config} {name}. Run plotting macros first.")
+            continue
+
+        significance_df = pd.read_pickle(significance_file)
+        exposure_df = pd.read_pickle(exposure_file)
+
+        if "EnergyLabel" not in significance_df.columns or "EnergyLabel" not in exposure_df.columns:
+            rprint(f"[yellow][WARNING][/yellow] Missing EnergyLabel in saved HEP plot data")
+            continue
+
+        significance_rows = significance_df.loc[
+            (significance_df["Config"] == config) & (significance_df["Name"] == name)
+            & (significance_df["EnergyLabel"] == energy) & (significance_df["Variable"].isin(["Asimov", "Gaussian", "ProfileLikelihood"]))
+        ].copy()
+        exposure_rows = exposure_df.loc[
+            (exposure_df["Config"] == config) & (exposure_df["Name"] == name)
+            & (exposure_df["EnergyLabel"] == energy) & (exposure_df["Variable"].isin(["Asimov", "Gaussian", "ProfileLikelihood"]))
+        ].copy()
+
+        for column, value in [("NHits", nhits_value), ("OpHits", ophits_value), ("AdjCl", adjcl_value)]:
+            if column in significance_rows.columns:
+                significance_rows = significance_rows.loc[significance_rows[column] == int(value)].copy()
+            if column in exposure_rows.columns:
+                exposure_rows = exposure_rows.loc[exposure_rows[column] == int(value)].copy()
+
+        if significance_rows.empty or exposure_rows.empty:
+            rprint(f"[yellow][WARNING][/yellow] Missing comparison inputs for {config} {name} {energy}")
+            continue
+
+        # Significance comparison figure
+        fig_sig = make_subplots(rows=2, cols=1, row_heights=[0.7, 0.3], vertical_spacing=0,
+                               subplot_titles=("", ""))
+
+        significance_max = 0.0
+        for variable in ["Asimov", "Gaussian", "ProfileLikelihood"]:
+            for spectrum_type in ["Raw", "Smoothed"]:
+                row = significance_rows.loc[
+                    (significance_rows["Variable"] == variable) & (significance_rows["SpectrumType"] == spectrum_type)
+                ]
+                if row.empty:
+                    continue
+
+                xvals = _safe_array(row["Energy"].values[0])
+                yvals = _safe_array(row["Significance"].values[0])
+                significance_max = max(significance_max, float(np.max(yvals)))
+
+                style = _COMPARISON_STYLES[(variable, spectrum_type)]
+                fig_sig.add_trace(go.Scatter(
+                    x=xvals, y=yvals, mode="lines", name=variable,
+                    line=dict(color=style["color"], dash=style["dash"], width=style["width"]),
+                    line_shape="hvh", legend="legend2", legendgroup="reference",
+                    legendgrouptitle="Reference", showlegend=(spectrum_type == "Smoothed"),
+                ), row=2, col=1)
+
+        fig_sig = format_coustom_plotly(fig_sig, figsize=(800, 600), tickformat=(".1f", ".0e"),
+                                       add_units=False, title=f"HEP Significance Comparison - {args.folder} - {config}",
+                                       matches=("x", None), add_watermark=False)
+        if args.threshold is not None:
+            fig_sig.add_vline(x=args.threshold, line_dash="dash", line_color="grey",
+                             annotation=dict(text="Threshold", showarrow=False),
+                             annotation_position="bottom right")
+
+        fig_sig.update_yaxes(tickformat=".0f", range=[0, max(1.0, 1.1 * significance_max)] if args.zoom else [0, 6],
+                            title="Significance (σ)", row=2, col=1)
+        fig_sig.update_xaxes(range=[8, 26], showticklabels=False, row=1, col=1)
+        fig_sig.update_xaxes(range=[8, 26], title="Reconstructed Neutrino Energy (MeV)", row=2, col=1)
+
+        figure_name = f"{energy}_HEP_Significance_Comparison"
+        if args.threshold is not None:
+            figure_name += f"_Threshold_{args.threshold:.0f}"
+
+        save_figure(fig_sig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+                   filename=figure_name, rm=args.rewrite, debug=args.plot)
+
+        # Exposure comparison figure
+        fig_exp = make_subplots(rows=1, cols=1)
+        exposure_max = 0.0
+
+        for variable in ["Asimov", "Gaussian"]:
+            row = exposure_rows.loc[exposure_rows["Variable"] == variable]
+            if row.empty:
+                continue
+
+            xvals = _safe_array(row["Exposure"].values[0])
+            y_raw = _safe_array(row["RawSignificance"].values[0] if "RawSignificance" in row.columns else row["Significance"].values[0])
+            y_smooth = _safe_array(row["Significance"].values[0])
+            exposure_max = max(exposure_max, float(np.max(y_smooth)))
+
+            raw_style = _COMPARISON_STYLES[(variable, "Raw")]
+            smooth_style = _COMPARISON_STYLES[(variable, "Smoothed")]
+
+            add_reference_pair_traces(fig_exp, x=xvals, y_raw=y_raw, y_smoothed=y_smooth, name=variable,
+                                     raw_style=raw_style, smoothed_style=smooth_style,
+                                     legend="legend", legendgroup="reference", legendgrouptitle="Reference",
+                                     showlegend_raw=False, showlegend_smoothed=True, line_shape="linear")
+
+        fig_exp = format_coustom_plotly(fig_exp, tickformat=(".1f", ".1f"), add_units=False,
+                                       title="Selected Sample for Solar Neutrino HEP Exposure Comparison",
+                                       matches=(None, None))
+        fig_exp.update_yaxes(tickformat=".1f", dtick=1,
+                            range=[0, max(1.0, 1.1 * exposure_max)] if args.zoom else [0, 6],
+                            title="Significance (σ)")
+        fig_exp.update_xaxes(range=[-1, args.exposure], zeroline=False, title="Exposure (kT·year)")
+
+        figure_name = f"{energy}_HEP_Exposure_Comparison"
+        if args.threshold is not None:
+            figure_name += f"_Threshold_{args.threshold:.0f}"
+
+        save_figure(fig_exp, save_path, config=config, name=name, subfolder=args.folder.lower(),
+                   filename=figure_name, rm=args.rewrite, debug=args.plot)
+
+    # ══════════════════════════════════════════════════════════════════════════
     # Sensitivity — 4 single-panel chi2 projections
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "Sensitivity":
@@ -644,9 +847,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
             cuts = (4, 10, 4)
         nhits, adjcl, ophits = cuts
 
-        prefix = f"{data_path}/{config}/{name}/{args.folder.lower()}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
-        if args.nuisance_profile:
-            prefix = prefix.replace(f"{args.folder.lower()}/", f"{args.folder.lower()}/{args.nuisance_profile}/")
+        # Path from sensitivity/06_significance.py output
+        sig_path = f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}"
+        suffix = (
+            f"signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
+            if args.background else f"signal_{100*args.signal_uncertainty:.0f}%_only"
+        )
+        profile_name = args.nuisance_profile or analysis_info.get("DEFAULT_NUISANCE_PROFILE", "full")
+        prefix = f"{sig_path}/results/{profile_name}/{suffix}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
 
         try:
             solar_sin12_df = pd.read_pickle(f"{prefix}_solar_sin12_df.pkl").astype(float)

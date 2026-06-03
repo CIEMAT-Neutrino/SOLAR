@@ -1,0 +1,40 @@
+{
+  "FIDUCIALIZATION": {
+    "combine_mode": "quadrature",
+    "ANALYSES": {
+      "DAYNIGHT": {
+        "significance_type": "asimov",
+        "energy_min": 6,
+        "energy_max": 18,
+        "energy_bands": [
+          {"label": "low",  "energy_min": 6,  "energy_max": 12},
+          {"label": "high", "energy_min": 12, "energy_max": 18}
+        ],
+        "signal_components":     ["8B", "hep"],
+        "background_components": ["gamma", "neutron", "radiological"]
+      },
+      "HEP": {
+        "significance_type": "asimov",
+        "energy_min": 14,
+        "energy_max": 30,
+        "energy_bands": [
+          {"label": "low",  "energy_min": 14, "energy_max": 20},
+          {"label": "high", "energy_min": 20, "energy_max": 30}
+        ],
+        "signal_components":     ["hep"],
+        "background_components": ["gamma", "neutron", "radiological", "8B"]
+      },
+      "SENSITIVITY": {
+        "significance_type": "asimov",
+        "energy_min": 10,
+        "energy_max": 30,
+        "energy_bands": [
+          {"label": "low",  "energy_min": 10, "energy_max": 20},
+          {"label": "high", "energy_min": 20, "energy_max": 30}
+        ],
+        "signal_components":     ["hep", "8B"],
+        "background_components": ["gamma", "neutron", "radiological"]
+      }
+    }
+  }
+}

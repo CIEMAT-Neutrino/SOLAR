@@ -35,7 +35,7 @@
     "DEFAULT_SIGNAL_WEIGHT": [
         "truth"
     ],
-    "DEFAULT_SIGNAL_AZIMUTH": [
+    "DEFAULT_SIGNAL_NADIR": [
         "mean"
     ],
     "DEFAULT_SIGNAL_DM2": 6e-05,

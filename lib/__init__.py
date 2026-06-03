@@ -20,9 +20,9 @@ from rich.progress import track
 from rich import print as rprint
 
 # Import all the local functions
-from .lib_reco import compute_reco_workflow
-from .lib_reco import compute_true_efficiency
-from .lib_default import (
+from .reco import compute_reco_workflow
+from .reco import compute_true_efficiency
+from .defaults import (
     get_default_energies,
     get_default_nhits,
     load_analysis_info,
@@ -33,31 +33,32 @@ from .lib_default import (
     get_folder_flags,
     folder_path_key,
     get_workflow_flags,
+    get_metrics_config,
 )
-from .lib_filter import (
+from .filters import (
     compute_filtered_run,
     update_yaml_file,
     update_json_file,
 )
-from .lib_weights import compute_particle_weights, compute_particle_surface
-from .lib_cluster import compute_total_energy
-from .lib_df import *
-from .lib_fit import *
-from .lib_geo import *
-from .lib_head import *
-from .lib_hit import *
-from .lib_io import *
-from .lib_osc import *
-from .lib_plt import *
-from .lib_root import *
-from .lib_smooth import *
-from .lib_sigma import evaluate_significance, evaluate_profile_likelihood_discovery
-from .lib_solar import *
-from .lib_wkf import *
-from .lib_evt import *
-from .lib_fiducial import *
-from .lib_background import *
-from .lib_log import configure_global_logging, get_global_logging_config
+from .weights import compute_particle_weights, compute_particle_surface
+from .cluster import compute_total_energy
+from .dataframe import *
+from .fitting import *
+from .geometry import *
+from .headers import *
+from .hit import *
+from .io import *
+from .oscillation import *
+from .plotting import *
+from .root import *
+from .smoothing import *
+from .sigma import evaluate_significance, evaluate_profile_likelihood_discovery
+from .solar import *
+from .workflow import *
+from .event import *
+from .fiducial import *
+from .background import *
+from .log import configure_global_logging, get_global_logging_config
 
 # Config the external libraries
 np.seterr(divide="ignore", invalid="ignore")

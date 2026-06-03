@@ -39,7 +39,7 @@ output/presentations/*.pdf
 
 data
 output/notebooks
-sensitivity
+images/analysis/sensitivity
 config/*/*/*calib/
 config/*/*calib/
 

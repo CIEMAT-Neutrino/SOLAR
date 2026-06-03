@@ -2,103 +2,186 @@
 
 SolarNuAna output analysis and reconstruction toolkit for DUNE solar-neutrino studies.
 
-The repository turns `SolarNuAna_module` outputs into analysis products, detector-performance studies, and oscillation sensitivity plots. It now includes a full staged pipeline covering truth-level weighting, reconstruction workflow studies, preselection, PDS/TPC/vertex performance, and high-level solar analyses such as Day-Night, HEP, fiducial optimization, and oscillation sensitivity.
+Turns `SolarNuAna_module` ROOT outputs into analysis products: detector-performance studies, truth-level weighting, oscillation templates, and oscillation-sensitivity plots covering Day-Night asymmetry, HEP flux measurement, and full Δm²/sin²θ sensitivity contours.
 
 Full documentation lives in [`docs/`](docs/) and is published at [dune-solar.readthedocs.io](https://dune-solar.readthedocs.io/en/latest/).
 
-## What Is In The Repo?
+---
 
-- `src/workflow/`: detector-response and reconstruction workflow drivers.
-- `src/preselection/`: production, efficiency, and clustering studies.
-- `src/PDS/`: optical-flash and matching studies.
-- `src/TPC/`: cluster and energy-resolution studies.
-- `src/vertex/`: smearing, fiducial, and reconstruction performance scans.
-- `src/truth/`: truth-level weighting and background PDF preparation.
-- `src/analysis/`: solar-physics analyses, fiducial optimization, Day-Night, HEP, and sensitivity products.
-- `lib/`: shared IO, plotting, smoothing, fiducial, oscillation, and workflow helpers.
-- `tests/`: regression coverage for newer smoothing utilities.
-- `config/`: detector-configuration-specific JSON files.
-- `import/`: shared analysis defaults, including smoothing and fiducialization settings.
+## Repository Layout
+
+```text
+src/
+  pipelines/          Top-level run macros (one per analysis block)
+  physics/
+    calibration/      Correction → calibration → discrimination → reconstruction → smearing
+    detector/
+      pds/            PDS optical-flash matching and efficiency
+      tpc/            TPC electron energy and cluster resolution
+      vertex/         Vertex smearing, fiducial, and reconstruction
+      preselection/   Production, efficiency, and clustering studies
+    truth/            Oscillation templates, background spectra, signal KDE
+    signal/           Fiducialization, rebinning, and analysis signal products
+    common/           Shared significance-plot macros
+    daynight/         Day-Night significance and exposure curves
+    hep/              HEP significance, exposure, and comparison plots
+    sensitivity/      Background/signal templates, cut optimisation, contour plots
+  tools/
+    presentations/    Auto-generated Reveal.js slide decks (daynight/hep/sensitivity)
+    optimize_smoothing.py
+    event_display.py
+    compare_backends.py
+    processing.py
+
+lib/                  Shared helpers (IO, smoothing, oscillation, fiducial, log, …)
+config/               Per-detector-configuration JSON files
+analysis/             Active analysis settings (backgrounds, physics, smoothing, …)
+tests/                Regression tests
+docs/                 Sphinx documentation source
+external/             Prob3plusplus and NuFast-Earth oscillation backends
+```
+
+---
+
+## Pipelines
+
+All entry-points live in [`src/pipelines/`](src/pipelines/). Each script is self-contained and accepts `--verbose quiet|normal|verbose` (default `normal`).
+
+| Script | Block |
+| ------ | ----- |
+| `run_truth.py` | Oscillation templates + background PDFs + signal KDE |
+| `run_calibration.py` | Detector calibration chain (single config/name) |
+| `run_calibration_all.py` | Calibration over multiple configs |
+| `run_sensitivity.py` | DayNight + HEP + Sensitivity analyses |
+| `run_pds.py` | PDS (OpFlash) diagnostics |
+| `run_tpc.py` | TPC energy resolution diagnostics |
+| `run_vertex.py` | Vertex reconstruction diagnostics |
+| `run_preselection.py` | Preselection efficiency diagnostics |
+| `run_analysis.py` | All detector diagnostics (no calibration) |
+| `run_all.py` | Full detector chain |
+
+### Execution Order
+
+For a clean environment run blocks in order:
+
+```text
+1. run_truth.py          ← oscillation files + background PDFs
+2. run_calibration.py    ← detector response chain
+3. run_sensitivity.py    ← physics analyses
+```
+
+---
 
 ## Typical Workflow
 
-1. Start from ROOT outputs produced with DUNE + `SolarNuAna_module`.
+### 1 — Truth preprocessing
 
-   ```bash
-   python3 src/XXProcessing.py
-   ```
+```bash
+python3 src/pipelines/run_truth.py \
+  --config hd_1x2x6_centralAPA \
+  --names marley gamma neutron \
+  --folder Nominal \
+  --oscillation_backend nufast \
+  --no-rewrite
+```
 
-2. Run the detector calibration chain:
+Key flags:
 
-   ```bash
-   python3 src/WORKFLOW/00AllWorkflow.py --config hd_1x2x6_centralAPA --name marley_official
-   ```
+| Flag | Default | Description |
+| ---- | ------- | ----------- |
+| `--config` | from `analysis/backgrounds.json` | Detector configuration(s) |
+| `--names` | `marley gamma neutron` | Signal and background sample names |
+| `--folder` | `Nominal` | Fiducial folder(s) for signal KDE |
+| `--oscillation_backend` | `file` | `file` / `prob3` / `nufast` |
+| `--oscillations` | off | Enable oscillation template step |
+| `--no-spectra` | on | Skip background spectra step |
+| `--verbose` | `normal` | `quiet` / `normal` / `verbose` |
 
-3. Run preselection, PDS, TPC, and vertex studies:
+### 2 — Detector calibration
 
-   ```bash
-   python3 src/01Analysis.py \
-     --config hd_1x2x6_centralAPA \
-     --names marley gamma neutron \
-     --analysis Preselection PDS TPC Vertex \
-     --folder Nominal
-   ```
+```bash
+python3 src/pipelines/run_calibration.py \
+  --config hd_1x2x6_centralAPA \
+  --name marley
+```
 
-4. Run the high-level solar analyses:
+### 3 — Physics analyses
 
-   ```bash
-   python3 src/analysis/10SensitivityAnalysis.py \
-     --config hd_1x2x6_centralAPA \
-     --names marley gamma neutron \
-     --analysis DayNight HEP Sensitivity \
-     --energy SolarEnergy \
-     --folder Nominal
-   ```
+```bash
+# Full three-analysis run
+python3 src/pipelines/run_sensitivity.py \
+  --config hd_1x2x6_centralAPA \
+  --names marley gamma neutron radiological \
+  --analysis DayNight HEP Sensitivity \
+  --folder Truncated \
+  --energy SolarEnergy \
+  --exposure 30 \
+  --oscillation_backend nufast \
+  --no-rewrite \
+  --plot
 
-5. Inspect generated artefacts under `data/` and `images/`.
+# Sensitivity only, skip already-computed steps
+python3 src/pipelines/run_sensitivity.py \
+  --analysis Sensitivity \
+  --oscillation_backend nufast \
+  --no-rewrite
+```
 
-For analysis-only reruns on existing reconstructed products, `src/01Analysis.py` skips the initial workflow stage and starts from preselection/PDS/TPC/vertex.
+Key flags:
 
-## Recent Developments Reflected In This Repo
+| Flag | Default | Description |
+| ---- | ------- | ----------- |
+| `--config` | `hd_1x2x6_centralAPA` | Detector configuration(s) |
+| `--names` | `marley gamma neutron radiological` | Sample names |
+| `--analysis` | all three | `DayNight` / `HEP` / `Sensitivity` |
+| `--folder` | `Truncated` | Fiducial folder(s) |
+| `--energy` | `SolarEnergy` | Energy estimator |
+| `--exposure` | `30` | Exposure in kt·yr |
+| `--oscillation_backend` | `file` | `file` / `prob3` / `nufast` |
+| `--no-computation` | | Plot-only mode (skip all computation) |
+| `--no-significance` | | Skip DayNight/HEP/Sensitivity computation |
+| `--no-fiducialization` | | Skip fiducialization step |
+| `--no-rebin` | | Skip signal rebin step |
+| `--rewrite` / `--no-rewrite` | rewrite | Overwrite existing outputs |
+| `--plot` / `--no-plot` | plot | Generate output figures |
+| `--verbose` | `normal` | `quiet` / `normal` / `verbose` |
 
-- Config-driven histogram smoothing via `lib/lib_smooth.py`.
-- Fiducial optimization helpers in `lib/lib_fiducial.py`, with split analysis/plot macros in `src/analysis/0YBestFiducial.py` and `src/analysis/10FiducializationPlot.py`.
-- Updated Day-Night, HEP, and oscillation-sensitivity orchestration in `src/analysis/10SensitivityAnalysis.py`.
-- Component-policy filtering for analysis inputs (essential vs non-essential backgrounds):
-  - Configured in `import/analysis.json` under `BACKGROUND_SAMPLES.ESSENTIAL` and `BACKGROUND_SAMPLES.ANALYSES`.
-  - Non-essential components not listed for the selected analyses are skipped automatically.
-  - Missing essential components emit warnings, while missing optional ones are skipped.
-- Shared analysis defaults in [`import/`](import/), including:
-  - General analysis binnings and plotting settings.
-  - Gaussian smoothing defaults for 1D and 2D products.
-  - Best-significance reference selection.
-  - Analysis-specific fiducialization rules for DayNight, HEP, and Sensitivity.
-  - Centralized significance thresholds in `ANALYSIS_THRESHOLDS` (for `DAYNIGHT`, `HEP`, `SENSITIVITY`), used by the DayNight/HEP/Sensitivity analysis macros as their default threshold input.
-  - Fiducial-stage energy windows from `FIDUCIALIZATION.ANALYSES.*.energy_min` and `energy_max`.
-- Regression tests for smoothing behaviour in [`tests/test_smoothing.py`](tests/test_smoothing.py).
-- HEP profile-likelihood improvements in `src/analysis/13HEP.py` and `lib/lib_sigma.py`:
-  - **Global background normalization model** (replacing the legacy per-bin model): `evaluate_profile_likelihood_discovery` now profiles a single global background scale factor β ~ Gaussian(1, σ_rel) across all bins jointly, rather than one independent β per bin. The per-bin model was over-parameterized: with N bins each carrying a 2% Gaussian constraint, the null hypothesis had N independent dials to absorb signal bin-by-bin, causing an artificial flat region in significance vs exposure that resolved in a sharp kink once the collective absorbing capacity was exhausted. A global β correctly represents a rate systematic that is correlated across all bins; its crossover from the absorbing regime to the saturated regime occurs at total-background scale (`f ~ 1/(B_total · σ_rel²)`, typically sub-year), eliminating the artefact. The analytical solution is the same closed-form quadratic root, now applied to summed counts `(N_total, B_total)` with a single Gaussian pull term.
-  - PL exposure curves are post-processed with **Gaussian kernel smoothing** ([`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html), σ = 3 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA`) followed by **isotonic regression** ([`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html), PAVA). The Gaussian step removes numerical oscillations from the profile-likelihood solver at low signal-to-background ratios; PAVA then enforces strict monotonicity by finding the non-decreasing sequence minimising L2 distance from the smoothed values.
-  - PL error bands use **signal normalization variation**: signal is scaled by `(1 ± σ_s)` where `σ_s = signal_uncertainty` (the reconstruction efficiency systematic, typically 10%). Both bands collapse symmetrically for configurations where signal is negligible (±10% of zero is zero). This avoids the asymmetric-collapse artifact produced by background-shifting approaches, where β̂_null pull contributions drive the upper band non-zero independent of signal strength.
-  - PL significance computed on the original fine binning with no adaptive rebin. Merging bins reduces information for PL (unlike Gaussian/Asimov where empty bins cause numerical issues); the likelihood ratio naturally suppresses bins with negligible signal.
-- Bug fix in `src/analysis/0ZBestSigmas.py`: fastest-sigma cut selection for HEP now uses `PLSigma2`/`PLSigma3` (PL-based exposure crossings) instead of Asimov-based `Sigma2`/`Sigma3` when the significance reference is `ProfileLikelihood`, with automatic fallback to Asimov columns for older output files.
-- Day-Night significance methodology follows the energy-spectral counting approach of Super-Kamiokande [[Abe et al. (Super-K), PRD 94, 052010 (2016)](https://doi.org/10.1103/PhysRevD.94.052010); [Renshaw et al. (Super-K), PRL 112, 091805 (2014)](https://doi.org/10.1103/PhysRevLett.112.091805)]:
-  - **Equivalence**: DUNE's $Z_{global}^2 = \sum_i Z_i^2 = \sum_i (\Delta S_i)^2 / B_i$ is equivalent to Super-K's energy-spectral $\chi^2$ in the statistical-only limit ($\sigma_i = \sqrt{B_i}$).
-  - **Shared background model**: both analyses embed the daytime solar signal in the null-hypothesis background; DUNE uses $B_i = B_i^{raw}/2 + S_i^{day}$.
-  - **Key differences**: Super-K includes systematic nuisance penalty terms (energy scale, cross-section, flux normalisation); DUNE's baseline is statistical-only, with a second curve that adds background uncertainty in quadrature. Super-K measures the asymmetry $A_{DN} = 2(\Phi_N - \Phi_D)/(\Phi_N + \Phi_D)$ from existing data; DUNE projects discovery significance as a function of future exposure. Super-K additionally sub-bins events by solar zenith angle for sensitivity gains; DUNE currently uses energy binning only.
+---
+
+## Verbosity
+
+All pipelines share a common verbosity model backed by `lib/log.py`:
+
+| Level | What is shown |
+| ----- | ------------- |
+| `quiet` | Errors and warnings only |
+| `normal` | Progress markers and key results (default) |
+| `verbose` | All output, including per-file debug messages |
+
+The selected level is propagated to every subprocess via the `SOLAR_VERBOSE` environment variable so child scripts filter their own `WorkflowLogBuffer` output consistently.
+
+```bash
+# Run sensitivity with full debug output
+python3 src/pipelines/run_sensitivity.py --verbose verbose ...
+
+# Run truth pipeline silently (CI/batch use)
+python3 src/pipelines/run_truth.py --verbose quiet ...
+```
+
+---
 
 ## Component Selection Policy (Essential vs Non-Essential)
 
-The analysis orchestrator (`src/analysis/10SensitivityAnalysis.py`) now applies a policy layer before launching per-sample jobs.
+The sensitivity pipeline applies a policy layer before launching per-sample jobs.
 
-- `BACKGROUND_SAMPLES.ANALYSES` in `import/analysis.json` defines which background components are used by each analysis (`DAYNIGHT`, `HEP`, `SENSITIVITY`).
-- `BACKGROUND_SAMPLES.ESSENTIAL` defines whether a component is required (`true`) or optional (`false`).
+- `BACKGROUND_SAMPLES.ANALYSES` in `analysis/backgrounds.json` defines which background components each analysis (`DAYNIGHT`, `HEP`, `SENSITIVITY`) uses.
+- `BACKGROUND_SAMPLES.ESSENTIAL` marks components as required (`true`) or optional (`false`).
 
 Behavior:
 
-- Non-essential + not included in selected analysis component list: not processed.
-- Essential + missing input files: warning is printed.
-- Optional + missing input files: skipped with warning.
+- Non-essential + not listed for selected analyses → not processed.
+- Essential + missing input files → hard stop.
+- Optional + missing input files → skipped with warning.
 
 Example config snippet:
 
@@ -111,60 +194,98 @@ Example config snippet:
     "radiological": false
   },
   "ANALYSES": {
-    "DAYNIGHT": ["gamma", "neutron"],
-    "HEP": ["gamma", "neutron"],
-    "SENSITIVITY": ["gamma", "neutron"]
+    "DAYNIGHT":     ["gamma", "neutron"],
+    "HEP":          ["gamma", "neutron"],
+    "SENSITIVITY":  ["gamma", "neutron"]
   }
 }
 ```
 
-This allows adding optional components (for example `radiological`) to command-line `--names` defaults without forcing failures in detector configurations where those productions are not available.
+This allows passing optional components (e.g. `radiological`) via `--names` without forcing failures in configurations where those productions do not exist.
+
+---
+
+## Oscillation Backends
+
+Three backends are supported for oscillation probability computation:
+
+| Backend | Description |
+| ------- | ----------- |
+| `file` | Load pre-computed ROOT oscillogram files and rebin to analysis grid |
+| `prob3` | Compute on-the-fly with [Prob3plusplus](external/Prob3plusplus/) |
+| `nufast` | Compute on-the-fly with [NuFast-Earth](external/NuFast-Earth/) (faster) |
+
+Select via `--oscillation_backend` in any pipeline that accepts it.
+
+---
+
+## Physics Notes
+
+### HEP Profile-Likelihood
+
+`src/physics/hep/01_hep.py` and `lib/sigma.py` implement a **global background normalization model**: a single scale factor β ~ Gaussian(1, σ_rel) is profiled across all bins jointly. The legacy per-bin model was over-parameterized (N independent dials to absorb signal bin-by-bin), producing an artificial flat significance region. A global β correctly represents a correlated rate systematic; the saturation threshold is `f ~ 1/(B_total · σ_rel²)`.
+
+Exposure curves are post-processed with Gaussian kernel smoothing (`scipy.ndimage.gaussian_filter1d`, σ = 3 grid units) followed by isotonic regression (PAVA) for strict monotonicity.
+
+### Day-Night Methodology
+
+Follows the energy-spectral counting approach of Super-Kamiogande [[Abe et al. PRD 94, 052010 (2016)](https://doi.org/10.1103/PhysRevD.94.052010); [Renshaw et al. PRL 112, 091805 (2014)](https://doi.org/10.1103/PhysRevLett.112.091805)]:
+
+- DUNE's $Z_{global}^2 = \sum_i Z_i^2 = \sum_i (\Delta S_i)^2 / B_i$ is equivalent to Super-K's energy-spectral $\chi^2$ in the statistical-only limit.
+- Background model embeds the daytime solar signal in the null hypothesis: $B_i = B_i^{raw}/2 + S_i^{day}$.
+- Baseline is statistical-only; a second curve adds background uncertainty in quadrature.
+
+---
 
 ## Installation
 
-SOLAR is a Python analysis repository intended to run alongside DUNE-produced files. A lightweight local setup is:
+### Local (venv)
 
-### Environment Setup
+```bash
+git clone https://github.com/CIEMAT-Neutrino/SOLAR.git
+cd SOLAR
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r docs/requirements.txt
+```
 
-  ```bash
-  git clone https://github.com/CIEMAT-Neutrino/SOLAR.git
-  cd SOLAR
-  python3 -m venv .venv
-  source .venv/bin/activate
-  pip install -r docs/requirements.txt
-  ```
-
-  For the Sphinx documentation environment, use:
-
-  ```bash
-  conda env create -f docs/environment.yaml
-  conda activate test
-  ```
-
-### Container Setup
-
-A containerized setup is also available through [DUNE's `dune-solar` image](https://hub.docker.com/r/dune/dune-solar). This image includes all dependencies and a pre-cloned version of this repository. It can be installed with apptainer by running:
+### Container (Apptainer)
 
 ```bash
 apptainer pull dune-solar.sif docker://dune/dune-solar:latest
 ```
 
-If you work against shared CIEMAT storage, `source scripts/setup.sh` can mount the expected `data/` and `sensitivity/` directories through `sshfs`.
+If working against shared CIEMAT storage, `source scripts/setup.sh` mounts the expected data directories via `sshfs`.
+
+### Oscillation backends (optional)
+
+```bash
+# Prob3plusplus
+cd external/Prob3plusplus && make && cd python && make
+
+# NuFast-Earth
+cd external/NuFast-Earth && make && cd python && make
+```
+
+---
 
 ## Documentation Build
 
 ```bash
-cd docs
-make html
+cd docs && make html
 ```
 
-The generated site is written to `docs/_build/html/`.
+Output: `docs/_build/html/`.
+
+---
 
 ## Testing
 
 ```bash
 python3 -m pytest tests/test_smoothing.py
 ```
+
+---
 
 ## Authors
 
