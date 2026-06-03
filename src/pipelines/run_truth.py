@@ -162,7 +162,7 @@ parser.add_argument(
     "--background",
     action=argparse.BooleanOptionalAction,
     default=True,
-    help="Run 0ZSolarBackground.py. Pass --no-background to skip.",
+    help="Run solar_background.py. Pass --no-background to skip.",
 )
 parser.add_argument(
     "--plot",
@@ -244,7 +244,7 @@ def run_pdf_stage():
 
 
 def run_signal_kde_stage(config: str, sig_names: List[str]):
-    """0Y — build per-azimuth oscillation-weighted signal KDEs.
+    """0Y — build per-nadir_slice oscillation-weighted signal KDEs.
 
     KDE files are folder-independent: the oscillation-weighted energy PDF is a
     theoretical quantity unaffected by fiducialization. The same pkl is reused
@@ -338,7 +338,7 @@ for config in configs:
     rprint(f"[bold magenta]  Config: {config}[/bold magenta]")
     rprint(f"[bold magenta]{'═'*60}[/bold magenta]")
 
-    # ── 0Y: Signal azimuth KDE (folder-independent) ───────────────────────
+    # ── 0Y: Signal nadir KDE (folder-independent) ───────────────────────
     if args.signal_kde:
         rprint("\n[bold cyan]── Stage 0Y: Signal KDE ──[/bold cyan]")
         run_signal_kde_stage(config, signal_names)

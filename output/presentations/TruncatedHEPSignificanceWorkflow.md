@@ -34,27 +34,27 @@ Config aliases:
 - folder: **Truncated**
 - analysis: HEP
 - exposure: default **30 years**
-- threshold in 13HEP.py: from [import/analysis.json](../../import/analysis.json) HEP -> THRESHOLDS -> (no threshold config found)
+- threshold in hep/01_hep.py: from [analysis/config.json](../../analysis/config.json) HEP -> THRESHOLDS -> (no threshold config found)
 - optional cuts override: nhits, ophits, adjcls
 - significance reference in plots: ProfileLikelihood
-- best-cut selection in 0ZBestSigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
+- best-cut selection in sensitivity/05_best_sigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
 
 ---
 
 ### Workflow Skip Flags
 
-Used for [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10SensitivityAnalysis.py):
+Used for [src/pipelines/run_sensitivity.py](../../src/pipelines/run_sensitivity.py):
 - `--no-computation`: skip all analysis, run plot macros only
-- `--no-significance`: skip 13HEP.py/12DayNight.py/14Sensitivity.py only
-- `--no-fiducialization`: skip 0XFiducializeSignal.py only
-- `--no-rebin`: skip 11AnalysisSignal.py rebinning step only
+- `--no-significance`: skip 01_hep.py/01_daynight.py/06_significance.py only
+- `--no-fiducialization`: skip signal/01_fiducialize.py only
+- `--no-rebin`: skip signal/03_analysis.py rebinning step only
 
 ---
 
 ### Workflow Outputs
 
 - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
-- Best cut summaries (JSON): [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
+- Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
 - Figures: [images/analysis/hep/truncated](../../images/analysis/hep/truncated)
 
@@ -62,16 +62,16 @@ Used for [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10Sensitivit
 
 ### Histogram and Significance Flow I: Building, Smoothing, and Evaluation
 
-- Step 1: Build HEP rates and threshold region in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) per component.
-- Step 2: Apply component-aware smoothing via [lib/lib_smooth.py](../../lib/lib_smooth.py) using HEP smoothing config.
-- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
+- Step 1: Build HEP rates and threshold region in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) per component.
+- Step 2: Apply component-aware smoothing via [lib/smoothing.py](../../lib/smoothing.py) using HEP smoothing config.
+- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
 
 ---
 
 ### Histogram and Significance Flow II: Post-Processing and Plotting
 
-- Step 4: Select the best cut by ProfileLikelihood in [src/analysis/0ZBestSigmas.py](../../src/analysis/0ZBestSigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
-- Step 5: Render exposure/significance and comparison plots in [src/analysis/13HEPExposurePlot.py](../../src/analysis/13HEPExposurePlot.py), [src/analysis/13HEPSignificancePlot.py](../../src/analysis/13HEPSignificancePlot.py), [src/analysis/13HEPSignificanceComparisonPlot.py](../../src/analysis/13HEPSignificanceComparisonPlot.py), and [src/analysis/13HEPExposureComparisonPlot.py](../../src/analysis/13HEPExposureComparisonPlot.py).
+- Step 4: Select the best cut by ProfileLikelihood in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
+- Step 5: Render exposure/significance and comparison plots in [src/physics/hep/exposure_plot.py](../../src/physics/hep/exposure_plot.py), [src/physics/hep/significance_plot.py](../../src/physics/hep/significance_plot.py), [src/physics/hep/significance_comparison.py](../../src/physics/hep/significance_comparison.py), and [src/physics/hep/exposure_comparison.py](../../src/physics/hep/exposure_comparison.py).
 
 ---
 
@@ -92,7 +92,7 @@ $$
 ### ProfileLikelihood Smoothing
 
 PL curves are post-processed with **Gaussian kernel smoothing followed by isotonic regression** to produce a continuous, monotone exposure curve:
-  1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/analysis/13HEP.py`](../../src/analysis/13HEP.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
+  1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/physics/hep/01_hep.py`](../../src/physics/hep/01_hep.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
   2. [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) is then applied to enforce strict monotonicity. It finds the non-decreasing sequence that minimises the L2 distance from the smoothed values, ensuring more data cannot reduce sensitivity.
 
 These steps remove residual numerical oscillations from the profile-likelihood solver at low signal-to-background ratios.
@@ -190,10 +190,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 0 | 0.231 | 1.208 | 5.85 |
-| HD Lateral | 60 | 80 | 0 | 0.046 | 0.737 | 4.88 |
-| VD Top | 0 | 0 | 20 | 0.500 | 0.506 | 7.69 |
-| VD Bottom Shielded | 0 | 0 | 20 | 0.387 | 0.387 | 7.69 |
+| HD Central | 0 | 80 | 0 | 0.303 | 1.226 | 5.85 |
+| HD Lateral | 60 | 80 | 20 | 0.095 | 0.817 | 4.74 |
+| VD Top | 0 | 0 | 40 | 0.551 | 0.575 | 7.54 |
+| VD Bottom Shielded | 0 | 0 | 20 | 0.781 | 0.782 | 7.69 |
 
 ---
 
@@ -445,10 +445,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | NHits | OpHits | AdjCl | Significance |
 |---|---:|---:|---:|---:|
-| HD Central | 4 | 13 | 5 | 11.370 |
-| HD Lateral | 6 | 4 | 5 | 2.630 |
-| VD Top | 10 | 10 | 7 | 2.796 |
-| VD Bottom Shielded | 8 | 20 | 6 | 2.920 |
+| HD Central | 4 | 13 | 5 | 9.099 |
+| HD Lateral | 6 | 4 | 5 | 2.395 |
+| VD Top | 1 | 4 | 20 | 0.000 |
+| VD Bottom Shielded | 1 | 4 | 19 | 0.000 |
 
 ---
 
@@ -458,13 +458,39 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ### HD Central — best excluded (spiked)
 
-No spiked plots found.
+<div class="comparison-note">
+  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
+</div>
+
+<div class="two-col">
+  <div>
+<p><strong>Significance</strong></p>
+<p>Significance plot not available.</p>
+  </div>
+  <div>
+<p><strong>Exposure</strong></p>
+<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
+  </div>
+</div>
 
 ---
 
 ### HD Lateral — best excluded (spiked)
 
-No spiked plots found.
+<div class="comparison-note">
+  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
+</div>
+
+<div class="two-col">
+  <div>
+<p><strong>Significance</strong></p>
+<p>Significance plot not available.</p>
+  </div>
+  <div>
+<p><strong>Exposure</strong></p>
+<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
+  </div>
+</div>
 
 ---
 
@@ -523,8 +549,8 @@ No spiked plots found.
 
 ### Adaptive Rebinning: Strategy
 
-- Rebinning is applied in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) through [lib/lib_smooth.py](../../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
-- It is controlled by [import/analysis.json](../../import/analysis.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- Rebinning is applied in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) through [lib/smoothing.py](../../lib/smoothing.py) using `apply_adaptive_tail_rebin`.
+- It is controlled by [analysis/config.json](../../analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
 - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
 - This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
 
@@ -545,7 +571,7 @@ $$
 Z = Z\!\left(S_{\mathrm{group}},\,B_{\mathrm{group}},\,\sigma_{B,\mathrm{group}}\right)
 $$
 
-ProfileLikelihood implementation in [src/analysis/13HEP.py](../../src/analysis/13HEP.py):
+ProfileLikelihood implementation in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py):
 - PL is computed for **every** analysis cut combination.
 - Original fine binning used throughout — no adaptive rebin. PL is optimal at the finest resolution; the likelihood ratio naturally suppresses bins with negligible signal without merging.
 - A **single global background normalization nuisance** (β ~ Gaussian(1, σ_rel)) is profiled jointly across all bins. See the *Background Normalization Model* slide.

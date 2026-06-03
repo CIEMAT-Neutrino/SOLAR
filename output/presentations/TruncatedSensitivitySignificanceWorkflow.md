@@ -5,7 +5,7 @@ paginate: true
 theme: dune
 ---
 
-<!-- AUTO-GENERATED: scripts/generate_sensitivity_presentation.py -->
+<!-- AUTO-GENERATED: src/tools/presentations/sensitivity.py -->
 
 <!-- _class: titlepage -->
 
@@ -29,11 +29,11 @@ Config aliases:
 
 ### Workflow
 
-- Orchestrator: [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10SensitivityAnalysis.py)
-- Step 1 (Background template): [src/analysis/14SensitivityBackgroundTemplate.py](../../src/analysis/14SensitivityBackgroundTemplate.py)
-- Step 2 (Signal template): [src/analysis/14SensitivitySignalTemplate.py](../../src/analysis/14SensitivitySignalTemplate.py)
-- Step 3 (Grid fit scan and best-cut storage): [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py)
-- Step 4 (Contour rendering): [src/analysis/14SensitivityContourPlot.py](../../src/analysis/14SensitivityContourPlot.py)
+- Orchestrator: [src/pipelines/run\_sensitivity.py](../../src/pipelines/run_sensitivity.py)
+- Step 1 (Background template): [src/physics/sensitivity/01\_background\_template.py](../../src/physics/sensitivity/01_background_template.py)
+- Step 2 (Signal template): [src/physics/sensitivity/02\_signal\_template.py](../../src/physics/sensitivity/02_signal_template.py)
+- Step 3 (Grid fit scan and best-cut storage): [src/physics/sensitivity/04\_best\_cuts.py](../../src/physics/sensitivity/04_best_cuts.py)
+- Step 4 (Contour rendering): [src/physics/sensitivity/contour\_plot.py](../../src/physics/sensitivity/contour_plot.py)
 
 ---
 
@@ -48,15 +48,15 @@ Config aliases:
 
 ### 2D Template Construction
 
-Signal and background are represented as 2D histograms with axes **(reconstructed neutrino energy × azimuth cos(η))**.
+Signal and background are represented as 2D histograms with axes **(reconstructed neutrino energy × nadir cos(η))**.
 
 For each oscillation point $(\Delta m^2,\, \sin^2\theta_{13},\, \sin^2\theta_{12})$, the signal template is built by convolving the detector energy-response matrix $H$ with the oscillation-probability matrix $P$:
 $$
 T^{\mathrm{sig}}_{ij}(\vec{\theta}) = T \cdot M_{\mathrm{det}} \cdot \left[ P(\vec{\theta})\, H \right]_{ij}
 $$
-where $i$ indexes azimuth bins and $j$ indexes energy bins ([src/analysis/14SensitivitySignalTemplate.py](../../src/analysis/14SensitivitySignalTemplate.py)).
+where $i$ indexes nadir bins and $j$ indexes energy bins ([src/physics/sensitivity/02\_signal\_template.py](../../src/physics/sensitivity/02_signal_template.py)).
 
-The background template $T^{\mathrm{bkg}}_{ij}$ is independent of oscillation parameters ([src/analysis/14SensitivityBackgroundTemplate.py](../../src/analysis/14SensitivityBackgroundTemplate.py)).
+The background template $T^{\mathrm{bkg}}_{ij}$ is independent of oscillation parameters ([src/physics/sensitivity/01\_background\_template.py](../../src/physics/sensitivity/01_background_template.py)).
 
 ---
 
@@ -84,7 +84,7 @@ $$
 Expected model: $e_{ij} = (1+A_{\mathrm{bkg}})\,T^{\mathrm{bkg}}_{ij} + (1+A_{\mathrm{pred}})\,p_{ij}$.
 Per-bin deviance: $\Delta\ell_{ij} = e_{ij} - o_{ij} + o_{ij}\ln(o_{ij}/e_{ij})$ for $o_{ij}>0$, else $\Delta\ell_{ij} = e_{ij}$.
 
-Implemented in [lib/lib_root.py: Sensitivity_Fitter](../../lib/lib_root.py). Minimized with [iminuit (Minuit)](https://iminuit.readthedocs.io/en/stable/).
+Implemented in [`lib/root.py: Sensitivity_Fitter`](../../lib/root.py). Default minimizer: **scipy L-BFGS-B** (joint 2D); ROOT TH2F input uses [iminuit (Minuit)](https://iminuit.readthedocs.io/en/stable/).
 
 ---
 
@@ -94,13 +94,41 @@ Both analyses use **Gaussian-constrained normalization nuisances** added to the 
 
 | Feature | HEP Profile-Likelihood | Sensitivity |
 |---|---|---|
-| Histogram | 1D (energy) | 2D (energy × azimuth) |
+| Histogram | 1D (energy) | 2D (energy × nadir) |
 | Goal | Discovery significance | $\chi^2$ map over $(\Delta m^2, \sin^2\theta)$ |
 | Nuisances | 1 global $\beta$ (background) | $A_{\mathrm{pred}} + A_{\mathrm{bkg}}$ |
 | Solution | Closed-form quadratic ([Cowan 2010](https://arxiv.org/abs/1007.1727)) | scipy L-BFGS-B (joint 2D) |
 | Deviance | $2\sum_i [n_i \ln(n_i/\hat{\beta}b_i) - (n_i - \hat{\beta}b_i)]$ | $2\sum_{ij} [e_{ij} - o_{ij} + o_{ij}\ln(o_{ij}/e_{ij})]$ |
-| Penalty | $[(\hat{\beta}-1)/\sigma_{\mathrm{rel}}]^2$ | $(A_{\mathrm{pred}}/\sigma_{\mathrm{pred}})^2 + (A_{\mathrm{bkg}}/\sigma_{\mathrm{bkg}})^2$ |
+| Penalty | $[(\hat{\beta}-1)/\sigma_{\mathrm{rel}}]^2$ | Conditional (see next slide) |
 | MC mask | Barlow-Beeston (static) | BB mask: bins with bkg template = 0 excluded |
+| Nuisance disable | — | set $\sigma \le 0$ to drop that penalty term |
+
+---
+
+### Nuisance Parameter Model
+
+The penalty term is applied **conditionally** based on each nuisance being active ($\sigma > 0$):
+
+$$
+\mathcal{P}(A_{\mathrm{pred}}, A_{\mathrm{bkg}}) = \begin{cases}
+\left(\dfrac{A_{\mathrm{pred}}}{\sigma_{\mathrm{pred}}}\right)^{\!2} + \left(\dfrac{A_{\mathrm{bkg}}}{\sigma_{\mathrm{bkg}}}\right)^{\!2} & \sigma_{\mathrm{pred}} > 0 \text{ and } \sigma_{\mathrm{bkg}} > 0 \\[6pt]
+\left(\dfrac{A_{\mathrm{bkg}}}{\sigma_{\mathrm{bkg}}}\right)^{\!2} & \sigma_{\mathrm{pred}} \le 0 \text{ and } \sigma_{\mathrm{bkg}} > 0 \\[6pt]
+\left(\dfrac{A_{\mathrm{pred}}}{\sigma_{\mathrm{pred}}}\right)^{\!2} & \sigma_{\mathrm{pred}} > 0 \text{ and } \sigma_{\mathrm{bkg}} \le 0 \\[6pt]
+0 & \text{otherwise}
+\end{cases}
+$$
+
+Setting $\sigma \le 0$ **disables** that nuisance entirely — the corresponding $A$ is still a free parameter in the minimization but receives no Gaussian pull. Default: $\sigma_{\mathrm{pred}} = 4\%$, $\sigma_{\mathrm{bkg}} = 2\%$.
+
+**Three minimization backends** (selected automatically by input type):
+
+| Backend | Input | Method |
+|---|---|---|
+| scipy L-BFGS-B | `np.ndarray` | Joint 2D over $(A_{\mathrm{pred}}, A_{\mathrm{bkg}})$ — **default** |
+| Minuit 1D + profiled bkg | `np.ndarray` + `profile_bkg=True` | 1D Minuit over $A_{\mathrm{pred}}$; `minimize_scalar` at each step for $A_{\mathrm{bkg}}$ |
+| Minuit 2D | `ROOT.TH2F` | Joint 2D Minuit |
+
+Implemented in [`lib/root.py: Sensitivity_Fitter.NumpyOperator`](../../lib/root.py).
 
 ---
 
@@ -121,7 +149,7 @@ Higher score = better discrimination between solar and reactor hypotheses. The b
 
 ### Implemented Improvements
 
-Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py):
+Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/physics/sensitivity/04\_best\_cuts.py](../../src/physics/sensitivity/04_best_cuts.py):
 
 1. **Replace heuristic score with profile-LR** *(proposed, not yet implemented)*: use $\Delta\chi^2 = \chi^2_{\mathrm{null}} - \chi^2_{\mathrm{best}}$ and report $Z = \sqrt{\Delta\chi^2}$ (Wilks theorem) instead of average cross-hypothesis $\chi^2$.
 2. ✅ **Barlow-Beeston mask** (`bb_mask = bkg > 0`): bins where the background template is zero are excluded from the fit, preventing spurious large deviance contributions from zero-MC-support bins.
@@ -133,10 +161,10 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 
 ### Sensitivity Fit Summary
 
-- [src/analysis/14Sensitivity.py](../../src/analysis/14Sensitivity.py) builds Asimov maps from signal + background templates, then fits each oscillation-grid point against solar and reactor reference templates with free normalizations.
-- The fit minimizes the **Baker-Cousins Poisson deviance** ([Baker & Cousins 1984](https://doi.org/10.1016/0029-554X(84)90016-4)) — identical in form to the per-bin LLR in the HEP profile-likelihood, extended to 2D (energy × azimuth).
-- Penalty terms $(A_{\mathrm{pred}}/\sigma_{\mathrm{pred}})^2 + (A_{\mathrm{bkg}}/\sigma_{\mathrm{bkg}})^2$ play the same role as HEP's $[(\hat{\beta}-1)/\sigma_{\mathrm{rel}}]^2$; HEP solves analytically, Sensitivity solves numerically.
-- Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py): BB mask, no `abs()`, ±10σ limits, scipy L-BFGS-B joint 2D minimization.
+- [src/physics/sensitivity/04\_best\_cuts.py](../../src/physics/sensitivity/04_best_cuts.py) builds Asimov maps from signal + background templates, then fits each oscillation-grid point against solar and reactor reference templates with free normalizations.
+- The fit minimizes the **Baker-Cousins Poisson deviance** ([Baker & Cousins 1984](https://doi.org/10.1016/0029-554X(84)90016-4)) — identical in form to the per-bin LLR in the HEP profile-likelihood, extended to 2D (energy × nadir).
+- Penalty terms are conditional on $\sigma > 0$; both active by default ($\sigma_{\mathrm{pred}}=4\%$, $\sigma_{\mathrm{bkg}}=2\%$). Set $\sigma \le 0$ to disable.
+- Improvements 2–5 implemented in [lib/root.py](../../lib/root.py): BB mask, no `abs()`, ±10σ limits, scipy L-BFGS-B joint 2D minimization.
 - Full mathematical derivations: [docs/hep\_likelihood\_derivation.tex](../../docs/hep_likelihood_derivation.tex).
 
 ---
@@ -209,10 +237,10 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 20 | 100 | 320 | 0.282 | 2.183 | 2.89 |
-| HD Lateral | 60 | 260 | 340 | 0.054 | 1.579 | 1.64 |
-| VD Top | 0 | 0 | 20 | 0.362 | 0.375 | 7.69 |
-| VD Bottom Shielded | 0 | 0 | 20 | 0.714 | 0.715 | 7.69 |
+| HD Central | 0 | 80 | 100 | 0.344 | 2.969 | 5.02 |
+| HD Lateral | 60 | 260 | 200 | 0.097 | 2.744 | 2.28 |
+| VD Top | 0 | 0 | 20 | 0.631 | 0.641 | 7.69 |
+| VD Bottom Shielded | 0 | 0 | 20 | 0.703 | 0.704 | 7.69 |
 
 ---
 
@@ -225,11 +253,11 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -240,11 +268,11 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -255,11 +283,11 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -270,149 +298,38 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
 ---
 
-## Contour Grids (sin13)
-
----
-
-### HD Central
-
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-</div>
-
----
-
-### HD Lateral
-
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded
-
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
-
----
-
-## Significance Spectra
-
----
-
-### HD Central
-
-<div class="center">
-  <img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
-
----
-
-### HD Lateral
-
-<div class="center">
-  <img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
-
----
-
-### VD Top
-
-<div class="center">
-  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
-
----
-
-### VD Bottom Shielded
-
-<div class="center">
-  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
-
----
-
-## Template Building
-
----
 
 ### HD Central Templates
 
-<div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_centralAPA/marley/hd_1x2x6_centralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
-</div>
+No template found for HD Central
 
 ---
 
 ### HD Lateral Templates
 
-<div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_lateralAPA/marley/hd_1x2x6_lateralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
-</div>
+No template found for HD Lateral
 
 ---
 
 ### VD Top Templates
 
-<div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_nominal/marley/vd_1x8x14_3view_30deg_nominal_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
-</div>
+No template found for VD Top
 
 ---
 
 ### VD Bottom Shielded Templates
 
-<div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_shielded/marley/vd_1x8x14_3view_30deg_shielded_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
-</div>
+No template found for VD Bottom Shielded
 
 ---
 
@@ -420,13 +337,17 @@ Improvements 2–5 implemented in [lib/lib_root.py](../../lib/lib_root.py) and [
 
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 1 | 8 | 4 | 4 | 2 | 63.12 |
-| HD Lateral | 3 | 10 | 2 | 4 | 2 | 21.19 |
-| VD Top | 8 | 10 | 8 | 4 | 2 | 14.89 |
-| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 73.34 |
+| HD Central | 1 | 8 | 4 | 4 | 2 | 62.94 |
+| HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.73 |
+| VD Top | 8 | 10 | 8 | 4 | 2 | 15.37 |
+| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 72.74 |
 
 
 ---
+
+
+
+
 
 ## Coverage and Notes
 
