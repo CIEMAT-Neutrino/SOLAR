@@ -24,7 +24,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.lib_osc_backends import (
+from lib.oscillation_backends import (
     compute_prob3,
     compute_nufast,
     get_nadir_pdf_nufast,
@@ -788,12 +788,15 @@ def test_osc_weight_kde():
       Night counts > day counts for every (backend, comp) pair (Earth regeneration)
 
     Saves:
-      osc_weight_kde_comparison.png  — KDE grid: 3 azimuths × 3 components
+      osc_weight_kde_comparison.png  — KDE grid: 3 nadir slices × 3 components
       osc_weight_counts.png          — expected event rates per 1 kT·yr
     """
-    from lib.lib_weights import _precompute_osc_result, _compute_osc_kde_and_exposure, SECONDS_PER_YEAR
-    from lib.lib_osc_backends import get_nadir_pdf_nufast
-    from lib.lib_solar import get_detected_solar_spectrum
+    from lib.weights import (
+        _precompute_osc_result, _compute_osc_kde_and_exposure,
+        _load_osc_pkl_as_pee, SECONDS_PER_YEAR,
+    )
+    from lib.oscillation_backends import get_nadir_pdf_nufast
+    from lib.solar import get_detected_solar_spectrum
     from sklearn.neighbors import KernelDensity
     from lib import energy_centers as ec, ebin
 
@@ -802,18 +805,22 @@ def test_osc_weight_kde():
         "osc_probability_dm2_6.000e-05_sin13_2.100e-02_sin12_3.030e-01.pkl",
     )
 
-    comps    = ["comb", "b8", "hep"]
-    azimuths = ["mean", "day", "night"]
+    comps         = ["comb", "b8", "hep"]
+    nadir_slices  = ["mean", "day", "night"]
     e_eval   = np.linspace(0, 30, 300)
 
     # ── On-the-fly backends ───────────────────────────────────────────────────
     kde_results = {}
     for backend in ["prob3", "nufast"]:
         osc, nadir_pdf = _precompute_osc_result(DM2, SIN13, SIN12, backend)
+        pee_2d    = osc.night.values
+        n_centers = osc.night.index.values
         for comp in comps:
-            for azimuth in azimuths:
-                kde, exp = _compute_osc_kde_and_exposure(osc, nadir_pdf, comp, azimuth)
-                kde_results[(backend, comp, azimuth)] = {
+            for nadir_slice in nadir_slices:
+                kde, exp = _compute_osc_kde_and_exposure(
+                    pee_2d, n_centers, nadir_pdf, comp, nadir_slice
+                )
+                kde_results[(backend, comp, nadir_slice)] = {
                     "kde_curve": np.exp(kde.score_samples(e_eval[:, None])),
                     "counts":    exp["counts"],
                 }
@@ -833,10 +840,10 @@ def test_osc_weight_kde():
             eff_flux_raw = get_detected_solar_spectrum(
                 bins=raw_e, mass=1e9, components=_comp_map[comp]
             )
-            for azimuth in azimuths:
-                if azimuth == "mean":
+            for nadir_slice in nadir_slices:
+                if nadir_slice == "mean":
                     mask = np.ones(len(n_centers_raw), dtype=bool)
-                elif azimuth == "day":
+                elif nadir_slice == "day":
                     mask = n_centers_raw > 0.0
                 else:
                     mask = n_centers_raw <= 0.0
@@ -853,17 +860,17 @@ def test_osc_weight_kde():
                     bandwidth=raw_ebin, kernel="gaussian", algorithm="kd_tree"
                 ).fit(raw_e[:, None], sample_weight=weighted)
 
-                kde_results[("legacy", comp, azimuth)] = {
+                kde_results[("legacy", comp, nadir_slice)] = {
                     "kde_curve": np.exp(kde_leg.score_samples(e_eval[:, None])),
                     "counts":    float(np.sum(weighted)),
                 }
 
-    # ── Plot 1: KDE grid  (3 rows = azimuth, 3 cols = component) ─────────────
-    colors       = {"prob3": "#2196F3", "nufast": "#FF5722", "legacy": "#4CAF50"}
-    labels_nice  = {"prob3": "Prob3++", "nufast": "NuFast-Earth", "legacy": "Legacy pkl"}
-    ls_map       = {"prob3": "-", "nufast": "--", "legacy": ":"}
-    comp_nice    = {"comb": "Combined (b8+hep)", "b8": "⁸B only", "hep": "hep only"}
-    az_nice      = {"mean": "Mean (all nadir)", "day": "Day (cosη > 0)", "night": "Night (cosη ≤ 0)"}
+    # ── Plot 1: KDE grid  (3 rows = nadir_slice, 3 cols = component) ─────────────
+    colors            = {"prob3": "#2196F3", "nufast": "#FF5722", "legacy": "#4CAF50"}
+    labels_nice       = {"prob3": "Prob3++", "nufast": "NuFast-Earth", "legacy": "Legacy pkl"}
+    ls_map            = {"prob3": "-", "nufast": "--", "legacy": ":"}
+    comp_nice         = {"comb": "Combined (b8+hep)", "b8": "⁸B only", "hep": "hep only"}
+    nadir_slice_nice  = {"mean": "Mean (all nadir)", "day": "Day (cosη > 0)", "night": "Night (cosη ≤ 0)"}
     backends_plot = ["prob3", "nufast"] + (["legacy"] if has_legacy else [])
 
     fig, axes = plt.subplots(3, 3, figsize=(16, 12), sharex=True, sharey="col")
@@ -875,11 +882,11 @@ def test_osc_weight_kde():
         fontsize=10,
     )
 
-    for row, azimuth in enumerate(azimuths):
+    for row, nadir_slice in enumerate(nadir_slices):
         for col, comp in enumerate(comps):
             ax = axes[row, col]
             for backend in backends_plot:
-                key = (backend, comp, azimuth)
+                key = (backend, comp, nadir_slice)
                 if key not in kde_results:
                     continue
                 cnts  = kde_results[key]["counts"]
@@ -890,7 +897,7 @@ def test_osc_weight_kde():
             if row == 0:
                 ax.set_title(comp_nice[comp], fontsize=9)
             if col == 0:
-                ax.set_ylabel(f"{az_nice[azimuth]}\nKDE density", fontsize=8)
+                ax.set_ylabel(f"{nadir_slice_nice[nadir_slice]}\nKDE density", fontsize=8)
             ax.legend(fontsize=6, loc="upper right")
             ax.set_yscale("log")
             ax.grid(True, alpha=0.2, which="both")
@@ -899,9 +906,9 @@ def test_osc_weight_kde():
     # Set column-wise y floor: 4 decades below each column's peak
     for col in range(3):
         col_peak = max(
-            kde_results[(b, comps[col], az)]["kde_curve"].max()
-            for b in backends_plot for az in azimuths
-            if (b, comps[col], az) in kde_results
+            kde_results[(b, comps[col], ns)]["kde_curve"].max()
+            for b in backends_plot for ns in nadir_slices
+            if (b, comps[col], ns) in kde_results
         )
         for row in range(3):
             axes[row, col].set_ylim(bottom=col_peak * 1e-4)
@@ -916,15 +923,15 @@ def test_osc_weight_kde():
     print(f"\n  [osc KDE] {path1}")
 
     # ── Plot 2: Expected event rate bar chart ─────────────────────────────────
-    combo_labels = [f"{az[:3]}/{comp}" for az in azimuths for comp in comps]
+    combo_labels = [f"{ns[:3]}/{comp}" for ns in nadir_slices for comp in comps]
     x            = np.arange(len(combo_labels))
     width        = 0.8 / len(backends_plot)
 
     fig, ax = plt.subplots(figsize=(max(12, 1.5 * len(combo_labels)), 5))
     for i, backend in enumerate(backends_plot):
         counts = [
-            kde_results.get((backend, comp, azimuth), {}).get("counts", 0)
-            for azimuth in azimuths
+            kde_results.get((backend, comp, nadir_slice), {}).get("counts", 0)
+            for nadir_slice in nadir_slices
             for comp in comps
         ]
         ax.bar(x + (i - len(backends_plot) / 2 + 0.5) * width, counts,
@@ -950,14 +957,14 @@ def test_osc_weight_kde():
 
     # ── Print summary table ───────────────────────────────────────────────────
     print()
-    print(f"  {'backend':<14} {'comp':<6} {'azimuth':<7} {'ev/kT·yr':>10}")
+    print(f"  {'backend':<14} {'comp':<6} {'nadir':<7} {'ev/kT·yr':>10}")
     print(f"  {'-'*14} {'-'*6} {'-'*7} {'-'*10}")
     for backend in backends_plot:
         for comp in comps:
-            for azimuth in azimuths:
-                key = (backend, comp, azimuth)
+            for nadir_slice in nadir_slices:
+                key = (backend, comp, nadir_slice)
                 if key in kde_results:
-                    print(f"  {backend:<14} {comp:<6} {azimuth:<7} {kde_results[key]['counts']:>10.1f}")
+                    print(f"  {backend:<14} {comp:<6} {nadir_slice:<7} {kde_results[key]['counts']:>10.1f}")
 
     # ── Assertions ────────────────────────────────────────────────────────────
     for comp in comps:
