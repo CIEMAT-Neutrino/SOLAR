@@ -33,7 +33,7 @@
         "mean"
     ],
     "DEFAULT_SIGNAL_DM2": 6.0e-5,
-    "DEFAULT_SIGNAL_SIN13": 0.021,
+    "DEFAULT_SIGNAL_SIN13": 0.0222,
     "DEFAULT_SIGNAL_SIN12": 0.303,
     "MIN_BKG_R": 100,
     "MAX_BKG_CHARGE": 0,
