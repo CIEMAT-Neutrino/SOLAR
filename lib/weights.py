@@ -306,7 +306,7 @@ def compute_particle_surface(
 def _precompute_osc_result(dm2: float, sin13: float, sin12: float, backend: str):
     """
     Compute P_ee(E, cos_nadir) once using Prob3++ or NuFast-Earth.
-    Returns (OscResult, nadir_pdf) for reuse across all (comp, azimuth) pairs.
+    Returns (OscResult, nadir_pdf) for reuse across all (comp, nadir_slice) pairs.
     """
     from lib.oscillation_backends import compute_prob3, compute_nufast, get_nadir_pdf_nufast
 
@@ -376,10 +376,10 @@ def _compute_osc_kde_and_exposure(
     n_centers: np.ndarray,
     nadir_pdf: np.ndarray,
     comp:      str,
-    azimuth:   str,
+    nadir_slice:   str,
 ):
     """
-    Build oscillation-weighted KDE and exposure dict for one (comp, azimuth) pair.
+    Build oscillation-weighted KDE and exposure dict for one (comp, nadir_slice) pair.
 
     Accepts plain P_ee(E, cos_nadir) — shape (n_nadir, n_energy) — together with
     the nadir bin centers and normalised nadir PDF.  Works for all three backends:
@@ -392,14 +392,14 @@ def _compute_osc_kde_and_exposure(
     from lib.solar import get_detected_solar_spectrum
     from lib import energy_centers as _ec, ebin as _ebin
 
-    if azimuth == "mean":
+    if nadir_slice == "mean":
         mask = np.ones(len(n_centers), dtype=bool)
-    elif azimuth == "day":
+    elif nadir_slice == "day":
         mask = n_centers > 0.0
-    elif azimuth == "night":
+    elif nadir_slice == "night":
         mask = n_centers <= 0.0
     else:
-        raise ValueError(f"Unknown azimuth category: {azimuth!r}")
+        raise ValueError(f"Unknown nadir_slice category: {nadir_slice!r}")
 
     w     = nadir_pdf[mask]
     w_sum = w.sum()
@@ -513,7 +513,7 @@ def compute_true_weights(
                     else:
                         # file backend: load oscillation pkl at best-fit point and
                         # recover plain P_ee (un-weight the pre-multiplied nadir PDF).
-                        # This replaces the old per-azimuth KDE pkl loading which
+                        # This replaces the old per-nadir_slice KDE pkl loading which
                         # referenced files that were never generated in the correct format.
                         try:
                             _pee_2d_cache, _n_centers_cache, _nadir_pdf_cache = \
@@ -537,17 +537,17 @@ def compute_true_weights(
                                 f"skipping osc weights for {name} ({_osc_backend} backend)."
                             )
                         else:
-                            for azimuth in params["DEFAULT_SIGNAL_AZIMUTH"]:
+                            for nadir_slice in params["DEFAULT_SIGNAL_AZIMUTH"]:
                                 kde_p, exp_dict = _compute_osc_kde_and_exposure(
                                     _pee_2d_cache,
                                     _n_centers_cache,
                                     _nadir_pdf_cache,
                                     comp,
-                                    azimuth,
+                                    nadir_slice,
                                 )
-                                exposure[(label, osc)][osc_names[azimuth]] = exp_dict
+                                exposure[(label, osc)][osc_names[nadir_slice]] = exp_dict
                                 run[tree][
-                                    f"SignalParticleWeight{label}Osc{osc_names[azimuth]}"
+                                    f"SignalParticleWeight{label}Osc{osc_names[nadir_slice]}"
                                 ][idx] = evaluate_1d_pdf(
                                     kde_p, run[tree]["SignalParticleP"][idx]
                                 )

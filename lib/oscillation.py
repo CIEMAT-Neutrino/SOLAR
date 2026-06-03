@@ -22,26 +22,26 @@ def get_nadir_angle(
     path: str = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/", debug: bool = False
 ) -> list[np.array]:
     """
-    This function can be used to obtain the azimuth angle distribution for DUNE.
+    This function can be used to obtain the nadir angle distribution for DUNE.
 
     Args:
-        path (str): Path to the azimuth angle data file (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
+        path (str): Path to the nadir angle data file (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
         show (bool): If True, show the plot (default: False)
         debug (bool): If True, the debug mode is activated.
 
     Returns:
-        [xnadir_centers,ynadir_centers]: list containing the azimuth angle and the PDF.
+        [xnadir_centers,ynadir_centers]: list containing the nadir angle and the PDF.
     """
-    with uproot.open(path + "nadir.root") as azimuth:
+    with uproot.open(path + "nadir.root") as root_file:
         # Loas pdf histogram
-        pdf = azimuth["nadir;1"]
+        pdf = root_file["nadir;1"]
         pdf_array = pdf.to_hist().to_numpy()
         xbin_edges = pdf_array[1]
         xnadir_centers = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
         ynadir_centers = pdf_array[0]
 
     if debug:
-        print(f"Azimuth angle data loaded: xnadir_centers = {xnadir_centers}, ynadir_centers = {ynadir_centers}")
+        print(f"Nadir angle data loaded: xnadir_centers = {xnadir_centers}, ynadir_centers = {ynadir_centers}")
         print(f"Check for PDF normalization: {np.sum(ynadir_centers)}")
 
     return [xnadir_centers, ynadir_centers]
@@ -49,7 +49,7 @@ def get_nadir_angle(
 
 def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "scatter", debug: bool = False):
     """
-    This function can be used to plot the azimuth angle distribution for DUNE.
+    This function can be used to plot the nadir angle distribution for DUNE.
 
     Args:
         fig (plotly.graph_objects.Figure): Plotly figure.
@@ -60,7 +60,7 @@ def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "s
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
     nadir_data = get_nadir_angle(debug = debug)
-    name = "Azimuth Angle PDF"
+    name = "Nadir Angle PDF"
     
     if norm is not None: 
         nadir_data[1] = nadir_data[1] / (norm*np.max(nadir_data[1]))
@@ -610,12 +610,12 @@ def process_oscillation_map(
     df = df1.join(df2).T
 
     if convolve:
-        # Interpolate azimuth data to match ybins
-        azimuth = interpolate.interp1d(
+        # Interpolate nadir data to match ybins
+        nadir_interp = interpolate.interp1d(
             nadir_data[0], nadir_data[1], kind="linear", fill_value="extrapolate"
         )
-        nadir_y = azimuth(x=root_nadir_centers)
-        # normalize azimuth distribution
+        nadir_y = nadir_interp(x=root_nadir_centers)
+        # normalize nadir distribution
         nadir_y = nadir_y / nadir_y.sum()
         df = df.mul(nadir_y, axis=0)
 
