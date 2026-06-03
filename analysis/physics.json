@@ -8,8 +8,8 @@
   "REACT_DM2": 7.4e-05,
   "SOLAR_DM2": 6e-05,
   "ATM_DM2": 2.5e-3,
-  "SIN13": 0.021,
-  "SIN12": 0.303,
+  "SIN13": 0.0220,
+  "SIN12": 0.304,
   "DUNE_LATITUDE_DEG": 44.35,
   "OSCILLATION_BACKEND": "nufast",
   "OSCILLATION_GRID": {
