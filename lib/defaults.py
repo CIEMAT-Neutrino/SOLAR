@@ -13,11 +13,16 @@ DEFAULT_ANALYSIS_THRESHOLDS = {
 }
 
 
-def load_analysis_info(root: str):
-    """Load and merge analysis configuration from split files in analysis/."""
+def load_analysis_info(root: str, physics_override: str = "physics.json"):
+    """Load and merge analysis configuration from split files in analysis/.
+
+    Args:
+        root: Project root path
+        physics_override: Override which physics config to load (e.g., "physics_file_backend_legacy.json")
+    """
     analysis_dir = Path(root) / "analysis"
     merged: Dict[str, Any] = {}
-    for fname in ("physics.json", "config.json", "smoothing.json", "fiducialization.json", "backgrounds.json"):
+    for fname in (physics_override, "config.json", "smoothing.json", "fiducialization.json", "backgrounds.json"):
         path = analysis_dir / fname
         if path.exists():
             merged.update(json.loads(path.read_text()))

@@ -501,18 +501,26 @@ def compute_true_weights(
                             )
                     if _osc_backend == "file":
                         # File backend: oscillograms pre-calculated at fixed grid points.
-                        # Best-fit point is locked to physics.json — param overrides ignored.
+                        # Must use legacy parameters that match pre-computed template files.
+                        try:
+                            _ai_legacy = load_analysis_info(str(root), "physics_file_backend_legacy.json")
+                        except FileNotFoundError:
+                            rprint(
+                                "[yellow][WARNING][/yellow] File backend legacy config not found; "
+                                "falling back to physics.json values. Templates may not exist."
+                            )
+                            _ai_legacy = _ai_ref
                         if any(k in params for k in ("DEFAULT_SIGNAL_DM2", "DEFAULT_SIGNAL_SIN13", "DEFAULT_SIGNAL_SIN12")):
                             rprint(
                                 "[yellow][WARNING][/yellow] weights: DEFAULT_SIGNAL_DM2/SIN13/SIN12 "
-                                "param overrides ignored for 'file' backend — oscillograms are "
-                                "pre-calculated; best-fit point locked to physics.json."
+                                "param overrides ignored for 'file' backend — using legacy values "
+                                "that match pre-computed oscillation templates."
                             )
-                        _dm2   = _ai_ref["SOLAR_DM2"]
-                        _sin13 = _ai_ref["SIN13"]
-                        _sin12 = _ai_ref["SIN12"]
+                        _dm2   = _ai_legacy["SOLAR_DM2"]
+                        _sin13 = _ai_legacy["SIN13"]
+                        _sin12 = _ai_legacy["SIN12"]
                     else:
-                        # prob3 / nufast: compute on-the-fly; best-fit point is free.
+                        # prob3 / nufast: compute on-the-fly; use current best-fit from physics.json.
                         _dm2   = params.get("DEFAULT_SIGNAL_DM2",   _ai_ref["SOLAR_DM2"])
                         _sin13 = params.get("DEFAULT_SIGNAL_SIN13", _ai_ref["SIN13"])
                         _sin12 = params.get("DEFAULT_SIGNAL_SIN12", _ai_ref["SIN12"])
