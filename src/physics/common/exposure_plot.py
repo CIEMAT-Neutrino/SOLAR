@@ -39,7 +39,7 @@ DUNE_COLOR_SOLAR = "#1f77b4"
 DUNE_COLOR_REACT = "#ff7f0e"
 
 # NuFit 6.1 reference data (from projections_plot.py:61–120)
-_NUFIT61_DM2_PROFILES = {
+_NUFIT61_DM2_SOLAR = {
     "MB22m": {
         "color": "#e8421a",
         "dash":  "solid",
@@ -54,6 +54,9 @@ _NUFIT61_DM2_PROFILES = {
         "dm2":   [2.0, 3.0, 4.0, 5.0, 5.5, 5.9, 6.5, 7.5, 8.5, 10.0],
         "chi2":  [11.0, 5.5, 2.2, 0.5, 0.1, 0.0, 0.6, 2.0, 4.5, 8.0],
     },
+}
+
+_NUFIT61_DM2_REACTOR = {
     "KamLAND": {
         "color": "#2ca02c",
         "dash":  "solid",
@@ -845,7 +848,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         cuts = _get_selection_cuts(config, name, energy, args, "SENSITIVITY")
         if cuts is None:
             cuts = (4, 10, 4)
-        nhits, adjcl, ophits = cuts
+        nhits, ophits, adjcl = cuts
 
         # Path from sensitivity/06_significance.py output
         sig_path = f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}"
@@ -899,8 +902,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
         _sort_r13 = np.argsort(sin13_vals_react)
         sin13_vals = sin13_vals[_sort_s13]
         sin13_vals_react = sin13_vals_react[_sort_r13]
-        dchi2_sin13_solar = _smooth_sg(np.nanmin(solar_sin13_df.values, axis=0)[_sort_s13] - global_min, _w)
-        dchi2_sin13_react = _smooth_sg(np.nanmin(react_sin13_df.values, axis=0)[_sort_r13] - react_global_min, _w)
+        dchi2_sin13_solar = _smooth_sg(np.nanmin(solar_sin13_df.values, axis=1)[_sort_s13] - global_min, _w)
+        dchi2_sin13_react = _smooth_sg(np.nanmin(react_sin13_df.values, axis=1)[_sort_r13] - react_global_min, _w)
 
         compare_tag = "_NuFit61" if args.compare else ""
         _cut_tag = f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
@@ -916,7 +919,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             ), row=1, col=1)
 
         if args.compare:
-            for ref_label, ref in _NUFIT61_DM2_PROFILES.items():
+            for ref_label, ref in _NUFIT61_DM2_SOLAR.items():
                 fig_dm2_solar.add_trace(go.Scatter(
                     x=ref["dm2"], y=ref["chi2"], mode="lines",
                     name=f"NuFit 6.1 {ref_label}", line=dict(color=ref["color"], width=1.5, dash=ref["dash"]),
@@ -942,7 +945,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             ), row=1, col=1)
 
         if args.compare:
-            for ref_label, ref in _NUFIT61_DM2_PROFILES.items():
+            for ref_label, ref in _NUFIT61_DM2_REACTOR.items():
                 fig_dm2_react.add_trace(go.Scatter(
                     x=ref["dm2"], y=ref["chi2"], mode="lines",
                     name=f"NuFit 6.1 {ref_label}", line=dict(color=ref["color"], width=1.5, dash=ref["dash"]),
@@ -975,12 +978,13 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.compare:
             x_s12 = np.linspace(0.15, 0.55, 200)
             for ref_label, ref in _NUFIT61_SIN12_PROFILES.items():
-                y = _gaussian_chi2(x_s12, ref["bf"], ref["sigma_lo"], ref["sigma_hi"])
-                fig_sin12.add_trace(go.Scatter(
-                    x=x_s12, y=y, mode="lines",
-                    name=f"NuFit 6.1 {ref_label}", line=dict(color=ref["color"], width=1.5, dash=ref["dash"]),
-                    legendgroup=f"nf12_{ref_label}", showlegend=True,
-                ), row=1, col=1)
+                if ref_label not in ("KamLAND", "Solar+KamL"):
+                    y = _gaussian_chi2(x_s12, ref["bf"], ref["sigma_lo"], ref["sigma_hi"])
+                    fig_sin12.add_trace(go.Scatter(
+                        x=x_s12, y=y, mode="lines",
+                        name=f"NuFit 6.1 {ref_label}", line=dict(color=ref["color"], width=1.5, dash=ref["dash"]),
+                        legendgroup=f"nf12_{ref_label}", showlegend=True,
+                    ), row=1, col=1)
 
         _add_projection_sigma_lines(fig_sin12, 1, 1)
         _add_bf_vline(fig_sin12, analysis_info.get("SIN12", 0.303), 1)
@@ -997,12 +1001,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
             fig_sin13.add_trace(go.Scatter(
                 x=sin13_vals, y=dchi2_sin13_solar, mode="lines",
                 name="DUNE (solar ref.)", line=dict(color=DUNE_COLOR_SOLAR, width=2.5),
-                legendgroup="dune_s", showlegend=False,
+                legendgroup="dune_s", showlegend=True,
             ), row=1, col=1)
             fig_sin13.add_trace(go.Scatter(
                 x=sin13_vals_react, y=dchi2_sin13_react, mode="lines",
                 name="DUNE (reactor ref.)", line=dict(color=DUNE_COLOR_REACT, width=2.5),
-                legendgroup="dune_r", showlegend=False,
+                legendgroup="dune_r", showlegend=True,
             ), row=1, col=1)
 
         if args.compare:

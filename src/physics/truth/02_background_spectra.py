@@ -12,16 +12,20 @@ Outputs (per-config)
     (x_mev: ndarray, y_flux: ndarray)  [counts MeV⁻¹ s⁻¹ cm⁻²]
     Shielding corrections from SPECTRA.SHIELDING already applied.
 
-Outputs (aggregate)
--------------------
-  {data_path}/background_spectra_summary.pkl
-        DataFrame with one row per spectrum and both legacy plus readable columns:
-        config, surface_id, particle_type, particle_origin, area_cm2,
-        x_mev, y_flux, Config, Geometry, Component, Particle, ParticleOrigin,
-        Energy, Counts / Flux, Flux, SpectrumType.
-        Surface rows keep the per-surface truth spectra; combined rows are added
-        with Component=None and surface_id=None so downstream scanners can read a
-        single table without losing the combined spectra.
+Outputs (per-config summary)
+----------------------------
+    {data_path}/{config}/spectra/{config}_background_spectra_summary.pkl
+                DataFrame with one row per spectrum and readable columns:
+                Config, Geometry, Component, Area, Surface, Particle, ParticleOrigin,
+                Energy, Flux, SpectrumType.
+                Surface rows keep the per-surface truth spectra; combined rows are added
+                with Component=None and Surface=None so downstream scanners can read a
+                single table without losing the combined spectra.
+
+Legacy compatibility
+--------------------
+    {data_path}/background_spectra_summary.pkl
+        Combined summary dataframe kept for older tooling.
 
   {figure_path}/shielding_comparison_{corrected_cfg}_{origin}.png
     For each SPECTRA.SHIELDING_COMPARISONS entry: reference vs. uncorrected
@@ -334,21 +338,16 @@ for config in configs_to_run:
     for (surface_id, particle_type, particle_origin), (x_mev, y_flux) in all_plots[config].items():
         _area = areas.get(_geo, {}).get(surface_id, 0.0)
         _spectra_records.append({
-            "config":          config,
-            "surface_id":      surface_id,
-            "particle_type":   particle_type,
-            "particle_origin": particle_origin,
-            "area_cm2":        _area,
-            "x_mev":           np.array(x_mev),
-            "y_flux":          np.array(y_flux),
             "Config":          config,
             "Geometry":        _geo,
             "Component":       clean_component_name(particle_origin),
+            "Area":            _area,
+            "Surface":         surface_id,
             "Particle":        particle_type,
             "ParticleOrigin":  particle_origin,
             "Energy":          np.array(x_mev),
-            "Counts / Flux":   np.array(y_flux),
             "Flux":            np.array(y_flux),
+            "SpectrumType":    "surface",
         })
 _spectra_df = pd.DataFrame(_spectra_records)
 rprint(
@@ -401,38 +400,13 @@ _combined_records = []
 for config, spectra in combined_spectra.items():
     for particle_type, (y_comb, x_comb) in spectra.items():
         _combined_records.append({
-            "config":          config,
-            "particle_type":   particle_type,
-            "x_mev":           np.array(x_comb),
-            "y_flux_per_s_kT": np.array(y_comb),
+            "Config":          config,
+            "Particle":        particle_type,
+            "Energy":          np.array(x_comb),
+            "Flux":            np.array(y_comb),
+            "SpectrumType":    "combined",
         })
 _combined_df = pd.DataFrame(_combined_records)
-
-
-# ── Build summary_df ──────────────────────────────────────────────────────────
-_summary_records = []
-for row in _spectra_records:
-    _summary_records.append({**row, "SpectrumType": "surface"})
-for row in _combined_records:
-    _summary_records.append({
-        "config":          row["config"],
-        "surface_id":      None,
-        "particle_type":   row["particle_type"],
-        "particle_origin": None,
-        "area_cm2":        None,
-        "x_mev":           row["x_mev"],
-        "y_flux":          row["y_flux_per_s_kT"],
-        "Config":          row["config"],
-        "Geometry":        row["config"].split("_")[0].lower(),
-        "Component":       None,
-        "Particle":        row["particle_type"],
-        "ParticleOrigin":  None,
-        "Energy":          row["x_mev"],
-        "Counts / Flux":   row["y_flux_per_s_kT"],
-        "Flux":            row["y_flux_per_s_kT"],
-        "SpectrumType":    "combined",
-    })
-_summary_df = pd.DataFrame(_summary_records)
 
 
 # ── Build flux_df (point 14: integrated flux table) ──────────────────────────
@@ -469,7 +443,24 @@ rprint("\n[bold]Integrated flux (counts · kT⁻¹ · yr⁻¹):[/bold]")
 rprint(_flux_df.to_string(index=False))
 
 
-# ── Save aggregate summary pkl ────────────────────────────────────────────────
+# ── Save per-config summary pkl ───────────────────────────────────────────────
+_summary_records = []
+for row in _spectra_records:
+    _summary_records.append(row)
+for row in _combined_records:
+    _summary_records.append({
+        "Config":          row["Config"],
+        "Geometry":        row["Config"].split("_")[0].lower(),
+        "Component":       None,
+        "Area":            None,
+        "Surface":         None,
+        "Particle":        row["Particle"],
+        "ParticleOrigin":  None,
+        "Energy":          row["Energy"],
+        "Flux":            row["Flux"],
+        "SpectrumType":    row["SpectrumType"],
+    })
+_summary_df = pd.DataFrame(_summary_records)
 save_pkl(
     _summary_df,
     data_path,
@@ -479,6 +470,40 @@ save_pkl(
     rm=args.rewrite,
     debug=True,
 )
+
+for config in configs_to_run:
+    if config not in all_plots:
+        continue
+
+    _config_rows = [row for row in _spectra_records if row["Config"] == config]
+    _config_rows.extend(
+        {
+            "Config":          row["Config"],
+            "Geometry":        row["Config"].split("_")[0].lower(),
+            "Component":       None,
+            "Area":            None,
+            "Surface":         None,
+            "Particle":        row["Particle"],
+            "ParticleOrigin":  None,
+            "Energy":          row["Energy"],
+            "Flux":            row["Flux"],
+            "SpectrumType":    row["SpectrumType"],
+        }
+        for row in _combined_records
+        if row["Config"] == config
+    )
+
+    _config_summary_df = pd.DataFrame(_config_rows)
+    save_pkl(
+        _config_summary_df,
+        data_path,
+        config,
+        None,
+        subfolder="spectra",
+        filename="background_spectra_summary",
+        rm=args.rewrite,
+        debug=True,
+    )
 
 
 # ── All-productions comparison plot (point 13) ───────────────────────────────

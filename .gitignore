@@ -207,6 +207,11 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Credentials — never commit
+.git-credentials
+.netrc
+*.credentials
+
 # Anthropic Claude / assistant files
 .claude/
 .claude.json

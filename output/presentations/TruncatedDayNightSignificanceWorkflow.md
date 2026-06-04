@@ -213,10 +213,10 @@ $$
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 20 | 100 | 320 | 0.418 | 3.718 | 2.89 |
-| HD Lateral | 80 | 140 | 200 | 0.091 | 3.290 | 2.88 |
+| HD Central | 20 | 100 | 320 | 0.418 | 3.721 | 2.89 |
+| HD Lateral | 80 | 140 | 200 | 0.091 | 3.293 | 2.88 |
 | VD Top | 40 | 40 | 100 | 0.000 | 0.031 | 6.27 |
-| VD Bottom Shielded | 80 | 20 | 80 | 0.022 | 0.037 | 6.17 |
+| VD Bottom Shielded | 20 | 120 | 80 | 0.022 | 0.036 | 5.77 |
 
 ---
 
@@ -288,10 +288,10 @@ $$
 
 | Config | NHits | OpHits | AdjCl | Significance |
 |---|---:|---:|---:|---:|
-| HD Central | 3 | 12 | 3 | 4.459 |
-| HD Lateral | 4 | 4 | 4 | 1.623 |
-| VD Top | 6 | 19 | 6 | 0.913 |
-| VD Bottom Shielded | 6 | 4 | 8 | 1.914 |
+| HD Central | 3 | 12 | 3 | 4.438 |
+| HD Lateral | 4 | 4 | 4 | 1.616 |
+| VD Top | 6 | 19 | 6 | 0.909 |
+| VD Bottom Shielded | 6 | 13 | 9 | 1.820 |
 
 
 ---

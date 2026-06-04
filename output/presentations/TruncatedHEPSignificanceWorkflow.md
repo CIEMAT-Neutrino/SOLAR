@@ -193,7 +193,7 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 | HD Central | 0 | 80 | 0 | 0.303 | 1.226 | 5.85 |
 | HD Lateral | 60 | 80 | 20 | 0.095 | 0.817 | 4.74 |
 | VD Top | 0 | 0 | 40 | 0.551 | 0.575 | 7.54 |
-| VD Bottom Shielded | 0 | 0 | 20 | 0.781 | 0.782 | 7.69 |
+| VD Bottom Shielded | 0 | 0 | 20 | 0.782 | 0.782 | 7.69 |
 
 ---
 
@@ -445,10 +445,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | NHits | OpHits | AdjCl | Significance |
 |---|---:|---:|---:|---:|
-| HD Central | 4 | 13 | 5 | 9.099 |
-| HD Lateral | 6 | 4 | 5 | 2.395 |
-| VD Top | 1 | 4 | 20 | 0.000 |
-| VD Bottom Shielded | 1 | 4 | 19 | 0.000 |
+| HD Central | 4 | 13 | 5 | 9.104 |
+| HD Lateral | 6 | 4 | 5 | 2.396 |
+| VD Top | 10 | 10 | 7 | 2.384 |
+| VD Bottom Shielded | 8 | 20 | 6 | 2.498 |
 
 ---
 

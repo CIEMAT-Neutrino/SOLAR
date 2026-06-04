@@ -583,7 +583,7 @@ def run_legacy_backend(config: str, name: str):
         [np.full(val_sample, s, dtype=float) for s in range(_max_sid + 1)]
     )
     _p_test = np.random.uniform(0, 14, val_sample * 5)
-    _w = compute_weights(_s_test.astype(int), _s_test.astype(int), hist_s, bins_s, alpha_truth)
+    _w = compute_weights(_p_test, _s_test.astype(int), hist_s, bins_s, alpha_truth)
 
     for _surf_label, (_surf_val, _surf_id) in surfaces[info["GEOMETRY"]].items():
         _sid = int(_surf_id)

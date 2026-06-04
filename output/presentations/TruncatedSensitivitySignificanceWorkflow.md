@@ -237,8 +237,8 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 100 | 0.344 | 2.969 | 5.02 |
-| HD Lateral | 60 | 260 | 200 | 0.097 | 2.744 | 2.28 |
+| HD Central | 0 | 80 | 100 | 0.344 | 2.971 | 5.02 |
+| HD Lateral | 60 | 260 | 200 | 0.097 | 2.746 | 2.28 |
 | VD Top | 0 | 0 | 20 | 0.631 | 0.641 | 7.69 |
 | VD Bottom Shielded | 0 | 0 | 20 | 0.703 | 0.704 | 7.69 |
 
@@ -337,10 +337,10 @@ No template found for VD Bottom Shielded
 
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 1 | 8 | 4 | 4 | 2 | 62.94 |
+| HD Central | 1 | 8 | 4 | 4 | 2 | 63.00 |
 | HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.73 |
-| VD Top | 8 | 10 | 8 | 4 | 2 | 15.37 |
-| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 72.74 |
+| VD Top | 8 | 10 | 8 | 4 | 2 | 15.38 |
+| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |
 
 
 ---
