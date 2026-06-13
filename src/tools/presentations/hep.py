@@ -24,7 +24,7 @@ from common import (
 )
 
 PNFS_HEP = Path("/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP")
-LOCAL_JSON = ROOT / "data" / "analysis" / "hep-json"
+LOCAL_JSON = ROOT / "config"
 DEFAULT_REFERENCE = "ProfileLikelihood"
 
 
@@ -189,13 +189,13 @@ def gather_best_sigma_rows(energy):
     row_map = {}
     patterns = [
         str(PNFS_HEP / "*" / "*" / "marley" / "*_highest_HEP.json"),
-        str(LOCAL_JSON / "*" / "*" / "marley" / "*_highest_HEP.json"),
+        str(LOCAL_JSON / "*" / "hep-json" / "*" / "*" / "*_highest_HEP.json"),
     ]
 
     for pattern in patterns:
         for json_path in sorted(glob(pattern)):
             p = Path(json_path)
-            folder = p.parts[-4]
+            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-3]
             if folder not in rows:
                 continue
 

@@ -480,19 +480,19 @@ if args.analysis != "Fiducial":
 
 if args.analysis == "DayNight":
     save_path = f"{root}/images/analysis/day-night"
-    data_path = f"{root}/data/analysis/day-night"
+    data_path = f"{analysis_info['PATH']}/DAYNIGHT"
     smoothing_config = get_smoothing_config(str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance")
 elif args.analysis == "HEP":
     save_path = f"{root}/images/analysis/hep"
-    data_path = f"{root}/data/analysis/hep"
+    data_path = f"{analysis_info['PATH']}/HEP"
     smoothing_config = get_smoothing_config(str(root), analysis_name="HEP", dimensions="1d", stage="significance")
 elif args.analysis == "Sensitivity":
     save_path = f"{root}/images/analysis/sensitivity"
-    data_path = f"{root}/data/analysis/sensitivity"
+    data_path = f"{analysis_info['PATH']}/SENSITIVITY"
     smoothing_config = get_smoothing_config(str(root), analysis_name="SENSITIVITY", dimensions="1d", stage="significance")
 else:
     save_path = f"{root}/images/solar/fiducial"
-    data_path = f"{root}/data/solar/fiducial"
+    data_path = f"{analysis_info['PATH']}/FIDUCIAL"
     smoothing_config = None
 
 for this_path in [save_path, data_path]:
@@ -692,8 +692,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "err_y": smoothed_errors_per_energy,
             })
 
+            raw_errors_per_energy = np.nan_to_num(
+                detector_mass * args.exposure * errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
+            )
             for counts_per_energy, errors_per_energy, spectrum_type in [
-                (raw_counts_per_energy, detector_mass * args.exposure * errors, "Raw"),
+                (raw_counts_per_energy, raw_errors_per_energy, "Raw"),
                 (smoothed_counts_per_energy, smoothed_errors_per_energy, "Smoothed"),
             ]:
                 significance_values = None
@@ -712,9 +715,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Geometry": info["GEOMETRY"],
                     "Component": component_label, "SpectrumType": spectrum_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure,
-                    "Energy": energy_axis.tolist(),
-                    "Counts": np.asarray(counts_per_energy).tolist(),
+                    "Exposure": args.exposure, "ExposureUnit": "year",
+                    "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                    "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": r"counts \cdot MeV^{-1}",
                     "CountsError": np.asarray(errors_per_energy).tolist(),
                     "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
                     "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
@@ -738,10 +741,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "Variable": label, "SpectrumType": "Raw" if dash == "dot" else "Smoothed",
                 "BinMode": "PerBin",
                 "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": args.exposure,
-                "Energy": stored_energy_axis.tolist(),
-                "Significance": np.asarray(significance).tolist(),
-                "BinWidth": None,
+                "Exposure": args.exposure, "ExposureUnit": "year",
+                "Energy": stored_energy_axis.tolist(), "EnergyUnit": "MeV",
+                "Significance": np.asarray(significance).tolist(), "SignificanceUnit": r"\sigma",
+                "BinWidth": None, "BinWidthUnit": None,
             })
 
         if _has_asimov_bins:
@@ -754,10 +757,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Variable": label, "SpectrumType": "Raw" if dash == "dot" else "Smoothed",
                     "BinMode": "PerBin",
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure,
-                    "Energy": stored_energy_axis.tolist(),
-                    "Significance": np.asarray(significance).tolist(),
-                    "BinWidth": None,
+                    "Exposure": args.exposure, "ExposureUnit": "year",
+                    "Energy": stored_energy_axis.tolist(), "EnergyUnit": "MeV",
+                    "Significance": np.asarray(significance).tolist(), "SignificanceUnit": r"\sigma",
+                    "BinWidth": None, "BinWidthUnit": None,
                 })
 
         figure_name = f"{energy}_DayNight_Significance"
@@ -1181,10 +1184,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
             ("Raw", raw_no_rebin_significance.tolist(), None),
             ("Smoothed", smoothed_no_rebin_significance.tolist(), None),
         ]:
-            _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "NoRebin", "Energy": no_rebin_energy.tolist(), "Significance": sig_vals, "BinWidth": bw})
+            _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "NoRebin", "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": r"\sigma", "BinWidth": bw, "BinWidthUnit": None, "ExposureUnit": "year"})
         if adaptive_energy.size > 0:
             for spec_type, sig_vals in [("Raw", raw_adaptive_significance), ("Smoothed", smoothed_adaptive_significance)]:
-                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "AdaptiveRebin", "Energy": adaptive_energy.tolist(), "Significance": sig_vals.tolist(), "BinWidth": adaptive_width.tolist()})
+                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "AdaptiveRebin", "Energy": adaptive_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals.tolist(), "SignificanceUnit": r"\sigma", "BinWidth": adaptive_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
 
             s = scale * signal_tail_counts
             b = scale * background_tail_counts
@@ -1209,12 +1212,16 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 to_save = purity_arr.tolist()
                 binmode_name = "Purity"
 
+            _hep_sig_unit = {
+                "LocalDensity": r"\sigma \cdot MeV^{-1}",
+                "AsimovTS": r"MeV^{-1}", "Fisher": r"MeV^{-1}", "SNR": r"MeV^{-1}", "Purity": "1",
+            }
             for spec_type, sig_vals, bm in [
                 ("Raw", raw_local_density.tolist(), "LocalDensity"),
                 ("Smoothed", smooth_local_density.tolist(), "LocalDensity"),
                 ("Smoothed", to_save, binmode_name),
             ]:
-                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": bm, "Energy": no_rebin_energy.tolist(), "Significance": sig_vals, "BinWidth": no_rebin_width.tolist()})
+                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": bm, "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": _hep_sig_unit.get(bm, "1"), "BinWidth": no_rebin_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
 
         tail_slice = slice(no_rebin_start, no_rebin_start + len(no_rebin_energy))
         for rd in _hep_render:
@@ -1225,9 +1232,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Geometry": info["GEOMETRY"],
                     "Component": rd["component"], "SpectrumType": spec_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure,
-                    "Energy": no_rebin_energy.tolist(),
-                    "Counts": (scale * cnt_arr[tail_slice]).tolist(),
+                    "Exposure": args.exposure, "ExposureUnit": "year",
+                    "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV",
+                    "Counts": (scale * cnt_arr[tail_slice]).tolist(), "CountsUnit": "counts",
                     "CountsError": None,
                     "Significance": (
                         raw_local_density.tolist() if (_is_sig and spec_type == "Raw")
@@ -1355,9 +1362,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Geometry": info["GEOMETRY"],
                     "Component": component_label, "SpectrumType": spec_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure,
-                    "Energy": energy_axis.tolist(),
-                    "Counts": (scale * cnt_arr).tolist(),
+                    "Exposure": args.exposure, "ExposureUnit": "year",
+                    "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                    "Counts": (scale * cnt_arr).tolist(), "CountsUnit": "counts",
                     "CountsError": (scale * err_arr).tolist(),
                     "Significance": None,
                     "SignificanceLabel": None,
@@ -1421,10 +1428,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
             "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "Sensitivity",
             "Variable": "AsimovTS", "SpectrumType": "Smoothed", "BinMode": "PerBin",
             "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-            "Exposure": args.exposure,
-            "Energy": energy_axis.tolist(),
-            "Significance": asimov_density.tolist(),
-            "BinWidth": bin_widths.tolist(),
+            "Exposure": args.exposure, "ExposureUnit": "year",
+            "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+            "Significance": asimov_density.tolist(), "SignificanceUnit": r"MeV^{-1}",
+            "BinWidth": bin_widths.tolist(), "BinWidthUnit": "MeV",
         })
 
         save_df(
@@ -1446,7 +1453,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         best_fiducials_path = f"{fid_data_root}/BestFiducials.json"
         best_fiducials = json.loads(open(best_fiducials_path).read()) if os.path.exists(best_fiducials_path) else {}
 
-        signal_pkl = f"{fid_data_root}/{config}/{name}/{config}_{name}_{energy}_Fiducial_Scan.pkl"
+        signal_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_Fiducial_Scan.pkl"
         if not os.path.exists(signal_pkl):
             rprint(f"[yellow][WARNING][/yellow] Missing fiducial scan pkl: {signal_pkl}")
             continue
@@ -1455,7 +1462,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         for an in args.fiducial_analyses:
             needed_bkg.update(get_fiducialization_config(str(root), an.upper()).get("background_components", []))
         for bkg_label in sorted(needed_bkg):
-            bkg_pkl = f"{fid_data_root}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
+            bkg_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
             if os.path.exists(bkg_pkl):
                 df_list.append(pd.read_pickle(bkg_pkl))
         raw_df = pd.concat(df_list, ignore_index=True)

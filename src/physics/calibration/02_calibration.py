@@ -32,6 +32,11 @@ args = parser.parse_args()
 config = args.config
 name = args.name
 
+analysis_info = load_analysis_info(str(root))
+_calib_base = analysis_info.get("DATA_PATHS", {}).get(
+    "CALIBRATION", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
+)
+
 configs = {config: [name]}
 
 user_input = {"workflow": "CALIBRATION"}
@@ -367,7 +372,7 @@ for config in configs:
 
             save_pkl(
                 slope,
-                f"{root}/config/{config}/{name}/{config}_calib",
+                f"{_calib_base}/{config}/{name}/calib",
                 None,
                 None,
                 filename=f"{config}_{variable.lower()}charge_slope_calibration",
@@ -377,7 +382,7 @@ for config in configs:
 
             save_pkl(
                 intercept,
-                f"{root}/config/{config}/{name}/{config}_calib",
+                f"{_calib_base}/{config}/{name}/calib",
                 None,
                 None,
                 filename=f"{config}_{variable.lower()}charge_intercept_calibration",

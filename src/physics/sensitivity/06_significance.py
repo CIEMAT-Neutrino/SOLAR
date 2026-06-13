@@ -601,8 +601,8 @@ for config in configs:
                 # Flatten to config/energy level (all samples combined)
                 json_payload.setdefault(cfg, {}).setdefault(en, {}).update(values)
             for local_dir in [
-                f"{root}/data/analysis/sensitivity-json/{args.folder.lower()}/{config}",
-                f"{root}/data/analysis/best-sigma-json/sensitivity/{args.folder.lower()}/{config}",
+                f"{root}/config/{config}/sensitivity-json/{args.folder.lower()}",
+                f"{root}/config/{config}/best-sigma-json/sensitivity/{args.folder.lower()}",
             ]:
                 if not os.path.exists(local_dir):
                     os.makedirs(local_dir)

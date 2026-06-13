@@ -26,7 +26,7 @@ def _load_best_cuts(analysis, folder, config):
     if not dir_name:
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: unknown analysis '{analysis}' — no best cuts loaded")
         return {}
-    path = f"{root}/data/analysis/{dir_name}/{folder.lower()}/{config}/{config}_highest_{analysis}.json"
+    path = f"{root}/config/{config}/{dir_name}/{folder.lower()}/{config}_highest_{analysis}.json"
     if not os.path.exists(path):
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: file not found — {path}")
         return {}

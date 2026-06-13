@@ -86,10 +86,10 @@
       "DEFAULT_METRIC": "sin12",
       "METRICS": {
         "sin12": true,
-        "sin13": false,
-        "templates": false,
+        "sin13": true,
+        "templates": true,
         "nuisance_comparison": false,
-        "significance_spectra": false
+        "significance_spectra": true
       }
     }
   },

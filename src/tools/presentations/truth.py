@@ -162,7 +162,7 @@ def gather_pdf_validation_plots():
 def gather_oscillogram_plots():
     specs = {}
     for config_key, display_name in STANDARD_CONFIGS:
-        for analysis in ["hep", "sensitivity", "daynight"]:
+        for analysis in ["hep", "sensitivity", "day-night"]:
             for folder in ["truncated", "nominal", "reduced"]:
                 osc_dir = (
                     ROOT / "images" / "analysis" / analysis

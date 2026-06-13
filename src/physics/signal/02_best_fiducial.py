@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+_analysis_info = load_analysis_info(str(root))
+
 save_path = f"{root}/images/solar/fiducial"
 data_path = f"{root}/data/solar/fiducial"
 
@@ -343,11 +345,11 @@ for config in configs:
     for name, energy_label in product(configs[config], args.energy):
         df_list = []
         signal_df = pd.read_pickle(
-            f"{root}/data/solar/fiducial/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan.pkl"
+            f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan.pkl"
         )
         df_list.append(signal_df)
         for bkg_label in get_background_samples(str(root)):
-            filepath = f"{root}/data/solar/fiducial/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
+            filepath = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
             if not os.path.exists(filepath):
                 continue
             bkg_df = pd.read_pickle(filepath)
@@ -366,7 +368,6 @@ for config in configs:
         for analysis_name in args.analysis:
             analysis_key = analysis_name.upper()
             analysis_config = get_fiducialization_config(str(root), analysis_key)
-            _analysis_info = load_analysis_info(str(root))
             _sig_ref = str(
                 _analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get(analysis_key, "")
             ).lower()

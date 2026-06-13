@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/images/analysis/hep"
-data_path = f"{root}/data/analysis/hep"
-for this_path in [save_path, data_path]:
+data_path = f"{analysis_info['PATH']}/HEP"
+for this_path in [save_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
@@ -40,7 +41,6 @@ def as_curve(value):
 parser = argparse.ArgumentParser(
     description="Compare HEP significance curves with and without adaptive rebinning"
 )
-analysis_info = load_analysis_info(str(root))
 default_reference = analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get(
     "HEP", "Asimov"
 )

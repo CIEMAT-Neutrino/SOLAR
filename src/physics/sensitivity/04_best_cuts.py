@@ -280,8 +280,8 @@ for (cfg, nm, en), values in best_payload.items():
     json_payload.setdefault(cfg, {}).setdefault(en, {}).update(values)
 
 for local_dir in [
-    f"{root}/data/analysis/sensitivity-json/{args.folder.lower()}/{args.config}",
-    f"{root}/data/analysis/best-sigma-json/sensitivity/{args.folder.lower()}/{args.config}",
+    f"{root}/config/{args.config}/sensitivity-json/{args.folder.lower()}",
+    f"{root}/config/{args.config}/best-sigma-json/sensitivity/{args.folder.lower()}",
 ]:
     if not os.path.exists(local_dir):
         os.makedirs(local_dir)

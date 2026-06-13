@@ -6,10 +6,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/analysis/hep"
-data_path = f"{root}/data/analysis/hep"
+analysis_info = load_analysis_info(str(root))
 
-for this_path in [save_path, data_path]:
+save_path = f"{root}/images/analysis/hep"
+data_path = f"{analysis_info['PATH']}/HEP"
+
+for this_path in [save_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
@@ -17,7 +19,6 @@ for this_path in [save_path, data_path]:
 parser = argparse.ArgumentParser(
     description="Plot the HEP significance analysis for a given configuration and name and plot the results as a function of exposure"
 )
-analysis_info = load_analysis_info(str(root))
 default_reference = analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get("HEP", "Asimov")
 parser.add_argument(
     "--analysis", type=str, help="The analysis configuration", default="HEP"

@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/images/analysis/day-night"
-data_path = f"{root}/data/analysis/day-night"
-for this_path in [save_path, data_path]:
+data_path = f"{analysis_info['PATH']}/DAYNIGHT"
+for this_path in [save_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 

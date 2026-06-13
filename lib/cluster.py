@@ -6,13 +6,16 @@ from typing import Optional
 from itertools import product
 from rich import print as rprint
 from .formatting import remove_branches, get_param_dict, reshape_array
-from .defaults import get_default_info
+from .defaults import get_default_info, load_analysis_info
 from .fitting import calibration_func
 from .dataframe import npy2df
 
 from src.utils import get_project_root
 
 root = get_project_root()
+_pnfs_calib = load_analysis_info(str(root)).get("DATA_PATHS", {}).get(
+    "CALIBRATION", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
+)
 
 
 def compute_electron_cluster(
@@ -225,13 +228,13 @@ def compute_cluster_calibration(
                 try:
                     corr_slope = pickle.load(
                         open(
-                            f"{root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{name}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
                             "rb",
                         )
                     )
                     corr_intercept = pickle.load(
                         open(
-                            f"{root}/config/{config}/{name}/{config}_calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{name}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
@@ -241,13 +244,13 @@ def compute_cluster_calibration(
 
                     corr_slope = pickle.load(
                         open(
-                            f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
                             "rb",
                         )
                     )
                     corr_intercept = pickle.load(
                         open(
-                            f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
@@ -379,13 +382,13 @@ def compute_reco_energy(
             # Save the trained model to a file so it can be used later using pickle
             default_sample = "marley_official"
             try:
-                path = f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
+                path = f"{_pnfs_calib}/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
                 with open(path, "rb") as model_file:
                     rf_classifier = pickle.load(model_file)
 
             except FileNotFoundError:
                 output += f"\t\t[yellow][WARNING][/yellow] ML model file not found. Defaulting to {default_sample}!\n"
-                path = f"{root}/config/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
+                path = f"{_pnfs_calib}/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
 
                 with open(path, "rb") as model_file:
                     rf_classifier = pickle.load(model_file)

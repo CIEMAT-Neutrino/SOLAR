@@ -1,6 +1,8 @@
 import os
 import sys
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))
 import argparse
 import json
 import re
@@ -26,6 +28,10 @@ from common import (
     pick_most_recent,
     render_oscillogram_slides,
 )
+from lib.defaults import load_analysis_info, get_project_root
+
+_analysis_info = load_analysis_info(str(get_project_root()))
+_PNFS = _analysis_info["PATH"]
 
 
 def parse_args():
@@ -167,14 +173,15 @@ def _gather_component_plot(folder, config_key, label, energy, cut_info):
     folder_title = folder.title()
     energy_label = output_energy_label(energy)
     base_dirs = [
-        ROOT / "images" / "analysis" / "sensitivity" / folder / config_key,
-        ROOT / "images" / "sensitivity" / folder / config_key,
+        ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder,
+        ROOT / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder,
     ]
     selected = _find_latest_with_cut(
         base_dirs,
         [
             f"{config_key}_{label}_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
             f"{config_key}_{label}_{energy_label}_NHits*_AdjCl*_OpHits*_Signal*_Bkg*.png",
+            f"{config_key}_marley_{label}_{energy_label}_NHits*_AdjCl*_OpHits*.png",
         ],
         cut_info,
     )
@@ -199,6 +206,84 @@ def gather_significance_specs(folder, energy):
             "path": _relative(path) if path is not None else None,
         })
     return specs
+
+
+_PROJECTION_AXES = [
+    ("sin12",       "sin²θ₁₂"),
+    ("sin13",       "sin²θ₁₃"),
+    ("dm2_solar",   "Δm²<sub>sol</sub>"),
+    ("dm2_reactor", "Δm²<sub>react</sub>"),
+]
+
+
+def gather_projection_specs(folder, energy):
+    energy_label = output_energy_label(energy)
+    folder_title = folder.title()
+    specs = []
+    for config_key, display_name in STANDARD_CONFIGS:
+        proj_dir = ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
+        axes = {}
+        for axis_key, _ in _PROJECTION_AXES:
+            path = _find_latest(
+                [proj_dir],
+                [
+                    f"{config_key}_marley_{config_key}_marley_{folder_title}_{energy_label}_NHits*_AdjCl*_OpHits*_{axis_key}_projection_NuFit61.png",
+                    f"*_{axis_key}_projection_NuFit61.png",
+                ],
+            )
+            axes[axis_key] = _relative(path) if path is not None else None
+        specs.append({
+            "name": display_name,
+            "config": config_key,
+            "folder": folder,
+            "axes": axes,
+        })
+    return specs
+
+
+def render_projection_slides(projection_specs):
+    slides = []
+    for spec in projection_specs:
+        axes = spec.get("axes", {})
+        if not any(axes.values()):
+            slides.append(f"### {spec['name']}\n\nNo 1D projections found.")
+            continue
+
+        def _img(key):
+            path = axes.get(key)
+            return f'    <img src="../../{path}">' if path else "    <p>Not available.</p>"
+
+        slides.append("\n".join([
+            f"### {spec['name']}: Mixing Angle Projections",
+            "",
+            '<div class="two-col">',
+            "  <div>",
+            '    <p><strong>sin²θ₁₂</strong></p>',
+            _img("sin12"),
+            "  </div>",
+            "  <div>",
+            '    <p><strong>sin²θ₁₃</strong></p>',
+            _img("sin13"),
+            "  </div>",
+            "</div>",
+        ]))
+        slides.append("\n".join([
+            f"### {spec['name']}: Mass Splitting Projections",
+            "",
+            '<div class="two-col">',
+            "  <div>",
+            '    <p><strong>Δm²<sub>sol</sub></strong></p>',
+            _img("dm2_solar"),
+            "  </div>",
+            "  <div>",
+            '    <p><strong>Δm²<sub>react</sub></strong></p>',
+            _img("dm2_reactor"),
+            "  </div>",
+            "</div>",
+        ]))
+    if not slides:
+        return "### 1D Parameter Projections\n\nNo projection plots were found."
+    return "\n\n---\n\n".join(slides)
 
 
 def render_significance_slides(specs):
@@ -285,7 +370,8 @@ def gather_result_specs(folder, energy, profile=None):
 
 
 def gather_template_specs(folder, energy, result_specs):
-    base = ROOT / "images" / "analysis" / "sensitivity" / "templates" / folder
+    # New layout: templates/{folder}/{config}/marley/
+    new_base = ROOT / "images" / "analysis" / "sensitivity" / "templates" / folder
     energy_label = output_energy_label(energy)
     selected_signal = {}
     selected_background = {}
@@ -295,10 +381,13 @@ def gather_template_specs(folder, energy, result_specs):
     }
 
     for config_key, _ in STANDARD_CONFIGS:
+        # Old layout: templates/{config}/marley/{folder}/
+        old_base = ROOT / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder
         selected_background_path = _find_latest_with_cut(
-            [base / config_key / "marley", base],
+            [new_base / config_key / "marley", new_base, old_base],
             [
                 f"{config_key}_marley_Sensitivity_Templates_{energy_label}_NHits*_AdjCl*_OpHits*.png",
+                f"{config_key}_marley_Background_{energy_label}_NHits*_AdjCl*_OpHits*.png",
                 f"*_{folder.title()}_Background_{energy_label}_NHits*_AdjCl*_OpHits*.png",
                 f"{folder.title()}_Background_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
@@ -306,7 +395,7 @@ def gather_template_specs(folder, energy, result_specs):
         )
 
         selected = _find_latest_with_cut(
-            [base / config_key],
+            [new_base / config_key, old_base],
             [
                 f"{config_key}_Selected_Signal_{energy_label}_NHits*_AdjCl*_OpHits*.png",
             ],
@@ -603,7 +692,7 @@ def gather_sensitivity_significance_rows(folder, energy):
     energy_label = output_energy_label(energy)
     for config_key, _ in STANDARD_CONFIGS:
         pkl_path = (
-            ROOT / "data" / "analysis" / "sensitivity"
+            Path(_PNFS) / "SENSITIVITY"
             / config_key / "marley" / folder
             / f"{config_key}_marley_Sensitivity_Significance.pkl"
         )
@@ -710,13 +799,14 @@ def render_nuisance_comparison_section(default_profile, default_specs, other_pro
     return "\n".join(slides)
 
 
-def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None):
+def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None, projection_specs=None):
     is_main = folder == "truncated"
     fid_title   = "Fiducialization" if is_main else f"Fiducialization ({folder.title()})"
     sin12_title = "Main Result: Contour Grids (sin12)" if is_main else f"Contour Grids (sin12, {folder.title()})"
     sin13_title = "Contour Grids (sin13)" if is_main else f"Contour Grids (sin13, {folder.title()})"
     templates_title = "Template Building" if is_main else f"Template Building ({folder.title()})"
     sig_title   = "Significance Spectra" if is_main else f"Significance Spectra ({folder.title()})"
+    proj_title  = "1D Parameter Projections" if is_main else f"1D Parameter Projections ({folder.title()})"
     fid_rows = fid_rows or []
     fid_specs = fid_specs or []
     significance_specs = significance_specs or []
@@ -745,7 +835,24 @@ def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, 
 ## {templates_title}
 
 ---
+
+{render_template_slides(template_specs)}
+
+---
 """ if show_templates else ""
+
+    _has_projections = projection_specs and any(
+        any(s.get("axes", {}).values()) for s in projection_specs
+    )
+    optional_projections = f"""
+## {proj_title}
+
+---
+
+{render_projection_slides(projection_specs)}
+
+---
+""" if _has_projections else ""
 
     osc_section = ""
     if osc_specs:
@@ -771,12 +878,7 @@ def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, 
 {render_component_pair_slides(result_specs, 'solar_sin12', 'react_sin12', 'Solar Contour (sin12)', 'Reactor Contour (sin12)')}
 
 ---
-{optional_sin13}{optional_significance}{optional_templates}
-
-{render_template_slides(template_specs)}
-
----
-
+{optional_sin13}{optional_significance}{optional_templates}{optional_projections}
 {render_cut_table(folder, result_specs, sig_rows=sig_rows)}
 {osc_section}"""
 
@@ -857,6 +959,10 @@ $$
 
 Setting $\\sigma \\le 0$ **disables** that nuisance entirely — the corresponding $A$ is still a free parameter in the minimization but receives no Gaussian pull. Default: $\\sigma_{\\mathrm{pred}} = 4\\%$, $\\sigma_{\\mathrm{bkg}} = 2\\%$.
 
+---
+
+### Minimization Backends
+
 **Three minimization backends** (selected automatically by input type):
 
 | Backend | Input | Method |
@@ -905,7 +1011,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 - Full mathematical derivations: [docs/hep\\_likelihood\\_derivation.tex](../../docs/hep_likelihood_derivation.tex)."""
 
 
-def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, comparison_profiles_specs=None, default_profile=None, nuisance_profiles=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None):
+def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, comparison_profiles_specs=None, default_profile=None, nuisance_profiles=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None, projection_specs=None):
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
     energy_label = output_energy_label(energy)
     coverage = sum(1 for item in folder_specs if item.get("primary"))
@@ -914,7 +1020,7 @@ def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None
         folder, folder_specs, folder_templates,
         fid_rows=fid_rows, fid_specs=fid_specs, significance_specs=significance_specs, sig_rows=sig_rows,
         show_sin13=show_sin13, show_templates=show_templates, show_significance_spectra=show_significance_spectra,
-        osc_specs=osc_specs,
+        osc_specs=osc_specs, projection_specs=projection_specs,
     )
     nuisance_section = render_nuisance_comparison_section(
         default_profile or "full",
@@ -1011,11 +1117,12 @@ def main():
     default_profile = _analysis_info.get("DEFAULT_NUISANCE_PROFILE", "full")
 
     # Load metrics config (controls which sections to gather/render)
+    # sin13, templates, significance_spectra default ON; nuisance_comparison stays OFF
     _workflow_section = _analysis_info.get("WORKFLOW", {}).get("SENSITIVITY", {})
     _metrics = _workflow_section.get("METRICS", {})
-    _do_sin13             = args.all_metrics or _metrics.get("sin13", False)
-    _do_templates         = args.all_metrics or _metrics.get("templates", False)
-    _do_significance_spec = args.all_metrics or _metrics.get("significance_spectra", False)
+    _do_sin13             = _metrics.get("sin13", True)
+    _do_templates         = _metrics.get("templates", True)
+    _do_significance_spec = _metrics.get("significance_spectra", True)
     _do_nuisance_cmp      = args.all_metrics or _metrics.get("nuisance_comparison", False)
 
     # Gather main specs: prefer profile subdir, fall back to flat folder
@@ -1029,6 +1136,7 @@ def main():
     fid_specs = gather_fiducial_plot_specs(args.folder, args.energy)
     significance_specs = gather_significance_specs(args.folder, args.energy) if _do_significance_spec else []
     sig_rows = gather_sensitivity_significance_rows(args.folder, args.energy)
+    projection_specs = gather_projection_specs(args.folder, args.energy)
 
     # Comparison: only gather when enabled (each profile requires filesystem globs)
     comparison_profiles_specs = {}
@@ -1058,6 +1166,7 @@ def main():
         show_templates=_do_templates,
         show_significance_spectra=_do_significance_spec,
         osc_specs=osc_specs,
+        projection_specs=projection_specs,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

@@ -48,21 +48,15 @@ def find_latest(base_dir, patterns):
     return pick_most_recent(candidates)
 
 
-def analysis_json_search_dirs(analysis):
+def analysis_json_globs(analysis, filename_pattern):
     analysis_key = str(analysis).strip().upper()
     analysis_dir = analysis_key.lower()
+    pnfs_dir = Path('/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR') / analysis_key
     return [
-        ROOT / 'data' / 'analysis' / 'best-sigma-json' / analysis_dir,
-        ROOT / 'data' / 'analysis' / f'{analysis_dir}-json',
+        str(pnfs_dir / '*' / '*' / 'marley' / filename_pattern),
+        str(ROOT / 'config' / '*' / f'best-sigma-json' / analysis_dir / '*' / '*' / filename_pattern),
+        str(ROOT / 'config' / '*' / f'{analysis_dir}-json' / '*' / '*' / filename_pattern),
     ]
-
-
-def analysis_json_globs(analysis, filename_pattern):
-    pnfs_dir = Path('/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR') / str(analysis).upper()
-    globs = [str(pnfs_dir / '*' / '*' / 'marley' / filename_pattern)]
-    for base_dir in analysis_json_search_dirs(analysis):
-        globs.append(str(base_dir / '*' / '*' / 'marley' / filename_pattern))
-    return globs
 
 
 _LAR_DENSITY_G_PER_CM3 = 1.396
@@ -110,22 +104,52 @@ def compute_fiducial_mass_kt(config, fid_x, fid_y, fid_z, lar_density=_LAR_DENSI
     return fid_x_size * fid_y_size * fid_z_size * lar_density * drift_factor * full_factor * 0.5 / 1e9
 
 
+_ANALYSIS_DIR = {
+    "daynight": "day-night",
+    "hep": "hep",
+    "sensitivity": "sensitivity",
+}
+
+# When a config has no oscillogram in the requested analysis, try these fallbacks in order.
+_OSCILLOGRAM_FALLBACK_ORDER = ["sensitivity", "day-night", "hep"]
+
+
 def gather_oscillogram_specs(folder, energy, analysis_name):
     analysis_lower = str(analysis_name).lower()
-    osc_root = ROOT / "images" / "analysis" / analysis_lower / "oscillogram"
+    analysis_dir = _ANALYSIS_DIR.get(analysis_lower, analysis_lower)
     energy_label = output_energy_label(energy)
+
+    primary_root = ROOT / "images" / "analysis" / analysis_dir / "oscillogram"
+    fallback_roots = [
+        ROOT / "images" / "analysis" / _ANALYSIS_DIR.get(a, a) / "oscillogram"
+        for a in _OSCILLOGRAM_FALLBACK_ORDER
+        if _ANALYSIS_DIR.get(a, a) != analysis_dir
+    ]
+
     specs = []
     for config_key, display_name in STANDARD_CONFIGS:
-        config_dir = osc_root / config_key / "marley" / folder
-        osc = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_{energy_label}.png"])
-        nadir_proj = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_NadirProjection_{energy_label}.png"])
-        signal_1d = find_latest(config_dir, [f"{config_key}_marley_Signal1D_{energy_label}_FidOnly.png"])
+        osc = nadir_proj = nadir_weighted = signal_1d = None
+        for osc_root in [primary_root] + fallback_roots:
+            config_dir = osc_root / config_key / "marley" / folder
+            if not config_dir.exists():
+                continue
+            if osc is None:
+                osc = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_{energy_label}.png"])
+            if nadir_proj is None:
+                nadir_proj = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_NadirProjection_{energy_label}.png"])
+            if nadir_weighted is None:
+                nadir_weighted = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_NadirWeighted_{energy_label}.png"])
+            if signal_1d is None:
+                signal_1d = find_latest(config_dir, [f"{config_key}_marley_Signal1D_{energy_label}_FidOnly.png"])
+            if osc and nadir_proj:
+                break
         specs.append({
             "name": display_name,
             "config": config_key,
             "folder": folder,
             "oscillogram": osc.relative_to(ROOT).as_posix() if osc else None,
             "nadir_projection": nadir_proj.relative_to(ROOT).as_posix() if nadir_proj else None,
+            "nadir_weighted": nadir_weighted.relative_to(ROOT).as_posix() if nadir_weighted else None,
             "signal_1d": signal_1d.relative_to(ROOT).as_posix() if signal_1d else None,
         })
     return specs
@@ -136,6 +160,7 @@ def render_oscillogram_slides(specs, show_signal_1d=True):
     for spec in specs:
         osc = spec.get("oscillogram")
         nadir = spec.get("nadir_projection")
+        nadir_w = spec.get("nadir_weighted")
         sig1d = spec.get("signal_1d") if show_signal_1d else None
         if osc or nadir:
             osc_block = f'    <img src="../../{osc}">' if osc else "    <p>Oscillogram not available.</p>"
@@ -154,15 +179,40 @@ def render_oscillogram_slides(specs, show_signal_1d=True):
                 "  </div>",
                 "</div>",
             ]
-            if sig1d:
-                parts += [
-                    "",
-                    '<div class="comparison-note">',
-                    f'  <img src="../../{sig1d}" style="max-height:180px">',
-                    "  <strong>1D fiducial signal spectrum</strong>",
-                    "</div>",
-                ]
             slides.append("\n".join(parts))
+            if nadir_w or sig1d:
+                extra = [f"### {spec['name']} (cont.)"]
+                if nadir_w and sig1d:
+                    extra += [
+                        "",
+                        '<div class="two-col">',
+                        "  <div>",
+                        '    <p><strong>Nadir-weighted oscillogram</strong></p>',
+                        f'    <img src="../../{nadir_w}">',
+                        "  </div>",
+                        "  <div>",
+                        '    <p><strong>1D fiducial signal spectrum</strong></p>',
+                        f'    <img src="../../{sig1d}">',
+                        "  </div>",
+                        "</div>",
+                    ]
+                elif nadir_w:
+                    extra += [
+                        "",
+                        '<div class="center">',
+                        '  <p><strong>Nadir-weighted oscillogram</strong></p>',
+                        f'  <img src="../../{nadir_w}">',
+                        "</div>",
+                    ]
+                else:
+                    extra += [
+                        "",
+                        '<div class="center">',
+                        '  <p><strong>1D fiducial signal spectrum</strong></p>',
+                        f'  <img src="../../{sig1d}">',
+                        "</div>",
+                    ]
+                slides.append("\n".join(extra))
         else:
             slides.append(f"### {spec['name']}\n\nNo oscillogram found.")
     if not slides:

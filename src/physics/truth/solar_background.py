@@ -6,10 +6,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-figure_path = f"{root}/images/background"
-data_path = f"{root}/data/background"
+analysis_info = load_analysis_info(str(root))
 
-for save_path in [figure_path, data_path]:
+figure_path = f"{root}/images/background"
+data_path = f"{analysis_info['PATH']}/background/solar"
+
+for save_path in [figure_path]:
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -161,14 +163,16 @@ for idx, name in enumerate(args.names):
                 print(f"Adding {particle_simple_label} to the plot")
             data_list.append(
                 {
-                    "Config": args.config,
-                    "Counts": h,
-                    "Energy": energy_centers[:80],
-                    "PDG": None,
-                    "Particle": particle_simple_label,
-                    "Name": particle_simple_ids,
-                    "Color": particle_simple_colors[0],
-                    "Plot": "ParticleID",
+                    "Config":     args.config,
+                    "Counts":     h,
+                    "CountsUnit": r"\mathrm{events \cdot (kT \cdot yr \cdot MeV)^{-1}}",
+                    "Energy":     energy_centers[:80],
+                    "EnergyUnit": r"\mathrm{MeV}",
+                    "PDG":        None,
+                    "Particle":   particle_simple_label,
+                    "Name":       particle_simple_ids,
+                    "Color":      particle_simple_colors[0],
+                    "Plot":       "ParticleID",
                     "LegendGroup": "DUNE Bkg.v3",
                 }
             )
@@ -211,14 +215,16 @@ for idx, name in enumerate(args.names):
                 print(f"Adding {pdg_label} to the plot")
             data_list.append(
                 {
-                    "Config": args.config,
-                    "Counts": h,
-                    "Energy": energy_centers[:80],
-                    "PDG": f"{pdg_label_dict[pdg_label]}",
-                    "Particle": None,
-                    "Name": particle_simple_ids,
-                    "Color": color,
-                    "Plot": "ParticlePDG",
+                    "Config":     args.config,
+                    "Counts":     h,
+                    "CountsUnit": r"\mathrm{events \cdot (kT \cdot yr \cdot MeV)^{-1}}",
+                    "Energy":     energy_centers[:80],
+                    "EnergyUnit": r"\mathrm{MeV}",
+                    "PDG":        f"{pdg_label_dict[pdg_label]}",
+                    "Particle":   None,
+                    "Name":       particle_simple_ids,
+                    "Color":      color,
+                    "Plot":       "ParticlePDG",
                     "LegendGroup": "DUNE Bkg.v3",
                 }
             )
@@ -232,14 +238,16 @@ for jdx, (solar_label, solar_flux, solar_color) in enumerate(
 ):
     data_list.append(
         {
-            "Config": args.config,
-            "Counts": solar_flux[:80] * 60 * 60 * 24 * 365,
-            "Energy": energy_centers[:80],
-            "PDG": "neutrino" if jdx == 0 else None,
-            "Particle": solar_label,
-            "Name": None,
-            "Color": solar_color,
-            "Plot": "ParticlePDG" if jdx == 0 else "ParticleID",
+            "Config":     args.config,
+            "Counts":     solar_flux[:80] * 60 * 60 * 24 * 365,
+            "CountsUnit": r"\nu \cdot (kT \cdot yr)^{-1} \cdot \mathrm{bin}^{-1}",
+            "Energy":     energy_centers[:80],
+            "EnergyUnit": r"\mathrm{MeV}",
+            "PDG":        "neutrino" if jdx == 0 else None,
+            "Particle":   solar_label,
+            "Name":       None,
+            "Color":      solar_color,
+            "Plot":       "ParticlePDG" if jdx == 0 else "ParticleID",
             "LegendGroup": "CC B16-GS98",
         }
     )

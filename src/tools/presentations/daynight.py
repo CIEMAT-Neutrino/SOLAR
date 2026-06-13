@@ -93,7 +93,7 @@ def gather_best_sigma_rows(energy):
     for pattern in patterns:
         for json_path in sorted(glob(pattern)):
             p = Path(json_path)
-            folder = p.parts[-4]
+            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-3]
             if folder not in rows:
                 continue
 

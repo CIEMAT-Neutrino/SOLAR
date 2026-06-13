@@ -351,7 +351,7 @@ for config in configs:
     
     save_pkl(
         pd.DataFrame(sensitivity),
-        f"{root}/data/analysis/sensitivity",
+        f"{analysis_info['PATH']}/SENSITIVITY",
         config=config,
         name=name,
         subfolder=args.folder.lower(),

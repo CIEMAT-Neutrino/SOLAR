@@ -32,6 +32,11 @@ args = parser.parse_args()
 config = args.config
 name = args.name
 
+analysis_info = load_analysis_info(str(root))
+_models_base = analysis_info.get("DATA_PATHS", {}).get(
+    "CALIBRATION", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
+)
+
 configs = {config: [name]}
 
 user_input = {
@@ -401,28 +406,19 @@ for config in configs:
         # )
 
         # Check if the path to the model file exists
-        if not os.path.exists(f"{root}/config/{config}/{name}/models/"):
-            # If the path does not exist, create it
-            os.makedirs(f"{root}/config/{config}/{name}/models/")
+        _model_dir = f"{_models_base}/{config}/{name}/models"
+        if not os.path.exists(_model_dir):
+            os.makedirs(_model_dir)
+        _model_path = f"{_model_dir}/{config}_{name}_random_forest_discriminant.pkl"
         # Save the trained classifier to a file
-        with open(
-            f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl",
-            "wb",
-        ) as model_file:
+        with open(_model_path, "wb") as model_file:
             pickle.dump(rf_classifier, model_file)
 
-        # Check if the model file already exists
-        if os.path.exists(
-            f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl"
-        ):
-            # If the model file exists, load the model from the file
-            with open(
-                f"{root}/config/{config}/{name}/models/{config}_{name}_random_forest_discriminant.pkl",
-                "rb",
-            ) as model_file:
+        # Verify save and reload for downstream use
+        if os.path.exists(_model_path):
+            with open(_model_path, "rb") as model_file:
                 rf_classifier = pickle.load(model_file)
         else:
-            # If the model file does not exist, print an error message
             print("Model file not found")
 
         # Genarate canvas with 2 subplots

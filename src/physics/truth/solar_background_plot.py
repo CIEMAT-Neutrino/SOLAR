@@ -6,10 +6,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-figure_path = f"{root}/images/background"
-data_path = f"{root}/data/background"
+analysis_info = load_analysis_info(str(root))
 
-for save_path in [figure_path, data_path]:
+figure_path = f"{root}/images/background"
+data_path = f"{analysis_info['PATH']}/background/solar"
+
+for save_path in [figure_path]:
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -35,7 +37,7 @@ user_input = {
 
 rprint(f"\nRunning script: {os.path.abspath(__file__)} with config: {args.config}")
 
-df = pickle.load(open(f"{root}/data/background/{args.config}/{args.config}_Background.pkl", "rb"))
+df = pickle.load(open(f"{analysis_info['PATH']}/background/solar/{args.config}/{args.config}_Background.pkl", "rb"))
 
 fig = make_subplots(rows=1, cols=1)
 id_df = df[(df["Plot"] == "ParticleID")]

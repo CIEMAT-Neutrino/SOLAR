@@ -16,11 +16,15 @@ Outputs (per-config summary)
 ----------------------------
     {data_path}/{config}/spectra/{config}_background_spectra_summary.pkl
                 DataFrame with one row per spectrum and readable columns:
-                Config, Geometry, Component, Area, Surface, Particle, ParticleOrigin,
-                Energy, Flux, SpectrumType.
-                Surface rows keep the per-surface truth spectra; combined rows are added
-                with Component=None and Surface=None so downstream scanners can read a
-                single table without losing the combined spectra.
+                Config, Geometry, Component, Area, AreaUnit, Surface, Particle,
+                ParticleOrigin, Energy, EnergyUnit, Flux, FluxUnit, SpectrumType.
+                Surface rows (SpectrumType="surface"):
+                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot cm^{-2}}"
+                  AreaUnit = r"\mathrm{cm^{2}}"
+                Combined rows (SpectrumType="combined"):
+                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"
+                  (area-weighted sum, normalised by detector mass in kT)
+                  AreaUnit = None, Component = None, Surface = None
 
 Legacy compatibility
 --------------------
@@ -342,11 +346,14 @@ for config in configs_to_run:
             "Geometry":        _geo,
             "Component":       clean_component_name(particle_origin),
             "Area":            _area,
+            "AreaUnit":        r"\mathrm{cm^{2}}",
             "Surface":         surface_id,
             "Particle":        particle_type,
             "ParticleOrigin":  particle_origin,
             "Energy":          np.array(x_mev),
+            "EnergyUnit":      r"\mathrm{MeV}",
             "Flux":            np.array(y_flux),
+            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot cm^{-2}}",
             "SpectrumType":    "surface",
         })
 _spectra_df = pd.DataFrame(_spectra_records)
@@ -403,7 +410,9 @@ for config, spectra in combined_spectra.items():
             "Config":          config,
             "Particle":        particle_type,
             "Energy":          np.array(x_comb),
+            "EnergyUnit":      r"\mathrm{MeV}",
             "Flux":            np.array(y_comb),
+            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}",
             "SpectrumType":    "combined",
         })
 _combined_df = pd.DataFrame(_combined_records)
@@ -453,11 +462,14 @@ for row in _combined_records:
         "Geometry":        row["Config"].split("_")[0].lower(),
         "Component":       None,
         "Area":            None,
+        "AreaUnit":        None,
         "Surface":         None,
         "Particle":        row["Particle"],
         "ParticleOrigin":  None,
         "Energy":          row["Energy"],
+        "EnergyUnit":      row.get("EnergyUnit", "MeV"),
         "Flux":            row["Flux"],
+        "FluxUnit":        row.get("FluxUnit", "counts MeV⁻¹ s⁻¹ kT⁻¹"),
         "SpectrumType":    row["SpectrumType"],
     })
 _summary_df = pd.DataFrame(_summary_records)
@@ -482,11 +494,14 @@ for config in configs_to_run:
             "Geometry":        row["Config"].split("_")[0].lower(),
             "Component":       None,
             "Area":            None,
+            "AreaUnit":        None,
             "Surface":         None,
             "Particle":        row["Particle"],
             "ParticleOrigin":  None,
             "Energy":          row["Energy"],
+            "EnergyUnit":      row.get("EnergyUnit", r"\mathrm{MeV}"),
             "Flux":            row["Flux"],
+            "FluxUnit":        row.get("FluxUnit", r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"),
             "SpectrumType":    row["SpectrumType"],
         }
         for row in _combined_records

@@ -53,8 +53,8 @@ def save_sigma_summary_json(
     analysis_dir = str(analysis).lower()
     pnfs_out_dir = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}/{config}/{name}"
     local_out_dirs = [
-        f"{root}/data/analysis/best-sigma-json/{analysis_dir}/{folder.lower()}/{config}/{name}",
-        f"{root}/data/analysis/{analysis_dir}-json/{folder.lower()}/{config}/{name}",
+        f"{root}/config/{config}/best-sigma-json/{analysis_dir}/{folder.lower()}/{name}",
+        f"{root}/config/{config}/{analysis_dir}-json/{folder.lower()}/{name}",
     ]
 
     payload = {}

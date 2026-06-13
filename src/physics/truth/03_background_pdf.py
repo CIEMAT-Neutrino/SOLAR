@@ -19,7 +19,16 @@ Both backends write identical output formats:
 
   {DATA_PATHS.TRUTH (truth) | DATA_PATHS.LEGACY (legacy)}/{config}/
     {config}_{name}_pdf.pkl        — (hist_s, bins_s) per-surface normalised PDFs
+                                     bins in MeV/c; hist dimensionless (integral=1)
     {config}_{name}_exposure.pkl   — dict[surface_id → exposure metadata]
+      truth backend keys:
+        counts [\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}], exposure [\mathrm{kT \cdot yr}, normalized=1],
+        detector_mass [\mathrm{kT}], detector_time [\mathrm{yr}, normalized=1]
+        + *_unit companions (LaTeX math strings) for each numeric key
+      legacy backend keys:
+        counts [raw MC particle count], exposure [\mathrm{kT \cdot yr}],
+        detector_mass [\mathrm{kT}], detector_time [\mathrm{yr}]
+        + *_unit companions (LaTeX math strings) for each numeric key
 
   legacy backend only:
     {config}_{name}_histograms.pkl — raw {(surface_id, variable): (h, bins)}
@@ -281,13 +290,17 @@ def run_truth_backend(config: str, name: str):
 
         counts = int(np.sum(h * np.diff(bins))) if len(h) > 0 else 0
         exposure_dict[surface_id_int] = {
-            "detector_mass": detector_mass,
-            "detector_time": 1,
-            "exposure":      1,
-            "surface_label": surface_label,
-            "surface":       surface_id_str,
-            "counts":        counts,
-            "name":          name,
+            "detector_mass":      detector_mass,
+            "detector_mass_unit": r"\mathrm{kT}",
+            "detector_time":      1,
+            "detector_time_unit": r"\mathrm{yr} \ \text{(normalized)}",
+            "exposure":           1,
+            "exposure_unit":      r"\mathrm{kT \cdot yr} \ \text{(normalized)}",
+            "surface_label":      surface_label,
+            "surface":            surface_id_str,
+            "counts":             counts,
+            "counts_unit":        r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+            "name":               name,
         }
         rprint(f"  Surface {surface_label} — rate: {counts:.2e} events/(kT·years)")
 
@@ -463,13 +476,17 @@ def run_legacy_backend(config: str, name: str):
         if variable == "ParticleP":
             counts = len(filtered_run["Reco"]["ParticleP"])
             exposure_dict[int(surface_id)] = {
-                "detector_mass": detector_mass,
-                "detector_time": detector_time,
-                "exposure":      detector_exp,
-                "surface_label": surface_label,
-                "surface":       surface_id,
-                "counts":        counts,
-                "name":          name,
+                "detector_mass":      detector_mass,
+                "detector_mass_unit": r"\mathrm{kT}",
+                "detector_time":      detector_time,
+                "detector_time_unit": r"\mathrm{yr}",
+                "exposure":           detector_exp,
+                "exposure_unit":      r"\mathrm{kT \cdot yr}",
+                "surface_label":      surface_label,
+                "surface":            surface_id,
+                "counts":             counts,
+                "counts_unit":        r"\mathrm{events} \ \text{(raw MC)}",
+                "name":               name,
             }
             rprint(
                 f"  Surface {surface_label} — counts: {counts}, "
