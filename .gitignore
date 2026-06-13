@@ -21,6 +21,7 @@ tests/fixtures/*.npy
 # Generated presentation exports
 output/presentations/*.html
 output/presentations/*.pdf
+output/presentations/*.md
 
 # See https://help.github.com/ignore-files/ for more about ignoring files.
 .vscode-remote-containers
@@ -42,6 +43,12 @@ output/notebooks
 images/analysis/sensitivity
 config/*/*/*calib/
 config/*/*calib/
+config/*/*/*/*.json
+config/*/*/*/*/*.json
+config/*/*/*/*/*/*.json
+config/*/*/*/*.yaml
+config/*/*/*/*/*.yaml
+config/*/*/*/*/*/*.yaml
 
 *.png
 *.pkl
