@@ -21,8 +21,10 @@ from common import (
     default_pdf_export_enabled,
     energy_candidates,
     export_marp_pdf,
+    gather_oscillogram_specs,
     output_energy_label,
     pick_most_recent,
+    render_oscillogram_slides,
 )
 
 
@@ -708,7 +710,7 @@ def render_nuisance_comparison_section(default_profile, default_specs, other_pro
     return "\n".join(slides)
 
 
-def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, show_sin13=False, show_templates=False, show_significance_spectra=False):
+def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None):
     is_main = folder == "truncated"
     fid_title   = "Fiducialization" if is_main else f"Fiducialization ({folder.title()})"
     sin12_title = "Main Result: Contour Grids (sin12)" if is_main else f"Contour Grids (sin12, {folder.title()})"
@@ -745,6 +747,11 @@ def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, 
 ---
 """ if show_templates else ""
 
+    osc_section = ""
+    if osc_specs:
+        osc_title = "Oscillograms" if folder == "truncated" else f"Oscillograms ({folder.title()})"
+        osc_section = f"\n## {osc_title}\n\n---\n\n{render_oscillogram_slides(osc_specs)}\n\n---\n\n"
+
     return f"""## {fid_title}
 
 ---
@@ -771,7 +778,7 @@ def render_folder_sections(folder, result_specs, template_specs, fid_rows=None, 
 ---
 
 {render_cut_table(folder, result_specs, sig_rows=sig_rows)}
-"""
+{osc_section}"""
 
 
 def _sensitivity_math_slides():
@@ -898,7 +905,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 - Full mathematical derivations: [docs/hep\\_likelihood\\_derivation.tex](../../docs/hep_likelihood_derivation.tex)."""
 
 
-def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, comparison_profiles_specs=None, default_profile=None, nuisance_profiles=None, show_sin13=False, show_templates=False, show_significance_spectra=False):
+def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None, fid_specs=None, significance_specs=None, sig_rows=None, comparison_profiles_specs=None, default_profile=None, nuisance_profiles=None, show_sin13=False, show_templates=False, show_significance_spectra=False, osc_specs=None):
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
     energy_label = output_energy_label(energy)
     coverage = sum(1 for item in folder_specs if item.get("primary"))
@@ -907,6 +914,7 @@ def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None
         folder, folder_specs, folder_templates,
         fid_rows=fid_rows, fid_specs=fid_specs, significance_specs=significance_specs, sig_rows=sig_rows,
         show_sin13=show_sin13, show_templates=show_templates, show_significance_spectra=show_significance_spectra,
+        osc_specs=osc_specs,
     )
     nuisance_section = render_nuisance_comparison_section(
         default_profile or "full",
@@ -1032,6 +1040,8 @@ def main():
             if any(s.get("primary") for s in pspecs):
                 comparison_profiles_specs[pname] = pspecs
 
+    osc_specs = gather_oscillogram_specs(args.folder, args.energy, "Sensitivity")
+
     markdown = build_markdown(
         args.energy,
         args.folder,
@@ -1047,6 +1057,7 @@ def main():
         show_sin13=_do_sin13,
         show_templates=_do_templates,
         show_significance_spectra=_do_significance_spec,
+        osc_specs=osc_specs,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

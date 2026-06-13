@@ -6,35 +6,37 @@ Mirrors the structure and conventions of src/pipelines/run_sensitivity.py.
 
 Pipeline stages (run in order, each skippable):
 
-  01  oscillations     01_process_oscillation.py   --no-oscillations
-  02  spectra          02_background_spectra.py     --no-spectra
-  02  external PDF     02_background_spectra.py     --no-external-pdf
-  03  surface PDF      03_background_pdf.py         --surface-pdf (off by default; legacy MC)
-  05  signal KDE       05_signal_nadir_kde.py     --signal-kde (off by default; superseded)
-  bkg solar bkg        solar_background.py          --no-background
-  bkg bkg plot         solar_background_plot.py     (controlled by --no-plot)
+  0X  oscillations     01_process_oscillation.py   --oscillations      (off by default)
+  0Y  spectra          02_background_spectra.py     --no-spectra        (on by default)
+  0Y  PDFs             03_background_pdf.py         --no-pdf            (on by default)
+  0Y  signal KDE       05_signal_nadir_kde.py       --signal-kde        (off by default; superseded)
+  0Y  line plots       common/line_plot.py          --no-plot           (on by default; config-independent)
+  0Z  solar bkg        solar_background.py          --no-background     (on by default)
+  0Z  bkg plot         solar_background_plot.py     --no-plot           (on by default)
+  0Z  oscillogram      common/oscillogram_plot.py   --no-plot           (on by default; reads pre-computed pkl)
+
+Configs and particle names read from analysis/backgrounds.json
+(DEFAULT_CONFIGS, TRUTH_PIPELINE.BACKGROUND_NAMES, TRUTH_PIPELINE.SIGNAL_NAMES).
+PDF backend (truth/legacy) read from TRUTH_PIPELINE.PDF_BACKEND.
 
 Run examples
 ------------
-  # Full pipeline, NuFast oscillations, VD nominal config:
+  # Full pipeline, NuFast oscillations:
   python3 src/pipelines/run_truth.py \\
-      --config vd_1x8x14_3view_30deg_nominal \\
-      --oscillation_backend nufast --rewrite
+      --oscillation_backend nufast --oscillations --rewrite
 
   # Background PDFs only (skip oscillations and signal KDE):
   python3 src/pipelines/run_truth.py \\
-      --config hd_1x2x6_centralAPA \\
-      --no-oscillations --no-signal-kde
+      --no-spectra --no-pdf --no-background --no-plot
 
-  # Regenerate signal KDE for all folders, skip everything else:
+  # Spectra + PDFs only (oscillograms already exist):
   python3 src/pipelines/run_truth.py \\
-      --no-oscillations --no-spectra --no-external-pdf \\
-      --no-surface-pdf --no-background
+      --no-background --no-plot
 
   # Refresh all oscillation pkl after updating physics.json best-fit params:
   python3 src/pipelines/run_truth.py \\
-      --oscillation_backend nufast --no-spectra --no-external-pdf \\
-      --no-surface-pdf --no-signal-kde --no-background --rewrite
+      --oscillation_backend nufast --oscillations --no-spectra \\
+      --no-pdf --no-signal-kde --no-background --no-plot --rewrite
 """
 
 import os
@@ -279,6 +281,24 @@ def run_background_plot_stage(config: str):
     )
 
 
+def run_oscillogram_stage(config: str, sig_names: List[str]):
+    """0Z — P(νe→νe) heatmap and nadir projection at best-fit point.
+
+    Reads pre-computed oscillation pkl (--oscillation_backend file).
+    Runs even when oscillation generation is skipped, as long as pkls exist.
+    """
+    for name in sig_names:
+        run_python_command(
+            ["python3", f"{root}/src/physics/common/oscillogram_plot.py",
+             "--config", config, "--name", name,
+             "--oscillation_backend", "file",
+             "--no-signal_1d",
+             _rw(), _debug(), _plot()],
+            label="oscillogram_plot.py",
+            stop_on_error=False,
+        )
+
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 rprint(f"\n[bold]Truth pipeline configuration[/bold]")
 rprint(f"  Configs          : {configs}")
@@ -329,6 +349,17 @@ if args.pdf:
 else:
     rprint("[cyan][SKIP][/cyan] Stage 0Y: PDFs (--no-pdf)")
 
+if args.plot:
+    rprint("\n[bold cyan]── Stage 0Y: Common line plots ──[/bold cyan]")
+    run_python_command(
+        ["python3", f"{root}/src/physics/common/line_plot.py",
+         _rw(), _debug(), _plot()],
+        label="line_plot.py",
+        stop_on_error=False,
+    )
+else:
+    rprint("[cyan][SKIP][/cyan] Stage 0Y: line plots (--no-plot)")
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Stages 0Y signal KDE + 0Z: per-config
@@ -356,8 +387,19 @@ for config in configs:
     if args.plot:
         rprint("\n[bold cyan]── Stage 0Z: Background plot ──[/bold cyan]")
         run_background_plot_stage(config)
+        rprint("\n[bold cyan]── Stage 0Z: Oscillogram plot ──[/bold cyan]")
+        run_oscillogram_stage(config, signal_names)
     else:
         rprint("[cyan][SKIP][/cyan] Stage 0Z: plot (--no-plot)")
 
 
 rprint(f"\n[bold green]Truth pipeline complete. Configs processed: {configs}[/bold green]")
+
+# Presentation
+if args.plot:
+    rprint("\n[bold cyan]── Presentation: Truth Pipeline ──[/bold cyan]")
+    run_python_command(
+        ["python3", f"{root}/src/tools/presentations/truth.py"],
+        label="truth.py",
+        stop_on_error=False,
+    )

@@ -8,21 +8,24 @@ import textwrap
 from glob import glob
 from pathlib import Path
 
-from common import compute_fiducial_mass_kt, default_pdf_export_enabled, export_marp_pdf, pick_most_recent
+from common import (
+    DEFAULT_ENERGY,
+    ROOT,
+    STANDARD_CONFIGS,
+    compute_fiducial_mass_kt,
+    config_alias,
+    default_pdf_export_enabled,
+    energy_candidates,
+    export_marp_pdf,
+    gather_oscillogram_specs,
+    output_energy_label,
+    pick_most_recent,
+    render_oscillogram_slides,
+)
 
-ROOT = Path("/pc/choozdsk01/users/manthey/SOLAR")
 PNFS_HEP = Path("/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP")
 LOCAL_JSON = ROOT / "data" / "analysis" / "hep-json"
-DEFAULT_ENERGY = "SolarEnergy"
 DEFAULT_REFERENCE = "ProfileLikelihood"
-
-STANDARD_CONFIGS = [
-    ("hd_1x2x6_centralAPA", "HD Central"),
-    ("hd_1x2x6_lateralAPA", "HD Lateral"),
-    ("vd_1x8x14_3view_30deg_nominal", "VD Top"),
-    ("vd_1x8x14_3view_30deg_shielded", "VD Bottom Shielded"),
-]
-CONFIG_ALIAS_MAP = {config: alias for config, alias in STANDARD_CONFIGS}
 
 
 def fmt_float(value, digits=3):
@@ -123,10 +126,6 @@ def gather_hep_smoothing_stage_rows():
     return rows
 
 
-def config_alias(config_name):
-    return CONFIG_ALIAS_MAP.get(config_name, config_name)
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate HEP MARP presentation from workflow outputs"
@@ -174,23 +173,6 @@ def output_markdown_path(energy, folder):
     return ROOT / "output" / "presentations" / f"{energy}{folder_label}HEPSignificanceWorkflow.md"
 
 
-def energy_candidates(energy):
-    if energy == DEFAULT_ENERGY:
-        return ["SolarEnergy", "Solar"]
-    return [energy]
-
-
-def output_energy_label(energy):
-    return "SolarEnergy" if energy == DEFAULT_ENERGY else energy
-
-
-def _pick_most_recent(paths):
-    existing = [path for path in paths if path is not None and path.exists()]
-    if not existing:
-        return None
-    return max(existing, key=lambda path: path.stat().st_mtime)
-
-
 def _find_latest(base_dir, patterns, exclude=None):
     if not base_dir.exists():
         return None
@@ -199,7 +181,7 @@ def _find_latest(base_dir, patterns, exclude=None):
         candidates.extend(base_dir.glob(pattern))
     if exclude:
         candidates = [c for c in candidates if not any(ex in c.name for ex in exclude)]
-    return _pick_most_recent(candidates)
+    return pick_most_recent(candidates)
 
 
 def gather_best_sigma_rows(energy):
@@ -853,6 +835,7 @@ def render_folder_sections(
     best_sigma_rows,
     fid_rows,
     spiked_specs=None,
+    osc_specs=None,
 ):
     def _bottom_variant(path, target_variant):
         if not path:
@@ -899,6 +882,10 @@ def render_folder_sections(
     hep_title = "HEP Results" if is_main else f"HEP Results ({folder.title()})"
     reference_title = "Reference Comparison" if is_main else f"Reference Comparison ({folder.title()})"
     adaptive_title = "Adaptive Rebin Comparison" if is_main else f"Adaptive Rebin Comparison ({folder.title()})"
+    osc_title = "Oscillograms" if is_main else f"Oscillograms ({folder.title()})"
+    osc_section = ""
+    if osc_specs:
+        osc_section = f"## {osc_title}\n\n---\n\n{render_oscillogram_slides(osc_specs)}\n\n---\n\n"
     return f"""## {fid_title}
 
 ---
@@ -938,7 +925,7 @@ def render_folder_sections(
 {render_sigma_table(folder, best_sigma_rows.get(folder, []))}
 
 {_render_spike_debug_section(spiked_specs)}
-"""
+{osc_section}"""
 
 
 def _render_spike_debug_section(spiked_specs):
@@ -961,6 +948,7 @@ def build_markdown(
     reference,
     smoothing_stage_rows,
     spiked_specs=None,
+    osc_specs=None,
 ):
     coverage = {folder: len(rows) for folder, rows in best_sigma_rows.items()}
     alias_bullets = "\n".join([f"- {config}: {alias}" for config, alias in STANDARD_CONFIGS])
@@ -973,6 +961,7 @@ def build_markdown(
         best_sigma_rows,
         fid_rows,
         spiked_specs=spiked_specs,
+        osc_specs=osc_specs,
     )
     selected_title = folder.title()
 
@@ -1162,6 +1151,7 @@ def main():
     selected_fid_specs = gather_fiducial_plot_specs(args.folder, args.energy)
     selected_spiked_specs = gather_spiked_debug_specs(args.folder, args.energy, args.reference)
     smoothing_stage_rows = gather_hep_smoothing_stage_rows()
+    selected_osc_specs = gather_oscillogram_specs(args.folder, args.energy, "HEP")
 
     markdown = build_markdown(
         args.folder,
@@ -1175,6 +1165,7 @@ def main():
         args.reference,
         smoothing_stage_rows,
         spiked_specs=selected_spiked_specs,
+        osc_specs=selected_osc_specs,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

@@ -110,6 +110,66 @@ def compute_fiducial_mass_kt(config, fid_x, fid_y, fid_z, lar_density=_LAR_DENSI
     return fid_x_size * fid_y_size * fid_z_size * lar_density * drift_factor * full_factor * 0.5 / 1e9
 
 
+def gather_oscillogram_specs(folder, energy, analysis_name):
+    analysis_lower = str(analysis_name).lower()
+    osc_root = ROOT / "images" / "analysis" / analysis_lower / "oscillogram"
+    energy_label = output_energy_label(energy)
+    specs = []
+    for config_key, display_name in STANDARD_CONFIGS:
+        config_dir = osc_root / config_key / "marley" / folder
+        osc = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_{energy_label}.png"])
+        nadir_proj = find_latest(config_dir, [f"{config_key}_marley_Oscillogram_NadirProjection_{energy_label}.png"])
+        signal_1d = find_latest(config_dir, [f"{config_key}_marley_Signal1D_{energy_label}_FidOnly.png"])
+        specs.append({
+            "name": display_name,
+            "config": config_key,
+            "folder": folder,
+            "oscillogram": osc.relative_to(ROOT).as_posix() if osc else None,
+            "nadir_projection": nadir_proj.relative_to(ROOT).as_posix() if nadir_proj else None,
+            "signal_1d": signal_1d.relative_to(ROOT).as_posix() if signal_1d else None,
+        })
+    return specs
+
+
+def render_oscillogram_slides(specs, show_signal_1d=True):
+    slides = []
+    for spec in specs:
+        osc = spec.get("oscillogram")
+        nadir = spec.get("nadir_projection")
+        sig1d = spec.get("signal_1d") if show_signal_1d else None
+        if osc or nadir:
+            osc_block = f'    <img src="../../{osc}">' if osc else "    <p>Oscillogram not available.</p>"
+            nadir_block = f'    <img src="../../{nadir}">' if nadir else "    <p>Nadir projection not available.</p>"
+            parts = [
+                f"### {spec['name']}",
+                "",
+                '<div class="two-col">',
+                "  <div>",
+                '    <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>',
+                osc_block,
+                "  </div>",
+                "  <div>",
+                '    <p><strong>Nadir projection</strong></p>',
+                nadir_block,
+                "  </div>",
+                "</div>",
+            ]
+            if sig1d:
+                parts += [
+                    "",
+                    '<div class="comparison-note">',
+                    f'  <img src="../../{sig1d}" style="max-height:180px">',
+                    "  <strong>1D fiducial signal spectrum</strong>",
+                    "</div>",
+                ]
+            slides.append("\n".join(parts))
+        else:
+            slides.append(f"### {spec['name']}\n\nNo oscillogram found.")
+    if not slides:
+        return "### Oscillograms\n\nNo oscillogram PNGs found."
+    return "\n\n---\n\n".join(slides)
+
+
 def default_pdf_export_enabled():
     return True
 

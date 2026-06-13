@@ -161,12 +161,17 @@ def make_oscillation_grid(analysis_info: dict, dm2=None, sin13=None, sin12=None)
 
     grid_cfg = analysis_info.get("OSCILLATION_GRID", {})
 
-    # Default ranges if section absent
     _default_ranges = {
         "dm2":   {"min": 2e-5, "max": 2e-4, "scale": "log"},
         "sin13": {"min": 0.017, "max": 0.025, "scale": "linear"},
         "sin12": {"min": 0.10,  "max": 0.70,  "scale": "linear"},
     }
+    if grid_cfg and "ranges" not in grid_cfg:
+        rprint(
+            "[yellow][WARNING][/yellow] oscillation: OSCILLATION_GRID present in config "
+            "but 'ranges' key absent — falling back to hardcoded axis ranges. "
+            "Add 'ranges' to OSCILLATION_GRID in physics.json to suppress this."
+        )
     ranges = grid_cfg.get("ranges", _default_ranges)
 
     def _make_axis(name: str, steps: int) -> list:

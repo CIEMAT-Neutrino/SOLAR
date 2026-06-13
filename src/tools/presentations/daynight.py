@@ -17,8 +17,10 @@ from common import (
     energy_candidates,
     export_marp_pdf,
     find_latest,
+    gather_oscillogram_specs,
     output_energy_label,
     pick_most_recent,
+    render_oscillogram_slides,
 )
 
 
@@ -375,10 +377,22 @@ def render_fiducial_plot_slides(folder, specs):
     return "\n\n---\n\n".join(slides)
 
 
-def render_folder_sections(folder, fid_specs, daynight_specs, best_sigma_rows, fid_rows):
+def render_folder_sections(folder, fid_specs, daynight_specs, best_sigma_rows, fid_rows, osc_specs=None):
     is_main = folder == "truncated"
     fid_title = "Fiducialization" if is_main else f"Fiducialization ({folder.title()})"
     daynight_title = "DayNight Results" if is_main else f"DayNight Results ({folder.title()})"
+    osc_title = "Oscillograms" if is_main else f"Oscillograms ({folder.title()})"
+    osc_section = ""
+    if osc_specs:
+        osc_section = f"""## {osc_title}
+
+---
+
+{render_oscillogram_slides(osc_specs)}
+
+---
+
+"""
     return f"""## {fid_title}
 
 ---
@@ -400,7 +414,10 @@ def render_folder_sections(folder, fid_specs, daynight_specs, best_sigma_rows, f
 ---
 
 {render_sigma_table(folder, best_sigma_rows.get(folder, []))}
-"""
+
+---
+
+{osc_section}"""
 
 
 def build_markdown(
@@ -410,6 +427,7 @@ def build_markdown(
     fid_rows,
     daynight_specs,
     fid_specs,
+    osc_specs=None,
 ):
     coverage = {folder: len(rows) for folder, rows in best_sigma_rows.items()}
     energy_label = output_energy_label(energy)
@@ -422,6 +440,7 @@ def build_markdown(
         daynight_specs,
         best_sigma_rows,
         fid_rows,
+        osc_specs=osc_specs,
     )
     selected_title = folder.title()
     text = textwrap.dedent(f"""
@@ -596,6 +615,7 @@ def main():
     fid_rows = gather_fiducial_rows(args.energy)
     selected_daynight_specs = gather_daynight_plot_specs(args.folder, args.energy)
     selected_fid_specs = gather_fiducial_plot_specs(args.folder, args.energy)
+    selected_osc_specs = gather_oscillogram_specs(args.folder, args.energy, "DayNight")
 
     markdown = build_markdown(
         args.energy,
@@ -604,6 +624,7 @@ def main():
         fid_rows,
         selected_daynight_specs,
         selected_fid_specs,
+        osc_specs=selected_osc_specs,
     )
     out_md.write_text(markdown)
     print(f"Wrote {out_md}")

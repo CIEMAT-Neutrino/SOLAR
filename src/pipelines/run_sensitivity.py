@@ -1,5 +1,66 @@
+"""
+run_sensitivity.py — Signal sensitivity pipeline
+=================================================
+Orchestrates the DayNight asymmetry, HEP discovery, and Sensitivity analyses
+for one or more detector configs and result folders.
+
+Pipeline stages (run in order per config/folder)
+-------------------------------------------------
+Prerequisites (all samples, signal + background):
+  01  fiducialize      signal/01_fiducialize.py          --no-fiducialization   (on by default)
+  02  best fiducial    signal/02_best_fiducial.py         (always runs with computation)
+  02  fiducial plot    common/significance_plot.py --analysis Fiducial
+  03  cut scan         signal/03_analysis.py --export_fiducial --no-rebin to skip scan
+                         Pass 1+2 merged: Ref arrays + FiducializationMask + rebinned DataFrames
+
+Per-analysis stages (marley only):
+  DN  daynight         daynight/01_daynight.py            --no-significance to skip
+  DN  best sigma       sensitivity/05_best_sigmas.py
+  DN  plots            common/exposure_plot.py + common/significance_plot.py --analysis DayNight
+
+  HEP hep              hep/01_hep.py                      --no-significance to skip
+  HEP best sigma       sensitivity/05_best_sigmas.py
+  HEP plots            common/exposure_plot.py + common/significance_plot.py --analysis HEP
+
+  SEN significance     sensitivity/06_significance.py     --no-significance to skip
+  SEN best sigma       sensitivity/05_best_sigmas.py (per nuisance profile)
+  SEN plots            common/exposure_plot.py + common/significance_plot.py --analysis Sensitivity
+
+Oscillogram (per analysis, runs even with --no-computation, skipped with --no-plot):
+  OSC oscillogram      common/oscillogram_plot.py  P_ee heatmap + nadir projection at best-fit
+                         --signal_1d overlay when computation enabled (needs Ref pkls from Pass 1+2)
+
+Post-analysis (all samples):
+  P3  best cuts        signal/03_analysis.py --best_cuts_only  saves AnalysisMask at best cuts
+
+Presentations (optional, --no-plot to skip):
+  Presentation scripts per analysis (src/tools/presentations/)
+
+Run examples
+------------
+  # Full pipeline (all analyses, default HD config):
+  python3 src/pipelines/run_sensitivity.py
+
+  # HEP only, nufast on-the-fly oscillations, multiple configs:
+  python3 src/pipelines/run_sensitivity.py \\
+      --analysis HEP \\
+      --config hd_1x2x6_centralAPA vd_1x8x14_3view_30deg_nominal \\
+      --oscillation_backend nufast
+
+  # Plots only, skip all computation (needs prior output):
+  python3 src/pipelines/run_sensitivity.py --no-computation
+
+  # Refresh significance only (fiducialization and cut scan already up to date):
+  python3 src/pipelines/run_sensitivity.py \\
+      --no-fiducialization --no-rebin
+
+  # DayNight only, skip plots:
+  python3 src/pipelines/run_sensitivity.py --analysis DayNight --no-plot
+"""
+
 import os
 import sys
+import time
 import subprocess
 from typing import List, Optional
 
@@ -20,6 +81,7 @@ PRESENTATION_SCRIPTS = {
     "HEP": "src/tools/presentations/hep.py",
     "Sensitivity": "src/tools/presentations/sensitivity.py",
 }
+REFERENCE_SCRIPT = "src/tools/presentations/reference.py"
 
 
 def build_command(script_name: str, additional_args: Optional[List[str]] = None) -> List[str]:
@@ -53,9 +115,49 @@ def _subprocess_env() -> dict:
 def run_python_command(command: List[str], label: Optional[str] = None, stop_on_error: bool = True):
     rendered = " ".join(command)
     rprint(f"\n[green][CMD][/green] {rendered}")
-    completed = subprocess.run(command, check=False, env=_subprocess_env())
-    if completed.returncode != 0 and stop_on_error:
-        script_label = label or os.path.basename(command[1])
+    # Retry loop guards against NFS4 transient failures. On NFS4 (e.g. gaesto01.ciemat.es),
+    # stat()/open() can return ESTALE mid-pipeline after heavy I/O, causing Python to emit
+    # "can't find '__main__' module" instead of executing the script. We retry up to 3 times:
+    #  • pre-flight isfile() check — wait and re-check if file appears inaccessible
+    #  • subprocess timing check  — if exit(1) arrives in < 1 s, treat as startup failure
+    script_path = command[1] if len(command) > 1 else None
+    completed = None
+    _MAX_ATTEMPTS = 3
+    for attempt in range(_MAX_ATTEMPTS):
+        if script_path and not os.path.isfile(script_path):
+            delay = 5 * (attempt + 1)
+            rprint(
+                f"[yellow][WARNING][/yellow] {os.path.basename(script_path)!r} inaccessible "
+                f"on NFS (attempt {attempt + 1}/{_MAX_ATTEMPTS}) — waiting {delay}s."
+            )
+            time.sleep(delay)
+            continue  # re-check accessibility before launching
+
+        t0 = time.monotonic()
+        completed = subprocess.run(command, check=False, env=_subprocess_env())
+        elapsed = time.monotonic() - t0
+
+        if completed.returncode == 0:
+            break
+
+        # Failure in < 1 s with code 1 is a Python startup error, not a script error
+        if completed.returncode == 1 and elapsed < 1.0 and attempt < _MAX_ATTEMPTS - 1:
+            rprint(
+                f"[yellow][WARNING][/yellow] {os.path.basename(script_path or command[1])!r} "
+                f"failed in {elapsed:.2f}s (NFS transient) — retrying in 5s "
+                f"(attempt {attempt + 2}/{_MAX_ATTEMPTS})."
+            )
+            time.sleep(5)
+        else:
+            break
+
+    if (completed is None or completed.returncode != 0) and stop_on_error:
+        script_label = label or (os.path.basename(command[1]) if len(command) > 1 else "script")
+        if completed is None:
+            raise SystemExit(
+                f"Workflow stopped because {script_label} was not accessible after "
+                f"{_MAX_ATTEMPTS} NFS retries.\nExecuted command: {rendered}"
+            )
         raise SystemExit(
             f"Workflow stopped because {script_label} failed with exit code {completed.returncode}.\n"
             f"Executed command: {rendered}"
@@ -68,9 +170,11 @@ def run_analysis_script(script_name: str, additional_args: Optional[List[str]] =
 
 
 
-def run_presentation_script(script_name: str, energy: str, stop_on_error: bool = True):
+def run_presentation_script(script_name: str, energy: str, folder: Optional[str] = None, stop_on_error: bool = True):
     script_path = f"{root}/{script_name}"
     command = ["python3", script_path, "--energy", energy]
+    if folder is not None:
+        command += ["--folder", folder.lower()]
     run_python_command(command, label=script_name, stop_on_error=stop_on_error)
 
 
@@ -863,13 +967,41 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
 
 
 
+def run_oscillogram_stage(config: str, folder: str, name: str):
+    """Produce P(νe→νe) heatmaps and nadir projections at the best-fit point.
+
+    Runs outside the --no-computation gate (visualization only).
+    Requires pre-computed oscillation pkl when --oscillation_backend file;
+    for --signal_1d, also needs Ref pkls from 03_analysis.py --export_fiducial.
+    """
+    if not args.plot:
+        return
+    base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
+    for analysis_name in args.analysis:
+        for energy in args.energy:
+            run_analysis_script(
+                "src/physics/common/oscillogram_plot.py",
+                base_args
+                + ["--analysis", analysis_name, "--energy", energy]
+                + oscillation_args_for()
+                + ["--signal_1d" if args.computation else "--no-signal_1d"],
+            )
+
+
 def run_presentations():
+    # Reference deck is config/folder-independent — run once
+    run_python_command(
+        ["python3", f"{root}/{REFERENCE_SCRIPT}"],
+        label=REFERENCE_SCRIPT,
+        stop_on_error=False,
+    )
     for analysis_name in args.analysis:
         script_name = PRESENTATION_SCRIPTS.get(analysis_name)
         if script_name is None:
             continue
         for energy in args.energy:
-            run_presentation_script(script_name, energy)
+            for folder in args.folder:
+                run_presentation_script(script_name, energy, folder=folder, stop_on_error=False)
 
 
 for config, folder in product(args.config, args.folder):
@@ -932,6 +1064,7 @@ for config, folder in product(args.config, args.folder):
             run_hep_stage(config, folder, name)
         if "Sensitivity" in args.analysis:
             run_sensitivity_stage(config, folder, name)
+        run_oscillogram_stage(config, folder, name)
 
     # Pass 3: post-analysis — export AnalysisMask at best cuts for all productions
     # Best-cuts JSONs exist for marley; apply same cuts to all samples
