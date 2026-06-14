@@ -151,12 +151,12 @@ def compute_component_sigma(df: pd.DataFrame, component: str, strategy_fn):
 # ---------------------------------------------------------------------------
 
 def _patch_analysis_json(config: str, name: str, analysis: str, recommended_sigma: float) -> bool:
-    """Write recommended_sigma into analysis/smoothing.json:
+    """Write recommended_sigma into config/analysis/smoothing.json:
     1. SMOOTHING.CONFIG_OVERRIDES.{config}.{name}.{analysis} — per-config/name record
        (runtime sigma delivered via SOLAR_SMOOTHING_SIGMA_{ANALYSIS} env var by orchestrator).
     2. SMOOTHING.ANALYSES.{analysis}.STAGES.*.dimensions.1d.sigma — global fallback default.
     """
-    analysis_json_path = Path(str(root)) / "analysis" / "smoothing.json"
+    analysis_json_path = Path(str(root)) / "config" / "analysis" / "smoothing.json"
     if not analysis_json_path.exists():
         return False
     try:
@@ -288,13 +288,13 @@ def run_optimization(config: str, name: str, energy: str, folder: str,
         patched = _patch_analysis_json(config, name, analysis, result["recommended_sigma"])
         if patched:
             rprint(
-                f"[green][SMOOTHING][/green] Patched analysis/smoothing.json: "
+                f"[green][SMOOTHING][/green] Patched config/analysis/smoothing.json: "
                 f"SMOOTHING.ANALYSES.{analysis.upper()}.STAGES.*.dimensions.1d.sigma "
                 f"= {result['recommended_sigma']:.4f}"
             )
         else:
             rprint(
-                f"[yellow][WARNING][/yellow] Could not patch analysis/smoothing.json for {analysis}."
+                f"[yellow][WARNING][/yellow] Could not patch config/analysis/smoothing.json for {analysis}."
             )
 
     return result
@@ -328,12 +328,12 @@ def main():
     )
     parser.add_argument(
         "--output_dir", type=str, default=None,
-        help="Root output directory (default: {root}/data/smoothing)",
+        help="Root output directory (default: {root}/output/data/smoothing)",
     )
     parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
         "--patch", action=argparse.BooleanOptionalAction, default=False,
-        help="If set, write recommended_sigma back into analysis/smoothing.json.",
+        help="If set, write recommended_sigma back into config/analysis/smoothing.json.",
     )
     args = parser.parse_args()
 

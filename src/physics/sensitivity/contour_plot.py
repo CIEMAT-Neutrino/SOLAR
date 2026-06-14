@@ -77,7 +77,7 @@ parser.add_argument("--background", action=argparse.BooleanOptionalAction, defau
 parser.add_argument(
     "--nuisance_profile",
     type=str,
-    help="Nuisance parameter profile name (key in NUISANCE_PROFILES in analysis/config.json). Defaults to DEFAULT_NUISANCE_PROFILE.",
+    help="Nuisance parameter profile name (key in NUISANCE_PROFILES in config/analysis/config.json). Defaults to DEFAULT_NUISANCE_PROFILE.",
     default=None,
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -111,7 +111,7 @@ def _load_best_cut_map(info: dict, args):
     return None
 
 sensitivity = []
-save_path = f"{root}/images/analysis/sensitivity"
+save_path = f"{root}/output/images/analysis/sensitivity"
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     analysis_info = load_analysis_info(str(root))
@@ -295,7 +295,7 @@ for config in configs:
                     for idx, file_path in enumerate(file_paths):
                         compute_sin = False
                         deltam_factor = 1e-5
-                        folder_path = f"{root}/data/contours/{label}"
+                        folder_path = f"{root}/external/contours/{label}"
                         # Check if the file exists
                         if not os.path.exists(f"{folder_path}/{file_path}"):
                             print(f"File {folder_path}/{file_path} does not exist.")

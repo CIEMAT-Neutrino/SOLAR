@@ -1269,7 +1269,7 @@ def get_bkg_config(info: dict, add_custom: list[str] = None, debug: bool = False
     """
     bkg_dict = {}
     color_dict = {}
-    f = json.load(open(f"{root}/import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/config/import/generator_order.json", "r"))
     bkg_list = list(f[info["GEOMETRY"]][info["VERSION"]].keys())
 
     if add_custom is not None:
@@ -1356,7 +1356,7 @@ def get_gen_color(names: list[str], debug=False):
 #     weights = dict()
 #     bkg_dict, color_dict = get_bkg_config(info, debug=False)
 #     production_weights = json.load(
-#         open(f"{root}/import/production_weights.json", "r")
+#         open(f"{root}/config/import/production_weights.json", "r")
 #     )
 #     custom_weights = production_weights[info["GEOMETRY"]][info["VERSION"]]
 #     for name in names:
@@ -1448,7 +1448,7 @@ def get_workflow_branches(
     if workflow is None:
         return dict()
 
-    f = json.load(open(f"{root}/import/workflow/{workflow}.json", "r"))
+    f = json.load(open(f"{root}/config/import/workflow/{workflow}.json", "r"))
     tree_branches = {}
     for tree in trees:
         tree_branch_list = []

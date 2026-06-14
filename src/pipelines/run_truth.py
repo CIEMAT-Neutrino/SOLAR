@@ -15,7 +15,7 @@ Pipeline stages (run in order, each skippable):
   0Z  bkg plot         solar_background_plot.py     --no-plot           (on by default)
   0Z  oscillogram      common/oscillogram_plot.py   --no-plot           (on by default; reads pre-computed pkl)
 
-Configs and particle names read from analysis/backgrounds.json
+Configs and particle names read from config/analysis/backgrounds.json
 (DEFAULT_CONFIGS, TRUTH_PIPELINE.BACKGROUND_NAMES, TRUTH_PIPELINE.SIGNAL_NAMES).
 PDF backend (truth/legacy) read from TRUTH_PIPELINE.PDF_BACKEND.
 
@@ -105,7 +105,7 @@ parser = argparse.ArgumentParser(
 )
 
 # ── Scope ────────────────────────────────────────────────────────────────────
-# Configs and particle names are read from analysis/backgrounds.json
+# Configs and particle names are read from config/analysis/backgrounds.json
 # (DEFAULT_CONFIGS and TRUTH_PIPELINE.BACKGROUND_NAMES / SIGNAL_NAMES).
 # No CLI args for these — edit the JSON to change the defaults.
 # ── Oscillation backend ──────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ signal_names     = truth_pipeline.get("SIGNAL_NAMES", ["marley"])
 
 if not configs:
     raise SystemExit(
-        "DEFAULT_CONFIGS not set in analysis/backgrounds.json."
+        "DEFAULT_CONFIGS not set in config/analysis/backgrounds.json."
     )
 
 # Common flag helpers

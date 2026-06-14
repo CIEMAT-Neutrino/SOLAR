@@ -12,8 +12,8 @@ def inverse_quadratic(x, a, b, c):
     return (-b + np.sqrt(b**2 - 4 * a * (c - x))) / (2 * a)
 
 
-data_path = f"{root}/data/workflow/reconstruction/"
-save_path = f"{root}/images/workflow/reconstruction"
+data_path = f"{root}/output/data/workflow/reconstruction/"
+save_path = f"{root}/output/images/workflow/reconstruction"
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 

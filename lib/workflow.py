@@ -56,7 +56,7 @@ def compute_root_workflow(
             "BOOLS": bool,
         }
 
-        data_config = json.load(open(f"{root}/import/workflow/{workflow}.json", "r"))
+        data_config = json.load(open(f"{root}/config/import/workflow/{workflow}.json", "r"))
         for object_type in object_types.keys():
             new_conf_branches = new_conf_branches + list(
                 data_config["Config"][object_type].keys()

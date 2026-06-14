@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/solar/nhits"
-data_path = f"{root}/data/solar/nhits"
+save_path = f"{root}/output/images/solar/nhits"
+data_path = f"{root}/output/data/solar/nhits"
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(

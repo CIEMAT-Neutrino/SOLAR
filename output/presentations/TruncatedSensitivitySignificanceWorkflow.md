@@ -120,6 +120,10 @@ $$
 
 Setting $\sigma \le 0$ **disables** that nuisance entirely — the corresponding $A$ is still a free parameter in the minimization but receives no Gaussian pull. Default: $\sigma_{\mathrm{pred}} = 4\%$, $\sigma_{\mathrm{bkg}} = 2\%$.
 
+---
+
+### Minimization Backends
+
 **Three minimization backends** (selected automatically by input type):
 
 | Backend | Input | Method |
@@ -308,28 +312,263 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ---
 
+## Contour Grids (sin13)
+
+---
+
+### HD Central
+
+<div class="two-col">
+  <div>
+<p><strong>Solar Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+  </div>
+  <div>
+<p><strong>Reactor Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral
+
+<div class="two-col">
+  <div>
+<p><strong>Solar Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+  </div>
+  <div>
+<p><strong>Reactor Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+  </div>
+</div>
+
+---
+
+### VD Top
+
+<div class="two-col">
+  <div>
+<p><strong>Solar Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+  </div>
+  <div>
+<p><strong>Reactor Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded
+
+<div class="two-col">
+  <div>
+<p><strong>Solar Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+  </div>
+  <div>
+<p><strong>Reactor Contour (sin13)</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+  </div>
+</div>
+
+---
+
+## Significance Spectra
+
+---
+
+### HD Central
+
+<div class="center">
+  <img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+</div>
+
+---
+
+### HD Lateral
+
+<div class="center">
+  <img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+</div>
+
+---
+
+### VD Top
+
+<div class="center">
+  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+</div>
+
+---
+
+### VD Bottom Shielded
+
+<div class="center">
+  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+</div>
+
+---
+
+## Template Building
+
+---
 
 ### HD Central Templates
 
-No template found for HD Central
+<div class="center">
+  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_centralAPA/marley/hd_1x2x6_centralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
+</div>
 
 ---
 
 ### HD Lateral Templates
 
-No template found for HD Lateral
+<div class="center">
+  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_lateralAPA/marley/hd_1x2x6_lateralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
+</div>
 
 ---
 
 ### VD Top Templates
 
-No template found for VD Top
+<div class="center">
+  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_nominal/marley/vd_1x8x14_3view_30deg_nominal_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
+</div>
 
 ---
 
 ### VD Bottom Shielded Templates
 
-No template found for VD Bottom Shielded
+<div class="center">
+  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_shielded/marley/vd_1x8x14_3view_30deg_shielded_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
+</div>
+
+---
+
+## 1D Parameter Projections
+
+---
+
+### HD Central: Mixing Angle Projections
+
+<div class="two-col">
+  <div>
+<p><strong>sin²θ₁₂</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin12_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>sin²θ₁₃</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin13_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### HD Central: Mass Splitting Projections
+
+<div class="two-col">
+  <div>
+<p><strong>Δm²<sub>sol</sub></strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_solar_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>Δm²<sub>react</sub></strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_reactor_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral: Mixing Angle Projections
+
+<div class="two-col">
+  <div>
+<p><strong>sin²θ₁₂</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin12_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>sin²θ₁₃</strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin13_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral: Mass Splitting Projections
+
+<div class="two-col">
+  <div>
+<p><strong>Δm²<sub>sol</sub></strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_solar_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>Δm²<sub>react</sub></strong></p>
+<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_reactor_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### VD Top: Mixing Angle Projections
+
+<div class="two-col">
+  <div>
+<p><strong>sin²θ₁₂</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin12_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>sin²θ₁₃</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin13_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### VD Top: Mass Splitting Projections
+
+<div class="two-col">
+  <div>
+<p><strong>Δm²<sub>sol</sub></strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_solar_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>Δm²<sub>react</sub></strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_reactor_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded: Mixing Angle Projections
+
+<div class="two-col">
+  <div>
+<p><strong>sin²θ₁₂</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin12_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>sin²θ₁₃</strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin13_projection_NuFit61.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded: Mass Splitting Projections
+
+<div class="two-col">
+  <div>
+<p><strong>Δm²<sub>sol</sub></strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_solar_projection_NuFit61.png">
+  </div>
+  <div>
+<p><strong>Δm²<sub>react</sub></strong></p>
+<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_reactor_projection_NuFit61.png">
+  </div>
+</div>
 
 ---
 
@@ -338,9 +577,134 @@ No template found for VD Bottom Shielded
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 1 | 8 | 4 | 4 | 2 | 63.00 |
-| HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.73 |
+| HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.75 |
 | VD Top | 8 | 10 | 8 | 4 | 2 | 15.38 |
 | VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |
+
+## Oscillograms
+
+---
+
+### HD Central
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### HD Central (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### VD Top
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### VD Top (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
 
 
 ---

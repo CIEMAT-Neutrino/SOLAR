@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/vertex/fiducial"
-data_path = f"{root}/data/vertex/fiducial"
+save_path = f"{root}/output/images/vertex/fiducial"
+data_path = f"{root}/output/data/vertex/fiducial"
 
 
 def fiducial_mask(

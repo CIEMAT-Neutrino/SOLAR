@@ -76,7 +76,7 @@ def get_pdg_color(pdgs: list[str], debug: bool = False):
     """
     # default_color_dict = {12: "red", 11: "orange", 22: "blue", 2112: "green", 2212: "purple", -12: "cyan",}
     output = ""
-    default_color_dict = json.load(open(f"{root}/import/pdg_color.json"))
+    default_color_dict = json.load(open(f"{root}/config/import/pdg_color.json"))
     if debug:
         rprint(f"[cyan]PDGs: {default_color_dict}[/cyan]")
 

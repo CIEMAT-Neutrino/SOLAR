@@ -4,7 +4,7 @@
 
 Run all diagnostics:
 ```bash
-bash run_diagnostics.sh
+bash src/tools/run_diagnostics.sh
 ```
 
 Or focus on regression testing:
@@ -17,7 +17,7 @@ python3 test_weighting_regression.py
 
 ### 1. **Rebinning Logic Test** (Most Critical)
 ```bash
-python3 test_rebin_logic.py
+python3 tests/test_rebin_logic.py
 ```
 
 **What it checks:**
@@ -40,7 +40,7 @@ Ratio (actual/expected): 1.000000  ✓ PASS
 
 ### 2. **Oscillation Weighting Test**
 ```bash
-python3 test_oscillation_weighting.py
+python3 tests/test_oscillation_weighting.py
 ```
 
 **What it checks:**
@@ -90,7 +90,7 @@ git bisect good bb5d270
 
 ### 4. **Signal Template Comparison**
 ```bash
-bash diagnostic_signal_check.sh
+bash src/tools/diagnostic_signal_check.sh
 ```
 
 **Shows:**
@@ -111,7 +111,7 @@ bash diagnostic_signal_check.sh
 # First, update path in script:
 # old_path = Path("/path/to/old/SENSITIVITY/truncated/solarenergy")
 
-python3 compare_signal_versions.py
+python3 src/tools/compare_signal_versions.py
 ```
 
 **What it does:**
@@ -134,7 +134,7 @@ Ratio (new/old): 1.00x (within 5%)
 ## Diagnosis Decision Tree
 
 ```
-Run: python3 test_rebin_logic.py
+Run: python3 tests/test_rebin_logic.py
   │
   ├─ Ratio ~100x?
   │  └─ YES → BUG IN REBINNING
@@ -144,7 +144,7 @@ Run: python3 test_rebin_logic.py
   │
   └─ Ratio ~1.0? → Rebinning is fine
      │
-     └─ Run: python3 test_oscillation_weighting.py
+     └─ Run: python3 tests/test_oscillation_weighting.py
         │
         ├─ Ratio ~100x?
         │  └─ YES → BUG IN OSCILLATION WEIGHTING
@@ -154,7 +154,7 @@ Run: python3 test_rebin_logic.py
         │
         └─ Ratio ~1.0? → Weighting is fine
            │
-           └─ Run: python3 compare_signal_versions.py
+           └─ Run: python3 src/tools/compare_signal_versions.py
               │
               ├─ New/Old ratio ~100x?
               │  └─ YES → SIGNAL NORMALIZATION CHANGED
@@ -193,7 +193,7 @@ z[: len(y) // rebin * rebin, : len(x) // rebin * rebin]
 
 1. **Run all tests:**
    ```bash
-   bash run_diagnostics.sh 2>&1 | tee diagnostic_results.txt
+   bash src/tools/run_diagnostics.sh 2>&1 | tee diagnostic_results.txt
    ```
 
 2. **Identify which component fails:**
@@ -216,11 +216,11 @@ z[: len(y) // rebin * rebin, : len(x) // rebin * rebin]
 
 ## Files Generated
 
-- `run_diagnostics.sh` - Master runner
-- `diagnostic_signal_check.sh` - Signal template stats
+- `src/tools/run_diagnostics.sh` - Master runner
+- `src/tools/diagnostic_signal_check.sh` - Signal template stats
 - `test_rebin_logic.py` - Rebinning validation
 - `test_oscillation_weighting.py` - Oscillation normalization
 - `test_weighting_regression.py` - Git regression detection
 - `compare_weighting_git.sh` - Show code changes
-- `compare_signal_versions.py` - Old vs new comparison
-- `DIAGNOSTICS_GUIDE.md` - This file
+- `src/tools/compare_signal_versions.py` - Old vs new comparison
+- `docs/DIAGNOSTICS_GUIDE.md` - This file

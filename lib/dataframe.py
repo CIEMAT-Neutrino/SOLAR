@@ -396,7 +396,7 @@ def reorder_df(
         color_list (list): list of the colors of the backgrounds
     """
 
-    f = json.load(open(f"{root}/import/generator_order.json", "r"))
+    f = json.load(open(f"{root}/config/import/generator_order.json", "r"))
     bkg_list = f[info["GEOMETRY"]][info["VERSION"]].keys()
     bkg_order = f[info["GEOMETRY"]][info["VERSION"]].values()
 
@@ -526,7 +526,7 @@ def generate_pileup_matrix(run, configs, factor, save=False, show=False, debug=F
         )
 
         if save:
-            fig.write_image(f"{root}/images/bkg/{config}_PileUp_Area.png", scale=1.5)
+            fig.write_image(f"{root}/output/images/bkg/{config}_PileUp_Area.png", scale=1.5)
         if show:
             fig.show()
     return fig

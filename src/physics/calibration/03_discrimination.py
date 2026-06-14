@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/workflow/discrimination"
-data_path = f"{root}/data/workflow/discrimination"
+save_path = f"{root}/output/images/workflow/discrimination"
+data_path = f"{root}/output/data/workflow/discrimination"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)

@@ -25,7 +25,7 @@ Outputs — DataFrames  (compatible with LOWE_RECONSTRUCTION_PUBLICATION scripts
                PeeWeighted (array n_nadir×n_energy, P_ee × nadir_pdf),
                Dm2, Sin12, Sin13
 
-For --signal_1d, reads pre-saved Ref pkls from output/analysis/.
+For --signal_1d, reads pre-saved Ref pkls from output/data/results/.
 Run src/physics/signal/03_analysis.py --export_fiducial first.
 
 Run
@@ -67,7 +67,7 @@ parser.add_argument(
     help=(
         "Overlay 1D oscillation-weighted signal spectrum. "
         "Reads AnalysisEnergy/Data/Weights/FiducializationMask pkls from "
-        "output/analysis/. Run 03_analysis.py --export_fiducial first."
+        "output/data/results/. Run 03_analysis.py --export_fiducial first."
     ),
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -86,9 +86,9 @@ _analysis_dir = {
     "Sensitivity": "sensitivity",
 }.get(args.analysis, args.analysis.lower())
 
-save_path   = f"{root}/images/analysis/{_analysis_dir}/oscillogram"
-data_path   = f"{root}/data/analysis/{_analysis_dir}"
-export_path = f"{root}/output/analysis"
+save_path   = f"{root}/output/images/analysis/{_analysis_dir}/oscillogram"
+data_path   = f"{root}/output/data/analysis/{_analysis_dir}"
+export_path = f"{root}/output/data/results"
 
 for _p in [save_path, data_path]:
     os.makedirs(_p, exist_ok=True)

@@ -276,7 +276,7 @@ def gather_fiducial_rows(energy):
 
 
 def gather_hep_plot_specs(folder, energy, reference):
-    plot_dir = ROOT / "images" / "analysis" / "hep"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "hep"
     energy_label = output_energy_label(energy)
     significance_refs = [reference, "ProfileLikelihood", "Asimov", "Gaussian"]
     significance_refs = list(dict.fromkeys(significance_refs))
@@ -319,7 +319,7 @@ def gather_hep_plot_specs(folder, energy, reference):
 
 
 def gather_reference_comparison_specs(folder, energy):
-    plot_dir = ROOT / "images" / "analysis" / "hep"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "hep"
     energy_label = output_energy_label(energy)
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
@@ -356,7 +356,7 @@ def gather_reference_comparison_specs(folder, energy):
 
 
 def gather_adaptive_rebin_specs(folder, energy):
-    plot_dir = ROOT / "images" / "analysis" / "hep"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "hep"
     energy_label = output_energy_label(energy)
     slides = []
     for config_key, display_name in STANDARD_CONFIGS:
@@ -404,7 +404,7 @@ def gather_adaptive_rebin_specs(folder, energy):
 
 def gather_spiked_debug_specs(folder, energy, reference):
     """Gather exposure and significance plots generated with --pkl_label highest_spiked for debug slides."""
-    plot_dir = ROOT / "images" / "analysis" / "hep"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "hep"
     energy_label = output_energy_label(energy)
     refs = list(dict.fromkeys([reference, "ProfileLikelihood", "Asimov", "Gaussian"]))
     slides = []
@@ -441,7 +441,7 @@ def gather_spiked_debug_specs(folder, energy, reference):
 
 
 def _find_fiducial_plot(folder, config_key, label, energy):
-    root_dir = ROOT / "images" / "solar" / "fiducial"
+    root_dir = ROOT / "output" / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
     candidate_dirs = [
         root_dir / config_key / "marley" / folder,
@@ -611,7 +611,7 @@ def render_hep_plot_slides(plot_specs):
             )
 
     if not slides:
-        slides.append("### Plot outputs\n\nNo HEP plot PNGs were found in images/analysis/hep.")
+        slides.append("### Plot outputs\n\nNo HEP plot PNGs were found in output/images/analysis/hep.")
 
     return "\n\n---\n\n".join(slides)
 
@@ -1000,7 +1000,7 @@ def build_markdown(
     - folder: **{selected_title}**
     - analysis: HEP
     - exposure: default **30 years**
-    - threshold in hep/01_hep.py: from [analysis/config.json](../../analysis/config.json) HEP -> THRESHOLDS -> {threshold_rows[folder] if folder in threshold_rows else "(no threshold config found)"}
+    - threshold in hep/01_hep.py: from [config/analysis/config.json](../../config/analysis/config.json) HEP -> THRESHOLDS -> {threshold_rows[folder] if folder in threshold_rows else "(no threshold config found)"}
     - optional cuts override: nhits, ophits, adjcls
     - significance reference in plots: {reference}
     - best-cut selection in sensitivity/05_best_sigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
@@ -1022,7 +1022,7 @@ def build_markdown(
     - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
     - Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
-    - Figures: [images/analysis/hep/truncated](../../images/analysis/hep/truncated)
+    - Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)
 
     ---
 
@@ -1103,7 +1103,7 @@ def build_markdown(
 ### Adaptive Rebinning: Strategy
 
 - Rebinning is applied in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) through [lib/smoothing.py](../../lib/smoothing.py) using `apply_adaptive_tail_rebin`.
-- It is controlled by [analysis/config.json](../../analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- It is controlled by [config/analysis/config.json](../../config/analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
 - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
 - This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
 

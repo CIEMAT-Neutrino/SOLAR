@@ -28,9 +28,9 @@ from common import (
     pick_most_recent,
     render_oscillogram_slides,
 )
-from lib.defaults import load_analysis_info, get_project_root
+from lib.defaults import load_analysis_info
 
-_analysis_info = load_analysis_info(str(get_project_root()))
+_analysis_info = load_analysis_info(str(ROOT))
 _PNFS = _analysis_info["PATH"]
 
 
@@ -173,8 +173,8 @@ def _gather_component_plot(folder, config_key, label, energy, cut_info):
     folder_title = folder.title()
     energy_label = output_energy_label(energy)
     base_dirs = [
-        ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder,
-        ROOT / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder,
+        ROOT / "output" / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder,
+        ROOT / "output" / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder,
     ]
     selected = _find_latest_with_cut(
         base_dirs,
@@ -191,7 +191,7 @@ def _gather_component_plot(folder, config_key, label, energy, cut_info):
 
 
 def gather_significance_specs(folder, energy):
-    plot_dir = ROOT / "images" / "analysis" / "sensitivity"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "sensitivity"
     energy_label = output_energy_label(energy)
     specs = []
     for config_key, display_name in STANDARD_CONFIGS:
@@ -221,7 +221,7 @@ def gather_projection_specs(folder, energy):
     folder_title = folder.title()
     specs = []
     for config_key, display_name in STANDARD_CONFIGS:
-        proj_dir = ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
+        proj_dir = ROOT / "output" / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
         axes = {}
         for axis_key, _ in _PROJECTION_AXES:
             path = _find_latest(
@@ -310,9 +310,9 @@ def gather_result_specs(folder, energy, profile=None):
     folder_title = folder.title()
     for config_key, display_name in STANDARD_CONFIGS:
         contour_dir = (
-            ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder / profile
+            ROOT / "output" / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder / profile
             if profile else
-            ROOT / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
+            ROOT / "output" / "images" / "analysis" / "sensitivity" / config_key / "marley" / folder
         )
 
         solar_sin12_path = _find_latest(
@@ -371,7 +371,7 @@ def gather_result_specs(folder, energy, profile=None):
 
 def gather_template_specs(folder, energy, result_specs):
     # New layout: templates/{folder}/{config}/marley/
-    new_base = ROOT / "images" / "analysis" / "sensitivity" / "templates" / folder
+    new_base = ROOT / "output" / "images" / "analysis" / "sensitivity" / "templates" / folder
     energy_label = output_energy_label(energy)
     selected_signal = {}
     selected_background = {}
@@ -382,7 +382,7 @@ def gather_template_specs(folder, energy, result_specs):
 
     for config_key, _ in STANDARD_CONFIGS:
         # Old layout: templates/{config}/marley/{folder}/
-        old_base = ROOT / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder
+        old_base = ROOT / "output" / "images" / "analysis" / "sensitivity" / "templates" / config_key / "marley" / folder
         selected_background_path = _find_latest_with_cut(
             [new_base / config_key / "marley", new_base, old_base],
             [
@@ -580,7 +580,7 @@ def gather_fiducial_rows(energy):
 
 
 def _find_fiducial_plot(folder, config_key, label, energy):
-    root_dir = ROOT / "images" / "solar" / "fiducial"
+    root_dir = ROOT / "output" / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
     candidate_dirs = [
         root_dir / folder / config_key / "marley",
@@ -1069,8 +1069,8 @@ def build_markdown(energy, folder, folder_specs, folder_templates, fid_rows=None
 
     ### Workflow Outputs
 
-    - Main contour grids (sin12/sin13): [images/analysis/sensitivity](../../images/analysis/sensitivity)
-    - Signal/background templates (figures): [images/analysis/sensitivity/templates](../../images/analysis/sensitivity/templates)
+    - Main contour grids (sin12/sin13): [output/images/analysis/sensitivity](../../output/images/analysis/sensitivity)
+    - Signal/background templates (figures): [output/images/analysis/sensitivity/templates](../../output/images/analysis/sensitivity/templates)
     - Grid-scan data products (PKL): [data/analysis/sensitivity](../../data/analysis/sensitivity)
     - Remote workflow outputs (PNFS): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY)
 
@@ -1110,7 +1110,7 @@ def main():
     export_pdf = args.pdf if args.pdf is not None else default_pdf_export_enabled()
     out_md = output_markdown_path(args.energy, args.folder)
 
-    # Load nuisance profile config from analysis/config.json
+    # Load nuisance profile config from config/analysis/config.json
     analysis_json = ROOT / "analysis" / "config.json"
     _analysis_info = json.loads(analysis_json.read_text()) if analysis_json.exists() else {}
     nuisance_profiles = _analysis_info.get("NUISANCE_PROFILES", {})

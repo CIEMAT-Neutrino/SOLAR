@@ -2,11 +2,10 @@
 
 ## Key Repository Paths
 
-- `config/`: detector-configuration JSON files.
-- `import/analysis.json`: shared physics-analysis defaults.
+- `config/`: detector-configuration JSON files plus analysis defaults (`config/analysis/`, `config/import/`).
 - `lib/`: reusable analysis helpers.
 - `tests/`: automated regression coverage.
-- `scripts/`: helper scripts for setup, docs, and repository utilities.
+- `src/tools/`: helper scripts for setup, docs, presentations, and repository utilities.
 
 ## Current Validation
 
@@ -28,5 +27,5 @@ make html
 ## Practical Notes
 
 - Many scripts assume existing DUNE-produced ROOT outputs and configuration-dependent filesystem paths.
-- `scripts/setup.sh` is aimed at shared CIEMAT storage workflows using `sshfs` mounts.
-- Generated products typically land in `data/`, `images/`, and sometimes `output/presentations/`.
+- `src/tools/setup.sh` is aimed at shared CIEMAT storage workflows using `sshfs` mounts.
+- Generated products land in `output/data/`, `output/images/`, and `output/presentations/`.

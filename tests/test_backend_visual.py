@@ -1,7 +1,7 @@
 """
 Visual comparison of oscillation backends: file fixture vs Prob3++ vs NuFast-Earth.
 
-Generates plots saved to output/backend_visual/.
+Generates plots saved to tests/backend_visual/.
 Run with:
     python3 -m pytest tests/test_backend_visual.py -v -s
 
@@ -42,7 +42,7 @@ E_CENTERS    = 0.5 * (ENERGY_EDGES[1:] + ENERGY_EDGES[:-1])
 N_CENTERS    = 0.5 * (NADIR_EDGES[1:]  + NADIR_EDGES[:-1])
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "oscillogram_default.pkl")
-OUT_DIR      = os.path.join(os.path.dirname(__file__), "..", "output", "backend_visual")
+OUT_DIR      = os.path.join(os.path.dirname(__file__), "backend_visual")
 
 PNFS_ROOT     = "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION"
 PNFS_PKL      = os.path.join(

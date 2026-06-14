@@ -6,7 +6,7 @@ The PDF export pipeline has been hardened across three layers to prevent hangs, 
 
 ## Changes Made
 
-### 1. Shell Script Hardening (`scripts/marp-pdf.sh`)
+### 1. Shell Script Hardening (`src/tools/marp_pdf.sh`)
 
 **Purpose**: Robust entry point for PDF export with timeout and browser validation
 
@@ -51,7 +51,7 @@ The PDF export pipeline has been hardened across three layers to prevent hangs, 
    - `--disable-sync`
    - `--no-first-run`
 
-### 2. Python Wrapper Enhancement (`scripts/presentation_common.py`)
+### 2. Python Wrapper Enhancement (`src/tools/presentations/common.py`)
 
 **Purpose**: Subprocess timeout management and error handling
 
@@ -137,7 +137,7 @@ export_marp_pdf(markdown_path)
   ↓
   subprocess.run(..., timeout=300s)
     ↓
-    scripts/marp-pdf.sh
+    src/tools/marp_pdf.sh
       ├─ Validate browser (executable, in PATH)
       ├─ timeout 90s (Marp HTML render)
       ├─ Validate HTML file exists
@@ -167,14 +167,14 @@ export_marp_pdf(markdown_path)
 If browser not found, Marp can bootstrap:
 ```bash
 # Let Marp download Chrome-for-Testing
-scripts/marp-pdf.sh output/presentations/MySlides.md
+src/tools/marp_pdf.sh output/presentations/MySlides.md
 ```
 
 ### Manual Override
 ```bash
 # Use specific browser
 export MARP_BROWSER_PATH=/usr/bin/chromium-browser
-scripts/marp-pdf.sh output/presentations/MySlides.md
+src/tools/marp_pdf.sh output/presentations/MySlides.md
 ```
 
 ### System Browsers
@@ -197,7 +197,7 @@ Preferred order checked automatically:
 
 ## Validation Checklist
 
-- [x] Shell script syntax validated: `bash -n scripts/marp-pdf.sh`
+- [x] Shell script syntax validated: `bash -n src/tools/marp_pdf.sh`
 - [x] Python module imports: `from scripts.presentation_common import export_marp_pdf`
 - [x] Default PDF export enabled: `default_pdf_export_enabled() == True`
 - [x] Browser detection logic enhanced with validation
@@ -209,8 +209,8 @@ Preferred order checked automatically:
 ## Files Modified/Created
 
 ### Modified
-- `scripts/marp-pdf.sh` - Enhanced with browser validation, verbose mode, improved timeouts
-- `scripts/presentation_common.py` - Added timeout wrapper, improved _run_export(), added sys/time imports
+- `src/tools/marp_pdf.sh` - Enhanced with browser validation, verbose mode, improved timeouts
+- `src/tools/presentations/common.py` - Added timeout wrapper, improved _run_export(), added sys/time imports
 
 ### Created
 - `tests/test_pdf_export_robustness.py` - Comprehensive robustness test suite
@@ -220,8 +220,8 @@ Preferred order checked automatically:
 
 1. **No action needed** for existing workflows - all changes are backward compatible
 2. **Test new robustness** with: `python3 tests/test_pdf_export_robustness.py`
-3. **Enable verbose mode** if PDF export hangs: `scripts/marp-pdf.sh file.md --verbose`
-4. **Use --verbose flag** to debug browser selection: `scripts/marp-pdf.sh file.md --verbose`
+3. **Enable verbose mode** if PDF export hangs: `src/tools/marp_pdf.sh file.md --verbose`
+4. **Use --verbose flag** to debug browser selection: `src/tools/marp_pdf.sh file.md --verbose`
 5. **Set MARP_BROWSER_PATH** if using custom browser: `export MARP_BROWSER_PATH=/path/to/chrome`
 
 ## Regression Prevention
@@ -229,7 +229,7 @@ Preferred order checked automatically:
 To prevent future regressions:
 
 1. **Run test suite regularly**: `python3 tests/test_pdf_export_robustness.py`
-2. **Use --verbose mode** when debugging: `scripts/marp-pdf.sh file.md --verbose`
+2. **Use --verbose mode** when debugging: `src/tools/marp_pdf.sh file.md --verbose`
 3. **Monitor execution time**: Watch for exports taking > 200s
 4. **Check browser availability**: Ensure Chromium/Chrome is installed or bootstrapped
 5. **Review timeouts** if using different hardware: May need adjustment for slow systems
@@ -254,6 +254,6 @@ For issues:
 6. **Review logs** - see error messages in stderr
 
 For persistent hangs after these changes, file an issue with:
-- Output of `scripts/marp-pdf.sh file.md --verbose`
+- Output of `src/tools/marp_pdf.sh file.md --verbose`
 - System info: `uname -a`, `free -h`, `df -h`
 - Browser info: `which chromium-browser`, `chromium-browser --version`

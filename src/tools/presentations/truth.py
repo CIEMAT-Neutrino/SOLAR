@@ -60,7 +60,7 @@ def _img(rel_path, caption=None):
 # ── Solar spectrum / asymmetry plots (config-independent) ────────────────────
 
 def gather_truth_solar_plots():
-    base = ROOT / "images" / "solar" / "truth"
+    base = ROOT / "output" / "images" / "solar" / "truth"
     specs = {}
     for key, patterns in [
         ("solar_spectrum", ["solar_neutrino_spectrum.png", "Solar_Neutrino_Spectrum.png"]),
@@ -77,10 +77,10 @@ def gather_truth_solar_plots():
         match = pick_most_recent([c for c in candidates if c.exists()])
         specs[key] = _rel(match) if match else None
 
-    # global solar spectrum from images/solar/
+    # global solar spectrum from output/images/solar/
     if specs["solar_spectrum"] is None:
         for p in ["solar_neutrino_spectrum.png", "Solar_Neutrino_Spectrum.png"]:
-            candidate = ROOT / "images" / "solar" / p
+            candidate = ROOT / "output" / "images" / "solar" / p
             if candidate.exists():
                 specs["solar_spectrum"] = _rel(candidate)
                 break
@@ -88,7 +88,7 @@ def gather_truth_solar_plots():
 
 
 def gather_nadir_pdf_plot():
-    candidate = ROOT / "images" / "common" / "line_plots" / "NadirPDF.png"
+    candidate = ROOT / "output" / "images" / "common" / "line_plots" / "NadirPDF.png"
     return _rel(candidate) if candidate.exists() else None
 
 
@@ -97,7 +97,7 @@ def gather_nadir_pdf_plot():
 def gather_background_dist_plots():
     specs = {}
     for config_key, display_name in STANDARD_CONFIGS:
-        base = ROOT / "images" / "background" / config_key / "truth"
+        base = ROOT / "output" / "images" / "background" / config_key / "truth"
         if not base.exists():
             specs[config_key] = None
             continue
@@ -112,7 +112,7 @@ def gather_background_dist_plots():
 def gather_background_logx_plots():
     specs = {}
     for config_key, display_name in STANDARD_CONFIGS:
-        base = ROOT / "images" / "background" / config_key / "truth"
+        base = ROOT / "output" / "images" / "background" / config_key / "truth"
         if not base.exists():
             specs[config_key] = None
             continue
@@ -122,12 +122,12 @@ def gather_background_logx_plots():
 
 
 def gather_combined_background_plot():
-    p = ROOT / "images" / "background" / "all_productions_combined_by_type.png"
+    p = ROOT / "output" / "images" / "background" / "all_productions_combined_by_type.png"
     return _rel(p) if p.exists() else None
 
 
 def gather_shielding_plots():
-    base = ROOT / "images" / "background"
+    base = ROOT / "output" / "images" / "background"
     plots = {}
     for key in ["cavernwall_gamma", "cavern_neutron", "foam_gamma", "cryostat_gamma"]:
         candidates = sorted(base.glob(f"vd_shielding_{key}_*.png"))
@@ -142,7 +142,7 @@ def gather_shielding_plots():
 def gather_pdf_validation_plots():
     specs = {}
     for config_key, _ in STANDARD_CONFIGS:
-        base = ROOT / "images" / "background" / config_key
+        base = ROOT / "output" / "images" / "background" / config_key
         gamma_dir = base / "gamma"
         neutron_dir = base / "neutron"
         gamma_checks = sorted(gamma_dir.glob("*_pdf_check.png")) if gamma_dir.exists() else []
@@ -156,7 +156,7 @@ def gather_pdf_validation_plots():
 
 # ── Oscillogram plots ─────────────────────────────────────────────────────────
 # Truth pipeline reads from pre-computed file backend oscillograms.
-# These live in images/analysis/<analysis>/oscillogram/<config>/marley/<folder>/
+# These live in output/images/analysis/<analysis>/oscillogram/<config>/marley/<folder>/
 # We prefer HEP oscillograms since they are often most complete.
 
 def gather_oscillogram_plots():
@@ -165,7 +165,7 @@ def gather_oscillogram_plots():
         for analysis in ["hep", "sensitivity", "day-night"]:
             for folder in ["truncated", "nominal", "reduced"]:
                 osc_dir = (
-                    ROOT / "images" / "analysis" / analysis
+                    ROOT / "output" / "images" / "analysis" / analysis
                     / "oscillogram" / config_key / "marley" / folder
                 )
                 osc = find_latest(
@@ -519,9 +519,9 @@ def build_markdown(
     ## Coverage and Notes
 
     - Oscillogram plots are sourced from the first available analysis (HEP → Sensitivity → DayNight), first available folder.
-    - Background distribution plots come from `images/background/{{config}}/truth/`.
-    - Shielding reduction factors for VD Bottom Shielded are stored in `analysis/backgrounds.json` under `SPECTRA.SHIELDING`.
-    - PDF backend: **{pdf_backend}** (set in `TRUTH_PIPELINE.PDF_BACKEND` in [analysis/backgrounds.json](../../analysis/backgrounds.json)).
+    - Background distribution plots come from `output/images/background/{{config}}/truth/`.
+    - Shielding reduction factors for VD Bottom Shielded are stored in `config/analysis/backgrounds.json` under `SPECTRA.SHIELDING`.
+    - PDF backend: **{pdf_backend}** (set in `TRUTH_PIPELINE.PDF_BACKEND` in [config/analysis/backgrounds.json](../../config/analysis/backgrounds.json)).
     - Re-run to refresh after truth pipeline:
       - `/usr/bin/python3 src/tools/presentations/truth.py`
     """)

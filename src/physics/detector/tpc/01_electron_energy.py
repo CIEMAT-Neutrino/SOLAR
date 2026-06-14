@@ -18,8 +18,8 @@ def resolution(x, p0, p1, p2, b):
     return residuals
 
 
-save_path = f"{root}/images/TPC/resolution/electron"
-data_path = f"{root}/data/TPC/resolution/electron"
+save_path = f"{root}/output/images/TPC/resolution/electron"
+data_path = f"{root}/output/data/TPC/resolution/electron"
 
 for path in [save_path, data_path]:
     if not os.path.exists(path):

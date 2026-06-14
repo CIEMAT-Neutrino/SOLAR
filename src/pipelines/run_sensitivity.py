@@ -294,7 +294,7 @@ parser.add_argument(
     type=float,
     help=(
         "Minimum summed MCCounts per essential background component required in DayNight cut scan. "
-        "This is configured in analysis/config.json and can be overridden on the CLI."
+        "This is configured in config/analysis/config.json and can be overridden on the CLI."
     ),
     default=get_analysis_threshold(str(root), "DAYNIGHT", stage="MC", fallback=0.0),
 )
@@ -327,7 +327,7 @@ parser.add_argument(
     type=float,
     help=(
         "Minimum summed MCCounts per essential background component required in HEP cut scan. "
-        "This is configured in analysis/config.json and can be overridden on the CLI."
+        "This is configured in config/analysis/config.json and can be overridden on the CLI."
     ),
     default=None,
 )
@@ -391,8 +391,8 @@ parser.add_argument(
     type=str,
     default=None,
     help=(
-        "Nuisance profile names to run (keys in NUISANCE_PROFILES in analysis/config.json). "
-        "Defaults to all profiles defined in analysis/config.json. "
+        "Nuisance profile names to run (keys in NUISANCE_PROFILES in config/analysis/config.json). "
+        "Defaults to all profiles defined in config/analysis/config.json. "
         "Example: --nuisance_profiles full nominal"
     ),
 )
@@ -432,7 +432,7 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=True,
     help=(
-        "Write the optimized sigma into analysis/smoothing.json (CONFIG_OVERRIDES + global fallback) "
+        "Write the optimized sigma into config/analysis/smoothing.json (CONFIG_OVERRIDES + global fallback) "
         "when --optimization is enabled. Pass --no-apply-smoothing to compute and report only."
     ),
 )

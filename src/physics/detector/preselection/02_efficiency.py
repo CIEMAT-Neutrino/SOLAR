@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/preselection/efficiency"
-data_path = f"{root}/data/preselection/efficiency"
+save_path = f"{root}/output/images/preselection/efficiency"
+data_path = f"{root}/output/data/preselection/efficiency"
 
 for path in [save_path, data_path]:
     if not os.path.exists(path):

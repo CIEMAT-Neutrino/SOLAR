@@ -14,13 +14,13 @@ DEFAULT_ANALYSIS_THRESHOLDS = {
 
 
 def load_analysis_info(root: str, physics_override: str = "physics.json"):
-    """Load and merge analysis configuration from split files in analysis/.
+    """Load and merge analysis configuration from split files in config/analysis/.
 
     Args:
         root: Project root path
         physics_override: Override which physics config to load (e.g., "physics_file_backend_legacy.json")
     """
-    analysis_dir = Path(root) / "analysis"
+    analysis_dir = Path(root) / "config" / "analysis"
     merged: Dict[str, Any] = {}
     for fname in (physics_override, "config.json", "smoothing.json", "fiducialization.json", "backgrounds.json"):
         path = analysis_dir / fname
@@ -28,7 +28,7 @@ def load_analysis_info(root: str, physics_override: str = "physics.json"):
             merged.update(json.loads(path.read_text()))
 
     for fname in ("calibration.json", "workflow.json"):
-        path = Path(root) / "import" / fname
+        path = Path(root) / "config" / "import" / fname
         if path.exists():
             merged.update(json.loads(path.read_text()))
 
@@ -76,8 +76,7 @@ def get_analysis_threshold(
 
 
 def load_folder_config(root: str) -> Dict[str, Any]:
-    """Load folder mode configuration from analysis/folder_configs.json."""
-    with open(f"{root}/analysis/folder_configs.json") as f:
+    with open(f"{root}/config/analysis/folder_configs.json") as f:
         return json.load(f)
 
 

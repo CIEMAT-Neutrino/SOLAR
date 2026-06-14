@@ -51,8 +51,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 
 # ── Paths ───────────────────────────────────────────────────────────────────
-figure_path = f"{root}/images/background"
-data_path   = f"{root}/data/background"
+figure_path = f"{root}/output/images/background"
+data_path   = f"{root}/output/data/background"
 for _p in [figure_path, data_path]:
     os.makedirs(_p, exist_ok=True)
 
@@ -78,13 +78,13 @@ configs_to_run = analysis_info.get("DEFAULT_CONFIGS", [])
 names          = truth_pipeline.get("BACKGROUND_NAMES", ["gamma", "neutron"])
 
 # ── Static import data ───────────────────────────────────────────────────────
-surface_names = json.load(open(f"{root}/import/surfaces.json"))
-areas         = json.load(open(f"{root}/import/surface_areas.json"))
+surface_names = json.load(open(f"{root}/config/import/surfaces.json"))
+areas         = json.load(open(f"{root}/config/import/surface_areas.json"))
 for geo, surfs in areas.items():
     for sid, expr in surfs.items():
         areas[geo][sid] = eval(expr)
 
-activity_files = json.load(open(f"{root}/import/surface_activity.json"))
+activity_files = json.load(open(f"{root}/config/import/surface_activity.json"))
 
 if args.debug:
     rprint(f"[cyan][INFO][/cyan] Configs: {configs_to_run}")

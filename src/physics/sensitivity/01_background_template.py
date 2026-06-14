@@ -10,7 +10,7 @@ from lib.root import Sensitivity_Fitter
 from lib.oscillation import get_oscillation_datafiles
 from lib.oscillation_backends import get_nadir_pdf_nufast
 
-save_path = f"{root}/images/analysis/sensitivity/templates"
+save_path = f"{root}/output/images/analysis/sensitivity/templates"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -90,7 +90,7 @@ parser.add_argument(
     type=str,
     choices=["file", "prob3", "nufast"],
     default="file",
-    help="Oscillation backend. 'file' uses pre-computed pkl files for the nadir axis; 'prob3'/'nufast' derive it from analysis/physics.json.",
+    help="Oscillation backend. 'file' uses pre-computed pkl files for the nadir axis; 'prob3'/'nufast' derive it from config/analysis/physics.json.",
 )
 
 args = parser.parse_args()
@@ -164,7 +164,7 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-fiducials = json.loads(open(f"{root}/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+fiducials = json.loads(open(f"{root}/output/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)
 

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 
 
-save_path = f"{root}/images/analysis/sensitivity/templates"
+save_path = f"{root}/output/images/analysis/sensitivity/templates"
 
 
 parser = argparse.ArgumentParser(

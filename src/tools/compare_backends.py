@@ -6,7 +6,7 @@ Usage:
                                          [--n_repeats 5] [--save_plots]
 
 Outputs:
-    output/backend_comparison/  — heatmaps, difference maps, timing bar chart, report
+    tests/backend_comparison/  — heatmaps, difference maps, timing bar chart, report
 """
 import sys, os, argparse, time
 import numpy as np
@@ -33,7 +33,7 @@ def parse_args():
     p.add_argument("--n_repeats", type=int,   default=5,
                    help="Number of timing repetitions per backend")
     p.add_argument("--save_plots", action="store_true", default=True)
-    p.add_argument("--out_dir",   default="output/backend_comparison")
+    p.add_argument("--out_dir",   default="tests/backend_comparison")
     return p.parse_args()
 
 

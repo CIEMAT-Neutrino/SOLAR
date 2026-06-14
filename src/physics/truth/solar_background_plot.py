@@ -8,7 +8,7 @@ from lib import *
 
 analysis_info = load_analysis_info(str(root))
 
-figure_path = f"{root}/images/background"
+figure_path = f"{root}/output/images/background"
 data_path = f"{analysis_info['PATH']}/background/solar"
 
 for save_path in [figure_path]:

@@ -15,7 +15,7 @@ Three modes selected via --backend:
   prob3 / nufast
     Generates oscillograms from first principles using the external bindings
     in external/Prob3plusplus and external/NuFast-Earth respectively.
-    The grid is taken from OSCILLATION_GRID in analysis/physics.json.
+    The grid is taken from OSCILLATION_GRID in config/analysis/physics.json.
     Saves both raw pkl (high-res nadir) and rebin pkl (analysis-resolution).
     Pass --rewrite to overwrite files that already exist on disk.
 

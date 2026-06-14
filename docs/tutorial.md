@@ -6,7 +6,7 @@ This tutorial follows the current structure of the repository: generate or colle
 
 SOLAR expects ROOT outputs produced with DUNE and the `SolarNuAna_module`. Detector and path defaults are stored in the configuration JSON files under `config/`.
 
-Common analysis-wide defaults, including smoothing and fiducialization rules, live in `import/analysis.json`.
+Common analysis-wide defaults, including smoothing and fiducialization rules, live in `config/analysis/` (split JSON files merged at runtime by `lib/defaults.load_analysis_info`).
 
 ## 2. Run The Full Reconstruction Chain
 
@@ -56,7 +56,7 @@ What it does today:
 
 Component policy note:
 
-- The orchestration applies the background component policy from `import/analysis.json` (`BACKGROUND_SAMPLES.ANALYSES` and `BACKGROUND_SAMPLES.ESSENTIAL`).
+- The orchestration applies the background component policy from `config/analysis/config.json` (`BACKGROUND_SAMPLES.ANALYSES` and `BACKGROUND_SAMPLES.ESSENTIAL`).
 - Non-essential components not selected for the requested analyses are skipped.
 - Missing essential components produce warnings.
 - Missing optional components are skipped with warnings.
@@ -67,8 +67,8 @@ This is useful when optional samples (for example `radiological`) are available 
 
 The repository writes intermediate and final artefacts into project-local folders, especially:
 
-- `data/` for processed arrays, scan products, and pickled analysis results.
-- `images/` for plots and figure outputs.
+- `output/data/` for processed arrays, scan products, and pickled analysis results.
+- `output/images/` for plots and figure outputs.
 - `output/presentations/` for presentation-ready material when used.
 
 ## 5. Validate New Smoothing Behaviour

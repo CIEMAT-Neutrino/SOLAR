@@ -8,7 +8,7 @@ from lib import *
 
 analysis_info = load_analysis_info(str(root))
 
-save_path = f"{root}/images/solar/fiducial"
+save_path = f"{root}/output/images/solar/fiducial"
 data_path = f"{analysis_info['PATH']}/FIDUCIAL"
 
 # Define flags for the analysis config and name with the python parser

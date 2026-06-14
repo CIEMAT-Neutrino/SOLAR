@@ -409,7 +409,7 @@ parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument(
     "--threshold", type=float, default=None,
-    help="Energy threshold; resolved per-analysis from analysis/config.json if not set",
+    help="Energy threshold; resolved per-analysis from config/analysis/config.json if not set",
 )
 parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -479,19 +479,19 @@ if args.analysis != "Fiducial":
 # ── per-analysis paths and smoothing ──────────────────────────────────────────
 
 if args.analysis == "DayNight":
-    save_path = f"{root}/images/analysis/day-night"
+    save_path = f"{root}/output/images/analysis/day-night"
     data_path = f"{analysis_info['PATH']}/DAYNIGHT"
     smoothing_config = get_smoothing_config(str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance")
 elif args.analysis == "HEP":
-    save_path = f"{root}/images/analysis/hep"
+    save_path = f"{root}/output/images/analysis/hep"
     data_path = f"{analysis_info['PATH']}/HEP"
     smoothing_config = get_smoothing_config(str(root), analysis_name="HEP", dimensions="1d", stage="significance")
 elif args.analysis == "Sensitivity":
-    save_path = f"{root}/images/analysis/sensitivity"
+    save_path = f"{root}/output/images/analysis/sensitivity"
     data_path = f"{analysis_info['PATH']}/SENSITIVITY"
     smoothing_config = get_smoothing_config(str(root), analysis_name="SENSITIVITY", dimensions="1d", stage="significance")
 else:
-    save_path = f"{root}/images/solar/fiducial"
+    save_path = f"{root}/output/images/solar/fiducial"
     data_path = f"{analysis_info['PATH']}/FIDUCIAL"
     smoothing_config = None
 
@@ -1449,7 +1449,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
     # Fiducial
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "Fiducial":
-        fid_data_root = f"{root}/data/solar/fiducial/{args.folder.lower()}"
+        fid_data_root = f"{root}/output/data/solar/fiducial/{args.folder.lower()}"
         best_fiducials_path = f"{fid_data_root}/BestFiducials.json"
         best_fiducials = json.loads(open(best_fiducials_path).read()) if os.path.exists(best_fiducials_path) else {}
 

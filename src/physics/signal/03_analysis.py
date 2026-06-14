@@ -6,9 +6,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path   = f"{root}/images/solar/results"
-export_path = f"{root}/output/analysis"
-data_path   = f"{root}/data/solar/weighted"
+save_path   = f"{root}/output/images/solar/results"
+export_path = f"{root}/output/data/results"
+data_path   = f"{root}/output/data/solar/weighted"
 
 _ANALYSIS_LOCAL_DIR = {
     "DayNight": "daynight-json",
@@ -208,7 +208,7 @@ run = compute_reco_workflow(
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    fiducials = json.loads(open(f"{root}/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    fiducials = json.loads(open(f"{root}/output/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 

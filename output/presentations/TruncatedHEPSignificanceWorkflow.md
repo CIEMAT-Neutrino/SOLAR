@@ -530,6 +530,130 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
   </div>
 </div>
 
+## Oscillograms
+
+---
+
+### HD Central
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### HD Central (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### HD Lateral (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### VD Top
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### VD Top (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded
+
+<div class="two-col">
+  <div>
+<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>Nadir projection</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+  </div>
+</div>
+
+---
+
+### VD Bottom Shielded (cont.)
+
+<div class="two-col">
+  <div>
+<p><strong>Nadir-weighted oscillogram</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+  </div>
+  <div>
+<p><strong>1D fiducial signal spectrum</strong></p>
+<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
+  </div>
+</div>
+
+---
+
 
 
 ---

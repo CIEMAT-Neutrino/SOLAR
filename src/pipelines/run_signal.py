@@ -89,8 +89,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_data_root  = f"{root}/data/marley/stacked"
-_image_root = f"{root}/images/marley/stacked"
+_data_root  = f"{root}/output/data/marley/stacked"
+_image_root = f"{root}/output/images/marley/stacked"
 os.makedirs(_image_root, exist_ok=True)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

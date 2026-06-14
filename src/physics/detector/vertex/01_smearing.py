@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/vertex/smearing"
-data_path = f"{root}/data/vertex/smearing"
+save_path = f"{root}/output/images/vertex/smearing"
+data_path = f"{root}/output/data/vertex/smearing"
 
 for path in [save_path, data_path]:
     if not os.path.exists(path):

@@ -290,13 +290,13 @@ if args.energy is None:
 # ── PATHS ──────────────────────────────────────────────────────────────────────
 
 if args.analysis == "DayNight":
-    save_path = f"{root}/images/analysis/day-night"
+    save_path = f"{root}/output/images/analysis/day-night"
     data_path = f"{analysis_info['PATH']}/DAYNIGHT"
 elif args.analysis == "HEP":
-    save_path = f"{root}/images/analysis/hep"
+    save_path = f"{root}/output/images/analysis/hep"
     data_path = f"{analysis_info['PATH']}/HEP"
 else:
-    save_path = f"{root}/images/analysis/sensitivity"
+    save_path = f"{root}/output/images/analysis/sensitivity"
     data_path = f"{analysis_info['PATH']}/SENSITIVITY"
 
 for this_path in [save_path]:
@@ -671,6 +671,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
         sigma_row = sigma_rows.iloc[0]
         exposure_grid = _safe_array(sigma_row["Exposure"])
+        total_bins_default = int(len(_safe_array(sigma_row.get("SignificanceEnergy", []))))
+        if total_bins_default <= 0:
+            total_bins_default = int(len(exposure_grid))
 
         for significance_type in ["Asimov", "Gaussian"]:
             curve_keys = {
@@ -678,6 +681,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 ("Raw", "AdaptiveRebin"): f"Raw{significance_type}",
                 ("Smoothed", "NoRebin"): f"{significance_type}NoRebin",
                 ("Smoothed", "AdaptiveRebin"): f"{significance_type}",
+            }
+            bin_keys = {
+                ("Raw", "NoRebin"): None,
+                ("Raw", "AdaptiveRebin"): "RawAdaptiveBins",
+                ("Smoothed", "NoRebin"): None,
+                ("Smoothed", "AdaptiveRebin"): "AdaptiveBins",
             }
             missing = [k for k in curve_keys.values() if k not in sigma_row.index]
             if missing:
@@ -700,6 +709,28 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     line=dict(color=style["color"], dash=style["dash"], width=style["width"]),
                     line_shape="linear",
                 ), row=1, col=1)
+
+                bin_key = bin_keys[(spectrum_label, rebin_mode)]
+                if bin_key is None or bin_key not in sigma_row.index:
+                    grouped_bins = np.full_like(exposure_grid, float(total_bins_default), dtype=float)
+                else:
+                    grouped_bins = np.nan_to_num(
+                        _safe_array(sigma_row[bin_key]),
+                        nan=float(total_bins_default),
+                        posinf=float(total_bins_default),
+                        neginf=float(total_bins_default),
+                    )
+                    if len(grouped_bins) != len(exposure_grid):
+                        grouped_bins = np.interp(
+                            exposure_grid,
+                            np.linspace(exposure_grid[0], exposure_grid[-1], len(grouped_bins)),
+                            grouped_bins,
+                        )
+                fig.add_trace(go.Scatter(
+                    x=exposure_grid, y=grouped_bins, mode="lines", name=f"{label} bins",
+                    line=dict(color=style["color"], dash=style["dash"], width=max(1, style["width"] - 1)),
+                    line_shape="linear", showlegend=False,
+                ), row=2, col=1)
 
             fig = format_coustom_plotly(fig, title=f"Rebin Comparison - {args.folder} - {config}",
                                        add_units=False, figsize=(800, 600), matches=("x", None), add_watermark=False)

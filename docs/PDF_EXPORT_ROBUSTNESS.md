@@ -16,7 +16,7 @@ Previous PDF export attempts would hang indefinitely in certain scenarios:
 
 ## Solutions Implemented
 
-### 1. Shell Script (`scripts/marp-pdf.sh`) Improvements
+### 1. Shell Script (`src/tools/marp_pdf.sh`) Improvements
 
 #### Browser Detection & Validation
 
@@ -46,7 +46,7 @@ Previous PDF export attempts would hang indefinitely in certain scenarios:
 - Validates PDF file exists after printing
 - Reports file sizes for debugging
 
-### 2. Python Wrapper (`scripts/presentation_common.py`) Improvements
+### 2. Python Wrapper (`src/tools/presentations/common.py`) Improvements
 
 #### Overall Timeout Management
 
@@ -151,17 +151,17 @@ Run shell script with `--verbose` to see:
 - File sizes and timing
 
 ```bash
-scripts/marp-pdf.sh output/presentations/MySlides.md --verbose
+src/tools/marp_pdf.sh output/presentations/MySlides.md --verbose
 ```
 
 ### Direct Script Testing
 
 ```bash
 # Test browser detection without full export
-bash -c '. scripts/marp-pdf.sh --verbose'
+bash -c '. src/tools/marp_pdf.sh --verbose'
 
 # Test with custom browser
-MARP_BROWSER_PATH=/usr/bin/chrome scripts/marp-pdf.sh output/presentations/MySlides.md
+MARP_BROWSER_PATH=/usr/bin/chrome src/tools/marp_pdf.sh output/presentations/MySlides.md
 ```
 
 ### Python-Level Debugging
@@ -210,7 +210,7 @@ If export takes > 300s, suspect:
 **Fix**:
 
 1. Check available memory: `free -h`
-2. Try manual export: `scripts/marp-pdf.sh output/presentations/MySlides.md --verbose`
+2. Try manual export: `src/tools/marp_pdf.sh output/presentations/MySlides.md --verbose`
 3. Set explicit browser: `export MARP_BROWSER_PATH=/usr/bin/chromium`
 4. Increase timeout if needed (edit script line 80 and 147)
 

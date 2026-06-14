@@ -44,8 +44,8 @@ reco_energy_edges, reco_energy_centers, reco_ebin = get_default_energies(
 pio.templates.default = "none"
 colors = px.colors.qualitative.Prism
 
-save_path = f"{root}/images/workflow/correction"
-data_path = f"{root}/data/workflow/correction"
+save_path = f"{root}/output/images/workflow/correction"
+data_path = f"{root}/output/data/workflow/correction"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)

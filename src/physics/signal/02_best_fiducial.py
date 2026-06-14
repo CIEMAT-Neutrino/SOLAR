@@ -9,8 +9,8 @@ from lib import *
 
 _analysis_info = load_analysis_info(str(root))
 
-save_path = f"{root}/images/solar/fiducial"
-data_path = f"{root}/data/solar/fiducial"
+save_path = f"{root}/output/images/solar/fiducial"
+data_path = f"{root}/output/data/solar/fiducial"
 
 ANALYSIS_CHOICES = ["DayNight", "HEP", "Sensitivity"]
 GROUP_COLUMNS = ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]

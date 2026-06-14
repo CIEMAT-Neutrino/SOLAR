@@ -2,7 +2,9 @@
 # Master diagnostic runner - checks all potential 100x sources
 
 set -e
-cd /pc/choozdsk01/users/manthey/SOLAR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$ROOT_DIR"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════════════╗"
@@ -13,29 +15,29 @@ echo ""
 # 1. Check rebin fix
 echo "1️⃣  CHECKING REBIN_HIST2D FIX..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-bash diagnostic_signal_check.sh
+bash "$SCRIPT_DIR/diagnostic_signal_check.sh"
 echo ""
 
 # 2. Test rebin logic
 echo "2️⃣  TESTING REBIN LOGIC..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-python3 test_rebin_logic.py
+python3 tests/test_rebin_logic.py
 echo ""
 
 # 3. Test oscillation weighting
 echo "3️⃣  TESTING OSCILLATION WEIGHTING..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-python3 test_oscillation_weighting.py
+python3 tests/test_oscillation_weighting.py
 echo ""
 
 # 4. Compare versions (optional)
 echo "4️⃣  COMPARING WITH PREVIOUS VERSION..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ -d "/path/to/old/SENSITIVITY" ]; then
-    python3 compare_signal_versions.py
+    python3 "$SCRIPT_DIR/compare_signal_versions.py"
 else
     echo "ℹ️  No old data path configured"
-    echo "   To enable comparison, update compare_signal_versions.py with old path"
+    echo "   To enable comparison, update src/tools/compare_signal_versions.py with old path"
 fi
 echo ""
 

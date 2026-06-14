@@ -198,7 +198,7 @@ def _results_path(info, nhits, adjcl, ophits, profile_name):
 
 # ── main ────────────────────────────────────────────────────────────────────────
 
-save_path = f"{root}/images/analysis/sensitivity"
+save_path = f"{root}/output/images/analysis/sensitivity"
 os.makedirs(save_path, exist_ok=True)
 
 info         = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())

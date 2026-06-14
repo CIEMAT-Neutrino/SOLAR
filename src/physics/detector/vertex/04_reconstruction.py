@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/vertex/reconstruction"
-data_path = f"{root}/data/vertex/reconstruction"
+save_path = f"{root}/output/images/vertex/reconstruction"
+data_path = f"{root}/output/data/vertex/reconstruction"
 
 
 def position_mask(
@@ -219,7 +219,7 @@ for config in configs:
 
         df = pickle.load(
         open(
-            f"{root}/data/vertex/resolution/{config}/{name}/{config}_{name}_Resolution.pkl",
+            f"{root}/output/data/vertex/resolution/{config}/{name}/{config}_{name}_Resolution.pkl",
             "rb",
             )
         )

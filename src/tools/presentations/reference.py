@@ -332,7 +332,7 @@ def build_markdown(params, analysis_cfg, bkg_cfg):
     | **OpHits** | Number of optical hits | 0–50 |
     | **AdjCl** | Adjacent cluster count | 0–5 |
 
-    Best cuts are selected per analysis by the significance at a chosen exposure crossing (Asimov or ProfileLikelihood curve). The cut scan iterates over the full (NHits × OpHits × AdjCl) grid defined in [analysis/config.json](../../analysis/config.json).
+    Best cuts are selected per analysis by the significance at a chosen exposure crossing (Asimov or ProfileLikelihood curve). The cut scan iterates over the full (NHits × OpHits × AdjCl) grid defined in [config/analysis/config.json](../../config/analysis/config.json).
 
     ---
 
@@ -372,7 +372,7 @@ def build_markdown(params, analysis_cfg, bkg_cfg):
 
     where $\\hat{{f}}_s$ is the KDE estimate of the true surface activity density and $f_{{\\mathrm{{sim}},s}}$ is the simulation density.
 
-    Shielded VD configs apply an additional per-component rate reduction factor from measured cavern spectra (stored in `SPECTRA.SHIELDING` in [analysis/backgrounds.json](../../analysis/backgrounds.json)).
+    Shielded VD configs apply an additional per-component rate reduction factor from measured cavern spectra (stored in `SPECTRA.SHIELDING` in [config/analysis/backgrounds.json](../../config/analysis/backgrounds.json)).
 
     ---
 
@@ -397,7 +397,7 @@ def build_markdown(params, analysis_cfg, bkg_cfg):
     v^{{\\mathrm{{out}}}} = (K \\odot K)\\,v, \\qquad \\sigma^{{\\mathrm{{out}}}}_i = \\sqrt{{v^{{\\mathrm{{out}}}}_i}}
     $$
 
-    Smoothing config lives in [analysis/smoothing.json](../../analysis/smoothing.json) per analysis and stage.
+    Smoothing config lives in [config/analysis/smoothing.json](../../config/analysis/smoothing.json) per analysis and stage.
 
     ---
 

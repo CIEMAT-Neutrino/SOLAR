@@ -76,8 +76,8 @@ def evaluate_joint_pdf(p, x, y, z, kde_p, kde_x, kde_y, kde_z):
 
 def evaluate_surface_pdf(info, name, A, alpha, p, x, y, z, s, kde_p, kde_uv):
     """Evaluate the surface PDF under the assumption of dimensional independence."""
-    # surface_weights = json.load(open(f"{root}/import/surface_weights.json"))
-    # surface_production = json.load(open(f"{root}/import/surface_production.json"))
+    # surface_weights = json.load(open(f"{root}/config/import/surface_weights.json"))
+    # surface_production = json.load(open(f"{root}/config/import/surface_production.json"))
     w = np.empty_like(p)
     N = 0
     # Combine u and v into a 2D array for kde_uv
@@ -122,8 +122,8 @@ def evaluate_surface_pdf(info, name, A, alpha, p, x, y, z, s, kde_p, kde_uv):
 
 def evaluate_background_pdf(info, name, A, alpha, p, s, hists, bins):
     """Evaluate the background PDF using histogram PDFs for each surface."""
-    # surface_weights = json.load(open(f"{root}/import/surface_weights.json"))
-    # surface_production = json.load(open(f"{root}/import/surface_production.json"))
+    # surface_weights = json.load(open(f"{root}/config/import/surface_weights.json"))
+    # surface_production = json.load(open(f"{root}/config/import/surface_production.json"))
     N = 0
     w = np.zeros_like(p)
     for surface_id in np.unique(s):
@@ -202,7 +202,7 @@ def compute_particle_surface(
 
     output += f"\t[magenta][LOG][/magenta] Computing particle surfaces...\n"
 
-    surfaces = json.load(open(f"{root}/import/surface_positions.json"))
+    surfaces = json.load(open(f"{root}/config/import/surface_positions.json"))
 
     new_branches = ["SignalParticleSurface"]
     for tree in trees:
@@ -282,7 +282,7 @@ def compute_particle_surface(
                     output += f"[yellow][WARNING][/yellow] {100 * (run[tree]['SignalParticleSurface'][idx] == -1).sum() / len(run[tree]['SignalParticleSurface'][idx]):.2f}% of particles not within 1 cm of any surface for {name} in {config}...\n"
 
                 # Update the surface weights in the import json file
-                # surface_weights_file = f"{root}/import/surface_weights.json"
+                # surface_weights_file = f"{root}/config/import/surface_weights.json"
                 # surface_weights_data = json.load(open(surface_weights_file))
                 # if info["VERSION"] in surface_weights_data:
                 # surface_weights_data[info["VERSION"]][name] = surface_weights
@@ -440,7 +440,7 @@ def compute_true_weights(
 
     # Load json with number of trees per configuration
     exposure = {"radiological": {}}
-    surfaces = json.load(open(f"{root}/import/surface_positions.json"))
+    surfaces = json.load(open(f"{root}/config/import/surface_positions.json"))
     if new_branches is None:
         new_branches = []
 
@@ -614,7 +614,7 @@ def compute_true_weights(
 
                 if params["PARTICLE_WEIGHTING"] in ["histogram", "surface"]:
                     alpha_truth = []
-                    areas = json.load(open(f"{root}/import/surface_areas.json", "r"))
+                    areas = json.load(open(f"{root}/config/import/surface_areas.json", "r"))
                     for geometry, surfaces in areas.items():
                         for surface, area in surfaces.items():
                             areas[geometry][surface] = eval(area)
@@ -781,10 +781,10 @@ def normalize_true_weights(
         output = ""
 
     new_weights = [""]
-    surfaces = json.load(open(f"{root}/import/surface_positions.json"))
-    # surface_weights = json.load(open(f"{root}/import/surface_weights.json"))
-    # surface_production = json.load(open(f"{root}/import/surface_production.json"))
-    config_tree_weight = json.load(open(f"{root}/import/productions.json"))
+    surfaces = json.load(open(f"{root}/config/import/surface_positions.json"))
+    # surface_weights = json.load(open(f"{root}/config/import/surface_weights.json"))
+    # surface_production = json.load(open(f"{root}/config/import/surface_production.json"))
+    config_tree_weight = json.load(open(f"{root}/config/import/productions.json"))
     # Planes * productions * events per production
     for config in configs:
         info, params, output = get_param_dict(

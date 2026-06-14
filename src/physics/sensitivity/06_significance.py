@@ -65,7 +65,7 @@ parser.add_argument(
 parser.add_argument(
     "--nuisance_profile",
     type=str,
-    help="Nuisance parameter profile name (key in NUISANCE_PROFILES in analysis/config.json). Defaults to DEFAULT_NUISANCE_PROFILE.",
+    help="Nuisance parameter profile name (key in NUISANCE_PROFILES in config/analysis/config.json). Defaults to DEFAULT_NUISANCE_PROFILE.",
     default=None,
 )
 parser.add_argument(

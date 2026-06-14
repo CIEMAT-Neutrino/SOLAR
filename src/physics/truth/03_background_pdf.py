@@ -13,7 +13,7 @@ backgrounds.  Selects one of two backends:
                       Logic mirrors the former 03_background_surface.py.
 
 The default backend is read from TRUTH_PIPELINE.PDF_BACKEND in
-analysis/backgrounds.json and can be overridden with --backend on the CLI.
+config/analysis/backgrounds.json and can be overridden with --backend on the CLI.
 
 Both backends write identical output formats:
 
@@ -34,7 +34,7 @@ Both backends write identical output formats:
     {config}_{name}_histograms.pkl — raw {(surface_id, variable): (h, bins)}
                                      consumed by 02_background_spectra.py for plots
 
-Configs and particle names are read from analysis/backgrounds.json
+Configs and particle names are read from config/analysis/backgrounds.json
 (DEFAULT_CONFIGS and TRUTH_PIPELINE.BACKGROUND_NAMES); no CLI args needed.
 
 Run
@@ -134,18 +134,18 @@ val_scale        = int(pdf_cfg.get("VALIDATION_SCALE", 1000))
 configs_to_run = analysis_info.get("DEFAULT_CONFIGS", [])
 names          = truth_pipeline.get("BACKGROUND_NAMES", ["gamma", "neutron"])
 
-figure_path = f"{root}/images/background"
+figure_path = f"{root}/output/images/background"
 os.makedirs(figure_path, exist_ok=True)
 
 # ── Static import data ────────────────────────────────────────────────────────
-areas          = json.load(open(f"{root}/import/surface_areas.json"))
+areas          = json.load(open(f"{root}/config/import/surface_areas.json"))
 for geo, surfs in areas.items():
     for sid, expr in surfs.items():
         areas[geo][sid] = eval(expr)
 
-activity_files = json.load(open(f"{root}/import/surface_activity.json"))
-surface_names  = json.load(open(f"{root}/import/surfaces.json"))
-surface_pos    = json.load(open(f"{root}/import/surface_positions.json"))
+activity_files = json.load(open(f"{root}/config/import/surface_activity.json"))
+surface_names  = json.load(open(f"{root}/config/import/surfaces.json"))
+surface_pos    = json.load(open(f"{root}/config/import/surface_positions.json"))
 
 PARTICLE_MASS = {"electron": 0.511, "gamma": 0.0, "neutron": 939.565}
 
@@ -418,7 +418,7 @@ def run_legacy_backend(config: str, name: str):
     rprint(output)
 
     info          = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    surfaces      = json.load(open(f"{root}/import/surface_positions.json"))
+    surfaces      = json.load(open(f"{root}/config/import/surface_positions.json"))
     detector_time = 2 * info["TIMEWINDOW"] * len(run["Truth"]["Event"]) / 60 / 60 / 24 / 365.25
     detector_mass = get_workspace_detector_mass(config, info)
     detector_exp  = detector_mass * detector_time

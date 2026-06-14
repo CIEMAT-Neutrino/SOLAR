@@ -1,4 +1,5 @@
 {
+  "PATH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR",
   "DEFAULT_NUISANCE_PROFILE": "full",
   "NUISANCE_PROFILES": {
     "full": {

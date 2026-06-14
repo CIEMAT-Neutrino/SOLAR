@@ -127,8 +127,9 @@ export BROWSER_PATH="$real_browser"
 # CDP (not --print-to-pdf): respects @page CSS dimensions, correct orientation, no rotation fix needed.
 # --browser-timeout 60: prevents hang after Chrome closes its CDP connection.
 marp_out=""
+marp_config="$root_dir/src/tools/marp.config.js"
 if ! marp_out="$("$marp_bin" --pdf --allow-local-files --browser-path "$browser" \
-    --browser-timeout 60 -o "$output" "$input" 2>&1)"; then
+    --browser-timeout 60 --config "$marp_config" -o "$output" "$input" 2>&1)"; then
   # Show ERROR/FAIL lines first; fall back to full output
   error_lines="$(echo "$marp_out" | grep -iE '\[ *ERROR\]|\[ *FAIL' || true)"
   if [[ -z "$error_lines" ]]; then

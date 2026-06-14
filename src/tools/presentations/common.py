@@ -119,9 +119,9 @@ def gather_oscillogram_specs(folder, energy, analysis_name):
     analysis_dir = _ANALYSIS_DIR.get(analysis_lower, analysis_lower)
     energy_label = output_energy_label(energy)
 
-    primary_root = ROOT / "images" / "analysis" / analysis_dir / "oscillogram"
+    primary_root = ROOT / "output" / "images" / "analysis" / analysis_dir / "oscillogram"
     fallback_roots = [
-        ROOT / "images" / "analysis" / _ANALYSIS_DIR.get(a, a) / "oscillogram"
+        ROOT / "output" / "images" / "analysis" / _ANALYSIS_DIR.get(a, a) / "oscillogram"
         for a in _OSCILLOGRAM_FALLBACK_ORDER
         if _ANALYSIS_DIR.get(a, a) != analysis_dir
     ]

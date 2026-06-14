@@ -7,7 +7,7 @@ from lib import *
 
 analysis_info = load_analysis_info(str(root))
 
-save_path = f"{root}/images/analysis/day-night"
+save_path = f"{root}/output/images/analysis/day-night"
 data_path = f"{analysis_info['PATH']}/DAYNIGHT"
 for this_path in [save_path]:
     if not os.path.exists(this_path):

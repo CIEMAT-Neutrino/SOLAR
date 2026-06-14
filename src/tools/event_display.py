@@ -75,8 +75,11 @@ def parse_args():
     p.add_argument("--html", action="store_true",
                    help="Also save full interactive HTML (includes 3D view, large files)")
     p.add_argument("--output", type=Path,
-                   default=ROOT / "output" / "event_display",
-                   help="Output directory for DataFrame and figures")
+                   default=ROOT / "output" / "images" / "event",
+                   help="Output directory for figures (PNG/HTML)")
+    p.add_argument("--data-output", type=Path, dest="data_output",
+                   default=ROOT / "output" / "data" / "event",
+                   help="Output directory for DataFrames (pkl)")
     p.add_argument("--no-show", action="store_true",
                    help="Do not call fig.show() (useful in batch mode)")
     p.add_argument("--debug", action="store_true")
@@ -372,8 +375,8 @@ def main():
     args = parse_args()
 
     if args.save:
-
         args.output.mkdir(parents=True, exist_ok=True)
+        args.data_output.mkdir(parents=True, exist_ok=True)
 
     plots = set(args.plots)
     dfs = {}
@@ -402,7 +405,7 @@ def main():
 
     if args.save:
         for plot, (cfg, nm, evt, df) in dfs.items():
-            pkl_path = args.output / f"{cfg}_{nm}_event_{evt}_display.pkl"
+            pkl_path = args.data_output / f"{cfg}_{nm}_event_{evt}_display.pkl"
             df.to_pickle(pkl_path)
             print(f"Saved DataFrame → {pkl_path}")
 

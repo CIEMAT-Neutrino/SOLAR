@@ -5,11 +5,10 @@ SOLAR is the analysis and reconstruction toolkit used to study solar-neutrino si
 
 The current codebase is organized around:
 
-- staged reconstruction drivers in `src/workflow/`, `src/preselection/`, `src/PDS/`, `src/TPC/`, and `src/vertex/`
-- truth-level weighting and background preparation in `src/truth/`
-- analysis orchestration in `src/analysis/`
+- staged reconstruction drivers in `src/physics/calibration/`, `src/physics/detector/`, and `src/physics/truth/`
+- analysis orchestration in `src/pipelines/`
 - shared utilities in `lib/`
-- central defaults in `import/analysis.json`
+- central defaults in `config/analysis/` (split JSON files merged at runtime)
 
 Recent repository developments reflected in these docs include config-driven Gaussian smoothing, shared fiducial-optimization helpers, and regression tests for the smoothing pipeline.
 
@@ -40,13 +39,13 @@ Run the full staged detector chain for one sample:
 
 .. code-block:: bash
 
-   python3 src/00All.py --config hd_1x2x6_centralAPA --name marley
+   python3 src/pipelines/run_all.py --config hd_1x2x6_centralAPA --name marley
 
-Run the current high-level solar analysis driver:
+Run the high-level solar analysis driver:
 
 .. code-block:: bash
 
-   python3 src/analysis/10SensitivityAnalysis.py \
+   python3 src/pipelines/run_sensitivity.py \
      --config hd_1x2x6_centralAPA \
      --names marley gamma neutron \
      --analysis DayNight HEP Sensitivity \

@@ -173,7 +173,7 @@ def gather_fiducial_rows(energy):
 
 def gather_daynight_plot_specs(folder, energy):
     standard_configs = STANDARD_CONFIGS
-    plot_dir = ROOT / "images" / "analysis" / "day-night"
+    plot_dir = ROOT / "output" / "images" / "analysis" / "day-night"
     energy_label = output_energy_label(energy)
 
     slides = []
@@ -212,7 +212,7 @@ def gather_daynight_plot_specs(folder, energy):
 
 
 def _find_fiducial_plot(folder, config_key, label, energy):
-    root_dir = ROOT / "images" / "solar" / "fiducial"
+    root_dir = ROOT / "output" / "images" / "solar" / "fiducial"
     energy_label = output_energy_label(energy)
     candidate_dirs = [
         root_dir / config_key / "marley" / folder,
@@ -333,7 +333,7 @@ def render_daynight_plot_slides(plot_specs):
             )
 
     if not slides:
-        slides.append("### Plot outputs\n\nNo DayNight plot PNGs were found in images/analysis/day-night.")
+        slides.append("### Plot outputs\n\nNo DayNight plot PNGs were found in output/images/analysis/day-night.")
 
     return "\n\n---\n\n".join(slides)
 
@@ -491,7 +491,7 @@ def build_markdown(
     - Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../../data/analysis/best-sigma-json/daynight/truncated)
     - Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated)
-    - Figures: [images/analysis/day-night/truncated](../../images/analysis/day-night/truncated)
+    - Figures: [output/images/analysis/day-night/truncated](../../output/images/analysis/day-night/truncated)
     
     ---
     

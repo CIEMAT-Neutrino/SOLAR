@@ -1,6 +1,6 @@
 # Workflow Guide
 
-The repository is organized as a staged pipeline. Each stage writes reusable products into `data/` and diagnostic plots into `images/`, so later stages can be rerun without always restarting from the ROOT inputs.
+The repository is organized as a staged pipeline. Each stage writes reusable products into `output/data/` and diagnostic plots into `output/images/`, so later stages can be rerun without always restarting from the ROOT inputs.
 
 ## Detector And Reconstruction Stages
 
@@ -43,13 +43,13 @@ Important scripts include:
 
 ## Shared Configuration
 
-Analysis defaults are centralized in the `analysis/` directory (split JSON files merged at runtime by `lib/defaults.load_analysis_info`):
+Analysis defaults are centralized in the `config/analysis/` directory (split JSON files merged at runtime by `lib/defaults.load_analysis_info`):
 
-- `analysis/config.json`: workflow flags, analysis thresholds, adaptive rebinning, background component policy.
-- `analysis/smoothing.json`: Gaussian smoothing parameters per analysis, energy, and stage.
-- `analysis/fiducialization.json`: fiducialization settings for DayNight, HEP, and Sensitivity.
-- `analysis/backgrounds.json`: background component lists and truth-pipeline defaults.
-- `analysis/physics.json`: oscillation parameters and detector geometry defaults.
+- `config/analysis/config.json`: workflow flags, analysis thresholds, adaptive rebinning, background component policy.
+- `config/analysis/smoothing.json`: Gaussian smoothing parameters per analysis, energy, and stage.
+- `config/analysis/fiducialization.json`: fiducialization settings for DayNight, HEP, and Sensitivity.
+- `config/analysis/backgrounds.json`: background component lists and truth-pipeline defaults.
+- `config/analysis/physics.json`: oscillation parameters and detector geometry defaults.
 
 Those settings are consumed by helpers in `lib/smoothing.py`, `lib/fiducial.py`, and `lib/defaults.py`.
 
@@ -86,7 +86,7 @@ Flag precedence: `--no-computation` → `--no-significance` → `--no-fiducializ
 
 The high-level orchestrator `src/pipelines/run_sensitivity.py` applies a component-selection policy before launching per-sample analysis jobs.
 
-The policy is configured in `analysis/config.json` (or `analysis/backgrounds.json`) under `BACKGROUND_SAMPLES`:
+The policy is configured in `config/analysis/config.json` (or `config/analysis/backgrounds.json`) under `BACKGROUND_SAMPLES`:
 
 - `ANALYSES`: per-analysis background component lists (`DAYNIGHT`, `HEP`, `SENSITIVITY`).
 - `ESSENTIAL`: map of components that must be present (`true`) vs optional (`false`).

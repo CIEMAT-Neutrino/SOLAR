@@ -30,12 +30,12 @@ The conda environment includes Sphinx plus the plotting and analysis dependencie
 
 ## Data Access
 
-Many workflows expect detector outputs and derived products to live under repository-local `data/` and `sensitivity/` paths.
+Many workflows expect detector outputs and derived products to live under repository-local `output/data/` paths.
 
 If you are working from the CIEMAT environment with shared storage available, the helper script can mount those directories via `sshfs`:
 
 ```bash
-source scripts/setup.sh
+source src/tools/setup.sh
 ```
 
 That script is intended for shared remote storage workflows. If you already have local copies of the inputs, you can skip it and point your configuration files to the correct paths.

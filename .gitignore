@@ -38,9 +38,10 @@ output/presentations/*.md
 .bash_history
 .python_history
 
-data
+output/data
+src/notebooks/
 output/notebooks
-images/analysis/sensitivity
+output/images/analysis/sensitivity
 config/*/*/*calib/
 config/*/*calib/
 config/*/*/*/*.json

@@ -102,8 +102,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_save_path = f"{root}/images/common/line_plots"
-_data_path = f"{root}/data/common"
+_save_path = f"{root}/output/images/common/line_plots"
+_data_path = f"{root}/output/data/common"
 
 for _p in [_save_path, _data_path]:
     os.makedirs(_p, exist_ok=True)
@@ -239,7 +239,7 @@ def run_kinematic_threshold():
         )
         return
 
-    _cc_data_path = f"{root}/data/marley/stacked"
+    _cc_data_path = f"{root}/output/data/marley/stacked"
     _pkl = f"{_cc_data_path}/{config}/{name}/{config}_{name}_Neutrino_CC_Fraction.pkl"
 
     if not os.path.exists(_pkl):
@@ -286,7 +286,7 @@ def run_kinematic_threshold():
         rprint("  [cyan][SKIP][/cyan] figure (--no-plot)")
         return
 
-    _cc_save_path = f"{root}/images/marley/stacked"
+    _cc_save_path = f"{root}/output/images/marley/stacked"
     os.makedirs(_cc_save_path, exist_ok=True)
 
     fig = make_subplots(rows=1, cols=1)

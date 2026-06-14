@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/event/opflash"
+save_path = f"{root}/output/images/event/opflash"
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)

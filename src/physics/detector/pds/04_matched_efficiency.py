@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-save_path = f"{root}/images/PDS/matchedopflash"
-save_data = f"{root}/data/PDS/matchedopflash"
+save_path = f"{root}/output/images/PDS/matchedopflash"
+save_data = f"{root}/output/data/PDS/matchedopflash"
 
 for path in [save_path, save_data]:
     if not os.path.exists(path):
