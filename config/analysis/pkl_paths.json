@@ -1,5 +1,5 @@
 {
-  "_comment": "Central registry of all .pkl files produced and consumed during the SOLAR pipeline. Template variables use {curly_brace} notation — these are NOT Python f-strings but documentation markers. PATH = info['PATH'] = /pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR (from config/{config}/{config}_config.json). DATA_PATHS sub-keys live in analysis/backgrounds.json and are merged into info by load_analysis_info().",
+  "_comment": "Central registry of all .pkl files produced and consumed during the SOLAR pipeline. Template variables use {curly_brace} notation — these are NOT Python f-strings but documentation markers. PATH = info['PATH'] = /pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR (from config/{config}/{config}_config.json). DATA_PATHS sub-keys live in config/analysis/backgrounds.json and are merged into info by load_analysis_info(). Three categories: INTERMEDIATE (read by another pipeline stage, must live in PNFS), REPRODUCIBILITY (local checkpoint arrays that persist analysis-stage selections for downstream visualisation without re-running computation — output/data/results/), OUTPUT_ONLY (write-once plots/diagnostics, never read back by pipeline).",
 
   "INTERMEDIATE": {
     "_comment": "PKL files written by one stage and READ BY ANOTHER for computation (not only for plotting). These must be accessible to all collaborators and therefore live in PNFS.",
@@ -326,35 +326,39 @@
       "in_pnfs": true
     },
 
-    "SIGNAL_ANALYSIS_ARRAYS": {
-      "description": "Per-event numpy arrays (true energy, reco energy, weights, fiducial mask) written after fiducialisation and cut selection. The '_Ref' suffix marks the uncut reference arrays; the per-analysis/per-cut arrays add the analysis key and cut values. Consumed by oscillogram_plot.py for oscillation-weighted signal visualisation.",
-      "base": "{root}/output/data/results/{config}/{name}/{folder}",
-      "filenames": {
-        "true_energy_ref":    "AnalysisEnergy_{energy}_Ref.pkl",
-        "reco_energy_ref":    "AnalysisData_{energy}_Ref.pkl",
-        "weights_ref":        "AnalysisWeights_{energy}_Ref.pkl",
-        "fid_mask_ref":       "FiducializationMask_{energy}_Ref.pkl",
-        "true_energy_cut":    "AnalysisEnergy_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
-        "reco_energy_cut":    "AnalysisData_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
-        "weights_cut":        "AnalysisWeights_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
-        "mask_cut":           "AnalysisMask_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl"
-      },
-      "written_by": "src/physics/signal/03_analysis.py (save_pkl; Ref arrays always, cut arrays only when --rebin is active)",
-      "read_by": [
-        "src/physics/common/oscillogram_plot.py (_load_ref → AnalysisEnergy/Data/Weights/FiducializationMask _Ref)"
-      ],
-      "path_source": "src/physics/signal/03_analysis.py: export_path = root/output/data/results",
-      "in_pnfs": false
-    },
-
     "SIGNAL_NADIR_KDE": {
-      "description": "KDE-smoothed P(e|nadir) probability density files used for nadir-slice oscillation studies. One file per (name, label, nadir_slice, dm2, sin13, sin12) point. Currently written by 05_signal_nadir_kde.py; no active pipeline consumer identified — retained in PNFS for external analysis use.",
-      "base": "{PATH}/signal/osc/nadir_{nadir_slice:.3f}",
-      "filename": "{name}_{label}_kde_p_nadir_{nadir_slice:.3f}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl",
+      "description": "KDE-smoothed P(e|nadir) probability density files used for nadir-slice oscillation studies. One file per (name, label, nadir_slice, dm2, sin13, sin12) point. Note: nadir_slice values are stored negated (cosine convention — negative = below horizon). Currently written by 05_signal_nadir_kde.py; no active pipeline consumer identified — retained in PNFS for external analysis use.",
+      "base": "{PATH}/signal/osc/nadir_{-nadir_slice:.3f}",
+      "filename": "{name}_{label}_kde_p_nadir_{-nadir_slice:.3f}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl",
       "written_by": "src/physics/truth/05_signal_nadir_kde.py (save_pkl)",
       "read_by": [],
       "path_source": "src/physics/truth/05_signal_nadir_kde.py: data_path = /pnfs/.../SOLAR/signal",
       "in_pnfs": true
+    }
+  },
+
+  "REPRODUCIBILITY": {
+    "_comment": "Local checkpoint arrays written to output/data/results/ after fiducialisation and cut selection. These persist the analysis-stage event selections so that oscillogram plots, significance visualisations, and other downstream tools can be reproduced without re-running the full signal processing chain. Not in PNFS — local to each workspace. Regenerate by re-running src/physics/signal/03_analysis.py.",
+
+    "SIGNAL_ANALYSIS_ARRAYS": {
+      "description": "Per-event numpy arrays (true energy, reco energy, oscillation weights, fiducial mask, cut mask) written by 03_analysis.py after fiducialisation and detector-cut selection. The '_Ref' files are the uncut reference arrays written unconditionally; the per-analysis/per-cut arrays are added when --rebin is active. All files are keyed by (config, name, folder, energy). Consumed by oscillogram_plot.py to reproduce oscillation-weighted visualisations without re-running fiducialisation.",
+      "base": "{root}/output/data/results/{config}/{name}/{folder}",
+      "filenames": {
+        "true_energy_ref":    "{config}_{name}_AnalysisEnergy_{energy}_Ref.pkl",
+        "reco_energy_ref":    "{config}_{name}_AnalysisData_{energy}_Ref.pkl",
+        "weights_ref":        "{config}_{name}_AnalysisWeights_{energy}_Ref.pkl",
+        "fid_mask_analysis":  "{config}_{name}_FiducializationMask_{energy}_{analysis_key}.pkl",
+        "true_energy_cut":    "{config}_{name}_AnalysisEnergy_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "reco_energy_cut":    "{config}_{name}_AnalysisData_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "weights_cut":        "{config}_{name}_AnalysisWeights_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "mask_cut":           "{config}_{name}_AnalysisMask_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl"
+      },
+      "written_by": "src/physics/signal/03_analysis.py (save_pkl; Ref + FiducializationMask always, cut arrays only when --rebin is active)",
+      "read_by": [
+        "src/physics/common/oscillogram_plot.py (_load_ref → AnalysisEnergy/Data/Weights _Ref + FiducializationMask for oscillation-weighted plot)"
+      ],
+      "path_source": "src/physics/signal/03_analysis.py: export_path = f'{root}/output/data/results'",
+      "in_pnfs": false
     }
   },
 
@@ -405,13 +409,14 @@
     },
 
     "BACKGROUND_SPECTRA": {
-      "description": "Background particle momentum spectra DataFrames (one per surface/component) produced by the background-spectra script for diagnostic visualisation.",
-      "base": "{root}/output/data/background/{config}/{name}",
+      "description": "Background particle momentum spectra DataFrames produced by the background-spectra script for diagnostic visualisation. Per-config spectra go to a 'spectra/' subfolder; the global summary has no config/name prefix.",
+      "base": "{root}/output/data/background",
       "filenames": {
-        "spectra": "background_spectra.pkl",
-        "summary": "background_spectra_summary.pkl"
+        "per_config_spectra":  "{config}/spectra/background_spectra.pkl",
+        "per_config_summary":  "{config}/spectra/background_spectra_summary.pkl",
+        "global_summary":      "background_spectra_summary.pkl"
       },
-      "written_by": "src/physics/truth/02_background_spectra.py (save_pkl)",
+      "written_by": "src/physics/truth/02_background_spectra.py (save_pkl; per-config uses config+subfolder='spectra', global summary uses no config/name)",
       "read_by": [],
       "in_pnfs": false
     },
@@ -436,23 +441,23 @@
 
     "DAYNIGHT_EXPOSURE": {
       "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). Saved for cross-analysis comparison but not read by any other pipeline script.",
-      "base": "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
+      "base": "{root}/output/data/daynight/{config}/{name}/{folder}",
       "filename": "DayNight_Exposure.pkl",
       "written_by": [
         "src/physics/daynight/exposure_plot.py (save_df)",
         "src/physics/common/exposure_plot.py (save_df → DayNight mode)"
       ],
       "read_by": [],
-      "in_pnfs": true
+      "in_pnfs": false
     },
 
     "HEP_REBIN_COMPARISON": {
       "description": "HEP adaptive-rebin comparison DataFrame (raw vs rebinned significance for each cut × exposure point). Saved for diagnostic review; not read back by any other script.",
-      "base": "{PATH}/HEP/{config}/{name}/{folder}",
+      "base": "{root}/output/data/hep/{config}/{name}/{folder}",
       "filename": "HEP_AdaptiveRebin_Comparison.pkl",
       "written_by": "src/physics/hep/rebin_comparison.py (save_df)",
       "read_by": [],
-      "in_pnfs": true
+      "in_pnfs": false
     },
 
     "WORKFLOW_CORRECTION": {

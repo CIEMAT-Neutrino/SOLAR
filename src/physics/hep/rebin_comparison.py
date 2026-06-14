@@ -8,8 +8,8 @@ from lib import *
 analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/output/images/analysis/hep"
-data_path = f"{analysis_info['PATH']}/HEP"
-for this_path in [save_path]:
+data_path = f"{root}/output/data/hep"
+for this_path in [save_path, data_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 

@@ -9,9 +9,9 @@ from lib import *
 analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/output/images/analysis/day-night"
-data_path = f"{analysis_info['PATH']}/DAYNIGHT"
+data_path = f"{root}/output/data/daynight"
 
-for this_path in [save_path]:
+for this_path in [save_path, data_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
