@@ -326,6 +326,15 @@
       "in_pnfs": true
     },
 
+    "CC_FRACTION": {
+      "description": "Per-PDG fractional CC neutrino energy deposition as a function of neutrino energy. One row per (energy bin, PDG) combination; TSignalSumK is the fraction of neutrino energy carried by that channel. Read by line_plot.py to produce the kinematic-threshold overlay plot.",
+      "base": "{root}/output/data/marley/stacked/{config}/{name}",
+      "filename": "{config}_{name}_Neutrino_CC_Fraction.pkl",
+      "written_by": "src/physics/truth/marley_cc_fraction.py (save_df; replaces TruthMarleyStacked.ipynb)",
+      "read_by": ["src/physics/common/line_plot.py (kinematic_threshold plot type)"],
+      "in_pnfs": false
+    },
+
     "SIGNAL_NADIR_KDE": {
       "description": "KDE-smoothed P(e|nadir) probability density files used for nadir-slice oscillation studies. One file per (name, label, nadir_slice, dm2, sin13, sin12) point. Note: nadir_slice values are stored negated (cosine convention — negative = below horizon). Currently written by 05_signal_nadir_kde.py; no active pipeline consumer identified — retained in PNFS for external analysis use.",
       "base": "{PATH}/signal/osc/nadir_{-nadir_slice:.3f}",
@@ -397,11 +406,10 @@
     },
 
     "LINE_PLOT_DATA": {
-      "description": "CC cross-section fraction and kinematic threshold DataFrames produced by the line-plot comparison tool.",
-      "base": "{root}/output/data/common",
+      "description": "DataFrames produced by the line-plot comparison tool. NadirPDF goes to output/data/common; KinematicThreshold goes to the same marley/stacked tree as CC_FRACTION.",
       "filenames": {
-        "summary":   "{filename}.pkl (varies by plot type)",
-        "cc_thresh": "cc/{config}/{name}/{config}_{name}_KinematicThreshold.pkl"
+        "nadir_pdf":        "{root}/output/data/common/NadirPDF.pkl",
+        "kinematic_thresh": "{root}/output/data/marley/stacked/{config}/{name}/{config}_{name}_KinematicThreshold.pkl"
       },
       "written_by": "src/physics/common/line_plot.py (save_df)",
       "read_by": [],
@@ -424,7 +432,7 @@
     "SIGNAL_ANALYSIS_DATA": {
       "description": "Flattened per-event analysis DataFrame (energy, counts, errors, MC counts per rebin bin) saved for local inspection. Not read back by any pipeline script; use SIGNAL_REBIN (in PNFS) for computation.",
       "base": "{root}/output/data/solar/weighted/{config}/{name}/{folder}",
-      "filename": "{energy}_{analysis}_AnalysisData.pkl",
+      "filename": "{config}_{name}_{energy}_{analysis}_AnalysisData.pkl",
       "written_by": "src/physics/signal/03_analysis.py (save_df)",
       "read_by": [],
       "in_pnfs": false
@@ -432,8 +440,8 @@
 
     "SIGNAL_WEIGHTED_DISTRIBUTIONS": {
       "description": "Per-NHits weighted count distribution DataFrame covering all cut combinations for a given (config, name, folder). Produced after oscillation weighting for visual inspection.",
-      "base": "{root}/output/data/solar/weighted/{config}/{name}/{folder}",
-      "filename": "Weighted_Distributions.pkl",
+      "base": "{root}/output/data/solar/nhits/{config}/{name}/{folder}",
+      "filename": "{config}_{name}_Weighted_Distributions.pkl",
       "written_by": "src/physics/signal/04_weighted.py (save_df)",
       "read_by": [],
       "in_pnfs": false
@@ -558,6 +566,18 @@
         "opflash_eff":   "OpFlash_Efficiency.pkl"
       },
       "written_by": "src/physics/detector/pds/04_matched_efficiency.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PRESELECTION_PRODUCTION": {
+      "description": "Production distribution and limits DataFrames from the preselection production stage. One pair of files per (config, name).",
+      "base": "{root}/output/data/preselection/production/{config}/{name}",
+      "filenames": {
+        "distributions": "{config}_{name}_Production_Distributions.pkl",
+        "limits":        "{config}_{name}_Production_Limits.pkl"
+      },
+      "written_by": "src/physics/detector/preselection/01_production.py (save_df)",
       "read_by": [],
       "in_pnfs": false
     },

@@ -220,8 +220,8 @@ def run_kinematic_threshold():
     """
     Kinematic threshold for CC νe + 40Ar → e⁻ + 40K* interaction.
 
-    Reads Neutrino_CC_Fraction DataFrame saved by TruthMarleyStacked.ipynb
-    (or run_signal.py). Computes:
+    Reads Neutrino_CC_Fraction DataFrame saved by src/physics/truth/marley_cc_fraction.py.
+    Computes:
 
       T_threshold(E_nu) = (1 - Σ_i f_i(E_nu)) × E_nu
 
