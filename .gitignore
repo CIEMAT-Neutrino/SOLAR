@@ -38,7 +38,8 @@ output/presentations/*.md
 .bash_history
 .python_history
 
-output/data
+output/data/**
+!output/data/index.json
 src/notebooks/
 output/notebooks
 output/images/analysis/sensitivity
