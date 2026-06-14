@@ -246,6 +246,115 @@
       "path_source": "info['PATH'] from load_analysis_info() → PATH/SENSITIVITY/{config}/{name}/{folder}/",
       "in_pnfs": true,
       "_migration_note": "Previously at {root}/data/analysis/sensitivity/{config}/{name}/{folder}/"
+    },
+
+    "DAYNIGHT_RESULTS": {
+      "description": "Full per-energy significance scan DataFrame (all cuts × exposure grid) for DayNight analysis. Primary input for all DayNight plotting scripts. Optional companion _SignificanceBins file holds per-bin breakdown when --significance_bins is active.",
+      "base": "{PATH}/DAYNIGHT/{folder}/{config}/{name}",
+      "filenames": {
+        "results":           "{config}_{name}_{energy}_DayNight_Results.pkl",
+        "significance_bins": "{config}_{name}_{energy}_DayNight_SignificanceBins.pkl"
+      },
+      "written_by": "src/physics/daynight/01_daynight.py (save_df)",
+      "read_by": [
+        "src/physics/daynight/significance_plot.py (pd.read_pickle → per-cut spectra)",
+        "src/physics/daynight/exposure_plot.py (pd.read_pickle → exposure curves)",
+        "src/physics/common/exposure_plot.py (pd.read_pickle → DayNight exposure mode)",
+        "src/physics/common/significance_plot.py (pd.read_pickle → DayNight significance mode)"
+      ],
+      "path_source": "hardcoded PNFS root in daynight/01_daynight.py: /pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{folder}/",
+      "in_pnfs": true
+    },
+
+    "HEP_RESULTS": {
+      "description": "Full per-energy significance scan DataFrame (all cuts × exposure grid) for HEP analysis. Primary input for all HEP plotting scripts. Optional companion _SignificanceBins file holds per-bin breakdown when --significance_bins is active.",
+      "base": "{PATH}/HEP/{folder}/{config}/{name}",
+      "filenames": {
+        "results":           "{config}_{name}_{energy}_HEP_Results.pkl",
+        "significance_bins": "{config}_{name}_{energy}_HEP_SignificanceBins.pkl"
+      },
+      "written_by": "src/physics/hep/01_hep.py (save_df)",
+      "read_by": [
+        "src/physics/hep/significance_plot.py (pd.read_pickle → per-cut spectra)",
+        "src/physics/hep/exposure_plot.py (pd.read_pickle → exposure curves)",
+        "src/physics/hep/rebin_comparison.py (pd.read_pickle → rebin comparison)",
+        "src/physics/common/exposure_plot.py (pd.read_pickle → HEP exposure and rebin modes)",
+        "src/physics/common/significance_plot.py (pd.read_pickle → HEP significance mode)"
+      ],
+      "path_source": "hardcoded PNFS root in hep/01_hep.py: /pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{folder}/",
+      "in_pnfs": true
+    },
+
+    "BEST_SIGMAS": {
+      "description": "Best-significance summary DataFrame keyed by (config, name, energy): optimal NHits/OpHits/AdjCl cut, crossing exposures (Sigma2/Sigma3/PLSigma2/PLSigma3), and significance metadata. Written per analysis. The 'label' in the filename is 'highest' for the standard best-cut pass or a custom tag for spiked-curve exports.",
+      "base": "{PATH}/{ANALYSIS}/{folder}/{config}/{name}",
+      "filenames": {
+        "best":   "{config}_{name}_highest_{analysis}.pkl",
+        "spiked": "{config}_{name}_highest_spiked_{analysis}.pkl"
+      },
+      "written_by": "src/physics/sensitivity/05_best_sigmas.py (save_df for each analysis in --analysis list)",
+      "read_by": [
+        "src/physics/common/exposure_plot.py (_get_selection_cuts → best NHits/OpHits/AdjCl selection)",
+        "src/physics/common/significance_plot.py (sigma_map_path → cut selection for significance plots)",
+        "src/physics/daynight/significance_plot.py (sigma_map_path → best-cut significance plot)",
+        "src/physics/hep/significance_plot.py (sigma_path → best-cut HEP significance plot)",
+        "src/physics/hep/exposure_plot.py (_get_selection_cuts → cut selection for exposure curves)",
+        "src/physics/sensitivity/01_background_template.py (_load_best_cut_map → optional default)",
+        "src/physics/sensitivity/02_signal_template.py (_load_best_cut_map → optional default)"
+      ],
+      "path_source": "src/physics/sensitivity/05_best_sigmas.py: save_df(path=info['PATH']+'/{ANALYSIS}/{folder}', config, name)",
+      "in_pnfs": true
+    },
+
+    "SIGNAL_REBIN": {
+      "description": "Rebinned per-event signal (marley) or background (neutron/gamma/etc.) event arrays at analysis-energy resolution, one file per (config, name, energy, analysis). These are the primary signal/background inputs for 01_daynight.py, 01_hep.py, and their plotting scripts. Background component names (neutron, gamma, …) use the same filename pattern with the component name in place of {name}.",
+      "base_signal":     "{PATH}/signal/{folder}/{ANALYSIS}/{config}/{name}",
+      "base_background": "{PATH}/background/{folder}/{ANALYSIS}/{config}/{component}",
+      "filename": "{config}_{name}_{energy}_Rebin.pkl",
+      "written_by": "src/physics/signal/03_analysis.py (save_df for each analysis/energy/name combination)",
+      "read_by": [
+        "src/physics/daynight/01_daynight.py (pd.read_pickle → DayNight significance scan)",
+        "src/physics/hep/01_hep.py (pd.read_pickle → HEP significance scan)",
+        "src/physics/daynight/significance_plot.py (pd.read_pickle → counts for spectrum plots)",
+        "src/physics/hep/significance_plot.py (pd.read_pickle → counts for HEP spectrum plots)",
+        "src/physics/daynight/exposure_plot.py (pd.read_pickle → rebin spectra for exposure)",
+        "src/physics/hep/exposure_plot.py (pd.read_pickle → rebin spectra for HEP exposure)",
+        "src/physics/hep/reference_comparison.py (pd.read_pickle → reference spectrum overlay)",
+        "src/tools/optimize_smoothing.py (pd.read_pickle → smoothing parameter optimisation)"
+      ],
+      "path_source": "src/physics/signal/03_analysis.py: save_df(path=info['PATH']+'/signal|background/{folder}', analysis.upper(), config, name)",
+      "in_pnfs": true
+    },
+
+    "SIGNAL_ANALYSIS_ARRAYS": {
+      "description": "Per-event numpy arrays (true energy, reco energy, weights, fiducial mask) written after fiducialisation and cut selection. The '_Ref' suffix marks the uncut reference arrays; the per-analysis/per-cut arrays add the analysis key and cut values. Consumed by oscillogram_plot.py for oscillation-weighted signal visualisation.",
+      "base": "{root}/output/data/results/{config}/{name}/{folder}",
+      "filenames": {
+        "true_energy_ref":    "AnalysisEnergy_{energy}_Ref.pkl",
+        "reco_energy_ref":    "AnalysisData_{energy}_Ref.pkl",
+        "weights_ref":        "AnalysisWeights_{energy}_Ref.pkl",
+        "fid_mask_ref":       "FiducializationMask_{energy}_Ref.pkl",
+        "true_energy_cut":    "AnalysisEnergy_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "reco_energy_cut":    "AnalysisData_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "weights_cut":        "AnalysisWeights_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl",
+        "mask_cut":           "AnalysisMask_{energy}_{analysis_key}_NHits{nhits}_OpHits{ophits}_AdjCl{adjcl}.pkl"
+      },
+      "written_by": "src/physics/signal/03_analysis.py (save_pkl; Ref arrays always, cut arrays only when --rebin is active)",
+      "read_by": [
+        "src/physics/common/oscillogram_plot.py (_load_ref → AnalysisEnergy/Data/Weights/FiducializationMask _Ref)"
+      ],
+      "path_source": "src/physics/signal/03_analysis.py: export_path = root/output/data/results",
+      "in_pnfs": false
+    },
+
+    "SIGNAL_NADIR_KDE": {
+      "description": "KDE-smoothed P(e|nadir) probability density files used for nadir-slice oscillation studies. One file per (name, label, nadir_slice, dm2, sin13, sin12) point. Currently written by 05_signal_nadir_kde.py; no active pipeline consumer identified — retained in PNFS for external analysis use.",
+      "base": "{PATH}/signal/osc/nadir_{nadir_slice:.3f}",
+      "filename": "{name}_{label}_kde_p_nadir_{nadir_slice:.3f}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl",
+      "written_by": "src/physics/truth/05_signal_nadir_kde.py (save_pkl)",
+      "read_by": [],
+      "path_source": "src/physics/truth/05_signal_nadir_kde.py: data_path = /pnfs/.../SOLAR/signal",
+      "in_pnfs": true
     }
   },
 
@@ -264,9 +373,301 @@
 
     "EVENT_DISPLAY": {
       "description": "Per-event display DataFrame for single-event visualisation tool. Written on demand, never consumed by analysis pipeline.",
-      "base": "{output_dir}",
+      "base": "{root}/output/data/event",
       "filename": "{config}_{name}_event_{evt}_display.pkl",
-      "written_by": "src/tools/event_display.py (df.to_pickle)",
+      "written_by": "src/tools/event_display.py (df.to_pickle via --data-output)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "OSCILLOGRAM": {
+      "description": "Oscillogram Pee(E, θ_nadir) and day-night averaged oscillation probability DataFrames for a given oscillation parameter point, plus Signal1D_{energy} marginal spectrum DataFrames.",
+      "base": "{root}/output/data/analysis/{analysis_dir}/{config}/{name}/{folder}",
+      "filenames": {
+        "oscillogram": "Oscillogram.pkl",
+        "signal_1d":   "Signal1D_{energy}.pkl"
+      },
+      "written_by": "src/physics/common/oscillogram_plot.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "LINE_PLOT_DATA": {
+      "description": "CC cross-section fraction and kinematic threshold DataFrames produced by the line-plot comparison tool.",
+      "base": "{root}/output/data/common",
+      "filenames": {
+        "summary":   "{filename}.pkl (varies by plot type)",
+        "cc_thresh": "cc/{config}/{name}/{config}_{name}_KinematicThreshold.pkl"
+      },
+      "written_by": "src/physics/common/line_plot.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "BACKGROUND_SPECTRA": {
+      "description": "Background particle momentum spectra DataFrames (one per surface/component) produced by the background-spectra script for diagnostic visualisation.",
+      "base": "{root}/output/data/background/{config}/{name}",
+      "filenames": {
+        "spectra": "background_spectra.pkl",
+        "summary": "background_spectra_summary.pkl"
+      },
+      "written_by": "src/physics/truth/02_background_spectra.py (save_pkl)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "SIGNAL_ANALYSIS_DATA": {
+      "description": "Flattened per-event analysis DataFrame (energy, counts, errors, MC counts per rebin bin) saved for local inspection. Not read back by any pipeline script; use SIGNAL_REBIN (in PNFS) for computation.",
+      "base": "{root}/output/data/solar/weighted/{config}/{name}/{folder}",
+      "filename": "{energy}_{analysis}_AnalysisData.pkl",
+      "written_by": "src/physics/signal/03_analysis.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "SIGNAL_WEIGHTED_DISTRIBUTIONS": {
+      "description": "Per-NHits weighted count distribution DataFrame covering all cut combinations for a given (config, name, folder). Produced after oscillation weighting for visual inspection.",
+      "base": "{root}/output/data/solar/weighted/{config}/{name}/{folder}",
+      "filename": "Weighted_Distributions.pkl",
+      "written_by": "src/physics/signal/04_weighted.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "DAYNIGHT_EXPOSURE": {
+      "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). Saved for cross-analysis comparison but not read by any other pipeline script.",
+      "base": "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
+      "filename": "DayNight_Exposure.pkl",
+      "written_by": [
+        "src/physics/daynight/exposure_plot.py (save_df)",
+        "src/physics/common/exposure_plot.py (save_df → DayNight mode)"
+      ],
+      "read_by": [],
+      "in_pnfs": true
+    },
+
+    "HEP_REBIN_COMPARISON": {
+      "description": "HEP adaptive-rebin comparison DataFrame (raw vs rebinned significance for each cut × exposure point). Saved for diagnostic review; not read back by any other script.",
+      "base": "{PATH}/HEP/{config}/{name}/{folder}",
+      "filename": "HEP_AdaptiveRebin_Comparison.pkl",
+      "written_by": "src/physics/hep/rebin_comparison.py (save_df)",
+      "read_by": [],
+      "in_pnfs": true
+    },
+
+    "WORKFLOW_CORRECTION": {
+      "description": "NHit distribution, cluster distribution, and per-charge lifetime/correction-factor DataFrames from the charge correction stage.",
+      "base": "{root}/output/data/workflow/correction/{config}/{name}",
+      "filenames": {
+        "nhit_distributions":    "NHit_Distributions.pkl",
+        "cluster_distributions": "Cluster_Distributions.pkl",
+        "lifetime_correction":   "{charge}Charge_Lifetime_Correction.pkl",
+        "correction_factor":     "{charge}Charge_Correction_Factor.pkl"
+      },
+      "written_by": "src/physics/calibration/01_correction.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "WORKFLOW_CALIBRATION": {
+      "description": "Per-NHits 2D calibration DataFrames and per-variable 1D calibration summary DataFrames from the charge calibration stage. (The PKL calibration function files themselves are INTERMEDIATE — see CALIBRATION_CHARGE.)",
+      "base": "{root}/output/data/workflow/calibration/{config}/{name}",
+      "filenames": {
+        "calibration_2d": "{variable}Charge_Calibration_2D_NHits{nhit}.pkl",
+        "calibration_1d": "{variable}Charge_Calibration.pkl",
+        "custom":         "{df_filename}.pkl"
+      },
+      "written_by": "src/physics/calibration/02_calibration.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "WORKFLOW_DISCRIMINATION": {
+      "description": "Random-forest feature importance, CC production, AdjCl selection, and cluster discriminant DataFrames from the discrimination stage. (The trained model PKL itself is INTERMEDIATE — see CALIBRATION_DISCRIMINANT.)",
+      "base": "{root}/output/data/workflow/discrimination/{config}/{name}",
+      "filenames": {
+        "cc_production":     "Neutrino_CC_Production.pkl",
+        "adjcl_selection":   "AdjCl_Selection.pkl",
+        "rf_importance":     "Random_Forest_Importance.pkl",
+        "discriminant":      "Cluster_Discriminant.pkl"
+      },
+      "written_by": "src/physics/calibration/03_discrimination.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "WORKFLOW_RECONSTRUCTION": {
+      "description": "Neutrino energy histograms (truth, reco, 1D/2D smearing matrices, normalised fit) from the reconstruction stage. (The calibration slope/intercept PKLs at this path are INTERMEDIATE — see CALIBRATION_CHARGE.)",
+      "base": "{root}/output/data/workflow/reconstruction/{config}/{name}",
+      "filenames": {
+        "neutrino_energy":       "Neutrino_Energy.pkl",
+        "daughter_energy":       "Neutrino_Daughter_Energy.pkl",
+        "gamma_energy":          "Gamma_Energy.pkl",
+        "truth_hist1d":          "Truth_Neutrino_{energy}_hist1D.pkl",
+        "reco_hist1d":           "Reco_Neutrino_{energy}_hist1D.pkl",
+        "smearing_raw":          "Neutrino_Smearing_Raw.pkl",
+        "hist2d_norm_fit":       "Reco_Neutrino_Energy_Norm_Hist2D_Fit.pkl",
+        "hist2d":                "Neutrino_{energy}_hist2D.pkl",
+        "hist2d_norm":           "Reco_Neutrino_Energy_Norm_Hist2D.pkl"
+      },
+      "written_by": "src/physics/calibration/04_reconstruction.py (save_df / save_pkl)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PDS_OPFLASH": {
+      "description": "MainOpFlashPE vs drift distributions and PE-cut coordinate scan DataFrames from the opflash stage.",
+      "base": "{root}/output/data/PDS/opflash/{config}/{name}",
+      "filenames": {
+        "pe_drift":     "MainOpFlashPE_vs_Drift.pkl",
+        "pe_drift_cut": "MainOpFlashPE_vs_Drift_{cut}_Modulator_{jdx}.pkl",
+        "pe_cut_scan":  "PECut_Coordinate_Scan.pkl"
+      },
+      "written_by": "src/physics/detector/pds/01_opflash.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PDS_ADJOPFLASH": {
+      "description": "Adjacent opflash radial/plane/coordinate scan DataFrames.",
+      "base": "{root}/output/data/PDS/adjopflash/{config}/{name}",
+      "filenames": {
+        "radial_scan": "Signal_AdjOpFlash{y_label}_RadialScan.pkl",
+        "plane_scan":  "Signal_AdjOpFlash{y_label}_PlaneScan.pkl",
+        "coord_scan":  "Signal_AdjOpFlash{y_label}_{coord}Scan_{type}.pkl"
+      },
+      "written_by": "src/physics/detector/pds/02_adj_opflash.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PDS_MATCHED_EFFICIENCY": {
+      "description": "Matched opflash efficiency scans (drift, energy, plane, coordinate) and summary DataFrame.",
+      "base": "{root}/output/data/PDS/matchedopflash/{config}/{name}",
+      "filenames": {
+        "drift_scan":    "{matching_type}_Efficiency_Drift_Scan.pkl",
+        "energy_scan":   "{matching_type}_Efficiency_Energy_Scan.pkl",
+        "plane_scan":    "{matching_type}_Efficiency_Plane_Scan.pkl",
+        "efficiency":    "{matching_type}_Efficiency_Scan.pkl",
+        "var_scan":      "{matching_type}_{variable}_{scan_type}.pkl",
+        "opflash_eff":   "OpFlash_Efficiency.pkl"
+      },
+      "written_by": "src/physics/detector/pds/04_matched_efficiency.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PRESELECTION_EFFICIENCY": {
+      "description": "Per-variable preselection efficiency and combined summary DataFrames.",
+      "base": "{root}/output/data/preselection/efficiency/{config}/{name}",
+      "filenames": {
+        "per_var":  "{tree}_Preselection_{var}_Efficiency.pkl",
+        "summary":  "Preselection_Efficiency.pkl"
+      },
+      "written_by": "src/physics/detector/preselection/02_efficiency.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "PRESELECTION_CLUSTERING": {
+      "description": "Cluster distribution and clustering efficiency DataFrames.",
+      "base": "{root}/output/data/preselection/clustering/{config}/{name}",
+      "filenames": {
+        "cluster_df":  "Cluster_{df_label}.pkl",
+        "efficiency":  "Clustering_Efficiency.pkl"
+      },
+      "written_by": "src/physics/detector/preselection/03_clustering.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "TPC_ELECTRON_ENERGY": {
+      "description": "Per-NHits electron energy resolution DataFrames and combined summary.",
+      "base": "{root}/output/data/TPC/resolution/electron/{config}/{name}",
+      "filenames": {
+        "per_nhit": "{variable_label}_Energy_{label}Resolution_NHits{nhit}.pkl",
+        "summary":  "Electron_Energy_Resolution.pkl"
+      },
+      "written_by": "src/physics/detector/tpc/01_electron_energy.py (save_pkl)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "TPC_ADJ_CLUSTERS": {
+      "description": "Signal adjacent cluster counts, per-variable distributions, and summary DataFrames.",
+      "base": "{root}/output/data/TPC/adjcluster/{config}/{name}",
+      "filenames": {
+        "signal":        "Signal_AdjClusters.pkl",
+        "counts":        "Adjacent_Cluster_Counts.pkl",
+        "distribution":  "{variable}_Distribution.pkl",
+        "summary":       "Adjacent_Cluster_Distributions.pkl"
+      },
+      "written_by": "src/physics/detector/tpc/02_adj_clusters.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "TPC_ENERGY_RESOLUTION": {
+      "description": "Per-NHits neutrino energy resolution DataFrames and combined summary.",
+      "base": "{root}/output/data/TPC/resolution/neutrino/{config}/{name}",
+      "filenames": {
+        "per_nhit": "{variable}Energy_{label}Resolution_NHits{nhit}.pkl",
+        "label":    "Neutrino_Energy_{label}Resolution.pkl",
+        "summary":  "Neutrino_Energy_Resolution.pkl"
+      },
+      "written_by": "src/physics/detector/tpc/03_energy_resolution.py (save_pkl)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "VERTEX_SMEARING": {
+      "description": "Cumulative vertex error and vertex smearing DataFrames plus per-component smearing entries.",
+      "base": "{root}/output/data/vertex/smearing/{config}/{name}",
+      "filenames": {
+        "cumulative_error": "Cumulative_Vertex_Error.pkl",
+        "smearing":         "Vertex_Smearing.pkl",
+        "per_component":    "{df_label}.pkl"
+      },
+      "written_by": "src/physics/detector/vertex/01_smearing.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "VERTEX_RESOLUTION": {
+      "description": "Vertex error (linear/log), per-coordinate vertex matrix, and combined vertex resolution DataFrames.",
+      "base": "{root}/output/data/vertex/resolution/{config}/{name}",
+      "filenames": {
+        "error_logy":  "Vertex_Error_LogY.pkl",
+        "error":       "Vertex_Error.pkl",
+        "matrix_coord":"Vertex_Matrix_{coord}.pkl",
+        "matrix":      "Vertex_Matrix.pkl",
+        "resolution":  "Vertex_Resolution.pkl"
+      },
+      "written_by": "src/physics/detector/vertex/02_vertex.py (save_df / save_pkl)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "VERTEX_FIDUCIAL": {
+      "description": "Fiducial efficiency scan DataFrames (per sigma/tolerance/energy combinations).",
+      "base": "{root}/output/data/vertex/fiducial/{config}/{name}",
+      "filenames": {
+        "scan": "{df_filename}.pkl"
+      },
+      "written_by": "src/physics/detector/vertex/03_fiducial.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false
+    },
+
+    "VERTEX_RECONSTRUCTION": {
+      "description": "Reconstruction efficiency vs sigma/tolerance and vs energy DataFrames.",
+      "base": "{root}/output/data/vertex/reconstruction/{config}/{name}",
+      "filenames": {
+        "efficiency_sigma":  "Vertex_Reconstruction_Efficiency_Sigma{tolerance}.pkl",
+        "efficiency_energy": "Vertex_Reconstruction_Efficiency_Energy_Sigma{tolerance}.pkl",
+        "summary":           "{filename}_Reconstruction_Efficiency.pkl"
+      },
+      "written_by": "src/physics/detector/vertex/04_reconstruction.py (save_df)",
       "read_by": [],
       "in_pnfs": false
     }
