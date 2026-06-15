@@ -151,9 +151,9 @@ for config in configs:
             energy = key[2]
 
         if args.background:
-            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
         else:
-            data_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
 
         if args.nhits is not None:
             nhits = args.nhits
