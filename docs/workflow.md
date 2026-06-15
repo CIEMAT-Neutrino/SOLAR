@@ -26,32 +26,59 @@ python3 src/pipelines/run_analysis.py --config hd_1x2x6_centralAPA --name marley
 
 The `src/physics/truth/` scripts prepare the signal and background ingredients used by the later solar analyses, including oscillation-grid processing, nadir weighting, and background surface or external PDFs. Entry point: `src/pipelines/run_truth.py`.
 
+Key scripts:
+
+- `src/physics/truth/marley_cc_fraction.py`: computes per-PDG CC energy-channel fractions as a function of neutrino energy and writes `{config}_{name}_Neutrino_CC_Fraction.pkl` to `output/data/marley/stacked/`. Replaces the deprecated `TruthMarleyStacked.ipynb` notebook. Consumed by `src/physics/common/line_plot.py` for the kinematic-threshold overlay plot.
+
 ## Solar Analysis Stages
 
 The current analysis layer lives in `src/physics/` (per-domain subdirectories) and is orchestrated by `src/pipelines/run_sensitivity.py`.
 
 Important scripts include:
 
-- `src/physics/signal/01_fiducialize.py`: builds fiducial scan products.
-- `src/physics/signal/02_best_fiducial.py`: selects optimized fiducials and writes best-fiducial summaries.
+- `src/physics/signal/01_fiducialize.py`: builds fiducial scan products. Applies `MatchedOpFlashPlane == QUALITY_CUTS.OPFLASH_PLANE` quality cut (from `config/analysis/config.json`).
+- `src/physics/signal/02_best_fiducial.py`: selects optimized fiducials and writes `output/data/solar/fiducial/{folder}/BestFiducials.json`.
+- `src/physics/signal/03_analysis.py`: produces rebinned signal/background arrays (written to PNFS via `SIGNAL_REBIN`) and optional pkl checkpoints. Pass `--save_weighted` to also write per-cut DataFrames to `output/data/solar/weighted/` (off by default).
 - `src/physics/signal/fiducialization_plot.py`: renders best/no-fiducial significance plots from fiducial scan products.
+- `src/physics/sensitivity/03_template_compute.py`: lightweight orchestrator that calls `01_background_template.py` and `02_signal_template.py` in one command without writing files itself.
 - `src/physics/sensitivity/05_best_sigmas.py`: records the best significance curves for downstream plots.
 - `src/pipelines/run_sensitivity.py`: orchestrates the full DayNight, HEP, and Sensitivity workflow.
-- `src/physics/daynight/01_daynight.py`, `exposure_plot.py`, `significance_plot.py`: Day-Night spectrum, exposure, and significance products.
-- `src/physics/hep/01_hep.py`, `exposure_plot.py`, `significance_plot.py`, `significance_comparison.py`: HEP spectrum, exposure, and significance products.
+- `src/physics/daynight/01_daynight.py`, `exposure_plot.py`, `significance_plot.py`: Day-Night spectrum, exposure, and significance products. Exposure diagnostic written to `output/data/daynight/`.
+- `src/physics/hep/01_hep.py`, `exposure_plot.py`, `significance_plot.py`, `significance_comparison.py`: HEP spectrum, exposure, and significance products. Adaptive-rebin comparison written to `output/data/hep/`.
 - `src/physics/sensitivity/01_background_template.py`, `02_signal_template.py`, `06_significance.py`, `contour_plot.py`: signal/background templates, oscillation fits, and contour plots.
+
+### Quality Cuts
+
+`01_fiducialize.py`, `03_analysis.py`, and `02_signal_template.py` all apply the same `MatchedOpFlashPlane` cut, ensuring signal and background event populations are identical across all analysis stages. The cut value is centrally defined in `config/analysis/config.json` under `QUALITY_CUTS.OPFLASH_PLANE` (default 0) and propagated at runtime via `load_analysis_info()`.
+
+### Smoothing Optimisation
+
+`src/tools/optimize_smoothing.py` scans KDE bandwidth strategies and writes a `{folder}_{energy}_{analysis}_sigma.json` file to `output/data/smoothing/{config}/{name}/`. `run_sensitivity.py` reads these files at launch and exports the recommended sigma values as `SOLAR_SMOOTHING_SIGMA_*` environment variables for child processes.
 
 ## Shared Configuration
 
 Analysis defaults are centralized in the `config/analysis/` directory (split JSON files merged at runtime by `lib/defaults.load_analysis_info`):
 
-- `config/analysis/config.json`: workflow flags, analysis thresholds, adaptive rebinning, background component policy.
+- `config/analysis/config.json`: workflow flags, analysis thresholds, adaptive rebinning, background component policy, and quality cuts (`QUALITY_CUTS.OPFLASH_PLANE`).
 - `config/analysis/smoothing.json`: Gaussian smoothing parameters per analysis, energy, and stage.
 - `config/analysis/fiducialization.json`: fiducialization settings for DayNight, HEP, and Sensitivity.
 - `config/analysis/backgrounds.json`: background component lists and truth-pipeline defaults.
 - `config/analysis/physics.json`: oscillation parameters and detector geometry defaults.
+- `config/analysis/pkl_paths.json`: central registry of every pkl and json file the pipeline produces or consumes. Three categories: `INTERMEDIATE` (in PNFS, read by another pipeline stage), `REPRODUCIBILITY` (local checkpoint arrays under `output/data/results/` and `output/data/solar/fiducial/`), and `OUTPUT_ONLY` (local write-once diagnostics). Use this file to trace data provenance, verify path consistency, and identify stale outputs after code changes.
 
 Those settings are consumed by helpers in `lib/smoothing.py`, `lib/fiducial.py`, and `lib/defaults.py`.
+
+## Output Data Index
+
+`output/data/index.json` is a git-tracked nested tree of every file under `output/data/`. It is the canonical discovery mechanism for external repositories that need to locate pipeline artefacts without access to the full `output/data/` tree.
+
+Regenerate after any change to `output/data/`:
+
+```bash
+python3 src/tools/generate_data_index.py
+```
+
+All other files under `output/data/` are excluded from git (`.gitignore: output/data/**`); `index.json` is tracked via the `!output/data/index.json` exception.
 
 ## HEP Profile-Likelihood Updates
 

@@ -21,24 +21,32 @@ src/
       vertex/         Vertex smearing, fiducial, and reconstruction
       preselection/   Production, efficiency, and clustering studies
     truth/            Oscillation templates, background spectra, signal KDE
+                        marley_cc_fraction.py — CC-fraction pkl per PDG (replaces TruthMarleyStacked.ipynb)
     signal/           Fiducialization, rebinning, and analysis signal products
     common/           Shared significance-plot macros
     daynight/         Day-Night significance and exposure curves
     hep/              HEP significance, exposure, and comparison plots
     sensitivity/      Background/signal templates, cut optimisation, contour plots
+                        03_template_compute.py — orchestrates 01+02 without writing files itself
   tools/
     presentations/    Auto-generated Reveal.js slide decks (daynight/hep/sensitivity)
-    optimize_smoothing.py
+    optimize_smoothing.py   KDE sigma optimiser; outputs sigma JSON to output/data/smoothing/
+    generate_data_index.py  Regenerates output/data/index.json (tree index for external repos)
     event_display.py
     compare_backends.py
     processing.py
 
 lib/                  Shared helpers (IO, smoothing, oscillation, fiducial, log, …)
 config/               Per-detector-configuration JSON files
-analysis/             Active analysis settings (backgrounds, physics, smoothing, …)
+  analysis/           Active analysis settings (backgrounds, physics, smoothing, …)
+    pkl_paths.json    Central registry of every pkl/json file the pipeline produces or consumes
 tests/                Regression tests
 docs/                 Sphinx documentation source
 external/             Prob3plusplus and NuFast-Earth oscillation backends
+output/
+  data/
+    index.json        Tracked in git — nested tree of all output/data/ files for external repos
+                        Regenerate: python3 src/tools/generate_data_index.py
 ```
 
 ---
@@ -146,6 +154,16 @@ Key flags:
 | `--plot` / `--no-plot` | plot | Generate output figures |
 | `--verbose` | `normal` | `quiet` / `normal` / `verbose` |
 
+### Signal analysis flags (`03_analysis.py`)
+
+| Flag | Default | Description |
+| ---- | ------- | ----------- |
+| `--save_weighted` / `--no-save_weighted` | off | Write per-cut weighted DataFrame to `output/data/solar/weighted/` (needed by `04_weighted.py`; disabled by default) |
+| `--export_raw` / `--no-export_raw` | on | Export raw event arrays (energy, mask, weights) as pkl checkpoints |
+| `--export_fiducial` | off | Export `FiducializationMask` per analysis before quality cuts |
+| `--skip_scan` | off | Export raw arrays and exit without running the cut scan |
+| `--best_cuts_only` | off | Scan only the best-cut point from JSON (Pass 3 / post-analysis export) |
+
 ---
 
 ## Verbosity
@@ -220,6 +238,19 @@ Select via `--oscillation_backend` in any pipeline that accepts it.
 ---
 
 ## Physics Notes
+
+### Quality Cuts
+
+All three physics-level scripts (`01_fiducialize.py`, `02_signal_template.py`, `03_analysis.py`) apply identical quality cuts so signal and background event populations are consistent. The optical-flash plane cut is centrally configured:
+
+```json
+// config/analysis/config.json
+"QUALITY_CUTS": {
+    "OPFLASH_PLANE": 0
+}
+```
+
+Changing `OPFLASH_PLANE` propagates to all scripts automatically via `load_analysis_info()`.
 
 ### HEP Profile-Likelihood
 
