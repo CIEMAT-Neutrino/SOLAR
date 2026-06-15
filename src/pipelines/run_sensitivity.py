@@ -641,7 +641,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
         for name in available_names:
             run_analysis_script(
                 "src/physics/signal/04_weighted.py",
-                base_args_for(config, folder, include_background=False) + ["--name", name],
+                base_args_for(config, folder, include_background=False) + ["--name", name] + oscillation_args_for(),
             )
 
 
