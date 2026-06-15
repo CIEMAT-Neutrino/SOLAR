@@ -81,15 +81,17 @@ parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=Tru
 args = parser.parse_args()
 
 comparison_styles = {
-    ("Asimov", "Raw"): dict(color="black", dash="dot", width=2),
-    ("Asimov", "Smoothed"): dict(color="black", dash="solid", width=3),
-    ("Gaussian", "Raw"): dict(color=compare[1], dash="dot", width=2),
-    ("Gaussian", "Smoothed"): dict(color=compare[1], dash="solid", width=3),
-    ("ProfileLikelihood", "Raw"): dict(color=compare[2], dash="dot", width=2),
+    ("Asimov",            "Raw"):      dict(color="black",    dash="dot",   width=2),
+    ("Asimov",            "Smoothed"): dict(color="black",    dash="solid", width=3),
+    ("AsimovProxy",       "Raw"):      dict(color="black",    dash="dot",   width=2),
+    ("AsimovProxy",       "Smoothed"): dict(color="black",    dash="solid", width=3),
+    ("Gaussian",          "Raw"):      dict(color=compare[1], dash="dot",   width=2),
+    ("Gaussian",          "Smoothed"): dict(color=compare[1], dash="solid", width=3),
+    ("ProfileLikelihood", "Raw"):      dict(color=compare[2], dash="dot",   width=2),
     ("ProfileLikelihood", "Smoothed"): dict(color=compare[2], dash="solid", width=3),
 }
 
-reference_variables = ["Asimov", "Gaussian", "ProfileLikelihood"]
+reference_variables = ["Asimov", "AsimovProxy", "Gaussian", "ProfileLikelihood"]
 
 for config, name, energy in product(args.config, args.name, args.energy):
     selection = get_selection_cuts(config, name, energy, args)

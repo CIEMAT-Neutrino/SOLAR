@@ -20,6 +20,8 @@ _CL_LABELS = {1: 0.6827, 2: 0.9545, 3: 0.9973, 4: 0.99994, 5: 0.9999994}
 _COMPARISON_STYLES = {
     ("Asimov",            "Raw"):      dict(color="black",     dash="dot",   width=2),
     ("Asimov",            "Smoothed"): dict(color="black",     dash="solid", width=3),
+    ("AsimovProxy",       "Raw"):      dict(color="black",     dash="dot",   width=2),
+    ("AsimovProxy",       "Smoothed"): dict(color="black",     dash="solid", width=3),
     ("Gaussian",          "Raw"):      dict(color=compare[1],  dash="dot",   width=2),
     ("Gaussian",          "Smoothed"): dict(color=compare[1],  dash="solid", width=3),
     ("ProfileLikelihood", "Raw"):      dict(color=compare[2],  dash="dot",   width=2),
@@ -292,14 +294,17 @@ if args.energy is None:
 if args.analysis == "DayNight":
     save_path = f"{root}/output/images/analysis/day-night"
     data_path = f"{analysis_info['PATH']}/DAYNIGHT"
+    local_data_path = f"{root}/output/data/analysis/day-night"
 elif args.analysis == "HEP":
     save_path = f"{root}/output/images/analysis/hep"
     data_path = f"{analysis_info['PATH']}/HEP"
+    local_data_path = f"{root}/output/data/analysis/hep"
 else:
     save_path = f"{root}/output/images/analysis/sensitivity"
     data_path = f"{analysis_info['PATH']}/SENSITIVITY"
+    local_data_path = None
 
-for this_path in [save_path]:
+for this_path in [save_path] + ([local_data_path] if local_data_path else []):
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
@@ -771,13 +776,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
             rprint(f"[yellow][WARNING][/yellow] Missing EnergyLabel in saved HEP plot data")
             continue
 
+        _ref_variables = ["Asimov", "AsimovProxy", "Gaussian", "ProfileLikelihood"]
         significance_rows = significance_df.loc[
             (significance_df["Config"] == config) & (significance_df["Name"] == name)
-            & (significance_df["EnergyLabel"] == energy) & (significance_df["Variable"].isin(["Asimov", "Gaussian", "ProfileLikelihood"]))
+            & (significance_df["EnergyLabel"] == energy) & (significance_df["Variable"].isin(_ref_variables))
         ].copy()
         exposure_rows = exposure_df.loc[
             (exposure_df["Config"] == config) & (exposure_df["Name"] == name)
-            & (exposure_df["EnergyLabel"] == energy) & (exposure_df["Variable"].isin(["Asimov", "Gaussian", "ProfileLikelihood"]))
+            & (exposure_df["EnergyLabel"] == energy) & (exposure_df["Variable"].isin(_ref_variables))
         ].copy()
 
         for column, value in [("NHits", nhits_value), ("OpHits", ophits_value), ("AdjCl", adjcl_value)]:
@@ -1071,3 +1077,11 @@ if exposure_records and args.analysis != "Sensitivity":
         filename=_filename,
         rm=args.rewrite, debug=args.debug,
     )
+    if local_data_path:
+        save_df(
+            _df, local_data_path,
+            config=args.config[0], name=args.name[0],
+            subfolder=args.folder.lower(),
+            filename=_filename,
+            rm=args.rewrite, debug=False,
+        )

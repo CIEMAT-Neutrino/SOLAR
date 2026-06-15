@@ -10,7 +10,7 @@ from lib import *
 _analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/output/images/solar/fiducial"
-data_path = f"{root}/output/data/solar/fiducial"
+data_path = f"{root}/config/analysis/fiducial"
 
 ANALYSIS_CHOICES = ["DayNight", "HEP", "Sensitivity"]
 GROUP_COLUMNS = ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]

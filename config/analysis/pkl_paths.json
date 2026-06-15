@@ -362,10 +362,10 @@
     },
 
     "BEST_FIDUCIALS": {
-      "description": "Per-(config, analysis_key, energy) best fiducial cut JSON. Written after fiducial optimisation and consumed by 03_analysis.py, 01_background_template.py, 02_signal_template.py, and significance_plot.py to apply the optimal fiducial volume. Not a pkl file — stored as JSON for human readability and easy inspection.",
-      "base": "{root}/output/data/solar/fiducial/{folder}",
+      "description": "Per-(config, analysis_key, energy) best fiducial cut JSON. Written after fiducial optimisation and consumed by 03_analysis.py, 01_background_template.py, 02_signal_template.py, and significance_plot.py to apply the optimal fiducial volume. Stored under config/analysis/fiducial/ so it is versioned alongside analysis configuration. Not a pkl — JSON for human readability.",
+      "base": "{root}/config/analysis/fiducial/{folder}",
       "filename": "BestFiducials.json",
-      "full_path": "{root}/output/data/solar/fiducial/{folder}/BestFiducials.json",
+      "full_path": "{root}/config/analysis/fiducial/{folder}/BestFiducials.json",
       "written_by": "src/physics/signal/02_best_fiducial.py (_merge_and_write_json; appends per-config results)",
       "read_by": [
         "src/physics/signal/03_analysis.py (json.loads → fiducial cut per config/analysis/energy)",
@@ -464,35 +464,42 @@
     },
 
     "DAYNIGHT_EXPOSURE": {
-      "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). The legacy script writes to a local output path; common/exposure_plot.py writes the same schema to PNFS.",
+      "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). The legacy script writes to a local output path; common/exposure_plot.py writes to both PNFS and a local output/data/analysis/ mirror.",
       "bases": {
-        "local":  "{root}/output/data/daynight/{config}/{name}/{folder}",
-        "pnfs":   "{PATH}/DAYNIGHT/{config}/{name}/{folder}"
+        "legacy_local": "{root}/output/data/daynight/{config}/{name}/{folder}",
+        "pnfs":         "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
+        "local_mirror": "{root}/output/data/analysis/day-night/{config}/{name}/{folder}"
       },
       "filename": "{config}_{name}_DayNight_Exposure.pkl",
       "written_by": [
-        "src/physics/daynight/exposure_plot.py (save_df → local output/data/daynight/)",
-        "src/physics/common/exposure_plot.py (save_df → PNFS PATH/DAYNIGHT/)"
+        "src/physics/daynight/exposure_plot.py (save_df → legacy_local only)",
+        "src/physics/common/exposure_plot.py (save_df → pnfs + local_mirror)"
       ],
       "read_by": [],
-      "in_pnfs": "partial — local copy (daynight/exposure_plot.py) is not in PNFS; PNFS copy (common/exposure_plot.py) is"
+      "in_pnfs": "partial — legacy_local is not in PNFS; pnfs and local_mirror copies are written by common/exposure_plot.py"
     },
 
     "COMMON_SIGNIFICANCE_OUTPUTS": {
-      "description": "Per-analysis significance and counts DataFrames produced by common/significance_plot.py for DayNight, HEP, and Sensitivity runs. Consumed only by comparison and presentation plotting scripts, not by any numerical computation stage. See also INTERMEDIATE entries HEP_SIGNIFICANCE, DAYNIGHT_SIGNIFICANCE, SENSITIVITY_SIGNIFICANCE for full pipeline context.",
-      "bases": {
+      "description": "Per-analysis significance and counts DataFrames produced by common/significance_plot.py. *_Counts files are written to both PNFS and a local output/data/analysis/ mirror; *_Significance files are PNFS-only. Consumed only by comparison and presentation plotting scripts, not by any numerical computation stage. See also INTERMEDIATE entries HEP_SIGNIFICANCE, DAYNIGHT_SIGNIFICANCE, SENSITIVITY_SIGNIFICANCE.",
+      "pnfs_bases": {
         "daynight":    "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
         "hep":         "{PATH}/HEP/{config}/{name}/{folder}",
         "sensitivity": "{PATH}/SENSITIVITY/{config}/{name}/{folder}"
       },
+      "local_bases": {
+        "daynight":    "{root}/output/data/analysis/day-night/{config}/{name}/{folder}",
+        "hep":         "{root}/output/data/analysis/hep/{config}/{name}/{folder}",
+        "sensitivity": "{root}/output/data/analysis/sensitivity/{config}/{name}/{folder}"
+      },
       "filenames": {
-        "daynight_counts":        "{config}_{name}_DayNight_Counts.pkl",
-        "daynight_significance":  "{config}_{name}_DayNight_Significance.pkl",
-        "hep_counts":             "{config}_{name}_HEP_Counts.pkl",
-        "hep_significance":       "{config}_{name}_HEP_Significance.pkl",
-        "sensitivity_counts":     "{config}_{name}_Sensitivity_Counts.pkl",
+        "daynight_counts":          "{config}_{name}_DayNight_Counts.pkl",
+        "daynight_significance":    "{config}_{name}_DayNight_Significance.pkl",
+        "hep_counts":               "{config}_{name}_HEP_Counts.pkl",
+        "hep_significance":         "{config}_{name}_HEP_Significance.pkl",
+        "sensitivity_counts":       "{config}_{name}_Sensitivity_Counts.pkl",
         "sensitivity_significance": "{config}_{name}_Sensitivity_Significance.pkl"
       },
+      "notes": "*_Counts → pnfs_base + local_base; *_Significance → pnfs_base only",
       "written_by": ["src/physics/common/significance_plot.py (save_df, one pair of files per --analysis mode)"],
       "read_by": [
         "src/physics/hep/significance_comparison.py (HEP_Significance → multi-config significance overlay)",
@@ -500,25 +507,29 @@
         "src/physics/common/exposure_plot.py --mode comparison/reference (HEP_Significance + HEP_Exposure)",
         "src/tools/presentations/sensitivity.py (Sensitivity_Significance → slide generation)"
       ],
-      "in_pnfs": true
+      "in_pnfs": "partial — *_Counts also mirrored locally; *_Significance PNFS only"
     },
 
     "COMMON_EXPOSURE_OUTPUTS": {
-      "description": "Per-analysis exposure vs significance DataFrames produced by common/exposure_plot.py for DayNight and HEP runs (Sensitivity exposure is not saved). HEP_Exposure is also cross-listed under INTERMEDIATE.HEP_SIGNIFICANCE because it is consumed by reference/comparison plotting scripts across configs.",
-      "bases": {
+      "description": "Per-analysis exposure vs significance DataFrames produced by common/exposure_plot.py for DayNight and HEP runs (Sensitivity exposure is not saved). Each file is written to both PNFS and a local output/data/analysis/ mirror. HEP_Exposure is also cross-listed under INTERMEDIATE.HEP_SIGNIFICANCE.",
+      "pnfs_bases": {
         "daynight": "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
         "hep":      "{PATH}/HEP/{config}/{name}/{folder}"
+      },
+      "local_bases": {
+        "daynight": "{root}/output/data/analysis/day-night/{config}/{name}/{folder}",
+        "hep":      "{root}/output/data/analysis/hep/{config}/{name}/{folder}"
       },
       "filenames": {
         "daynight_exposure": "{config}_{name}_DayNight_Exposure.pkl",
         "hep_exposure":      "{config}_{name}_HEP_Exposure.pkl"
       },
-      "written_by": ["src/physics/common/exposure_plot.py (save_df --mode exposure; Sensitivity mode is excluded)"],
+      "written_by": ["src/physics/common/exposure_plot.py (save_df --mode exposure; Sensitivity excluded; each file → pnfs_base + local_base)"],
       "read_by": [
         "src/physics/hep/reference_comparison.py (HEP_Exposure → exposure curve comparison)",
         "src/physics/common/exposure_plot.py --mode comparison/reference (HEP_Exposure)"
       ],
-      "in_pnfs": true
+      "in_pnfs": "partial — each file written to both PNFS and local mirror"
     },
 
     "HEP_REBIN_COMPARISON": {

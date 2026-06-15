@@ -235,7 +235,7 @@ def gather_best_sigma_rows(energy):
 def gather_fiducial_rows(energy):
     fid_rows = []
     for folder in ["nominal", "reduced", "truncated"]:
-        path = ROOT / "data" / "solar" / "fiducial" / folder / "BestFiducials.json"
+        path = ROOT / "config" / "analysis" / "fiducial" / folder / "BestFiducials.json"
         if not path.exists():
             continue
 
@@ -1019,7 +1019,7 @@ def build_markdown(
 
     ### Workflow Outputs
 
-    - Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
+    - Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
     - Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
     - Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)

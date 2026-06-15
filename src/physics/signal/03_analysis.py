@@ -211,7 +211,7 @@ run = compute_reco_workflow(
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    fiducials = json.loads(open(f"{root}/output/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 

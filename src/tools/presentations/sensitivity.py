@@ -543,7 +543,7 @@ def render_template_slides(template_specs):
 def gather_fiducial_rows(energy):
     fid_rows = []
     for folder in ["nominal", "reduced", "truncated"]:
-        path = ROOT / "data" / "solar" / "fiducial" / folder / "BestFiducials.json"
+        path = ROOT / "config" / "analysis" / "fiducial" / folder / "BestFiducials.json"
         if not path.exists():
             continue
         payload = read_json(path)

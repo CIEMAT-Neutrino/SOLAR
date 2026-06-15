@@ -204,7 +204,7 @@ for config in configs:
     info = json.loads(
         open(f"{root}/config/{config}/{config}_config.json").read()
     )
-    fiducials = json.loads(open(f"{root}/output/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
     selected_fiducial = get_best_fiducial(fiducials, config, args.energy, "SENSITIVITY")
     selected_fiducial_bands = get_best_fiducial_bands(fiducials, config, args.energy, "SENSITIVITY")
     analysis_info = load_analysis_info(str(root))

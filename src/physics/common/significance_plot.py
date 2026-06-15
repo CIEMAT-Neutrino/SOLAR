@@ -481,21 +481,25 @@ if args.analysis != "Fiducial":
 if args.analysis == "DayNight":
     save_path = f"{root}/output/images/analysis/day-night"
     data_path = f"{analysis_info['PATH']}/DAYNIGHT"
+    local_data_path = f"{root}/output/data/analysis/day-night"
     smoothing_config = get_smoothing_config(str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance")
 elif args.analysis == "HEP":
     save_path = f"{root}/output/images/analysis/hep"
     data_path = f"{analysis_info['PATH']}/HEP"
+    local_data_path = f"{root}/output/data/analysis/hep"
     smoothing_config = get_smoothing_config(str(root), analysis_name="HEP", dimensions="1d", stage="significance")
 elif args.analysis == "Sensitivity":
     save_path = f"{root}/output/images/analysis/sensitivity"
     data_path = f"{analysis_info['PATH']}/SENSITIVITY"
+    local_data_path = f"{root}/output/data/analysis/sensitivity"
     smoothing_config = get_smoothing_config(str(root), analysis_name="SENSITIVITY", dimensions="1d", stage="significance")
 else:
     save_path = f"{root}/output/images/solar/fiducial"
     data_path = f"{analysis_info['PATH']}/FIDUCIAL"
+    local_data_path = None
     smoothing_config = None
 
-for this_path in [save_path, data_path]:
+for this_path in [save_path, data_path] + ([local_data_path] if local_data_path else []):
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
@@ -832,6 +836,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 subfolder=args.folder.lower(), filename=df_name,
                 rm=args.rewrite, debug=True if df_name == "DayNight_Counts" else args.debug,
             )
+            if df_name == "DayNight_Counts":
+                save_df(
+                    df, local_data_path, config, name,
+                    subfolder=args.folder.lower(), filename=df_name,
+                    rm=args.rewrite, debug=False,
+                )
 
     # ══════════════════════════════════════════════════════════════════════════
     # HEP
@@ -1245,10 +1255,16 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 })
 
         if args.pkl_label == "highest":
+            _hep_counts_df = pd.DataFrame(_counts_list)
             save_df(
-                pd.DataFrame(_counts_list), data_path, config=args.config[0], name=args.name[0],
+                _hep_counts_df, data_path, config=args.config[0], name=args.name[0],
                 subfolder=args.folder.lower(), filename="HEP_Counts",
                 rm=args.rewrite, debug=True,
+            )
+            save_df(
+                _hep_counts_df, local_data_path, config=args.config[0], name=args.name[0],
+                subfolder=args.folder.lower(), filename="HEP_Counts",
+                rm=args.rewrite, debug=False,
             )
             save_df(
                 pd.DataFrame(_significance_list), data_path, config=args.config[0], name=args.name[0],
@@ -1434,10 +1450,16 @@ for config, name, energy in product(args.config, args.name, args.energy):
             "BinWidth": bin_widths.tolist(), "BinWidthUnit": "MeV",
         })
 
+        _sens_counts_df = pd.DataFrame(_counts_list)
         save_df(
-            pd.DataFrame(_counts_list), data_path, config=config, name=name,
+            _sens_counts_df, data_path, config=config, name=name,
             subfolder=args.folder.lower(), filename="Sensitivity_Counts",
             rm=args.rewrite, debug=True,
+        )
+        save_df(
+            _sens_counts_df, local_data_path, config=config, name=name,
+            subfolder=args.folder.lower(), filename="Sensitivity_Counts",
+            rm=args.rewrite, debug=False,
         )
         save_df(
             pd.DataFrame(_significance_list), data_path, config=config, name=name,
@@ -1449,7 +1471,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
     # Fiducial
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "Fiducial":
-        fid_data_root = f"{root}/output/data/solar/fiducial/{args.folder.lower()}"
+        fid_data_root = f"{root}/config/analysis/fiducial/{args.folder.lower()}"
         best_fiducials_path = f"{fid_data_root}/BestFiducials.json"
         best_fiducials = json.loads(open(best_fiducials_path).read()) if os.path.exists(best_fiducials_path) else {}
 

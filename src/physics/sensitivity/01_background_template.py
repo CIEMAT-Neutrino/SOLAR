@@ -164,7 +164,7 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-fiducials = json.loads(open(f"{root}/output/data/solar/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)
 
