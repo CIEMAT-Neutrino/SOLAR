@@ -129,6 +129,7 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--export_raw", action=argparse.BooleanOptionalAction, default=True, help="Export raw numpy arrays (energy, mask, weights) as pkl files")
+parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, default=False, help="Save per-cut weighted DataFrame to output/data/solar/weighted/ (disabled by default; used by 04_weighted.py)")
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
@@ -460,7 +461,8 @@ for config in configs:
                 df = pd.DataFrame(plot_lists[analysis])
                 if df.empty:
                     continue
-                save_df(df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename=f"{energy}_{analysis}_AnalysisData", rm=user_input["rewrite"], debug=user_input["debug"])
+                if args.save_weighted:
+                    save_df(df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename=f"{energy}_{analysis}_AnalysisData", rm=user_input["rewrite"], debug=user_input["debug"])
 
                 # Cache check: if this exact DataFrame was already rebinned, reuse result
                 df_id = id(df)

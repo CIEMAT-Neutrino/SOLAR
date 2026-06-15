@@ -449,7 +449,7 @@
       "description": "Flattened per-event analysis DataFrame (energy, counts, errors, MC counts per rebin bin) saved for local inspection. Not read back by any pipeline script; use SIGNAL_REBIN (in PNFS) for computation.",
       "base": "{root}/output/data/solar/weighted/{config}/{name}/{folder}",
       "filename": "{config}_{name}_{energy}_{analysis}_AnalysisData.pkl",
-      "written_by": "src/physics/signal/03_analysis.py (save_df)",
+      "written_by": "src/physics/signal/03_analysis.py (save_df; only when --save_weighted flag is set — disabled by default)",
       "read_by": [],
       "in_pnfs": false
     },
