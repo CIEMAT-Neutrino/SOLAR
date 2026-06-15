@@ -68,7 +68,7 @@
       "base": "{PATH}/SENSITIVITY/{config}/background/{folder}/{energy}",
       "filename": "{config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl",
       "full_path": "{PATH}/SENSITIVITY/{config}/background/{folder}/{energy}/{config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl",
-      "written_by": "src/physics/sensitivity/01_background_template.py (pd.to_pickle via save_df)",
+      "written_by": "src/physics/sensitivity/01_background_template.py (pd.to_pickle via save_df) — orchestrated by src/physics/sensitivity/03_template_compute.py",
       "read_by": [
         "src/physics/sensitivity/04_best_cuts.py (pd.read_pickle → chi2 optimisation)",
         "src/physics/sensitivity/06_significance.py (pd.read_pickle → background baseline for LLR)"
@@ -82,7 +82,7 @@
       "base": "{PATH}/SENSITIVITY/{config}/{name}/{folder}/{energy}",
       "filename": "{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl",
       "full_path": "{PATH}/SENSITIVITY/{config}/{name}/{folder}/{energy}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl",
-      "written_by": "src/physics/sensitivity/02_signal_template.py (save_df)",
+      "written_by": "src/physics/sensitivity/02_signal_template.py (save_df) — orchestrated by src/physics/sensitivity/03_template_compute.py",
       "read_by": [
         "src/physics/sensitivity/04_best_cuts.py (pd.read_pickle → chi2 optimisation at best-fit point)",
         "src/physics/sensitivity/06_significance.py (pd.read_pickle → LLR scan)"
@@ -326,15 +326,6 @@
       "in_pnfs": true
     },
 
-    "CC_FRACTION": {
-      "description": "Per-PDG fractional CC neutrino energy deposition as a function of neutrino energy. One row per (energy bin, PDG) combination; TSignalSumK is the fraction of neutrino energy carried by that channel. Read by line_plot.py to produce the kinematic-threshold overlay plot.",
-      "base": "{root}/output/data/marley/stacked/{config}/{name}",
-      "filename": "{config}_{name}_Neutrino_CC_Fraction.pkl",
-      "written_by": "src/physics/truth/marley_cc_fraction.py (save_df; replaces TruthMarleyStacked.ipynb)",
-      "read_by": ["src/physics/common/line_plot.py (kinematic_threshold plot type)"],
-      "in_pnfs": false
-    },
-
     "SIGNAL_NADIR_KDE": {
       "description": "KDE-smoothed P(e|nadir) probability density files used for nadir-slice oscillation studies. One file per (name, label, nadir_slice, dm2, sin13, sin12) point. Note: nadir_slice values are stored negated (cosine convention — negative = below horizon). Currently written by 05_signal_nadir_kde.py; no active pipeline consumer identified — retained in PNFS for external analysis use.",
       "base": "{PATH}/signal/osc/nadir_{-nadir_slice:.3f}",
@@ -368,11 +359,36 @@
       ],
       "path_source": "src/physics/signal/03_analysis.py: export_path = f'{root}/output/data/results'",
       "in_pnfs": false
+    },
+
+    "BEST_FIDUCIALS": {
+      "description": "Per-(config, analysis_key, energy) best fiducial cut JSON. Written after fiducial optimisation and consumed by 03_analysis.py, 01_background_template.py, 02_signal_template.py, and significance_plot.py to apply the optimal fiducial volume. Not a pkl file — stored as JSON for human readability and easy inspection.",
+      "base": "{root}/output/data/solar/fiducial/{folder}",
+      "filename": "BestFiducials.json",
+      "full_path": "{root}/output/data/solar/fiducial/{folder}/BestFiducials.json",
+      "written_by": "src/physics/signal/02_best_fiducial.py (_merge_and_write_json; appends per-config results)",
+      "read_by": [
+        "src/physics/signal/03_analysis.py (json.loads → fiducial cut per config/analysis/energy)",
+        "src/physics/sensitivity/01_background_template.py (json.loads → fiducial volume for background template)",
+        "src/physics/sensitivity/02_signal_template.py (json.loads → fiducial volume for signal template)",
+        "src/physics/common/significance_plot.py (json.loads → best fiducial overlay on significance plots)",
+        "src/tools/presentations/{analysis}.py (json.loads → fiducial info for presentation slides)"
+      ],
+      "in_pnfs": false
     }
   },
 
   "OUTPUT_ONLY": {
     "_comment": "PKL files written by a script but never read by any other pipeline script. These are local convenience caches for plotting and can be regenerated at any time. They do NOT need to live in PNFS.",
+
+    "CC_FRACTION": {
+      "description": "Per-PDG fractional CC neutrino energy deposition as a function of neutrino energy. One row per (energy bin, PDG) combination; TSignalSumK is the fraction of neutrino energy carried by that channel. Read only by line_plot.py for a visualisation overlay — not a computation input for any pipeline stage.",
+      "base": "{root}/output/data/marley/stacked/{config}/{name}",
+      "filename": "{config}_{name}_Neutrino_CC_Fraction.pkl",
+      "written_by": "src/physics/truth/marley_cc_fraction.py (save_df; replaces TruthMarleyStacked.ipynb)",
+      "read_by": ["src/physics/common/line_plot.py (kinematic_threshold plot type)"],
+      "in_pnfs": false
+    },
 
     "SMEARING_MATRIX": {
       "description": "NHits-resolved energy reconstruction smearing matrix (DataFrame of reco-energy vs true-energy bin fractions). Written once per (config, name, energy, component, NHits) combination. Used only internally by 05_smearing.py for visualisation.",
@@ -448,21 +464,67 @@
     },
 
     "DAYNIGHT_EXPOSURE": {
-      "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). Saved for cross-analysis comparison but not read by any other pipeline script.",
-      "base": "{root}/output/data/daynight/{config}/{name}/{folder}",
-      "filename": "DayNight_Exposure.pkl",
+      "description": "Accumulated exposure vs significance records for DayNight (one row per config/name/energy/variable/spectrum_type). The legacy script writes to a local output path; common/exposure_plot.py writes the same schema to PNFS.",
+      "bases": {
+        "local":  "{root}/output/data/daynight/{config}/{name}/{folder}",
+        "pnfs":   "{PATH}/DAYNIGHT/{config}/{name}/{folder}"
+      },
+      "filename": "{config}_{name}_DayNight_Exposure.pkl",
       "written_by": [
-        "src/physics/daynight/exposure_plot.py (save_df)",
-        "src/physics/common/exposure_plot.py (save_df → DayNight mode)"
+        "src/physics/daynight/exposure_plot.py (save_df → local output/data/daynight/)",
+        "src/physics/common/exposure_plot.py (save_df → PNFS PATH/DAYNIGHT/)"
       ],
       "read_by": [],
-      "in_pnfs": false
+      "in_pnfs": "partial — local copy (daynight/exposure_plot.py) is not in PNFS; PNFS copy (common/exposure_plot.py) is"
+    },
+
+    "COMMON_SIGNIFICANCE_OUTPUTS": {
+      "description": "Per-analysis significance and counts DataFrames produced by common/significance_plot.py for DayNight, HEP, and Sensitivity runs. Consumed only by comparison and presentation plotting scripts, not by any numerical computation stage. See also INTERMEDIATE entries HEP_SIGNIFICANCE, DAYNIGHT_SIGNIFICANCE, SENSITIVITY_SIGNIFICANCE for full pipeline context.",
+      "bases": {
+        "daynight":    "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
+        "hep":         "{PATH}/HEP/{config}/{name}/{folder}",
+        "sensitivity": "{PATH}/SENSITIVITY/{config}/{name}/{folder}"
+      },
+      "filenames": {
+        "daynight_counts":        "{config}_{name}_DayNight_Counts.pkl",
+        "daynight_significance":  "{config}_{name}_DayNight_Significance.pkl",
+        "hep_counts":             "{config}_{name}_HEP_Counts.pkl",
+        "hep_significance":       "{config}_{name}_HEP_Significance.pkl",
+        "sensitivity_counts":     "{config}_{name}_Sensitivity_Counts.pkl",
+        "sensitivity_significance": "{config}_{name}_Sensitivity_Significance.pkl"
+      },
+      "written_by": ["src/physics/common/significance_plot.py (save_df, one pair of files per --analysis mode)"],
+      "read_by": [
+        "src/physics/hep/significance_comparison.py (HEP_Significance → multi-config significance overlay)",
+        "src/physics/hep/reference_comparison.py (HEP_Significance + HEP_Exposure → reference comparison plots)",
+        "src/physics/common/exposure_plot.py --mode comparison/reference (HEP_Significance + HEP_Exposure)",
+        "src/tools/presentations/sensitivity.py (Sensitivity_Significance → slide generation)"
+      ],
+      "in_pnfs": true
+    },
+
+    "COMMON_EXPOSURE_OUTPUTS": {
+      "description": "Per-analysis exposure vs significance DataFrames produced by common/exposure_plot.py for DayNight and HEP runs (Sensitivity exposure is not saved). HEP_Exposure is also cross-listed under INTERMEDIATE.HEP_SIGNIFICANCE because it is consumed by reference/comparison plotting scripts across configs.",
+      "bases": {
+        "daynight": "{PATH}/DAYNIGHT/{config}/{name}/{folder}",
+        "hep":      "{PATH}/HEP/{config}/{name}/{folder}"
+      },
+      "filenames": {
+        "daynight_exposure": "{config}_{name}_DayNight_Exposure.pkl",
+        "hep_exposure":      "{config}_{name}_HEP_Exposure.pkl"
+      },
+      "written_by": ["src/physics/common/exposure_plot.py (save_df --mode exposure; Sensitivity mode is excluded)"],
+      "read_by": [
+        "src/physics/hep/reference_comparison.py (HEP_Exposure → exposure curve comparison)",
+        "src/physics/common/exposure_plot.py --mode comparison/reference (HEP_Exposure)"
+      ],
+      "in_pnfs": true
     },
 
     "HEP_REBIN_COMPARISON": {
       "description": "HEP adaptive-rebin comparison DataFrame (raw vs rebinned significance for each cut × exposure point). Saved for diagnostic review; not read back by any other script.",
       "base": "{root}/output/data/hep/{config}/{name}/{folder}",
-      "filename": "HEP_AdaptiveRebin_Comparison.pkl",
+      "filename": "{config}_{name}_HEP_AdaptiveRebin_Comparison.pkl",
       "written_by": "src/physics/hep/rebin_comparison.py (save_df)",
       "read_by": [],
       "in_pnfs": false

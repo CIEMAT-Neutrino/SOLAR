@@ -637,7 +637,7 @@ def _set_smoothing_env(analysis_name: str, config: str, name: str, folder: str) 
     sigmas = []
     for energy in args.energy:
         sigma_path = (
-            Path(str(root)) / "data" / "smoothing" / config / name
+            Path(str(root)) / "output" / "data" / "smoothing" / config / name
             / f"{folder.lower()}_{energy}_{analysis_name}_sigma.json"
         )
         if sigma_path.exists():

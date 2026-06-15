@@ -337,7 +337,7 @@ def main():
     )
     args = parser.parse_args()
 
-    base_dir = Path(args.output_dir) if args.output_dir else Path(str(root)) / "data" / "smoothing"
+    base_dir = Path(args.output_dir) if args.output_dir else Path(str(root)) / "output" / "data" / "smoothing"
 
     for config, name, energy, analysis in product(
         args.config, args.name, args.energy, args.analysis

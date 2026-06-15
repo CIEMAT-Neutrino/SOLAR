@@ -432,7 +432,7 @@ for config in configs:
                         save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
 
                     cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name)
-                    cut_dir = f"{export_path}/{config}/{args.name}/{args.folder.lower()}"
+                    cut_dir = f"{export_path}/{config}/{name}/{args.folder.lower()}"
                     if not os.path.exists(cut_dir):
                         os.makedirs(cut_dir)
                     cut_path = f"{cut_dir}/analysis_cuts_{analysis_key}.json"

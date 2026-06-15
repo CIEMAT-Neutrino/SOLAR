@@ -65,7 +65,13 @@ run = compute_reco_workflow(run, configs, workflow="MARLEY", rm_branches=False, 
 truth_df = npy2df(run, "Truth", debug=args.debug)
 
 for config, name in product(args.config, args.name):
-    this_df = explode(truth_df, ["TSignalSumK", "TSignalSumPDG"])
+    _cfg_info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _cfg_mask = (
+        (truth_df["Name"] == name)
+        & (truth_df["Geometry"] == _cfg_info["GEOMETRY"])
+        & (truth_df["Version"] == _cfg_info["VERSION"])
+    )
+    this_df = explode(truth_df[_cfg_mask].copy(), ["TSignalSumK", "TSignalSumPDG"])
     this_df["TSignalSumK"] = this_df["TSignalSumK"].astype(float)
 
     particle_df = (
