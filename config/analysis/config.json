@@ -94,6 +94,10 @@
       }
     }
   },
+  "QUALITY_CUTS": {
+    "OPFLASH_PLANE": 0
+  },
+
   "ADAPTIVE_REBIN": {
     "ANALYSES": {
       "HEP": {

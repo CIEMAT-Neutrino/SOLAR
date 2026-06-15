@@ -10,6 +10,9 @@ save_path   = f"{root}/output/images/solar/results"
 export_path = f"{root}/output/data/results"
 data_path   = f"{root}/output/data/solar/weighted"
 
+_analysis_info = load_analysis_info(str(root))
+_OP_PLANE_CUT  = _analysis_info.get("QUALITY_CUTS", {}).get("OPFLASH_PLANE", 0)
+
 _ANALYSIS_LOCAL_DIR = {
     "DayNight": "daynight-json",
     "HEP": "hep-json",
@@ -49,7 +52,7 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
         )
         * (run["Reco"]["NHits"] > this_nhit - 1)
         * (run["Reco"]["AdjClNum"] < this_adjcl)
-        * (run["Reco"]["MatchedOpFlashPlane"] == 0)
+        * (run["Reco"]["MatchedOpFlashPlane"] == _OP_PLANE_CUT)
         * (run["Reco"]["MatchedOpFlashPE"] > 0)
         * (run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1)
     )
@@ -92,7 +95,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
             "NHits": 100 * np.sum(run["Reco"]["NHits"] > this_nhit - 1) / events,
             "AdjClNum": 100 * np.sum(run["Reco"]["AdjClNum"] < this_adjcl) / events,
             "MatchedOpFlashNHits": 100 * np.sum(run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1) / events,
-            "MatchedOpFlashPlane": 100 * np.sum(run["Reco"]["MatchedOpFlashPlane"] == 0) / events,
+            "MatchedOpFlashPlane": 100 * np.sum(run["Reco"]["MatchedOpFlashPlane"] == _OP_PLANE_CUT) / events,
             "MatchedOpFlashPE": 100 * np.sum(run["Reco"]["MatchedOpFlashPE"] > 0) / events,
             "Fiducial": 100 * np.sum(fiducialx & fiducialy & fiducialz) / events,
             "FiducialX": 100 * np.sum(fiducialx) / events,
@@ -411,6 +414,8 @@ for config in configs:
                         "TrueCounts": h_true.tolist(),
                         "Counts": h.tolist(),
                         "Energy": true_energy_centers,
+                        "EnergyUnit": "MeV",
+                        "CountsUnit": "events/(kT·yr)",
                         "Error": h_error,
                         "Color": color,
                         "NHits": this_nhit,

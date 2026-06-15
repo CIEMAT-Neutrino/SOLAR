@@ -289,6 +289,7 @@ for config in configs:
             & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.name.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
+            & (run["Reco"]["MatchedOpFlashPlane"] == analysis_info["QUALITY_CUTS"]["OPFLASH_PLANE"])
             & (run["Reco"]["MatchedOpFlashPE"] > 0)
             & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
         )

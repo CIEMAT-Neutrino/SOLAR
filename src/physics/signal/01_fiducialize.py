@@ -185,7 +185,7 @@ for config in configs:
                 _surface_ok = _surface_ok & (_surface_arr < 3)
         else:
             _surface_ok = np.ones(len(_surface_arr), dtype=bool)
-        _quality_mask = _surface_ok & (_op_plane_arr == 0) & (_op_pe_arr > 0)
+        _quality_mask = _surface_ok & (_op_plane_arr == analysis_info["QUALITY_CUTS"]["OPFLASH_PLANE"]) & (_op_pe_arr > 0)
 
         # Single-entry cache: weights are innermost in product(), so consecutive
         # iterations with the same (fid_x, fid_y, fid_z) share mask and bin indices.
