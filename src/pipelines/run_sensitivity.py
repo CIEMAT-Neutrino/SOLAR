@@ -445,6 +445,15 @@ parser.add_argument(
         "significance plots alongside the standard line plots."
     ),
 )
+parser.add_argument(
+    "--weighted",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Run signal/04_weighted.py after the cut scan to write per-NHits weighted "
+        "distribution DataFrames to output/data/solar/nhits/. Off by default."
+    ),
+)
 
 args = parser.parse_args()
 configure_global_logging(verbose=args.verbose)
@@ -626,6 +635,13 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + cut_args
                 + oscillation_args_for()
                 + ["--export_fiducial", "--skip_scan", "--no-plot"],
+            )
+
+    if args.weighted:
+        for name in available_names:
+            run_analysis_script(
+                "src/physics/signal/04_weighted.py",
+                base_args_for(config, folder, include_background=False) + ["--name", name],
             )
 
 
