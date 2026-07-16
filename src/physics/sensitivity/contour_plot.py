@@ -254,6 +254,8 @@ for config in configs:
             else:
                 fig.update_layout(
                     coloraxis=dict(colorscale=colorscale),
+                    xaxis=dict(range=[0.01, 0.04]),
+                    yaxis=dict(range=[3e-5, 1e-4]),
                 )
 
             # Add an ellipse at position y=7.4 and x=0.303

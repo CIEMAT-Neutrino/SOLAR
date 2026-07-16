@@ -15,7 +15,7 @@
   "OSCILLATION_GRID": {
     "ranges": {
       "dm2":   {"min": 2.0e-5, "max": 2.0e-4, "scale": "linear"},
-      "sin13": {"min": 0.017,  "max": 0.025,  "scale": "linear"},
+      "sin13": {"min": 0.01,   "max": 0.04,   "scale": "linear"},
       "sin12": {"min": 0.10,   "max": 0.70,   "scale": "linear"}
     },
     "planes": [

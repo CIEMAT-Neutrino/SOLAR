@@ -327,6 +327,52 @@ def merge_with_existing_df(
     return merged
 
 
+def upsert_df_rows(
+    new_df: "pd.DataFrame",
+    path: str,
+    config: Optional[str] = None,
+    name: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    filename: str = "newdf",
+    key_col: str = "EnergyLabel",
+    debug: bool = False,
+) -> "pd.DataFrame":
+    """
+    Row-level upsert: read existing pkl, drop rows whose key_col value appears
+    in new_df, then concatenate new_df. Returns the merged DataFrame.
+
+    Call before save_df(rm=True) so that only the current energy label's rows
+    are replaced while rows for other energy labels are preserved.
+    """
+    filepath, _, _ = prepare_file_save(
+        path=path,
+        config=config,
+        name=name,
+        subfolder=subfolder,
+        filename=filename,
+        rm=False,
+        filetype="pkl",
+        debug=False,
+    )
+    if not os.path.exists(filepath):
+        return new_df
+    try:
+        existing = pd.read_pickle(filepath)
+    except Exception as exc:
+        rprint(f"[yellow][WARNING][/yellow] upsert_df_rows: could not load {filepath}: {exc}")
+        return new_df
+    if existing.empty or key_col not in existing.columns or key_col not in new_df.columns:
+        return new_df
+    new_keys = new_df[key_col].unique()
+    preserved = existing.loc[~existing[key_col].isin(new_keys)]
+    if debug:
+        rprint(
+            f"[cyan][INFO][/cyan] upsert_df_rows: kept {len(preserved)} rows, "
+            f"replaced {len(existing) - len(preserved)} rows for {list(new_keys)}"
+        )
+    return pd.concat([preserved, new_df], ignore_index=True)
+
+
 def save_figure(
     fig,
     path: str,

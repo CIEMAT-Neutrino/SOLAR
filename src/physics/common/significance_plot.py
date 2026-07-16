@@ -715,7 +715,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                             sig_source, (0, energy_len - bin_len), mode="constant", constant_values=np.nan,
                         )
                 _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "DayNight",
+                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "DayNight",
                     "Geometry": info["GEOMETRY"],
                     "Component": component_label, "SpectrumType": spectrum_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
@@ -724,6 +724,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": r"counts \cdot MeV^{-1}",
                     "CountsError": np.asarray(errors_per_energy).tolist(),
                     "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
+                    "SignificanceUnit": r"\sigma",
                     "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
                 })
 
@@ -831,16 +832,18 @@ for config, name, energy in product(args.config, args.name, args.energy):
             [pd.DataFrame(_counts_list), pd.DataFrame(_significance_list)],
             ["DayNight_Counts", "DayNight_Significance"],
         ):
+            _merged = upsert_df_rows(df, data_path, config, name, subfolder=args.folder.lower(), filename=df_name, debug=args.debug)
             save_df(
-                df, data_path, config, name,
+                _merged, data_path, config, name,
                 subfolder=args.folder.lower(), filename=df_name,
-                rm=args.rewrite, debug=True if df_name == "DayNight_Counts" else args.debug,
+                rm=True, debug=True if df_name == "DayNight_Counts" else args.debug,
             )
             if df_name == "DayNight_Counts":
+                _merged_local = upsert_df_rows(df, local_data_path, config, name, subfolder=args.folder.lower(), filename=df_name)
                 save_df(
-                    df, local_data_path, config, name,
+                    _merged_local, local_data_path, config, name,
                     subfolder=args.folder.lower(), filename=df_name,
-                    rm=args.rewrite, debug=False,
+                    rm=True, debug=False,
                 )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1238,38 +1241,43 @@ for config, name, energy in product(args.config, args.name, args.energy):
             _is_sig = rd["component"] == "hep"
             for spec_type, cnt_arr in [("Raw", rd["counts"]), ("Smoothed", rd["smoothed_counts"])]:
                 _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "HEP",
+                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "HEP",
                     "Geometry": info["GEOMETRY"],
                     "Component": rd["component"], "SpectrumType": spec_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": args.exposure, "ExposureUnit": "year",
                     "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr[tail_slice]).tolist(), "CountsUnit": "counts",
+                    "Counts": (scale * cnt_arr[tail_slice]).tolist(), "CountsUnit": f"{args.exposure:.0f} year",
                     "CountsError": None,
                     "Significance": (
                         raw_local_density.tolist() if (_is_sig and spec_type == "Raw")
                         else smooth_local_density.tolist() if (_is_sig and spec_type == "Smoothed")
                         else None
                     ),
+                    "SignificanceUnit": r"\sigma \cdot MeV^{-1}" if _is_sig else None,
                     "SignificanceLabel": "Asimov TS density" if _is_sig else None,
                 })
 
         if args.pkl_label == "highest":
             _hep_counts_df = pd.DataFrame(_counts_list)
+            _merged_hc = upsert_df_rows(_hep_counts_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Counts", debug=args.debug)
             save_df(
-                _hep_counts_df, data_path, config=args.config[0], name=args.name[0],
+                _merged_hc, data_path, config=args.config[0], name=args.name[0],
                 subfolder=args.folder.lower(), filename="HEP_Counts",
-                rm=args.rewrite, debug=True,
+                rm=True, debug=True,
             )
+            _merged_hc_local = upsert_df_rows(_hep_counts_df, local_data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Counts")
             save_df(
-                _hep_counts_df, local_data_path, config=args.config[0], name=args.name[0],
+                _merged_hc_local, local_data_path, config=args.config[0], name=args.name[0],
                 subfolder=args.folder.lower(), filename="HEP_Counts",
-                rm=args.rewrite, debug=False,
+                rm=True, debug=False,
             )
+            _hep_sig_df = pd.DataFrame(_significance_list)
+            _merged_hs = upsert_df_rows(_hep_sig_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Significance", debug=args.debug)
             save_df(
-                pd.DataFrame(_significance_list), data_path, config=args.config[0], name=args.name[0],
+                _merged_hs, data_path, config=args.config[0], name=args.name[0],
                 subfolder=args.folder.lower(), filename="HEP_Significance",
-                rm=args.rewrite, debug=args.debug,
+                rm=True, debug=args.debug,
             )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1374,15 +1382,16 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 ("Smoothed", cd["smoothed_counts"], cd["smoothed_errors"]),
             ]:
                 _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "Sensitivity",
+                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "Sensitivity",
                     "Geometry": info["GEOMETRY"],
                     "Component": component_label, "SpectrumType": spec_type,
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": args.exposure, "ExposureUnit": "year",
                     "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr).tolist(), "CountsUnit": "counts",
+                    "Counts": (scale * cnt_arr).tolist(), "CountsUnit": f"{args.exposure:.0f} year",
                     "CountsError": (scale * err_arr).tolist(),
                     "Significance": None,
+                    "SignificanceUnit": None,
                     "SignificanceLabel": None,
                 })
 
@@ -1451,20 +1460,24 @@ for config, name, energy in product(args.config, args.name, args.energy):
         })
 
         _sens_counts_df = pd.DataFrame(_counts_list)
+        _merged_sc = upsert_df_rows(_sens_counts_df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Counts", debug=args.debug)
         save_df(
-            _sens_counts_df, data_path, config=config, name=name,
+            _merged_sc, data_path, config=config, name=name,
             subfolder=args.folder.lower(), filename="Sensitivity_Counts",
-            rm=args.rewrite, debug=True,
+            rm=True, debug=True,
         )
+        _merged_sc_local = upsert_df_rows(_sens_counts_df, local_data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Counts")
         save_df(
-            _sens_counts_df, local_data_path, config=config, name=name,
+            _merged_sc_local, local_data_path, config=config, name=name,
             subfolder=args.folder.lower(), filename="Sensitivity_Counts",
-            rm=args.rewrite, debug=False,
+            rm=True, debug=False,
         )
+        _sens_sig_df = pd.DataFrame(_significance_list)
+        _merged_ss = upsert_df_rows(_sens_sig_df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Significance", debug=args.debug)
         save_df(
-            pd.DataFrame(_significance_list), data_path, config=config, name=name,
+            _merged_ss, data_path, config=config, name=name,
             subfolder=args.folder.lower(), filename="Sensitivity_Significance",
-            rm=args.rewrite, debug=args.debug,
+            rm=True, debug=args.debug,
         )
 
     # ══════════════════════════════════════════════════════════════════════════

@@ -98,6 +98,7 @@ for config in configs:
                 bins=x_axis,
             )
             purity_dict = {
+                "Geometry": info["GEOMETRY"],
                 "Config": config,
                 "Name": name,
                 "#Hits": hit,
@@ -113,6 +114,7 @@ for config in configs:
                 bins=x_axis,
             )
             completeness_dict = {
+                "Geometry": info["GEOMETRY"],
                 "Config": config,
                 "Name": name,
                 "#Hits": hit,
@@ -122,6 +124,49 @@ for config in configs:
                 "Variable": "Completeness",
             }
             df_list.append(completeness_dict)
+
+        # Energy scan: mean Purity and Completeness vs neutrino energy
+        _reco = run["Reco"]
+        _base_mask = (
+            (_reco["Geometry"] == info["GEOMETRY"])
+            & (_reco["Version"] == info["VERSION"])
+            & (_reco["Name"] == name)
+        )
+        _es_energy, _es_purity, _es_purity_err = [], [], []
+        _es_completeness, _es_completeness_err = [], []
+        for energy in lowe_energy_centers:
+            _emask = _base_mask & (
+                (_reco["SignalParticleK"] >= energy - lowe_ebin / 2)
+                & (_reco["SignalParticleK"] < energy + lowe_ebin / 2)
+            )
+            _purity_vals = _reco["Purity"][_emask]
+            _comp_vals = _reco["Charge"][_emask] / _reco["ElectronCharge"][_emask]
+            if len(_purity_vals) < 10:
+                continue
+            n = len(_purity_vals)
+            _es_energy.append(energy)
+            _es_purity.append(100 * np.mean(_purity_vals))
+            _es_purity_err.append(100 * np.std(_purity_vals) / np.sqrt(n))
+            _es_completeness.append(100 * np.mean(_comp_vals))
+            _es_completeness_err.append(100 * np.std(_comp_vals) / np.sqrt(n))
+
+        for _var, _vals, _errs in [
+            ("Purity", _es_purity, _es_purity_err),
+            ("Completeness", _es_completeness, _es_completeness_err),
+        ]:
+            df_list.append(
+                {
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "#Hits": None,
+                    "Values": np.asarray(_es_energy, dtype=float),
+                    "Counts": np.asarray(_vals),
+                    "CountsError": np.asarray(_errs),
+                    "Density": np.asarray(_vals),
+                    "Variable": _var,
+                }
+            )
 
         plot_df = pd.DataFrame(df_list)
         for df_label in ["Purity", "Completeness"]:

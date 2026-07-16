@@ -6,6 +6,26 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+
+def double_gaussian(x, a_core, mu, sigma_core, a_tail, sigma_tail):
+    return (
+        a_core * np.exp(-0.5 * ((x - mu) / abs(sigma_core)) ** 2)
+        + a_tail * np.exp(-0.5 * ((x - mu) / abs(sigma_tail)) ** 2)
+    )
+
+
+def gaussian(x, a, b, c):
+    return a * np.exp(-0.5 * ((x - b) / abs(c)) ** 2)
+
+
+def exponential_decay(x, a, b, c):
+    return a * np.exp(-abs(x) / abs(c)) - b
+
+
+def gaussian_plus_sym_exp(x, a, mu, sigma, b, tau):
+    return a * np.exp(-0.5 * ((x - mu) / abs(sigma)) ** 2) + b * np.exp(-abs(x - mu) / abs(tau))
+
+
 save_path = f"{root}/output/images/vertex/reconstruction"
 data_path = f"{root}/output/data/vertex/reconstruction"
 
@@ -21,11 +41,14 @@ def position_mask(
     coordinate: Optional[str] = "X",
     combined_scan_coordinate: Optional[str] = "X",
     sigma: bool = True,
+    radius_thresholds: Optional[dict] = None,
 ):
     def _energy_sigma(coord_label: str) -> float:
+        _emask = df["Energy"] == energy if energy is not None else df["Energy"].isna()
         sigma_row = df[
             (df["Coordinate"] == coord_label)
-            * (df["Energy"] == energy if energy is not None else df["Energy"].isna())
+            & _emask
+            & df["CoordinateBin"].isna()
         ]["Sigma"].values
         return float(sigma_row[0]) if len(sigma_row) > 0 else np.nan
 
@@ -89,17 +112,20 @@ def position_mask(
 
         if sigma:
             if coordinate is None:
-                sigma_axes = np.asarray([_energy_sigma(axis) for axis in ["X", "Y", "Z"]])
-                has_valid_sigma = np.all(np.isfinite(sigma_axes))
-                sigma_3d = np.sqrt(np.sum(sigma_axes**2)) if has_valid_sigma else np.nan
                 reco_error = np.sqrt(
                     run["Reco"]["ErrorX"] ** 2
                     + run["Reco"]["ErrorY"] ** 2
                     + run["Reco"]["ErrorZ"] ** 2
                 )
-                reco_mask = reco_mask * (
-                    reco_error < tolerance * sigma_3d if has_valid_sigma else False
-                )
+                if radius_thresholds is not None:
+                    reco_mask = reco_mask * (reco_error < radius_thresholds[tolerance])
+                else:
+                    sigma_axes = np.asarray([_energy_sigma(axis) for axis in ["X", "Y", "Z"]])
+                    has_valid_sigma = np.all(np.isfinite(sigma_axes))
+                    sigma_3d = np.sqrt(np.sum(sigma_axes**2)) if has_valid_sigma else np.nan
+                    reco_mask = reco_mask * (
+                        reco_error < tolerance * sigma_3d if has_valid_sigma else False
+                    )
             else:
                 axis_sigma = _energy_sigma(f"{coordinate}")
                 reco_mask = reco_mask * (
@@ -151,6 +177,10 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--purity_threshold", type=float, default=0.5,
+    help="MatchedOpFlashPur threshold for the high-purity 3D reference sample (default: 0.5)",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -160,6 +190,7 @@ combined_scan_coordinate = (
     if args.combined_scan_coordinate.upper() == "NONE"
     else args.combined_scan_coordinate.upper()
 )
+purity_threshold = args.purity_threshold
 
 configs = {config: [name]}
 
@@ -191,11 +222,9 @@ run, mask, output = compute_filtered_run(
 )
 rprint(output)
 
-# Redefine the np.ndarray lowe_energy_centers to have an extra None value at the beginning by using np.insert
-lowe_energy_centers = np.append(
-    np.array([None]),
-    lowe_energy_centers,
-)
+# Extend to match resolution scan range (02_vertex.py uses np.arange(6, 31, 2))
+lowe_energy_centers = np.arange(6, 31, 2)
+lowe_energy_centers = np.append(np.array([None]), lowe_energy_centers)
 
 for config in configs:
     info, params, output = get_param_dict(
@@ -225,6 +254,42 @@ for config in configs:
         )
         print( df.head())
         df = df.fillna(np.nan)
+
+        # Pre-compute 3D quantile thresholds from high-purity matched sample.
+        # threshold(n) = quantile(r_hp, erf(n/√2)) — e.g. n=3 → 99.73% coverage.
+        from scipy.special import erf as _erf
+        _reco = run["Reco"]
+        _purity_base = (
+            (_reco["Geometry"] == info["GEOMETRY"])
+            & (_reco["Version"] == info["VERSION"])
+            & (_reco["Name"] == name)
+            & (_reco["MatchedOpFlashPur"] > purity_threshold)
+        )
+        _3d_error_all = np.sqrt(
+            _reco["ErrorX"] ** 2 + _reco["ErrorY"] ** 2 + _reco["ErrorZ"] ** 2
+        )
+        _3d_quantile_thresholds = {}
+        for _eq in lowe_energy_centers:
+            if _eq is None:
+                _qmask = _purity_base
+            else:
+                _qmask = _purity_base & (
+                    (_reco["SignalParticleK"] >= _eq - lowe_ebin / 2)
+                    & (_reco["SignalParticleK"] < _eq + lowe_ebin / 2)
+                )
+            _r_hp = _3d_error_all[_qmask]
+            if len(_r_hp) < 10:
+                _3d_quantile_thresholds[_eq] = None
+                continue
+            _3d_quantile_thresholds[_eq] = {
+                s: float(np.quantile(_r_hp, _erf(s / np.sqrt(2))))
+                for s in analysis_info["VERTEX_RESOLUTION_SIGMAS"]
+            }
+        rprint(
+            f"[cyan][3D quantile thresholds at energy=None]: "
+            f"{_3d_quantile_thresholds.get(None)}[/cyan]"
+        )
+
         for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z", None]):
             if energy not in df["Energy"].values and energy is not None:
                 missing_energies.append(energy)
@@ -284,45 +349,40 @@ for config in configs:
                 ['Reco']
             ):
                 if sigma:
+                    _emask = df["Energy"] == energy if energy is not None else df["Energy"].isna()
+                    _missing_sigma = False
                     if coord is None:
-                        sigma_values = [
-                            df[
-                                (df["Coordinate"] == axis)
-                                * (
-                                    df["Energy"] == energy
-                                    if energy is not None
-                                    else df["Energy"].isna()
-                                )
-                            ]["Sigma"].values
-                            for axis in ["X", "Y", "Z"]
-                        ]
-                        if any(len(vals) == 0 for vals in sigma_values):
+                        if _3d_quantile_thresholds.get(energy) is None:
                             warning_key = (energy, coord)
                             if warning_key not in missing_sigma_warnings:
                                 output += (
-                                    f"[yellow][WARNING][/yellow] Missing sigma entry for combined XYZ at energy={energy}. "
-                                    "Skipping sigma-based reconstruction efficiency for this point.\n"
+                                    f"[yellow][WARNING][/yellow] Insufficient high-purity events for 3D quantile threshold at energy={energy}. "
+                                    "Padding with NaN.\n"
                                 )
                                 missing_sigma_warnings.add(warning_key)
-                            continue
+                            _missing_sigma = True
                     else:
                         axis_sigma_vals = df[
                             (df["Coordinate"] == coord)
-                            * (
-                                df["Energy"] == energy
-                                if energy is not None
-                                else df["Energy"].isna()
-                            )
+                            & _emask
+                            & df["CoordinateBin"].isna()
                         ]["Sigma"].values
                         if len(axis_sigma_vals) == 0:
                             warning_key = (energy, coord)
                             if warning_key not in missing_sigma_warnings:
                                 output += (
                                     f"[yellow][WARNING][/yellow] Missing sigma entry for coordinate={coord} at energy={energy}. "
-                                    "Skipping sigma-based reconstruction efficiency for this point.\n"
+                                    "Padding with NaN.\n"
                                 )
                                 missing_sigma_warnings.add(warning_key)
-                            continue
+                            _missing_sigma = True
+                    if _missing_sigma:
+                        for _tol in tolerances:
+                            counts[sigma][_tol].append(0)
+                            counts_error[sigma][_tol].append(0)
+                            efficiency[sigma][_tol].append(np.nan)
+                            efficiency_error[sigma][_tol].append(np.nan)
+                        continue
                 
                 true_mask[sigma], reco_mask[sigma] = position_mask(
                     run=run,
@@ -339,6 +399,11 @@ for config in configs:
                     coordinate=coord,
                     combined_scan_coordinate=combined_scan_coordinate,
                     sigma=sigma,
+                    radius_thresholds=(
+                        _3d_quantile_thresholds.get(energy)
+                        if coord is None and sigma
+                        else None
+                    ),
                 )
                 if energy is None:
                     true_energy_mask = np.ones(
@@ -478,12 +543,13 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+    _plot_energies = [6, 10, 14, 18, 22, 26, 30]
     for tolerance in analysis_info["VERTEX_RESOLUTION_SIGMAS"]:
         fig = px.line(
             df_position_plot[
-                (df_position_plot["Energy"].notna())
-                * (df_position_plot["Sigma"] == True)
-                * (df_position_plot["Tolerance"] == tolerance)
+                (df_position_plot["Energy"].isin(_plot_energies))
+                & (df_position_plot["Sigma"] == True)
+                & (df_position_plot["Tolerance"] == tolerance)
             ].explode(["Values", "Efficiency", "EfficiencyError"]),
             x="Values",
             y="Efficiency",
@@ -520,38 +586,69 @@ for config in configs:
             debug=user_input["debug"],
         )
 
-    # Create a df with the values at 100 cm position cut from 8, 16, 24 MeV
-    summary_list = []
-    for energy in [6, 10, 14]:
-        for coord in ["X", "Y", "Z", None]:
+    # Append efficiency-vs-energy summary rows into the same dataframe.
+    # Variable = "EnergyX" / "EnergyY" / "EnergyZ" / "EnergyXYZ"; Energy = None;
+    # Values = array of energy bin centers; Efficiency/EfficiencyError = aligned arrays.
+    all_energies = sorted(df_position["Energy"].dropna().unique())
+    _summary_accum = {}
+    for energy in all_energies:
+        for coord in [None]:
             this_df = df_position[
                 (df_position["Energy"] == energy)
-                * (df_position["Variable"] == coord)
-                * (df_position["Sigma"] == True)
+                & df_position["Variable"].isna()
+                & (df_position["Sigma"] == True)
             ]
-            if len(this_df) > 0:
+            if len(this_df) == 0:
+                continue
+            coord_label = "Energy"
+            for tolerance in this_df["Tolerance"].unique():
+                tol_df = this_df[this_df["Tolerance"] == tolerance]
                 efficiency_values = np.asarray(
-                    [val for row in this_df["Efficiency"].values for val in np.asarray(row)]
+                    [val for row in tol_df["Efficiency"].values for val in np.asarray(row)
+                     if np.isfinite(val)]
                 )
-                summary_list.append(
-                    {
-                        "Energy": energy,
-                        "Coordinate": coord,
-                        "Efficiency": np.mean(efficiency_values),
-                        "EfficiencyError": np.std(efficiency_values),
-                    }
+                n = len(efficiency_values)
+                key = (coord_label, tolerance)
+                if key not in _summary_accum:
+                    _summary_accum[key] = {"Energy": [], "Efficiency": [], "EfficiencyError": []}
+                _summary_accum[key]["Energy"].append(energy)
+                _summary_accum[key]["Efficiency"].append(
+                    np.mean(efficiency_values) if n > 0 else np.nan
                 )
-    summary_df = pd.DataFrame(summary_list)
-    for this_filename, this_filetype, this_df in zip(
-        ["Vertex", "Summary_100cm"], ["pkl", "tex"], [df_position, summary_df]
-    ):
-        save_df(
-            this_df,
-            data_path,
-            config,
-            name,
-            filename=f"{this_filename}_Reconstruction_Efficiency",
-            rm=user_input["rewrite"],
-            filetype=this_filetype,
-            debug=user_input["debug"],
-        )
+                _summary_accum[key]["EfficiencyError"].append(
+                    np.std(efficiency_values) / np.sqrt(n) if n > 0 else np.nan
+                )
+
+    _nan_arr = lambda n: np.full(n, np.nan)
+    summary_rows = [
+        {
+            "Geometry": info["GEOMETRY"],
+            "Config": config,
+            "Name": name,
+            "Variable": coord_label,
+            "Energy": None,
+            "Tolerance": tolerance,
+            "Reference": "Reco",
+            "Values": np.asarray(arrays["Energy"], dtype=float),
+            "Counts": _nan_arr(len(arrays["Energy"])),
+            "CountsError": _nan_arr(len(arrays["Energy"])),
+            "Efficiency": np.asarray(arrays["Efficiency"]),
+            "EfficiencyError": np.asarray(arrays["EfficiencyError"]),
+            "Sigma": True,
+        }
+        for (coord_label, tolerance), arrays in _summary_accum.items()
+    ]
+    df_position = pd.concat(
+        [df_position, pd.DataFrame(summary_rows)], ignore_index=True
+    )
+
+    save_df(
+        df_position,
+        data_path,
+        config,
+        name,
+        filename="Vertex_Reconstruction_Efficiency",
+        rm=user_input["rewrite"],
+        filetype="pkl",
+        debug=user_input["debug"],
+    )

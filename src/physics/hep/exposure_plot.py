@@ -5,6 +5,16 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from sklearn.isotonic import IsotonicRegression as _IsotonicRegression
+
+_isotonic_regressor = _IsotonicRegression(increasing=True)
+
+
+def _monotone_for_export(arr: np.ndarray) -> np.ndarray:
+    """Enforce non-decreasing constraint on a significance-vs-exposure array before pkl export."""
+    a = np.clip(np.asarray(arr, dtype=float), 0.0, None)
+    return np.asarray(_isotonic_regressor.fit_transform(np.arange(len(a)), a))
+
 
 analysis_info = load_analysis_info(str(root))
 
@@ -288,6 +298,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 posinf=0.0,
                 neginf=0.0,
             )
+
+            # Enforce monotonicity on PL curves at load time so plot and pkl are consistent.
+            if significance == "ProfileLikelihood":
+                smoothed_significance = _monotone_for_export(smoothed_significance)
+                raw_significance      = _monotone_for_export(raw_significance)
 
             for spectrum_type, this_significance in zip(
                 ["Smoothed", "Raw"],

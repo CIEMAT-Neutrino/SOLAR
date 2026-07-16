@@ -10,12 +10,88 @@ save_path = f"{root}/output/images/vertex/resolution"
 data_path = f"{root}/output/data/vertex/resolution"
 
 
+def double_gaussian(x, a_core, mu, sigma_core, a_tail, sigma_tail):
+    """Double Gaussian: narrow core (intrinsic resolution) + broad tail component."""
+    return (
+        a_core * np.exp(-0.5 * ((x - mu) / abs(sigma_core)) ** 2)
+        + a_tail * np.exp(-0.5 * ((x - mu) / abs(sigma_tail)) ** 2)
+    )
+
+
 def gaussian(x, a, b, c):
     return a * np.exp(-0.5 * ((x - b) / abs(c)) ** 2)
 
 
 def exponential_decay(x, a, b, c):
     return a * np.exp(-abs(x) / abs(c)) - b
+
+
+def gaussian_plus_sym_exp(x, a, mu, sigma, b, tau):
+    return a * np.exp(-0.5 * ((x - mu) / abs(sigma)) ** 2) + b * np.exp(-abs(x - mu) / abs(tau))
+
+
+def _fit_resolution(hx, edges, name, p0_sigma=5, label=None):
+    """Fit resolution histogram; returns (fit_function_label, popt, perr, bin_centers)."""
+    _xc = 0.5 * (edges[1:] + edges[:-1])
+    _w = np.where(hx > 0, 1.0 / np.sqrt(hx), np.inf)
+    if "marley" in name.lower():
+        try:
+            ff = "DoubleGaussian"
+            popt, pcov = curve_fit(
+                double_gaussian, _xc, hx,
+                p0=[np.max(hx), 0, p0_sigma, np.max(hx) * 0.2, 4 * p0_sigma],
+                sigma=_w,
+                bounds=([0, -20, 0.1, 0, 0.1], [np.max(hx) * 2, 20, 20, np.max(hx), 100]),
+            )
+            if abs(popt[2]) > abs(popt[4]):
+                popt[0], popt[2], popt[3], popt[4] = popt[3], popt[4], popt[0], popt[2]
+                _pe = np.sqrt(np.diag(pcov))
+                _pe[0], _pe[2], _pe[3], _pe[4] = _pe[3], _pe[4], _pe[0], _pe[2]
+                pcov = np.diag(_pe ** 2)
+        except Exception:
+            ff = "Gaussian"
+            popt, pcov = curve_fit(gaussian, _xc, hx, p0=[np.max(hx), 0, p0_sigma], sigma=_w)
+    else:
+        ff = "Gaussian"
+        popt, pcov = curve_fit(gaussian, _xc, hx, p0=[np.max(hx), 0, p0_sigma], sigma=_w)
+    if label:
+        rprint(f"[cyan][Fit] {label}: {ff}  σ_core = {popt[2]:.2f} cm[/cyan]")
+    return ff, popt, np.sqrt(np.diag(pcov)), _xc
+
+
+def _get_fit_meta(fit_function):
+    if fit_function == "DoubleGaussian":
+        return {
+            "func": double_gaussian,
+            "formula": r"A_\mathrm{core}\exp\!\left(-\frac{(x-\mu)^2}{2\sigma_\mathrm{core}^2}\right)+A_\mathrm{tail}\exp\!\left(-\frac{(x-\mu)^2}{2\sigma_\mathrm{tail}^2}\right)",
+            "labels": ["Amp. Core", "Mean", "Sigma Core", "Amp. Tail", "Sigma Tail"],
+            "units": ["", "cm", "cm", "", "cm"],
+            "formats": [".1f", ".1f", ".2f", ".1f", ".2f"],
+        }
+    elif fit_function == "GaussianPlusSymExp":
+        return {
+            "func": gaussian_plus_sym_exp,
+            "formula": r"A \exp\!\left(-\frac{(x-\mu)^2}{2\sigma^2}\right) + B \exp\!\left(-\frac{|x-\mu|}{\tau}\right)",
+            "labels": ["Amp.", "Mean", "Sigma", "ExpAmp.", "Tau"],
+            "units": ["", "cm", "cm", "", "cm"],
+            "formats": [".1f", ".1f", ".2f", ".1f", ".2f"],
+        }
+    elif fit_function == "Gaussian":
+        return {
+            "func": gaussian,
+            "formula": r"A \exp\!\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)",
+            "labels": ["Amp.", "Mean", "Sigma"],
+            "units": ["", "cm", "cm"],
+            "formats": [".1f", ".1f", ".2f"],
+        }
+    else:
+        return {
+            "func": exponential_decay,
+            "formula": r"A \exp\!\left(-\frac{|x|}{\tau}\right) - B",
+            "labels": ["Amp.", "Offset", "DecayConst"],
+            "units": ["", "cm", "cm"],
+            "formats": [".1f", ".1f", ".2f"],
+        }
 
 
 for path in [save_path, data_path]:
@@ -37,6 +113,12 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--purity_threshold",
+    type=float,
+    default=None,
+    help="OpFlash purity threshold for high-purity selection (default: 0.1 for vd, 0.5 for hd)",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -82,6 +164,12 @@ for config in configs:
     for name in configs[config]:
         max_hist = 0
         info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+        purity_threshold = (
+            args.purity_threshold
+            if args.purity_threshold is not None
+            else 0.5
+        )
+        rprint(f"[cyan]Purity threshold ({info['GEOMETRY']}): {purity_threshold}[/cyan]")
         this_reco_df = reco_df[
             (reco_df["Geometry"] == info["GEOMETRY"])
             & (reco_df["Version"] == info["VERSION"])
@@ -97,49 +185,16 @@ for config in configs:
             #############################################################################
 
             hx, edges = np.histogram(
-                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > 0.5],
+                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > purity_threshold],
                 bins=np.arange(-20, 20.5, 0.5),
                 density=False,
             )
-            if "marley" in name.lower():
-                try:
-                    fit_function = "Gaussian"
-                    popt, pcov = curve_fit(
-                        gaussian,
-                        0.5 * (edges[1:] + edges[:-1]),
-                        hx,
-                        p0=[np.max(hx), 0, 2],
-                        sigma=1 / np.sqrt(hx),
-                    )
-                except:
-                    rprint("Gaussian fit failed, trying exponential decay fit")
-                    fit_function = "Exponential"
-                    popt, pcov = curve_fit(
-                        exponential_decay,
-                        0.5 * (edges[1:] + edges[:-1]),
-                        hx,
-                        p0=[np.max(hx), 0, 2],
-                        sigma=1 / np.sqrt(hx),
-                        bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
-                    )
-            else:
-                rprint("Gaussian fit failed, trying exponential decay fit")
-                fit_function = "Exponential"
-                popt, pcov = curve_fit(
-                    exponential_decay,
-                    0.5 * (edges[1:] + edges[:-1]),
-                    hx,
-                    p0=[np.max(hx), 0, 2],
-                    sigma=1 / np.sqrt(hx),
-                    bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
-                )
+            fit_function, popt, perr_tmp, _ = _fit_resolution(hx, edges, name, p0_sigma=2, label=f"{coord} overall")
 
-            fit_y = (
-                gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
-                if fit_function == "Gaussian"
-                else exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
-            )
-            perr = np.sqrt(np.diag(pcov))
+            perr = perr_tmp
+            popt_overall, perr_overall = popt, perr
+            _xc = 0.5 * (edges[1:] + edges[:-1])
+            fit_y = _get_fit_meta(fit_function)["func"](_xc, *popt)
 
             # Find percentage of events within 1, 2 and 3 sigma
             sigma1 = len(
@@ -174,8 +229,8 @@ for config in configs:
                             (this_reco_df["MatchedOpFlashPur"] == 0)
                             * (this_reco_df["MatchedOpFlashPE"] >= 0),
                             (this_reco_df["MatchedOpFlashPur"] > 0)
-                            * (this_reco_df["MatchedOpFlashPur"] <= 0.5),
-                            this_reco_df["MatchedOpFlashPur"] > 0.5,
+                            * (this_reco_df["MatchedOpFlashPur"] <= purity_threshold),
+                            this_reco_df["MatchedOpFlashPur"] > purity_threshold,
                         ],
                     )
                 ):
@@ -192,6 +247,7 @@ for config in configs:
                             -info["DETECTOR_MAX_X"], info["DETECTOR_MAX_X"], 0.5
                         ),
                     )
+                    _fit_meta = _get_fit_meta(fit_function)
                     purity_list.append(
                         {
                             "Geometry": info["GEOMETRY"],
@@ -210,26 +266,14 @@ for config in configs:
                             / np.sum(h)
                             / (this_edges[1] - this_edges[0]),
                             "Values": 0.5 * (this_edges[1:] + this_edges[:-1]),
-                            "FitFunction": (
-                                gaussian
-                                if fit_function == "Gaussian"
-                                else exponential_decay
-                            ),
+                            "FitFunction": _fit_meta["func"],
                             "FitFunctionLabel": fit_function,
-                            "FitFunctionFormula": (
-                                r"A \exp\left(-\frac{(x - \mu)^2}{2 \sigma^2}\right)"
-                                if fit_function == "Gaussian"
-                                else r"A \exp\left(-\frac{|x|}{\tau}\right) - B"
-                            ),
+                            "FitFunctionFormula": _fit_meta["formula"],
                             "Params": popt,
                             "ParamsError": perr,
-                            "ParamsLabel": (
-                                ["Amp.", "Mean", "Sigma"]
-                                if fit_function == "Gaussian"
-                                else ["Amp.", "Offset", "DecayConst"]
-                            ),
-                            "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
-                            "ParamsFormat": [".1f", ".1f", ".2f"],
+                            "ParamsLabel": _fit_meta["labels"],
+                            "ParamsUnit": _fit_meta["units"],
+                            "ParamsFormat": _fit_meta["formats"],
                         }
                     )
                     # Print the drift sample percentages
@@ -256,28 +300,131 @@ for config in configs:
                 density=True,
             )
 
+            _fit_meta = _get_fit_meta(fit_function)
             hist_list.append(
                 {
+                    "Geometry": info["GEOMETRY"],
                     "Config": config,
                     "Name": name,
                     "Energy": None,
+                    "CoordinateBin": None,
                     "Coordinate": coord,
                     "Error": np.asarray(h),
                     "Values": 0.5 * (edges[1:] + edges[:-1]),
                     "Sigma": popt[2],
                     "SigmaError": perr[2],
                     "FitFunctionLabel": fit_function,
+                    "FitFunctionFormula": _fit_meta["formula"],
                     "Params": popt,
                     "ParamsError": perr,
-                    "ParamsLabel": (
-                        ["Amp.", "Mean", "Sigma"]
-                        if fit_function == "Gaussian"
-                        else ["Amp.", "Offset", "DecayConst"]
-                    ),
-                    "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
-                    "ParamsFormat": [".1f", ".1f", ".2f"],
+                    "ParamsLabel": _fit_meta["labels"],
+                    "ParamsUnit": _fit_meta["units"],
+                    "ParamsFormat": _fit_meta["formats"],
                 }
             )
+
+            if np.max(h) > max_hist:
+                max_hist = np.max(h)
+
+            _res_edges = np.arange(-20, 20.5, 0.5)
+            _purity_mask = this_reco_df["MatchedOpFlashPur"] > purity_threshold
+
+            # Energy scan
+            _es_energies, _es_sigma, _es_sigma_err = [], [], []
+            for energy in np.arange(6, 31, 2):
+                _emask = (
+                    (this_reco_df["SignalParticleK"] > (energy - 1))
+                    & (this_reco_df["SignalParticleK"] < energy + 1)
+                )
+                _edf = this_reco_df[_emask]
+                if len(_edf) < 50:
+                    continue
+                _evals = _edf[error][_purity_mask[_emask]] if coord == "X" else _edf[error]
+                hx, edges = np.histogram(_evals, bins=_res_edges, density=True)
+                if np.sum(hx) == 0:
+                    continue
+                try:
+                    fit_function, popt, perr, _xc = _fit_resolution(hx, edges, name)
+                except Exception:
+                    continue
+                _es_energies.append(energy)
+                _es_sigma.append(popt[2])
+                _es_sigma_err.append(perr[2])
+                _fit_meta = _get_fit_meta(fit_function)
+                hist_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Energy": energy,
+                        "CoordinateBin": None,
+                        "Coordinate": coord,
+                        "Error": np.asarray(hx),
+                        "Values": _xc,
+                        "Sigma": popt[2],
+                        "SigmaError": perr[2],
+                        "FitFunction": _fit_meta["func"],
+                        "FitFunctionLabel": fit_function,
+                        "FitFunctionFormula": _fit_meta["formula"],
+                        "Params": popt,
+                        "ParamsError": perr,
+                        "ParamsLabel": _fit_meta["labels"],
+                        "ParamsUnit": _fit_meta["units"],
+                        "ParamsFormat": _fit_meta["formats"],
+                    }
+                )
+
+            # Coordinate scan: resolution vs true position along each axis
+            _coord_min = info[f"DETECTOR_MIN_{coord}"] if coord != "Z" else -info[f"DETECTOR_MAX_{coord}"]
+            _coord_max = info[f"DETECTOR_MAX_{coord}"]
+            _n_cbins = 10
+            _cbw = (_coord_max - _coord_min) / _n_cbins
+            _coord_centers = np.linspace(_coord_min + _cbw / 2, _coord_max - _cbw / 2, _n_cbins)
+            _cs_bins, _cs_sigma, _cs_sigma_err = [], [], []
+
+            for coord_bin in _coord_centers:
+                _cmask = (
+                    (this_reco_df[f"SignalParticle{coord}"] >= coord_bin - _cbw / 2)
+                    & (this_reco_df[f"SignalParticle{coord}"] < coord_bin + _cbw / 2)
+                )
+                if coord == "X":
+                    _cmask &= _purity_mask
+                _cdf = this_reco_df[_cmask]
+                if len(_cdf) < 50:
+                    continue
+                hx, edges = np.histogram(_cdf[error], bins=_res_edges, density=True)
+                if np.sum(hx) == 0:
+                    continue
+                try:
+                    fit_function, popt, perr, _xc = _fit_resolution(hx, edges, name)
+                except Exception:
+                    continue
+                _cs_bins.append(coord_bin)
+                _cs_sigma.append(popt[2])
+                _cs_sigma_err.append(perr[2])
+                _fit_meta = _get_fit_meta(fit_function)
+                hist_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Energy": None,
+                        "CoordinateBin": coord_bin,
+                        "Coordinate": coord,
+                        "Error": np.asarray(hx),
+                        "Values": _xc,
+                        "Sigma": popt[2],
+                        "SigmaError": perr[2],
+                        "FitFunction": _fit_meta["func"],
+                        "FitFunctionLabel": fit_function,
+                        "FitFunctionFormula": _fit_meta["formula"],
+                        "Params": popt,
+                        "ParamsError": perr,
+                        "ParamsLabel": _fit_meta["labels"],
+                        "ParamsUnit": _fit_meta["units"],
+                        "ParamsFormat": _fit_meta["formats"],
+                    }
+                )
 
             sigma_list.append(
                 {
@@ -293,106 +440,23 @@ for config in configs:
                     "Background": 100 * drift_sample[1],
                     "LowPurity": 100 * drift_sample[2],
                     "HighPurity": 100 * drift_sample[3],
-                    "Sigma": popt[2],
-                    "SigmaError": perr[2],
+                    "Sigma": popt_overall[2],
+                    "SigmaError": perr_overall[2],
                     "Sigma1": sigma1,
                     "Sigma3": sigma2,
                     "Sigma5": sigma3,
                     "Mean": np.mean(this_reco_df[error]),
                     "Median": np.median(this_reco_df[error]),
                     "STD": np.std(this_reco_df[error]),
-                    "STDError": np.std(this_reco_df[error])
-                    / np.sqrt(len(this_reco_df[error])),
+                    "STDError": np.std(this_reco_df[error]) / np.sqrt(len(this_reco_df[error])),
+                    "EnergyScanBins": np.asarray(_es_energies),
+                    "EnergyScanSigma": np.asarray(_es_sigma),
+                    "EnergyScanSigmaError": np.asarray(_es_sigma_err),
+                    "CoordScanBins": np.asarray(_cs_bins),
+                    "CoordScanSigma": np.asarray(_cs_sigma),
+                    "CoordScanSigmaError": np.asarray(_cs_sigma_err),
                 }
             )
-
-            if np.max(h) > max_hist:
-                max_hist = np.max(h)
-
-            for energy in lowe_energy_centers:
-                this_energy_df = this_reco_df[
-                    (this_reco_df["SignalParticleK"] > (energy - 1))
-                    & (this_reco_df["SignalParticleK"] < energy + 1)
-                ]
-                hx, edges = np.histogram(
-                    (
-                        this_energy_df[error][
-                            (this_energy_df["MatchedOpFlashPur"] > 0.5)
-                        ]
-                        if coord == "X"
-                        else this_energy_df[error]
-                    ),
-                    bins=np.arange(-20, 20.5, 0.5),
-                    density=True,
-                )
-
-                # Check that data exists for the fit
-                if len(this_energy_df) < 50 or np.sum(hx) == 0:
-                    continue
-
-                if "marley" in name.lower():
-                    # Fit a Gaussian to the histogram
-                    try:
-                        fit_function = "Gaussian"
-                        popt, pcov = curve_fit(
-                            gaussian,
-                            0.5 * (edges[1:] + edges[:-1]),
-                            hx,
-                            p0=[np.max(hx), 0, 5],
-                            # sigma=1/np.sqrt(hx_counts)
-                        )
-                        fit_y = gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
-
-                    except:
-                        rprint("Gaussian fit failed, trying exponential decay fit")
-                        fit_function = "Exponential"
-                        popt, pcov = curve_fit(
-                            exponential_decay,
-                            0.5 * (edges[1:] + edges[:-1]),
-                            hx,
-                            p0=[np.max(hx), 0, 5],
-                            # sigma=1/np.sqrt(hx_counts),
-                            bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
-                        )
-                        fit_y = exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
-
-                else:
-                    fit_function = "Exponential"
-                    popt, pcov = curve_fit(
-                        exponential_decay,
-                        0.5 * (edges[1:] + edges[:-1]),
-                        hx,
-                        p0=[np.max(hx), 0, 5],
-                        # sigma=1/np.sqrt(hx_counts),
-                        bounds=([0, -5, 0.1], [np.max(hx) * 1.5, 5, 100]),
-                    )
-                    fit_y = exponential_decay(0.5 * (edges[1:] + edges[:-1]), *popt)
-
-                perr = np.sqrt(np.diag(pcov))
-
-                hist_list.append(
-                    {
-                        "Geometry": info["GEOMETRY"],
-                        "Config": config,
-                        "Name": name,
-                        "Energy": energy,
-                        "Coordinate": coord,
-                        "Error": np.asarray(hx),
-                        "Values": 0.5 * (edges[1:] + edges[:-1]),
-                        "Sigma": popt[2],
-                        "SigmaError": perr[2],
-                        "FitFunctionLabel": fit_function,
-                        "Params": popt,
-                        "ParamsError": perr,
-                        "ParamsLabel": (
-                            ["Amp.", "Mean", "Sigma"]
-                            if fit_function == "Gaussian"
-                            else ["Amp.", "Offset", "DecayConst"]
-                        ),
-                        "ParamsUnit": ["", "cm", "cm"] if fit_function == "Gaussian" else ["", "cm", "cm"],
-                        "ParamsFormat": [".1f", ".1f", ".2f"],
-                    }
-                )
 
         df = pd.DataFrame(hist_list)
         df = explode(df, ["Error", "Values"])
@@ -405,7 +469,7 @@ for config in configs:
             ["X", "Y", "Z"],
         ):
 
-            this_df = df[(df["Coordinate"] == coord) & (df["Energy"].isna())]
+            this_df = df[(df["Coordinate"] == coord) & df["Energy"].isna() & df["CoordinateBin"].isna()]
             # print(this_df)
             fig.add_trace(
                 go.Scatter(
@@ -451,7 +515,7 @@ for config in configs:
             ["X", "Y", "Z"],
         ):
 
-            this_df = df[(df["Coordinate"] == coord) & (df["Energy"].isna())]
+            this_df = df[(df["Coordinate"] == coord) & df["Energy"].isna() & df["CoordinateBin"].isna()]
 
             fig.add_trace(
                 go.Scatter(
@@ -572,25 +636,18 @@ for config in configs:
 
             if purity_label == "High-Purity":
                 df_x = df[(df["Coordinate"] == "X") & (df["Energy"].isna())]
-                popt = [
-                    df_x["Params"].values[0][0],
-                    df_x["Params"].values[0][1],
-                    df_x["Params"].values[0][2],
-                ]
+                _popt_full = df_x["Params"].values[0]
+                _fit_label = df_x["FitFunctionLabel"].values[0]
+                _fit_func = _get_fit_meta(_fit_label)["func"]
+                _xplot = 0.5 * (edges[1:] + edges[:-1])
                 fig.add_trace(
                     go.Scatter(
-                        x=0.5 * (edges[1:] + edges[:-1]),
-                        y=(
-                            gaussian(0.5 * (edges[1:] + edges[:-1]), *popt)
-                            if df_x["FitFunctionLabel"].values[0] == "Gaussian"
-                            else exponential_decay(
-                                0.5 * (edges[1:] + edges[:-1]), *popt
-                            )
-                        ),
+                        x=_xplot,
+                        y=_fit_func(_xplot, *_popt_full),
                         mode="lines",
                         line_shape="spline",
                         line=dict(color="red", dash="dash"),
-                        name=f"Fit: Sigma {popt[2]:.1f} cm",
+                        name=f"Fit ({_fit_label}): Sigma {_popt_full[2]:.1f} cm",
                     ),
                     row=1,
                     col=1,
@@ -647,19 +704,20 @@ for config in configs:
             )
 
         fig = make_subplots(rows=1, cols=1)
-        for j, coord in zip(
-            range(3),
-            ["X", "Y", "Z"],
-        ):
-
-            this_df = df[(df["Coordinate"] == coord) & (~df["Energy"].isna())]
+        _sigma_df = pd.DataFrame(sigma_list)
+        for j, coord in enumerate(["X", "Y", "Z"]):
+            _row = _sigma_df[
+                (_sigma_df["Coordinate"] == coord)
+                & (_sigma_df["Config"] == config)
+                & (_sigma_df["Name"] == name)
+            ]
+            if len(_row) == 0:
+                continue
             fig.add_trace(
                 go.Scatter(
-                    x=this_df["Energy"],
-                    y=this_df["Params"].apply(lambda x: x[2]),
-                    error_y=dict(
-                        type="data", array=this_df["ParamsError"].apply(lambda x: x[2])
-                    ),
+                    x=_row["EnergyScanBins"].values[0],
+                    y=_row["EnergyScanSigma"].values[0],
+                    error_y=dict(type="data", array=_row["EnergyScanSigmaError"].values[0]),
                     mode="lines+markers",
                     line_shape="spline",
                     line=dict(color=default[j % len(default)], width=2),
@@ -690,6 +748,57 @@ for config in configs:
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )
+
+        # Resolution vs true coordinate position (one subplot per axis)
+        fig = make_subplots(rows=1, cols=3, subplot_titles=["X (Drift)", "Y", "Z"])
+        sigma_df = pd.DataFrame(sigma_list)
+        for j, coord in enumerate(["X", "Y", "Z"]):
+            row_data = sigma_df[
+                (sigma_df["Coordinate"] == coord)
+                & (sigma_df["Config"] == config)
+                & (sigma_df["Name"] == name)
+            ]
+            if len(row_data) == 0:
+                continue
+            _bins = row_data["CoordScanBins"].values[0]
+            _sig  = row_data["CoordScanSigma"].values[0]
+            _serr = row_data["CoordScanSigmaError"].values[0]
+            if len(_bins) == 0:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=_bins,
+                    y=_sig,
+                    error_y=dict(type="data", array=_serr),
+                    mode="lines+markers",
+                    line_shape="spline",
+                    line=dict(color=default[j % len(default)], width=2),
+                    name=coord,
+                ),
+                row=1,
+                col=j + 1,
+            )
+            fig.update_xaxes(title_text=f"True {coord} (cm)", row=1, col=j + 1)
+            fig.update_yaxes(title_text="Resolution (cm)", row=1, col=j + 1)
+
+        fig = format_coustom_plotly(
+            fig,
+            matches=(None, None),
+            ranges=(None, [0, 4]),
+            title=f"Vertex Resolution vs Position - {config} {name}",
+            legend_title="Coordinate",
+            legend=dict(x=0.82, y=0.99, font=dict(size=13), title=dict(font=dict(size=16))),
+        )
+        save_figure(
+            fig,
+            save_path,
+            config,
+            name,
+            filename=f"Vertex_Resolution_vs_Position",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
         # Save the sigma list to a dataframe
         for filename, df in zip(
             ["Resolution", "Purity_Match_Resolution", "Vertex_Resolution"],

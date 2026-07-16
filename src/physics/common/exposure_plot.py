@@ -6,6 +6,16 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from sklearn.isotonic import IsotonicRegression as _IsotonicRegression
+
+_isotonic_regressor = _IsotonicRegression(increasing=True)
+
+
+def _monotone_for_export(arr: np.ndarray) -> np.ndarray:
+    """Enforce non-decreasing constraint on a significance-vs-exposure array before pkl export."""
+    a = np.clip(np.asarray(arr, dtype=float), 0.0, None)
+    return np.asarray(_isotonic_regressor.fit_transform(np.arange(len(a)), a))
+
 
 # ── STYLES ─────────────────────────────────────────────────────────────────────
 
@@ -411,7 +421,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
             "Config": config, "Name": name, "EnergyLabel": energy,
             "Variable": "Gaussian", "SpectrumType": "Raw", "Mode": "PerBin",
             "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-            "Exposure": exposure_values.tolist(), "Significance": raw_gaussian.tolist(),
+            "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+            "Significance": raw_gaussian.tolist(), "SignificanceUnit": r"\sigma",
             "SignificanceError+": None, "SignificanceError-": None,
         })
         exposure_records.append({
@@ -419,7 +430,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
             "Config": config, "Name": name, "EnergyLabel": energy,
             "Variable": "Gaussian", "SpectrumType": "Smoothed", "Mode": "PerBin",
             "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-            "Exposure": exposure_values.tolist(), "Significance": smoothed_gaussian.tolist(),
+            "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+            "Significance": smoothed_gaussian.tolist(), "SignificanceUnit": r"\sigma",
             "SignificanceError+": (gaussian_upper - smoothed_gaussian).tolist(),
             "SignificanceError-": (smoothed_gaussian - gaussian_lower).tolist(),
         })
@@ -430,7 +442,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "Config": config, "Name": name, "EnergyLabel": energy,
                 "Variable": "Asimov", "SpectrumType": "Raw", "Mode": "PerBin",
                 "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": exposure_values.tolist(), "Significance": raw_asimov.tolist(),
+                "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                "Significance": raw_asimov.tolist(), "SignificanceUnit": r"\sigma",
                 "SignificanceError+": None, "SignificanceError-": None,
             })
             exposure_records.append({
@@ -438,7 +451,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "Config": config, "Name": name, "EnergyLabel": energy,
                 "Variable": "Asimov", "SpectrumType": "Smoothed", "Mode": "PerBin",
                 "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": exposure_values.tolist(), "Significance": smoothed_asimov.tolist(),
+                "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                "Significance": smoothed_asimov.tolist(), "SignificanceUnit": r"\sigma",
                 "SignificanceError+": (asimov_upper - smoothed_asimov).tolist(),
                 "SignificanceError-": (smoothed_asimov - asimov_lower).tolist(),
             })
@@ -496,6 +510,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
             sig_plus = _safe_array(plot_sigmas[significance + "+Error"].values[0])
             sig_minus = _safe_array(plot_sigmas[significance + "-Error"].values[0])
 
+            # Enforce monotonicity at load time so plot and pkl are consistent.
+            if significance == "ProfileLikelihood":
+                smoothed_sig = _monotone_for_export(smoothed_sig)
+                raw_sig      = _monotone_for_export(raw_sig)
+
             # If --reference specified, plot only that metric; otherwise plot all available
             if args.reference and significance != args.reference:
                 continue
@@ -542,7 +561,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 "Config": config, "Name": name, "EnergyLabel": energy,
                 "Variable": args.reference, "SpectrumType": spec_type, "Mode": "NoRebin",
                 "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": exposure_values.tolist(), "Significance": sig_arr.tolist(),
+                "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                "Significance": sig_arr.tolist(), "SignificanceUnit": r"\sigma",
                 "SignificanceError+": None, "SignificanceError-": None,
             })
 
@@ -1070,18 +1090,24 @@ for config, name, energy in product(args.config, args.name, args.energy):
 if exposure_records and args.analysis != "Sensitivity":
     _df = pd.DataFrame(exposure_records)
     _filename = f"{args.analysis}_Exposure"
+    _merged_exp = upsert_df_rows(_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename=_filename, debug=args.debug)
+    if "Variable" in _merged_exp.columns:
+        _merged_exp = _merged_exp.loc[~_merged_exp["Variable"].astype(str).str.startswith("PreIsotonic")].reset_index(drop=True)
     save_df(
-        _df, data_path,
+        _merged_exp, data_path,
         config=args.config[0], name=args.name[0],
         subfolder=args.folder.lower(),
         filename=_filename,
-        rm=args.rewrite, debug=args.debug,
+        rm=True, debug=args.debug,
     )
     if local_data_path:
+        _merged_exp_local = upsert_df_rows(_df, local_data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename=_filename)
+        if "Variable" in _merged_exp_local.columns:
+            _merged_exp_local = _merged_exp_local.loc[~_merged_exp_local["Variable"].astype(str).str.startswith("PreIsotonic")].reset_index(drop=True)
         save_df(
-            _df, local_data_path,
+            _merged_exp_local, local_data_path,
             config=args.config[0], name=args.name[0],
             subfolder=args.folder.lower(),
             filename=_filename,
-            rm=args.rewrite, debug=False,
+            rm=True, debug=False,
         )
