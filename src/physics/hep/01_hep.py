@@ -534,8 +534,17 @@ for config, name, energy in product(args.config, args.name, args.energy):
         # artificial significance that grows super-linearly with exposure.  This is
         # the standard ROOT/HistFactory treatment: zero contribution to the test
         # statistic for bins without MC support, regardless of exposure.
-        # Both raw and smoothed use the same mask: smoothing does not create new MC events.
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
+        # Smoothed PL requires an additional guard: Gaussian smoothing can redistribute
+        # counts away from a bin that passes the MC-count mask, leaving
+        # smoothed_background_rate = 0 there.  In evaluate_profile_likelihood_discovery
+        # this triggers the min_expected = 1e-12 floor on expected_null, turning the
+        # per-bin LLR into signal × log(signal / 1e-12) ≈ signal × 27.6 — completely
+        # independent of the actual background level and ~20× larger than the Asimov
+        # approximation.  The fix: also require smoothed_background_rate > 0 so that
+        # smoothing-zeroed bins are excluded from the smoothed PL (they remain in
+        # raw_pl which uses unsmoothed rates and has no such zero-background artefact).
+        smoothed_pl_bin_mask = pl_bin_mask & (smoothed_background_rate > 0)
 
         for years in exposure_grid:
             factor = years * detector_mass
@@ -596,7 +605,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                             factor,
                             fluctuation_sigma=_pl_fluctuations[kdx],
                             signal_norm_frac=args.signal_uncertainty,
-                            perm_mask=pl_bin_mask,
+                            perm_mask=smoothed_pl_bin_mask,
                         ))
                 else:
                     _raw_pl_val = _hep_profile_step(
@@ -611,7 +620,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                         factor,
                         fluctuation_sigma=0.0,
                         signal_norm_frac=args.signal_uncertainty,
-                        perm_mask=pl_bin_mask,
+                        perm_mask=smoothed_pl_bin_mask,
                     )
                     for kdx in range(3):
                         raw_profile_significances[kdx].append(_raw_pl_val)
