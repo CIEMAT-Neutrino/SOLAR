@@ -337,6 +337,17 @@ detection_threshold = max(_min_expected, _prob_events)
 for config, name, energy in product(args.config, args.name, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
+    # Barlow-Beeston floor for the smoothed PL: a bin's smoothed background rate
+    # must produce at least min_mc_per_bin expected events at the reference exposure
+    # before it is included.  Gaussian smoothing can redistribute raw MC events
+    # into neighbouring bins, leaving some bins with smoothed_background_rate ≈ 0
+    # (or a tiny positive tail value).  The existing pl_bin_mask catches exact-zero
+    # raw bins, but the smoothed tail can produce values like 1e-6 that pass the
+    # previous "> 0" check while still causing log(signal/1e-6) ≈ signal × 13.8
+    # inflation.  Using the same min_mc_per_bin threshold on the smoothed rates
+    # (per unit rate = events/(exposure × mass)) extends Barlow-Beeston consistently
+    # to the smoothed distribution.
+    _pl_bkg_floor = args.min_mc_per_bin / (args.exposure * detector_mass)
 
     sigmas = []
     significance_bins = []
@@ -537,14 +548,18 @@ for config, name, energy in product(args.config, args.name, args.energy):
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
         # Smoothed PL requires an additional guard: Gaussian smoothing can redistribute
         # counts away from a bin that passes the MC-count mask, leaving
-        # smoothed_background_rate = 0 there.  In evaluate_profile_likelihood_discovery
-        # this triggers the min_expected = 1e-12 floor on expected_null, turning the
-        # per-bin LLR into signal × log(signal / 1e-12) ≈ signal × 27.6 — completely
-        # independent of the actual background level and ~20× larger than the Asimov
-        # approximation.  The fix: also require smoothed_background_rate > 0 so that
-        # smoothing-zeroed bins are excluded from the smoothed PL (they remain in
-        # raw_pl which uses unsmoothed rates and has no such zero-background artefact).
-        smoothed_pl_bin_mask = pl_bin_mask & (smoothed_background_rate > 0)
+        # smoothed_background_rate near zero.  In evaluate_profile_likelihood_discovery
+        # this causes per_bin_llr ≈ signal × log(signal / near_zero) — orders of
+        # magnitude larger than the true S²/(2B) Asimov approximation.  The previous
+        # "> 0" check only excluded exact zeros; tiny positive tail values (e.g. 1e-6)
+        # from the Gaussian kernel still produced log(signal/1e-6) ≈ signal × 13.8
+        # inflation.  Fix: apply the same Barlow-Beeston threshold as pl_bin_mask but
+        # to the smoothed rates.  _pl_bkg_floor = min_mc_per_bin / (exposure × mass)
+        # is the minimum rate that produces ≥ min_mc_per_bin expected events at full
+        # exposure.  Bins below this floor are statistically unreliable after smoothing
+        # and must be excluded from the smoothed PL (they remain in raw_pl which uses
+        # unsmoothed rates and has no redistribution artefact).
+        smoothed_pl_bin_mask = pl_bin_mask & (smoothed_background_rate >= _pl_bkg_floor)
 
         for years in exposure_grid:
             factor = years * detector_mass
