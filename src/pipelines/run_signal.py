@@ -54,7 +54,8 @@ from lib import *
 _analysis_info = load_analysis_info(str(root))
 
 parser = argparse.ArgumentParser(
-    description="Signal characterisation pipeline — reads MARLEY CC fraction DataFrames"
+    description="Signal characterisation pipeline — reads MARLEY CC fraction DataFrames",
+    formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=32, width=120),
 )
 parser.add_argument(
     "--config",
@@ -74,16 +75,19 @@ parser.add_argument(
     "--rewrite",
     action=argparse.BooleanOptionalAction,
     default=True,
+    help="Overwrite existing output files. Pass --no-rewrite to skip files that already exist.",
 )
 parser.add_argument(
     "--plot",
     action=argparse.BooleanOptionalAction,
     default=True,
+    help="Save figures to disk. Pass --no-plot to suppress PNG output.",
 )
 parser.add_argument(
     "--debug",
     action=argparse.BooleanOptionalAction,
     default=False,
+    help="Forward --debug to each sub-script to preview figures interactively in the browser.",
 )
 
 args = parser.parse_args()

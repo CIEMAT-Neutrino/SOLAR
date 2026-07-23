@@ -290,28 +290,40 @@ for config in configs:
             f"{_3d_quantile_thresholds.get(None)}[/cyan]"
         )
 
+        # Save wide-format pkl of quantile thresholds for table generation.
+        # One row per (config, energy); one column per sigma level: Sigma_1, Sigma_2, ...
+        _qt_rows = []
+        for _eq, _tdict in _3d_quantile_thresholds.items():
+            if _tdict is None:
+                continue
+            _row = {
+                "Geometry": info["GEOMETRY"],
+                "Config": config,
+                "Name": name,
+                "Energy": _eq,
+            }
+            _row.update({f"Sigma_{s}": v for s, v in _tdict.items()})
+            _qt_rows.append(_row)
+        save_df(
+            pd.DataFrame(_qt_rows),
+            data_path,
+            config,
+            name,
+            filename="Vertex_3D_Quantile_Thresholds",
+            rm=user_input["rewrite"],
+            filetype="pkl",
+            debug=user_input["debug"],
+        )
+
         for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z", None]):
             if energy not in df["Energy"].values and energy is not None:
                 missing_energies.append(energy)
                 continue
-            
-            counts, counts_error = {True: {}, False: {}}, {True: {}, False: {}}
-            efficiency, efficiency_error = {True: {}, False: {}}, {True: {}, False: {}}
 
-            for sigma, tolerance in zip(
-                (
-                    [True] * len(analysis_info["VERTEX_RESOLUTION_SIGMAS"])
-                    + [False] * len(analysis_info["VERTEX_RESOLUTION_TOLERANCES"])
-                ),
-                (
-                    analysis_info["VERTEX_RESOLUTION_SIGMAS"]
-                    + analysis_info["VERTEX_RESOLUTION_TOLERANCES"]
-                ),
-            ):
-                counts[sigma][tolerance] = []
-                counts_error[sigma][tolerance] = []
-                efficiency[sigma][tolerance] = []
-                efficiency_error[sigma][tolerance] = []
+            counts      = {True: {}, False: {}}
+            counts_error   = {True: {}, False: {}}
+            efficiency     = {True: {}, False: {}}
+            efficiency_error = {True: {}, False: {}}
 
             scan_coordinate = coord if coord is not None else combined_scan_coordinate
 
@@ -325,7 +337,6 @@ for config in configs:
                     + params[f"DEFAULT_{scan_coordinate}_BIN"],
                     params[f"DEFAULT_{scan_coordinate}_BIN"],
                 )
-
             else:
                 coordinate_array = np.arange(
                     info[f"DETECTOR_MIN_{scan_coordinate}"] - info[f"DETECTOR_GAP_{scan_coordinate}"],
@@ -335,132 +346,114 @@ for config in configs:
                     params[f"DEFAULT_{scan_coordinate}_BIN"],
                 )
 
-            true_mask, reco_mask = {}, {}
-            reference = "Reco"
-            for position, (tolerances, sigma), reference in product(
-                coordinate_array,
-                zip(
-                    [
-                        analysis_info["VERTEX_RESOLUTION_SIGMAS"],
-                        analysis_info["VERTEX_RESOLUTION_TOLERANCES"],
-                    ],
-                    [True, False],
-                ),
-                ['Reco']
-            ):
-                if sigma:
-                    _emask = df["Energy"] == energy if energy is not None else df["Energy"].isna()
-                    _missing_sigma = False
-                    if coord is None:
-                        if _3d_quantile_thresholds.get(energy) is None:
-                            warning_key = (energy, coord)
-                            if warning_key not in missing_sigma_warnings:
-                                output += (
-                                    f"[yellow][WARNING][/yellow] Insufficient high-purity events for 3D quantile threshold at energy={energy}. "
-                                    "Padding with NaN.\n"
-                                )
-                                missing_sigma_warnings.add(warning_key)
-                            _missing_sigma = True
-                    else:
-                        axis_sigma_vals = df[
-                            (df["Coordinate"] == coord)
-                            & _emask
-                            & df["CoordinateBin"].isna()
-                        ]["Sigma"].values
-                        if len(axis_sigma_vals) == 0:
-                            warning_key = (energy, coord)
-                            if warning_key not in missing_sigma_warnings:
-                                output += (
-                                    f"[yellow][WARNING][/yellow] Missing sigma entry for coordinate={coord} at energy={energy}. "
-                                    "Padding with NaN.\n"
-                                )
-                                missing_sigma_warnings.add(warning_key)
-                            _missing_sigma = True
-                    if _missing_sigma:
-                        for _tol in tolerances:
-                            counts[sigma][_tol].append(0)
-                            counts_error[sigma][_tol].append(0)
-                            efficiency[sigma][_tol].append(np.nan)
-                            efficiency_error[sigma][_tol].append(np.nan)
-                        continue
-                
-                true_mask[sigma], reco_mask[sigma] = position_mask(
-                    run=run,
-                    info=info,
-                    reference=reference,
-                    energy=energy,
-                    tolerances=tolerances,
-                    position=position,
-                    coordinate_bin=(
-                        params[f"DEFAULT_{scan_coordinate}_BIN"]
-                        if scan_coordinate is not None
-                        else None
-                    ),
-                    coordinate=coord,
-                    combined_scan_coordinate=combined_scan_coordinate,
-                    sigma=sigma,
-                    radius_thresholds=(
-                        _3d_quantile_thresholds.get(energy)
-                        if coord is None and sigma
-                        else None
-                    ),
+            N_bins = len(coordinate_array)
+
+            # Base mask: geometry + energy (same denominator for all tolerances)
+            if energy is None:
+                _energy_mask = np.ones(len(run["Reco"]["SignalParticleK"]), dtype=bool)
+            else:
+                _energy_mask = (
+                    (run["Reco"]["SignalParticleK"] >= energy - lowe_ebin / 2)
+                    & (run["Reco"]["SignalParticleK"] < energy + lowe_ebin / 2)
                 )
-                if energy is None:
-                    true_energy_mask = np.ones(
-                        len(run[reference]["SignalParticleK"]), dtype=bool
-                    )
-                    reco_energy_mask = np.ones(
-                        len(run["Reco"]["SignalParticleK"]), dtype=bool
-                    )
-                else:
-                    true_energy_mask = (
-                        run[reference]["SignalParticleK"] >= energy - lowe_ebin / 2
-                    ) * (run[reference]["SignalParticleK"] < energy + lowe_ebin / 2)
-                    reco_energy_mask = (
-                        run["Reco"]["SignalParticleK"] >= energy - lowe_ebin / 2
-                    ) * (run["Reco"]["SignalParticleK"] < energy + lowe_ebin / 2)
+            _geo_mask = (
+                (run["Reco"]["Geometry"] == info["GEOMETRY"])
+                & (run["Reco"]["Version"] == info["VERSION"])
+                & (run["Reco"]["Name"] == name)
+            )
+            _base_mask = _geo_mask & _energy_mask
 
-                for tolerance in tolerances:
-                    this_true_mask = true_mask[sigma][tolerance] * (
-                        (run[reference]["Geometry"] == info["GEOMETRY"])
-                        * (run[reference]["Version"] == info["VERSION"])
-                        * (run[reference]["Name"] == name)
-                        * true_energy_mask
-                    )
-                    this_reco_mask = reco_mask[sigma][tolerance] * (
-                        (run["Reco"]["Geometry"] == info["GEOMETRY"])
-                        * (run["Reco"]["Version"] == info["VERSION"])
-                        * (run["Reco"]["Name"] == name)
-                        * reco_energy_mask
-                    )
-                    counts[sigma][tolerance].append(sum(this_reco_mask))
-                    counts_error[sigma][tolerance].append(np.sqrt(sum(this_reco_mask)))
-                    efficiency[sigma][tolerance].append(
-                        100
-                        * (
-                            sum(this_reco_mask) / sum(this_true_mask)
-                            if sum(this_true_mask) > 0
-                            else 0
-                        )
-                    )
-                    efficiency_error[sigma][tolerance].append(
-                        100
-                        * (
-                            np.sqrt(sum(this_reco_mask)) / sum(this_true_mask)
-                            if sum(this_true_mask) > 0
-                            else 0
-                        )
-                    )
+            # Bin every event into a position bin (vectorized, replaces position loop)
+            if scan_coordinate is None:
+                _pos_bin = np.zeros(len(run["Reco"]["SignalParticleX"]), dtype=int)
+                _valid_pos = np.ones(len(run["Reco"]["SignalParticleX"]), dtype=bool)
+            else:
+                _half_bin = params[f"DEFAULT_{scan_coordinate}_BIN"] / 2
+                _x = (
+                    np.abs(run["Reco"]["SignalParticleX"])
+                    if scan_coordinate == "X" and info["GEOMETRY"] == "hd"
+                    else run["Reco"][f"SignalParticle{scan_coordinate}"]
+                )
+                _edges = np.append(coordinate_array - _half_bin, coordinate_array[-1] + _half_bin)
+                _pos_bin = np.digitize(_x, _edges, right=True) - 1
+                _valid_pos = (_pos_bin >= 0) & (_pos_bin < N_bins)
 
-            for sigma, tolerance in zip(
-                (
-                    [True] * len(analysis_info["VERTEX_RESOLUTION_SIGMAS"])
-                    + [False] * len(analysis_info["VERTEX_RESOLUTION_TOLERANCES"])
-                ),
-                (
-                    analysis_info["VERTEX_RESOLUTION_SIGMAS"]
-                    + analysis_info["VERTEX_RESOLUTION_TOLERANCES"]
-                ),
+            # True counts per bin — denominator, same for all tolerances
+            _true_counts = np.bincount(_pos_bin[_base_mask & _valid_pos], minlength=N_bins)
+
+            # Pre-compute sigma quantities once per (energy, coord)
+            _emask_df = df["Energy"] == energy if energy is not None else df["Energy"].isna()
+            if coord is None:
+                _can_use_sigma = _3d_quantile_thresholds.get(energy) is not None
+                _reco_3d_err = np.sqrt(
+                    run["Reco"]["ErrorX"] ** 2
+                    + run["Reco"]["ErrorY"] ** 2
+                    + run["Reco"]["ErrorZ"] ** 2
+                )
+            else:
+                _axis_sigma_rows = df[
+                    (df["Coordinate"] == coord) & _emask_df & df["CoordinateBin"].isna()
+                ]["Sigma"].values
+                _can_use_sigma = len(_axis_sigma_rows) > 0
+                _axis_sigma = float(_axis_sigma_rows[0]) if _can_use_sigma else np.nan
+                _reco_axis_err = np.abs(run["Reco"][f"Error{coord}"])
+
+            # Loop over sigma modes and tolerances — no position loop needed
+            for _sigma_bool, _tol_list in [
+                (True,  analysis_info["VERTEX_RESOLUTION_SIGMAS"]),
+                (False, analysis_info["VERTEX_RESOLUTION_TOLERANCES"]),
+            ]:
+                for _tol in _tol_list:
+                    if _sigma_bool and not _can_use_sigma:
+                        warning_key = (energy, coord)
+                        if warning_key not in missing_sigma_warnings:
+                            _wmsg = (
+                                f"Insufficient high-purity events for 3D quantile threshold at energy={energy}."
+                                if coord is None else
+                                f"Missing sigma entry for coordinate={coord} at energy={energy}."
+                            )
+                            output += f"[yellow][WARNING][/yellow] {_wmsg} Padding with NaN.\n"
+                            missing_sigma_warnings.add(warning_key)
+                        counts[_sigma_bool][_tol]        = [0]      * N_bins
+                        counts_error[_sigma_bool][_tol]  = [0]      * N_bins
+                        efficiency[_sigma_bool][_tol]    = [np.nan] * N_bins
+                        efficiency_error[_sigma_bool][_tol] = [np.nan] * N_bins
+                        continue
+
+                    if coord is None:
+                        _reco_cut = (
+                            _reco_3d_err < _3d_quantile_thresholds[energy][_tol]
+                            if _sigma_bool
+                            else _reco_3d_err < _tol
+                        )
+                    else:
+                        _reco_cut = (
+                            _reco_axis_err < _tol * _axis_sigma
+                            if _sigma_bool
+                            else _reco_axis_err < _tol
+                        )
+
+                    _reco_counts = np.bincount(
+                        _pos_bin[_base_mask & _valid_pos & _reco_cut], minlength=N_bins
+                    )
+                    _eff = 100.0 * np.where(
+                        _true_counts > 0, _reco_counts / _true_counts, 0.0
+                    )
+                    _eff_err = 100.0 * np.where(
+                        _true_counts > 0,
+                        np.sqrt(_reco_counts.astype(float)) / _true_counts,
+                        0.0,
+                    )
+                    counts[_sigma_bool][_tol]           = list(_reco_counts)
+                    counts_error[_sigma_bool][_tol]     = list(np.sqrt(_reco_counts.astype(float)))
+                    efficiency[_sigma_bool][_tol]       = list(_eff)
+                    efficiency_error[_sigma_bool][_tol] = list(_eff_err)
+
+            for _sigma_bool, _tol in zip(
+                [True]  * len(analysis_info["VERTEX_RESOLUTION_SIGMAS"])
+                + [False] * len(analysis_info["VERTEX_RESOLUTION_TOLERANCES"]),
+                analysis_info["VERTEX_RESOLUTION_SIGMAS"]
+                + analysis_info["VERTEX_RESOLUTION_TOLERANCES"],
             ):
                 if energy in missing_energies:
                     continue
@@ -472,8 +465,8 @@ for config in configs:
                         "Name": name,
                         "Variable": coord,
                         "Energy": energy,
-                        "Tolerance": tolerance,
-                        "Reference": reference,
+                        "Tolerance": _tol,
+                        "Reference": "Reco",
                         "Values": (
                             2 * info[f"DETECTOR_MAX_{values_axis}"] - coordinate_array
                             if (
@@ -491,11 +484,11 @@ for config in configs:
                                 else coordinate_array
                             )
                         ),
-                        "Counts": counts[sigma][tolerance],
-                        "CountsError": counts_error[sigma][tolerance],
-                        "Efficiency": efficiency[sigma][tolerance],
-                        "EfficiencyError": efficiency_error[sigma][tolerance],
-                        "Sigma": sigma,
+                        "Counts":          counts[_sigma_bool][_tol],
+                        "CountsError":     counts_error[_sigma_bool][_tol],
+                        "Efficiency":      efficiency[_sigma_bool][_tol],
+                        "EfficiencyError": efficiency_error[_sigma_bool][_tol],
+                        "Sigma": _sigma_bool,
                     }
                 )
 

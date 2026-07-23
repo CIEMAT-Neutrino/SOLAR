@@ -20,8 +20,9 @@ analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/output/images/analysis/hep"
 data_path = f"{analysis_info['PATH']}/HEP"
+local_data_path = f"{root}/output/data/analysis/hep"
 
-for this_path in [save_path]:
+for this_path in [save_path, local_data_path]:
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
@@ -464,4 +465,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     filename=df_name,
                     rm=args.rewrite,
                     debug=True,
+                )
+                save_df(
+                    df,
+                    local_data_path,
+                    config=config,
+                    name=name,
+                    subfolder=args.folder.lower(),
+                    filename=df_name,
+                    rm=args.rewrite,
+                    debug=False,
                 )

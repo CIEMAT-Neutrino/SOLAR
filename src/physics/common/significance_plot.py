@@ -1179,7 +1179,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 lower_y_title=reference_label if mode == "rigorous" else local_proxy_label,
                 x_range=[8, 30], figure_name=_hep_figure_name,
                 positive_count_values=positive_count_values, log_default_range=[-2, 10],
-                save_path=save_path, config=config, save_name=None, folder=args.folder.lower(),
+                save_path=save_path, config=config, save_name=name, folder=args.folder.lower(),
                 rewrite=args.rewrite, debug_plot=args.plot,
                 stacked_range=[False, True] if args.stacked else [False],
                 zoom=args.zoom, threshold=args.threshold,

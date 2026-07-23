@@ -215,7 +215,8 @@ def is_essential_component(sample_key: str, analysis_info: dict) -> bool:
 
 
 parser = argparse.ArgumentParser(
-    description="Run DayNight, HEP, and Sensitivity workflows from a single entrypoint"
+    description="Run DayNight, HEP, and Sensitivity workflows from a single entrypoint",
+    formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=32, width=120),
 )
 parser.add_argument(
     "--config",
@@ -331,8 +332,18 @@ parser.add_argument(
     ),
     default=None,
 )
-parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--background",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Load and display background component traces in significance plots. Pass --no-background to plot signal only.",
+)
+parser.add_argument(
+    "--rewrite",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Overwrite existing output files. Pass --no-rewrite to skip files that already exist.",
+)
 parser.add_argument(
     "--significance",
     action=argparse.BooleanOptionalAction,
@@ -384,7 +395,12 @@ parser.add_argument(
         "'verbose' (all output including per-file debug messages)."
     ),
 )
-parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--plot",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Save PNG figures and run the oscillogram visualisation stage. Pass --no-plot to skip all plot-producing steps.",
+)
 parser.add_argument(
     "--nuisance_profiles",
     nargs="+",
@@ -904,6 +920,15 @@ def run_hep_stage(config: str, folder: str, name: str):
         "src/physics/common/exposure_plot.py",
         analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference),
     )
+    run_analysis_script(
+        "src/physics/hep/exposure_plot.py",
+        analysis_base_args + common_args + uncertainty_args + reference_args_for(hep_significance_reference),
+    )
+    if args.all_metrics:
+        run_analysis_script(
+            "src/physics/hep/rebin_comparison.py",
+            analysis_base_args + common_args + uncertainty_args,
+        )
 
     # HEP stage summary
     rprint(
@@ -915,6 +940,8 @@ def run_hep_stage(config: str, folder: str, name: str):
         "\n  • significance_comparison — Gaussian vs Asimov overlay"
         "\n  • exposure_plot (comparison mode) — exposure comparison across metrics"
         "\n  • exposure_plot (rebin mode) — rebinned energy intervals"
+        "\n  • hep/exposure_plot — per-energy Threshold PNGs + local/PNFS pkl sync"
+        "\n  • rebin_comparison — PL Pre/Post-PAVA comparison at best cut (2-panel when pl_isotonic:true, 1-panel otherwise) [--all_metrics only]"
     )
 
 

@@ -45,7 +45,10 @@ def run_python_command(command: List[str], label: Optional[str] = None, stop_on_
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="Run PDS (OpFlash) diagnostics")
+parser = argparse.ArgumentParser(
+    description="Run PDS (OpFlash) diagnostics",
+    formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=32, width=120),
+)
 parser.add_argument(
     "--config",
     type=str,
@@ -60,7 +63,12 @@ parser.add_argument(
     help="Sample name(s) to process",
     default=["marley"],
 )
-parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--rewrite",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Overwrite existing output files. Pass --no-rewrite to skip files that already exist.",
+)
 parser.add_argument(
     "--verbose",
     type=str,

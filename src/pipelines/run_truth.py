@@ -101,7 +101,8 @@ def run_truth_script(script_name: str, additional_args: Optional[List[str]] = No
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(
-    description="Run the full truth-level background and oscillation pipeline"
+    description="Run the full truth-level background and oscillation pipeline",
+    formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=32, width=120),
 )
 
 # ── Scope ────────────────────────────────────────────────────────────────────
