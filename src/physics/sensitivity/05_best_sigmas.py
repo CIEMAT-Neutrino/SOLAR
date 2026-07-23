@@ -11,7 +11,7 @@ from lib import *
 def _is_spiked(arr, threshold: float) -> bool:
     """Return True if any consecutive step in arr exceeds threshold.
 
-    Used on RawPreIsotonicProfileLikelihood before PAVA: spikes appear as large
+    Used on PreIsotonicProfileLikelihood before PAVA: spikes appear as large
     positive jumps that PAVA converts into high plateaus in the final curve.
     """
     a = np.nan_to_num(np.asarray(arr, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
@@ -167,10 +167,9 @@ parser.add_argument(
     type=float,
     default=1.0,
     help=(
-        "Maximum allowed single-step jump (σ) in RawPreIsotonicProfileLikelihood "
-        "or PreIsotonicProfileLikelihood when classifying a curve as spiked. "
-        "Both pre-PAVA columns are checked: spikes can appear in the smoothed-histogram "
-        "path (PreIsotonic) even when the raw-histogram path (RawPreIsotonic) is clean. "
+        "Maximum allowed single-step jump (σ) in PreIsotonicProfileLikelihood "
+        "(pre-PAVA raw PL, written when pl_isotonic=True) when classifying a cut as spiked. "
+        "Falls back to ProfileLikelihood when pl_isotonic=False. "
         "Spiked curves are excluded from the main highest selection and saved separately "
         "as highest_spiked. Set to 0 to disable filtering (backward-compatible)."
     ),
@@ -248,25 +247,11 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
     ]
 
     # Compute spike flag per cut (before exploding, while reference column is still a list).
-    # Column selection follows two rules applied in order:
-    #   1. Isotonic rule: prefer pre-isotonic columns (only present when pl_isotonic=True,
-    #      where spikes are most visible before Gaussian+PAVA smoothing flattens them into
-    #      plateaus).  Fall back to the post-isotonic ProfileLikelihood columns when
-    #      pl_isotonic=False — the raw PL values are stored there directly.
-    #   2. Smoothing rule: if histogram smoothing was active (SmoothingEnabled=True and
-    #      SmoothingSigma > 0), use the smoothed-histogram column; otherwise use the
-    #      Raw* column.  Both rules apply independently to the pre- and post-isotonic paths
-    #      so the filter always operates on the same curve the analysis actually uses.
-    _smoothing_active = (
-        bool(sigmas_df["SmoothingEnabled"].iloc[0])
-        and float(sigmas_df["SmoothingSigma"].iloc[0]) > 0.0
-    ) if "SmoothingEnabled" in sigmas_df.columns and "SmoothingSigma" in sigmas_df.columns else False
-
-    _pre_iso_col  = "PreIsotonicProfileLikelihood"    if _smoothing_active else "RawPreIsotonicProfileLikelihood"
-    _post_iso_col = "ProfileLikelihood"               if _smoothing_active else "RawProfileLikelihood"
-
-    _pre_isotonic_candidates  = [_pre_iso_col]  if _pre_iso_col  in sigmas_df.columns else []
-    _post_isotonic_candidates = [_post_iso_col] if _post_iso_col in sigmas_df.columns else []
+    # Prefer PreIsotonicProfileLikelihood (written when pl_isotonic=True): spikes are most
+    # visible before Gaussian+PAVA smoothing flattens them into plateaus.  Fall back to
+    # ProfileLikelihood when pl_isotonic=False (raw per-step values stored there directly).
+    _pre_isotonic_candidates  = ["PreIsotonicProfileLikelihood"] if "PreIsotonicProfileLikelihood" in sigmas_df.columns else []
+    _post_isotonic_candidates = ["ProfileLikelihood"]            if "ProfileLikelihood"            in sigmas_df.columns else []
     spike_cols = _pre_isotonic_candidates or _post_isotonic_candidates
 
     if args.max_pl_jump > 0 and spike_cols:
@@ -276,9 +261,7 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
                 lambda arr: _is_spiked(arr, args.max_pl_jump)
             )
         _spike_source = (
-            f"pre-isotonic/{'smoothed' if _smoothing_active else 'raw'}"
-            if _pre_isotonic_candidates else
-            f"post-isotonic fallback/{'smoothed' if _smoothing_active else 'raw'} (pl_isotonic=False)"
+            "pre-isotonic" if _pre_isotonic_candidates else "post-isotonic fallback (pl_isotonic=False)"
         )
         n_spiked = int(sigmas_df["_is_spiked"].sum())
         if n_spiked > 0:

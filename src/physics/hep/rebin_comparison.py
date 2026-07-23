@@ -108,6 +108,9 @@ style_map = {
     ("Raw", "AdaptiveRebin"): dict(color=compare[1], dash="dot", width=3),
     ("Smoothed", "NoRebin"): dict(color='black', dash="dash", width=2),
     ("Smoothed", "AdaptiveRebin"): dict(color='black', dash="solid", width=3),
+    ("Pre-PAVA", "AdaptiveRebin"): dict(color=compare[1], dash="dot", width=2),
+    ("Post-PAVA", "AdaptiveRebin"): dict(color='black', dash="solid", width=3),
+    ("ProfileLikelihood", "AdaptiveRebin"): dict(color='black', dash="solid", width=3),
 }
 
 
@@ -322,8 +325,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             debug=args.plot,
         )
 
-    pl_required = ["ProfileLikelihood", "RawProfileLikelihood"]
-    if all(c in sigma_row.index for c in pl_required):
+    if "ProfileLikelihood" in sigma_row.index:
         fig = make_subplots(
             rows=2,
             cols=1,
@@ -335,18 +337,13 @@ for config, name, energy in product(args.config, args.name, args.energy):
             ),
         )
         significance_peak = 0.0
+        # Compare pre-PAVA vs post-PAVA when isotonic was applied; otherwise single curve.
         profile_entries = [
-            ("Raw", "NoRebin", "RawProfileLikelihoodNoRebin"),
-            ("Raw", "AdaptiveRebin", "RawProfileLikelihood"),
-            ("Smoothed", "NoRebin", "ProfileLikelihoodNoRebin"),
-            ("Smoothed", "AdaptiveRebin", "ProfileLikelihood"),
+            ("Pre-PAVA", "AdaptiveRebin", "PreIsotonicProfileLikelihood"),
+            ("Post-PAVA", "AdaptiveRebin", "ProfileLikelihood"),
+        ] if "PreIsotonicProfileLikelihood" in sigma_row.index else [
+            ("ProfileLikelihood", "AdaptiveRebin", "ProfileLikelihood"),
         ]
-        has_full_profile_shape = all(curve_key in sigma_row.index for _, _, curve_key in profile_entries)
-        if not has_full_profile_shape:
-            profile_entries = [
-                ("Raw", "AdaptiveRebin", "RawProfileLikelihood"),
-                ("Smoothed", "AdaptiveRebin", "ProfileLikelihood"),
-            ]
 
         pl_curves = {}
         for spectrum_label, rebin_mode, curve_key in profile_entries:

@@ -337,17 +337,6 @@ detection_threshold = max(_min_expected, _prob_events)
 for config, name, energy in product(args.config, args.name, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
-    # Barlow-Beeston floor for the smoothed PL: a bin's smoothed background rate
-    # must produce at least min_mc_per_bin expected events at the reference exposure
-    # before it is included.  Gaussian smoothing can redistribute raw MC events
-    # into neighbouring bins, leaving some bins with smoothed_background_rate ≈ 0
-    # (or a tiny positive tail value).  The existing pl_bin_mask catches exact-zero
-    # raw bins, but the smoothed tail can produce values like 1e-6 that pass the
-    # previous "> 0" check while still causing log(signal/1e-6) ≈ signal × 13.8
-    # inflation.  Using the same min_mc_per_bin threshold on the smoothed rates
-    # (per unit rate = events/(exposure × mass)) extends Barlow-Beeston consistently
-    # to the smoothed distribution.
-    _pl_bkg_floor = args.min_mc_per_bin / (args.exposure * detector_mass)
 
     sigmas = []
     significance_bins = []
@@ -506,8 +495,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         raw_rebinned_bins = [[], [], []]
         smoothed_rebinned_bins = [[], [], []]
 
-        raw_profile_significances      = [[], [], []]
-        smoothed_profile_significances = [[], [], []]
+        raw_profile_significances = [[], [], []]
         pl_sigma2 = 0.0
         pl_sigma3 = 0.0
         found_pl_sigma2 = False
@@ -546,20 +534,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
         # the standard ROOT/HistFactory treatment: zero contribution to the test
         # statistic for bins without MC support, regardless of exposure.
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
-        # Smoothed PL requires an additional guard: Gaussian smoothing can redistribute
-        # counts away from a bin that passes the MC-count mask, leaving
-        # smoothed_background_rate near zero.  In evaluate_profile_likelihood_discovery
-        # this causes per_bin_llr ≈ signal × log(signal / near_zero) — orders of
-        # magnitude larger than the true S²/(2B) Asimov approximation.  The previous
-        # "> 0" check only excluded exact zeros; tiny positive tail values (e.g. 1e-6)
-        # from the Gaussian kernel still produced log(signal/1e-6) ≈ signal × 13.8
-        # inflation.  Fix: apply the same Barlow-Beeston threshold as pl_bin_mask but
-        # to the smoothed rates.  _pl_bkg_floor = min_mc_per_bin / (exposure × mass)
-        # is the minimum rate that produces ≥ min_mc_per_bin expected events at full
-        # exposure.  Bins below this floor are statistically unreliable after smoothing
-        # and must be excluded from the smoothed PL (they remain in raw_pl which uses
-        # unsmoothed rates and has no redistribution artefact).
-        smoothed_pl_bin_mask = pl_bin_mask & (smoothed_background_rate >= _pl_bkg_floor)
 
         for years in exposure_grid:
             factor = years * detector_mass
@@ -615,13 +589,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
                             signal_norm_frac=args.signal_uncertainty,
                             perm_mask=pl_bin_mask,
                         ))
-                        smoothed_profile_significances[kdx].append(_hep_profile_step(
-                            smoothed_signal_rate, smoothed_background_rate, args.background_uncertainty,
-                            factor,
-                            fluctuation_sigma=_pl_fluctuations[kdx],
-                            signal_norm_frac=args.signal_uncertainty,
-                            perm_mask=smoothed_pl_bin_mask,
-                        ))
                 else:
                     _raw_pl_val = _hep_profile_step(
                         raw_signal_rate, raw_background_rate, args.background_uncertainty,
@@ -630,20 +597,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
                         signal_norm_frac=args.signal_uncertainty,
                         perm_mask=pl_bin_mask,
                     )
-                    _smth_pl_val = _hep_profile_step(
-                        smoothed_signal_rate, smoothed_background_rate, args.background_uncertainty,
-                        factor,
-                        fluctuation_sigma=0.0,
-                        signal_norm_frac=args.signal_uncertainty,
-                        perm_mask=smoothed_pl_bin_mask,
-                    )
                     for kdx in range(3):
                         raw_profile_significances[kdx].append(_raw_pl_val)
-                        smoothed_profile_significances[kdx].append(_smth_pl_val)
             else:
                 for kdx in range(3):
                     raw_profile_significances[kdx].append(0.0)
-                    smoothed_profile_significances[kdx].append(0.0)
 
             if smoothed_asimov_significances[1][-1] > sigmamax:
                 sigmamax = smoothed_asimov_significances[1][-1]
@@ -718,9 +676,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
             adaptive_bin_widths_display = np.ones(_n_energy_bins, dtype=float)
 
         if _compute_pl and _workflow["pl_isotonic"]:
-            # Capture pre-isotonic curves for diagnostics before overwriting.
-            raw_profile_pre_isotonic      = [list(arr) for arr in raw_profile_significances]
-            smoothed_profile_pre_isotonic = [list(arr) for arr in smoothed_profile_significances]
+            # Capture pre-isotonic curves for spike detection before overwriting.
+            raw_profile_pre_isotonic = [list(arr) for arr in raw_profile_significances]
 
             # Enforce monotonicity on PL curves via isotonic regression (PAVA).
             # Isotonic regression minimises the L2 distance from the computed values
@@ -728,15 +685,13 @@ for config, name, energy in product(args.config, args.name, args.energy):
             # curve consistent with the data — unlike a running maximum, which freezes
             # every transient solver spike into a permanent plateau.
             for _kdx in range(3):
-                raw_profile_significances[_kdx]      = _isotonic_monotone(raw_profile_significances[_kdx])
-                smoothed_profile_significances[_kdx] = _isotonic_monotone(smoothed_profile_significances[_kdx])
+                raw_profile_significances[_kdx] = _isotonic_monotone(raw_profile_significances[_kdx])
 
-            for _sigs in (raw_profile_significances, smoothed_profile_significances):
-                _upper   = np.asarray(_sigs[0])
-                _nominal = np.asarray(_sigs[1])
-                _lower   = np.asarray(_sigs[2])
-                _sigs[0] = np.maximum(_upper,   _nominal).tolist()
-                _sigs[2] = np.minimum(_lower,   _nominal).tolist()
+            _upper   = np.asarray(raw_profile_significances[0])
+            _nominal = np.asarray(raw_profile_significances[1])
+            _lower   = np.asarray(raw_profile_significances[2])
+            raw_profile_significances[0] = np.maximum(_upper,   _nominal).tolist()
+            raw_profile_significances[2] = np.minimum(_lower,   _nominal).tolist()
 
         # ── Build result entry — only include columns for active metrics ──────────
         # Disabled metrics are omitted entirely; merge_with_existing_df restores
@@ -807,46 +762,31 @@ for config, name, energy in product(args.config, args.name, args.energy):
             })
 
         if _compute_pl:
-            # Raw PL (using unsmoothed background rates and pl_bin_mask) is the
-            # primary ProfileLikelihood metric.  Smoothed background was previously
-            # used here but Gaussian smoothing redistributes background away from
-            # signal-region bins, producing near-zero denominators in per-bin LLR
-            # and inflating significance by signal × log(signal/near-zero).  The
-            # raw histogram IS the correct per-bin background model: any bin with
-            # mc_counts >= min_mc_per_bin has raw_background_rate > 0 by construction,
-            # so no floor artifact can arise.
+            # PLRaw*Crossing = crossing from pre-PAVA curve; PLSmoothed*Crossing = post-PAVA.
+            # When pl_isotonic=False both sides are identical (same raw per-step values).
+            _pl_pre = raw_profile_pre_isotonic if _workflow["pl_isotonic"] else raw_profile_significances
             pl_crossing_summary = compute_crossing_summary(
                 exposure_grid,
+                np.asarray(_pl_pre[1], dtype=float),
                 np.asarray(raw_profile_significances[1], dtype=float),
-                np.asarray(smoothed_profile_significances[1], dtype=float),
             )
             pl_crossing_summary_prefixed = {f"PL{k}": v for k, v in pl_crossing_summary.items()}
             if smoothing_info["SmoothingReport"] and args.debug and explicit_debug_flag:
                 rprint(
                     f"[cyan][REPORT][/cyan] {config} {name} {energy} NHits={nhit} OpHits={ophit} AdjCl={adjcl} "
-                    f"PL sigma2 raw={pl_crossing_summary['RawSigma2Crossing']:.2f} smooth={pl_crossing_summary['SmoothedSigma2Crossing']:.2f}, "
-                    f"sigma3 raw={pl_crossing_summary['RawSigma3Crossing']:.2f} smooth={pl_crossing_summary['SmoothedSigma3Crossing']:.2f}"
+                    f"PL sigma2 pre-PAVA={pl_crossing_summary['RawSigma2Crossing']:.2f} post-PAVA={pl_crossing_summary['SmoothedSigma2Crossing']:.2f}, "
+                    f"sigma3 pre-PAVA={pl_crossing_summary['RawSigma3Crossing']:.2f} post-PAVA={pl_crossing_summary['SmoothedSigma3Crossing']:.2f}"
                 )
             _entry.update({
                 "PLSigma2": pl_sigma2_curve,
                 "PLSigma3": pl_sigma3_curve,
-                # ProfileLikelihood = raw background PL (correct per-bin model).
-                # RawProfileLikelihood = smoothed background PL (legacy diagnostic).
-                "ProfileLikelihood+Error":    raw_profile_significances[0],
-                "ProfileLikelihood":          raw_profile_significances[1],
-                "ProfileLikelihood-Error":    raw_profile_significances[2],
-                "RawProfileLikelihood+Error": smoothed_profile_significances[0],
-                "RawProfileLikelihood":       smoothed_profile_significances[1],
-                "RawProfileLikelihood-Error": smoothed_profile_significances[2],
+                "ProfileLikelihood+Error": raw_profile_significances[0],
+                "ProfileLikelihood":       raw_profile_significances[1],
+                "ProfileLikelihood-Error": raw_profile_significances[2],
                 **({
-                    # PreIsotonicProfileLikelihood = pre-PAVA raw PL (for spike detection).
-                    # RawPreIsotonicProfileLikelihood = pre-PAVA smoothed PL (legacy).
-                    "PreIsotonicProfileLikelihood+Error":    raw_profile_pre_isotonic[0],
-                    "PreIsotonicProfileLikelihood":          raw_profile_pre_isotonic[1],
-                    "PreIsotonicProfileLikelihood-Error":    raw_profile_pre_isotonic[2],
-                    "RawPreIsotonicProfileLikelihood+Error": smoothed_profile_pre_isotonic[0],
-                    "RawPreIsotonicProfileLikelihood":       smoothed_profile_pre_isotonic[1],
-                    "RawPreIsotonicProfileLikelihood-Error": smoothed_profile_pre_isotonic[2],
+                    "PreIsotonicProfileLikelihood+Error": raw_profile_pre_isotonic[0],
+                    "PreIsotonicProfileLikelihood":       raw_profile_pre_isotonic[1],
+                    "PreIsotonicProfileLikelihood-Error": raw_profile_pre_isotonic[2],
                 } if _workflow["pl_isotonic"] else {}),
                 **pl_crossing_summary_prefixed,
             })
