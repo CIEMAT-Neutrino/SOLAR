@@ -672,10 +672,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
             sigma3_curve.append(sigma3)
 
             if _compute_pl:
-                if smoothed_profile_significances[1][-1] > 2 and not found_pl_sigma2:
+                if raw_profile_significances[1][-1] > 2 and not found_pl_sigma2:
                     pl_sigma2 = factor
                     found_pl_sigma2 = True
-                if smoothed_profile_significances[1][-1] > 3 and not found_pl_sigma3:
+                if raw_profile_significances[1][-1] > 3 and not found_pl_sigma3:
                     pl_sigma3 = factor
                     found_pl_sigma3 = True
             pl_sigma2_curve.append(pl_sigma2)
@@ -807,6 +807,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
             })
 
         if _compute_pl:
+            # Raw PL (using unsmoothed background rates and pl_bin_mask) is the
+            # primary ProfileLikelihood metric.  Smoothed background was previously
+            # used here but Gaussian smoothing redistributes background away from
+            # signal-region bins, producing near-zero denominators in per-bin LLR
+            # and inflating significance by signal × log(signal/near-zero).  The
+            # raw histogram IS the correct per-bin background model: any bin with
+            # mc_counts >= min_mc_per_bin has raw_background_rate > 0 by construction,
+            # so no floor artifact can arise.
             pl_crossing_summary = compute_crossing_summary(
                 exposure_grid,
                 np.asarray(raw_profile_significances[1], dtype=float),
@@ -822,19 +830,23 @@ for config, name, energy in product(args.config, args.name, args.energy):
             _entry.update({
                 "PLSigma2": pl_sigma2_curve,
                 "PLSigma3": pl_sigma3_curve,
-                "ProfileLikelihood+Error":    smoothed_profile_significances[0],
-                "ProfileLikelihood":          smoothed_profile_significances[1],
-                "ProfileLikelihood-Error":    smoothed_profile_significances[2],
-                "RawProfileLikelihood+Error": raw_profile_significances[0],
-                "RawProfileLikelihood":       raw_profile_significances[1],
-                "RawProfileLikelihood-Error": raw_profile_significances[2],
+                # ProfileLikelihood = raw background PL (correct per-bin model).
+                # RawProfileLikelihood = smoothed background PL (legacy diagnostic).
+                "ProfileLikelihood+Error":    raw_profile_significances[0],
+                "ProfileLikelihood":          raw_profile_significances[1],
+                "ProfileLikelihood-Error":    raw_profile_significances[2],
+                "RawProfileLikelihood+Error": smoothed_profile_significances[0],
+                "RawProfileLikelihood":       smoothed_profile_significances[1],
+                "RawProfileLikelihood-Error": smoothed_profile_significances[2],
                 **({
-                    "PreIsotonicProfileLikelihood+Error":    smoothed_profile_pre_isotonic[0],
-                    "PreIsotonicProfileLikelihood":          smoothed_profile_pre_isotonic[1],
-                    "PreIsotonicProfileLikelihood-Error":    smoothed_profile_pre_isotonic[2],
-                    "RawPreIsotonicProfileLikelihood+Error": raw_profile_pre_isotonic[0],
-                    "RawPreIsotonicProfileLikelihood":       raw_profile_pre_isotonic[1],
-                    "RawPreIsotonicProfileLikelihood-Error": raw_profile_pre_isotonic[2],
+                    # PreIsotonicProfileLikelihood = pre-PAVA raw PL (for spike detection).
+                    # RawPreIsotonicProfileLikelihood = pre-PAVA smoothed PL (legacy).
+                    "PreIsotonicProfileLikelihood+Error":    raw_profile_pre_isotonic[0],
+                    "PreIsotonicProfileLikelihood":          raw_profile_pre_isotonic[1],
+                    "PreIsotonicProfileLikelihood-Error":    raw_profile_pre_isotonic[2],
+                    "RawPreIsotonicProfileLikelihood+Error": smoothed_profile_pre_isotonic[0],
+                    "RawPreIsotonicProfileLikelihood":       smoothed_profile_pre_isotonic[1],
+                    "RawPreIsotonicProfileLikelihood-Error": smoothed_profile_pre_isotonic[2],
                 } if _workflow["pl_isotonic"] else {}),
                 **pl_crossing_summary_prefixed,
             })

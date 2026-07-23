@@ -59,7 +59,7 @@
   },
   "WORKFLOW": {
     "HEP": {
-      "pl_isotonic": false,
+      "pl_isotonic": true,
       "pl_signal_bands": true,
       "pl_conservative_sigma": 1,
       "significance_bins": false,
