@@ -25,9 +25,10 @@
     ],
     "LOWE_RECO_ENERGY_BINS": 6,
     "VERTEX_RESOLUTION_SIGMAS": [
-        7,
         5,
+        4,
         3,
+        2,
         1
     ],
     "VERTEX_RESOLUTION_TOLERANCES": [

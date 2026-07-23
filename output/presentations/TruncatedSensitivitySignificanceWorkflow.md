@@ -39,8 +39,8 @@ Config aliases:
 
 ### Workflow Outputs
 
-- Main contour grids (sin12/sin13): [images/analysis/sensitivity](../../images/analysis/sensitivity)
-- Signal/background templates (figures): [images/analysis/sensitivity/templates](../../images/analysis/sensitivity/templates)
+- Main contour grids (sin12/sin13): [output/images/analysis/sensitivity](../../output/images/analysis/sensitivity)
+- Signal/background templates (figures): [output/images/analysis/sensitivity/templates](../../output/images/analysis/sensitivity/templates)
 - Grid-scan data products (PKL): [data/analysis/sensitivity](../../data/analysis/sensitivity)
 - Remote workflow outputs (PNFS): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/SENSITIVITY)
 
@@ -182,11 +182,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -197,11 +197,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -212,11 +212,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -227,11 +227,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -243,7 +243,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 0 | 80 | 100 | 0.344 | 2.971 | 5.02 |
 | HD Lateral | 60 | 260 | 200 | 0.097 | 2.746 | 2.28 |
-| VD Top | 0 | 0 | 20 | 0.631 | 0.641 | 7.69 |
+| VD Top | 0 | 0 | 20 | 0.632 | 0.642 | 7.69 |
 | VD Bottom Shielded | 0 | 0 | 20 | 0.703 | 0.704 | 7.69 |
 
 ---
@@ -257,11 +257,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -272,11 +272,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -287,11 +287,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -302,11 +302,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -321,11 +321,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -336,11 +336,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/full/hd_1x2x6_lateralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -351,11 +351,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -366,11 +366,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
   <div>
 <p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
   </div>
 </div>
 
@@ -383,7 +383,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Central
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+  <img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
 </div>
 
 ---
@@ -391,7 +391,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Lateral
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+  <img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
 </div>
 
 ---
@@ -399,7 +399,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Top
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+  <img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
 </div>
 
 ---
@@ -407,7 +407,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Bottom Shielded
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
+  <img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
 </div>
 
 ---
@@ -419,7 +419,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Central Templates
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_centralAPA/marley/hd_1x2x6_centralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
+  <img src="../../output/images/analysis/sensitivity/templates/truncated/hd_1x2x6_centralAPA/marley/hd_1x2x6_centralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
 </div>
 
 ---
@@ -427,7 +427,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Lateral Templates
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/hd_1x2x6_lateralAPA/marley/hd_1x2x6_lateralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/truncated/hd_1x2x6_lateralAPA/marley/hd_1x2x6_lateralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
 </div>
 
 ---
@@ -435,7 +435,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Top Templates
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_nominal/marley/vd_1x8x14_3view_30deg_nominal_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_nominal/marley/vd_1x8x14_3view_30deg_nominal_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
 </div>
 
 ---
@@ -443,7 +443,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Bottom Shielded Templates
 
 <div class="center">
-  <img src="../../images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_shielded/marley/vd_1x8x14_3view_30deg_shielded_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_shielded/marley/vd_1x8x14_3view_30deg_shielded_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
 </div>
 
 ---
@@ -457,11 +457,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>sin²θ₁₂</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin12_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin12_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>sin²θ₁₃</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin13_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin13_projection_NuFit61.png">
   </div>
 </div>
 
@@ -472,11 +472,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_solar_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_solar_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_reactor_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_reactor_projection_NuFit61.png">
   </div>
 </div>
 
@@ -487,11 +487,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>sin²θ₁₂</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin12_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin12_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>sin²θ₁₃</strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin13_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin13_projection_NuFit61.png">
   </div>
 </div>
 
@@ -502,11 +502,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_solar_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_solar_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_reactor_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_reactor_projection_NuFit61.png">
   </div>
 </div>
 
@@ -517,11 +517,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>sin²θ₁₂</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin12_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin12_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>sin²θ₁₃</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin13_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin13_projection_NuFit61.png">
   </div>
 </div>
 
@@ -532,11 +532,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_solar_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_solar_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_reactor_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_reactor_projection_NuFit61.png">
   </div>
 </div>
 
@@ -547,11 +547,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>sin²θ₁₂</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin12_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin12_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>sin²θ₁₃</strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin13_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin13_projection_NuFit61.png">
   </div>
 </div>
 
@@ -562,11 +562,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_solar_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_solar_projection_NuFit61.png">
   </div>
   <div>
 <p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_reactor_projection_NuFit61.png">
+<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_reactor_projection_NuFit61.png">
   </div>
 </div>
 
@@ -578,7 +578,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 1 | 8 | 4 | 4 | 2 | 63.00 |
 | HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.75 |
-| VD Top | 8 | 10 | 8 | 4 | 2 | 15.38 |
+| VD Top | 8 | 10 | 8 | 4 | 2 | 14.91 |
 | VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |
 
 ## Oscillograms
@@ -590,11 +590,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -605,11 +605,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -620,11 +620,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -635,11 +635,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -650,11 +650,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -665,11 +665,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -680,11 +680,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -695,11 +695,11 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 

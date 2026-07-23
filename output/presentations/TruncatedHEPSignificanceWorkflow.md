@@ -34,10 +34,10 @@ Config aliases:
 - folder: **Truncated**
 - analysis: HEP
 - exposure: default **30 years**
-- threshold in hep/01_hep.py: from [analysis/config.json](../../analysis/config.json) HEP -> THRESHOLDS -> (no threshold config found)
+- threshold in hep/01_hep.py: from [config/analysis/config.json](../../config/analysis/config.json) HEP -> THRESHOLDS -> (no threshold config found)
 - optional cuts override: nhits, ophits, adjcls
 - significance reference in plots: ProfileLikelihood
-- best-cut selection in sensitivity/05_best_sigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
+- best-cut selection in sensitivity/05_best_sigmas.py: **ProfileLikelihood** (PAVA-monotone, 3σ crossing)
 
 ---
 
@@ -53,10 +53,10 @@ Used for [src/pipelines/run_sensitivity.py](../../src/pipelines/run_sensitivity.
 
 ### Workflow Outputs
 
-- Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
+- Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
 - Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
-- Figures: [images/analysis/hep/truncated](../../images/analysis/hep/truncated)
+- Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)
 
 ---
 
@@ -64,14 +64,14 @@ Used for [src/pipelines/run_sensitivity.py](../../src/pipelines/run_sensitivity.
 
 - Step 1: Build HEP rates and threshold region in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) per component.
 - Step 2: Apply component-aware smoothing via [lib/smoothing.py](../../lib/smoothing.py) using HEP smoothing config.
-- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
+- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. **Only raw histogram background rates** enter the PL — Gaussian-smoothed rates are for visual display only. Using smoothed rates produces near-zero per-bin denominators in signal-region bins (kernel tail leakage), inflating PL as `signal × log(signal/ε)` — a bias proportional to signal strength that is strongest for dense detector configs.
 
 ---
 
 ### Histogram and Significance Flow II: Post-Processing and Plotting
 
-- Step 4: Select the best cut by ProfileLikelihood in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
-- Step 5: Render exposure/significance and comparison plots in [src/physics/hep/exposure_plot.py](../../src/physics/hep/exposure_plot.py), [src/physics/hep/significance_plot.py](../../src/physics/hep/significance_plot.py), [src/physics/hep/significance_comparison.py](../../src/physics/hep/significance_comparison.py), and [src/physics/hep/exposure_comparison.py](../../src/physics/hep/exposure_comparison.py).
+- Step 4: Select the best cut by ProfileLikelihood in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in `PreIsotonicProfileLikelihood` (pre-PAVA values, available when `pl_isotonic: true`) are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection. Falls back to post-PAVA `ProfileLikelihood` if `PreIsotonicProfileLikelihood` is absent.
+- Step 5: Render exposure/significance and comparison plots in [src/physics/hep/exposure_plot.py](../../src/physics/hep/exposure_plot.py), [src/physics/hep/significance_plot.py](../../src/physics/hep/significance_plot.py), [src/physics/hep/significance_comparison.py](../../src/physics/hep/significance_comparison.py), and [src/physics/hep/exposure_comparison.py](../../src/physics/hep/exposure_comparison.py). With `--all_metrics`: [src/physics/hep/rebin_comparison.py](../../src/physics/hep/rebin_comparison.py) renders Pre-PAVA vs Post-PAVA PL curves at the best cut for direct comparison.
 
 ---
 
@@ -89,13 +89,13 @@ $$
 
 ---
 
-### ProfileLikelihood Smoothing
+### ProfileLikelihood Monotonicity (PAVA)
 
-PL curves are post-processed with **Gaussian kernel smoothing followed by isotonic regression** to produce a continuous, monotone exposure curve:
-  1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/physics/hep/01_hep.py`](../../src/physics/hep/01_hep.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
-  2. [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) is then applied to enforce strict monotonicity. It finds the non-decreasing sequence that minimises the L2 distance from the smoothed values, ensuring more data cannot reduce sensitivity.
+When `pl_isotonic: true` is set in the workflow config, the raw per-cut PL significance array is post-processed with [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) to enforce strict monotonicity. PAVA finds the non-decreasing sequence with minimum L2 distance from the raw values, ensuring accumulated exposure cannot reduce significance.
 
-These steps remove residual numerical oscillations from the profile-likelihood solver at low signal-to-background ratios.
+The pre-PAVA values are saved as `PreIsotonicProfileLikelihood` in the output pkl. This column is what the spike detector in `05_best_sigmas.py` reads — abrupt numerical jumps that PAVA would otherwise flatten are still caught before they contaminate the best-cut selection.
+
+Note: **Gaussian kernel smoothing is not applied to PL curves.** Smoothing is reserved for visual display of background histograms. Applying it to the per-bin background rates that enter the likelihood ratio produces near-zero denominators in signal-region bins via kernel tail leakage, inflating PL significance as `signal × log(signal / ε)` — a signal-proportional bias that is most severe for dense detector configs with many signal-region bins.
 
 ---
 
@@ -117,8 +117,7 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Stage | Enabled | Method | Component Mode | Smoothed Components | Sigma |
 |---|---|---|---|---|---|
-| Fiducial | Yes | gaussian | only | gamma, neutron, radiological, 8B | 0.62 |
-| Significance | Yes | gaussian | only | gamma, neutron, radiological, 8B | 0.62 |
+| *(no HEP smoothing stage config found)* | - | - | - | - | - |
 
 ---
 
@@ -131,11 +130,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -146,11 +145,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -161,11 +160,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -176,11 +175,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>No Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
   </div>
   <div>
 <p><strong>Best Fiducial</strong></p>
-<img src="../../images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
+<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
   </div>
 </div>
 
@@ -206,16 +205,16 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
   </div>
 </div>
 
 <div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
+  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
 </div>
 
 ---
@@ -225,16 +224,16 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
   </div>
 </div>
 
 <div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
+  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
 </div>
 
 ---
@@ -244,16 +243,16 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
+<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
   </div>
 </div>
 
 <div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
+  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
 </div>
 
 ---
@@ -263,16 +262,16 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
+<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
   </div>
 </div>
 
 <div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
+  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
 </div>
 
 ---
@@ -286,11 +285,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Significance_Comparison_Exposure_30_Threshold_0.png">
   </div>
   <div>
 <p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
   </div>
 </div>
 
@@ -301,11 +300,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Significance_Comparison_Exposure_30_Threshold_0.png">
   </div>
   <div>
 <p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
+<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
   </div>
 </div>
 
@@ -313,31 +312,13 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Significance Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous.png">
-  </div>
-  <div>
-<p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
-  </div>
-</div>
+No matching reference-comparison pair found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Significance Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous_highest_spiked.png">
-  </div>
-  <div>
-<p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
-  </div>
-</div>
+No matching reference-comparison pair found for VD Bottom Shielded
 
 ---
 
@@ -350,15 +331,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="three-col">
   <div>
   <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
   <div>
   <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
 </div>
 
@@ -374,15 +351,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="three-col">
   <div>
   <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
   <div>
   <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
 </div>
 
@@ -398,15 +371,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="three-col">
   <div>
   <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
   <div>
   <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
 </div>
 
@@ -422,15 +391,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="three-col">
   <div>
   <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
   <div>
   <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
+  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
 </div>
 </div>
 
@@ -445,10 +410,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | NHits | OpHits | AdjCl | Significance |
 |---|---:|---:|---:|---:|
-| HD Central | 4 | 13 | 5 | 9.104 |
-| HD Lateral | 6 | 4 | 5 | 2.396 |
-| VD Top | 10 | 10 | 7 | 2.384 |
-| VD Bottom Shielded | 8 | 20 | 6 | 2.498 |
+| HD Central | 4 | 13 | 5 | 12.182 |
+| HD Lateral | 3 | 4 | 9 | 6.263 |
+| VD Top | 10 | 11 | 7 | 4.682 |
+| VD Bottom Shielded | 8 | 20 | 6 | 5.065 |
 
 ---
 
@@ -458,39 +423,13 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ### HD Central — best excluded (spiked)
 
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
-
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
+No spiked plots found.
 
 ---
 
 ### HD Lateral — best excluded (spiked)
 
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
-
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
+No spiked plots found.
 
 ---
 
@@ -503,11 +442,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive_highest_spiked.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
+<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
   </div>
 </div>
 
@@ -522,11 +461,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Significance</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive_highest_spiked.png">
+<p>Significance plot not available.</p>
   </div>
   <div>
 <p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
+<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
   </div>
 </div>
 
@@ -539,11 +478,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -554,11 +493,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -569,11 +508,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -584,11 +523,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -599,11 +538,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -614,11 +553,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -629,11 +568,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
   </div>
   <div>
 <p><strong>Nadir projection</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
   </div>
 </div>
 
@@ -644,11 +583,11 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 <div class="two-col">
   <div>
 <p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
   </div>
   <div>
 <p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
+<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
   </div>
 </div>
 
@@ -674,7 +613,7 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 ### Adaptive Rebinning: Strategy
 
 - Rebinning is applied in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) through [lib/smoothing.py](../../lib/smoothing.py) using `apply_adaptive_tail_rebin`.
-- It is controlled by [analysis/config.json](../../analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- It is controlled by [config/analysis/config.json](../../config/analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
 - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
 - This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
 
