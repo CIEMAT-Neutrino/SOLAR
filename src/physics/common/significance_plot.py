@@ -1479,6 +1479,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
             subfolder=args.folder.lower(), filename="Sensitivity_Significance",
             rm=True, debug=args.debug,
         )
+        _merged_ss_local = upsert_df_rows(_sens_sig_df, local_data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Significance")
+        save_df(
+            _merged_ss_local, local_data_path, config=config, name=name,
+            subfolder=args.folder.lower(), filename="Sensitivity_Significance",
+            rm=True, debug=False,
+        )
 
     # ══════════════════════════════════════════════════════════════════════════
     # Fiducial
