@@ -80,6 +80,38 @@ python3 src/tools/generate_data_index.py
 
 All other files under `output/data/` are excluded from git (`.gitignore: output/data/**`); `index.json` is tracked via the `!output/data/index.json` exception.
 
+## DayNight Significance Computation
+
+The DayNight analysis measures the solar neutrino day-night asymmetry produced by the MSW Earth matter effect, which enhances νe survival probability for nighttime neutrinos traversing the Earth.
+
+**Signal definition** (`src/physics/daynight/01_daynight.py`): the observable is the oscillation-induced asymmetry between reconstructed night and day event rates, bin-by-bin: `ΔS_i = S_i^night − S_i^day`. Night bins see an enhanced νe flux due to regeneration in the Earth's mantle and core; day bins see the vacuum oscillation rate. Only the `Osc` oscillation row of the signal DataFrame enters the computation (not the `Truth` row).
+
+**Asymmetry uncertainty bands**: two independent uncertainty sources on the predicted asymmetry amplitude are combined in quadrature to produce a total band `σ_tot`:
+- `--earth_density_band` (default 0.13 = ±13%): spread in the expected asymmetry from Earth density profile (PREM) variations and MSW matter effect.
+- `--oscillation_band` (default 0.05 = ±5%): residual uncertainty from θ₁₂ and Δm²₂₁ (PDG values).
+- `σ_tot = sqrt(σ_earth² + σ_osc²) ≈ 0.139`.
+
+Three asymmetry scale factors bracket the full predicted range: `[1 + σ_tot, 1.0, 1 − σ_tot]` → upper, nominal, lower significance curves. The upper band represents a stronger matter effect; the lower, a weaker one.
+
+**Day fraction and uncertainty**: `--day_fraction` (default 0.493) is the fraction of total exposure attributed to daytime, computed from the SURF latitude (~44.3°N) averaged over a full year. This is not 0.5 — the slight asymmetry arises from the eccentricity of the Earth's orbit and latitude. `--day_fraction_band` (default 0.01 = ±1%) is the absolute uncertainty from imperfect knowledge of the solar zenith angle cut and run schedule.
+
+**Statistics** (`src/physics/daynight/01_daynight.py`):
+
+- **Gaussian (main metric)**: per-bin `Z_i = ΔS_i / sqrt(B_i^eff)` combined in quadrature as `Z = sqrt(Σ Z_i²)`, where the effective background accounts for unequal day/night fractions: `B_i^eff = n_i^night/g² + n_i^day/f²`. Gaussian smoothing is applied to signal and background histograms before this computation. Unlike the HEP profile likelihood, the Gaussian statistic does not involve a log-ratio, so near-zero smoothed background in a bin gives `Z_i ≈ 0` (not log-amplification), making smoothed rates safe to use here.
+
+- **Asimov LLR** (optional, enabled by `--test_statistic asimov` or `all`): two-sample Poisson log-likelihood ratio. Under H₀ (no asymmetry, common pooled rate), expected night/day counts are `h_i^night = g × (n_i^night + n_i^day)` and `h_i^day = f × (n_i^night + n_i^day)`. `q₀ = 2Σ[n_i^night × log(n_i^night/h_i^night) + n_i^day × log(n_i^day/h_i^day)]`, `Z = sqrt(q₀)`. Computed on both raw and smoothed histograms.
+
+**Background uncertainty model** (enabled when `background_error: true` in workflow config): three uncertainty sources per period are combined in quadrature:
+1. Poisson statistical: `sqrt(n_bkg_period)`
+2. Normalization systematic: `background_uncertainty × n_bkg_period` (default 2%)
+3. Day-fraction uncertainty: `day_fraction_band × factor × background_total` (propagates run-schedule uncertainty)
+
+The effective combined uncertainty enters `evaluate_significance` as `background_uncertainty=σ_eff` for the `ErrorGaussian` columns.
+
+**Best-cut selection**: `src/physics/sensitivity/05_best_sigmas.py` uses `Asimov` as the significance reference for DayNight (configured in `config/analysis/config.json` under `BEST_SIGMA_SIGNIFICANCE_REFERENCE.DAYNIGHT`). Crossing exposures are tracked independently: `Sigma2`/`Sigma3` (Gaussian 2σ/3σ) and `AsimovSigma2`/`AsimovSigma3`; fastest-discovery cut selection uses the Asimov crossing columns.
+
+**PKL output columns** (per cut, per energy, per config/name): `Gaussian`, `Gaussian±Error`, `RawGaussian`, `RawGaussian±Error`, `ErrorGaussian`, `ErrorGaussian±Error`, `RawErrorGaussian`, `RawErrorGaussian±Error`, `Asimov`, `Asimov±Error`, `RawAsimov`, `RawAsimov±Error`, `EarthDensityBand`, `OscillationBand`, `TotalAsymmetryBand`, `DayFraction`, `DayFractionBand`, `BackgroundUncertainty`, plus crossing summaries from `compute_crossing_summary`.
+
 ## HEP Profile-Likelihood Updates
 
 Full mathematical derivations of all significance methods, the profile-likelihood formulation, adaptive rebinning, Barlow-Beeston masking, PL smoothing pipeline, and spike detection are in [`docs/hep_likelihood_derivation.tex`](hep_likelihood_derivation.tex).
