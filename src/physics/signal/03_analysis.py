@@ -133,6 +133,7 @@ parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, de
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
+parser.add_argument("--minimal_cuts", action=argparse.BooleanOptionalAction, default=False, help="Scan only the minimally restrictive cut point: NHits=min, OpHits=min, AdjCl=max (i.e. NHits=1, OpHits=4, AdjCl=20). Useful for background flux plots with no selection applied.")
 parser.add_argument(
     "--oscillation_backend",
     type=str,
@@ -299,6 +300,10 @@ for config in configs:
                 )
                 continue
             _nhits_scan, _ophits_scan, _adjcls_scan = _bc_nhits, _bc_ophits, _bc_adjcls
+        elif args.minimal_cuts:
+            _nhits_scan  = [nhits[0]]
+            _ophits_scan = [nhits[3]]
+            _adjcls_scan = [nhits[::-1][0]]
         elif args.nhits is not None:
             _nhits_scan  = [args.nhits]
             _ophits_scan = [args.ophits]
@@ -424,7 +429,7 @@ for config in configs:
                         "AdjCl": this_adjcl,
                     })
 
-                if this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls and weight == "SignalParticleWeight":
+                if (args.minimal_cuts or (this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls)) and weight == "SignalParticleWeight":
                     analysis_key = analysis.upper()
                     if args.export_raw:
                         save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
