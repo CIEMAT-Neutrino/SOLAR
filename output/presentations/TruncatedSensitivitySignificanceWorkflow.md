@@ -155,11 +155,10 @@ Higher score = better discrimination between solar and reactor hypotheses. The b
 
 Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/physics/sensitivity/04\_best\_cuts.py](../../src/physics/sensitivity/04_best_cuts.py):
 
-1. **Replace heuristic score with profile-LR** *(proposed, not yet implemented)*: use $\Delta\chi^2 = \chi^2_{\mathrm{null}} - \chi^2_{\mathrm{best}}$ and report $Z = \sqrt{\Delta\chi^2}$ (Wilks theorem) instead of average cross-hypothesis $\chi^2$.
-2. ✅ **Barlow-Beeston mask** (`bb_mask = bkg > 0`): bins where the background template is zero are excluded from the fit, preventing spurious large deviance contributions from zero-MC-support bins.
-3. ✅ **Removed `abs()`** from `ROOTOperator` and `NumpyOperator`: the Baker-Cousins deviance is always $\ge 0$ at the minimum; `abs()` distorts gradients and can impair Minuit convergence.
-4. ✅ **Tightened parameter limits**: $\pm 100\sigma \to \pm 10\sigma$, reducing search space and avoiding minimization in flat tails.
-5. ✅ **Replaced Minuit with scipy L-BFGS-B** (joint 2D): `scipy.optimize.minimize(..., method="L-BFGS-B")` minimizes over $(A_{\mathrm{pred}}, A_{\mathrm{bkg}})$ jointly with ±10$\sigma$ bounds. Uses gradient info → fewer function evaluations than Minuit for smooth convex objectives. `_profile_a_bkg` retained as `profile_bkg=True` option for comparison. No analytic closed form exists for either nuisance (unlike HEP's $\hat{\beta}$) due to per-bin coupling.
+**Barlow-Beeston mask** (`bb_mask = bkg > 0`): bins where the background template is zero are excluded from the fit, preventing spurious large deviance contributions from zero-MC-support bins.
+**Removed `abs()`** from `ROOTOperator` and `NumpyOperator`: the Baker-Cousins deviance is always $\ge 0$ at the minimum; `abs()` distorts gradients and can impair Minuit convergence.
+**Tightened parameter limits**: $\pm 100\sigma \to \pm 10\sigma$, reducing search space and avoiding minimization in flat tails.
+**Replaced Minuit with scipy L-BFGS-B** (joint 2D): `scipy.optimize.minimize(..., method="L-BFGS-B")` minimizes over $(A_{\mathrm{pred}}, A_{\mathrm{bkg}})$ jointly with ±10$\sigma$ bounds. Uses gradient info → fewer function evaluations than Minuit for smooth convex objectives. `_profile_a_bkg` retained as `profile_bkg=True` option for comparison. No analytic closed form exists for either nuisance (unlike HEP's $\hat{\beta}$) due to per-bin coupling.
 
 ---
 
@@ -580,6 +579,9 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 | HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.75 |
 | VD Top | 8 | 10 | 8 | 4 | 2 | 14.91 |
 | VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |
+
+---
+
 
 ## Oscillograms
 

@@ -256,12 +256,17 @@ for config, name, energy in product(args.config, args.name, args.energy):
             if this_plot_sigmas.empty:
                 continue
 
+            # "Raw" + significance is optional for PL: the PL test uses raw (unsmoothed)
+            # spectra only, so no smoothed variant exists. Fall back to the primary column.
+            _raw_col = "Raw" + significance
+            _has_raw = _raw_col in this_plot_sigmas.columns
             required_significance_columns = [
                 significance,
-                "Raw" + significance,
                 significance + "+Error",
                 significance + "-Error",
             ]
+            if _has_raw:
+                required_significance_columns.insert(1, _raw_col)
             missing_significance_columns = [
                 column
                 for column in required_significance_columns
@@ -281,8 +286,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 posinf=0.0,
                 neginf=0.0,
             )
+            # When no raw variant exists (PL uses unsmoothed spectra), raw == smoothed.
             raw_significance = np.nan_to_num(
-                np.asarray(this_plot_sigmas["Raw" + significance].values[0], dtype=float),
+                np.asarray(this_plot_sigmas[_raw_col if _has_raw else significance].values[0], dtype=float),
                 nan=0.0,
                 posinf=0.0,
                 neginf=0.0,
@@ -310,6 +316,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 [smoothed_significance, raw_significance]
             ):
                 if significance.startswith("PreIsotonic"):
+                    continue
+                # PL uses unsmoothed spectra — no smoothed variant exists when RawProfileLikelihood absent.
+                if spectrum_type == "Smoothed" and significance == "ProfileLikelihood" and not _has_raw:
                     continue
                 hep_exposure.append(
                     {

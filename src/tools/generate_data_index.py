@@ -132,6 +132,12 @@ def main():
 
     pub_exports = _collect_publication_exports(tree)
 
+    # Collect spectrum_type_defaults from all OUTPUT_ONLY registry entries that define it.
+    _spectrum_defaults: dict = {}
+    for _entry in registry.get("OUTPUT_ONLY", {}).values():
+        if isinstance(_entry, dict) and "spectrum_type_defaults" in _entry:
+            _spectrum_defaults.update(_entry["spectrum_type_defaults"])
+
     index = {
         "_generated":  datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "_description": (
@@ -142,6 +148,7 @@ def main():
         "_root":     "output/data",
         "_registry": "config/analysis/pkl_paths.json",
         "_themes":   registry.get("_themes", {}),
+        "_spectrum_type_defaults": _spectrum_defaults,
         "_publication_exports": pub_exports,
         "file_count": file_count,
         "tree": tree,

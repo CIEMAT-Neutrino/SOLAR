@@ -500,13 +500,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
         }
 
         for significance, style in significance_plot_styles.items():
-            required_sig_columns = [significance, "Raw" + significance, significance + "+Error", significance + "-Error"]
+            # "Raw" + significance is optional for PL: the PL test uses raw (unsmoothed)
+            # spectra only, so no smoothed variant exists. Fall back to the primary column.
+            _raw_col = "Raw" + significance
+            _has_raw = _raw_col in plot_sigmas.columns
+            required_sig_columns = [significance, significance + "+Error", significance + "-Error"]
+            if _has_raw:
+                required_sig_columns.insert(1, _raw_col)
             missing_sig_columns = [c for c in required_sig_columns if c not in plot_sigmas.columns]
             if missing_sig_columns:
                 continue
 
             smoothed_sig = _safe_array(plot_sigmas[significance].values[0])
-            raw_sig = _safe_array(plot_sigmas["Raw" + significance].values[0])
+            # When no raw variant exists (PL uses unsmoothed spectra), raw == smoothed.
+            raw_sig = _safe_array(plot_sigmas[_raw_col if _has_raw else significance].values[0])
             sig_plus = _safe_array(plot_sigmas[significance + "+Error"].values[0])
             sig_minus = _safe_array(plot_sigmas[significance + "-Error"].values[0])
 
@@ -514,6 +521,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
             if significance == "ProfileLikelihood":
                 smoothed_sig = _monotone_for_export(smoothed_sig)
                 raw_sig      = _monotone_for_export(raw_sig)
+
+            for spec_type, sig_arr in [("Raw", raw_sig), ("Smoothed", smoothed_sig)]:
+                # PL uses unsmoothed spectra — no smoothed variant exists when RawProfileLikelihood absent.
+                if spec_type == "Smoothed" and significance == "ProfileLikelihood" and not _has_raw:
+                    continue
+                exposure_records.append({
+                    "Analysis": "HEP", "Geometry": info["GEOMETRY"],
+                    "Config": config, "Name": name, "EnergyLabel": energy,
+                    "Variable": significance, "SpectrumType": spec_type, "Mode": "NoRebin",
+                    "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                    "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                    "Significance": sig_arr.tolist(), "SignificanceUnit": r"\sigma",
+                    "SignificanceError+": None, "SignificanceError-": None,
+                })
 
             # If --reference specified, plot only that metric; otherwise plot all available
             if args.reference and significance != args.reference:
@@ -554,17 +575,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
         save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
                     filename=figure_name, rm=args.rewrite, debug=args.plot)
-
-        for spec_type, sig_arr in [("Raw", raw_sig), ("Smoothed", smoothed_sig)]:
-            exposure_records.append({
-                "Analysis": "HEP", "Geometry": info["GEOMETRY"],
-                "Config": config, "Name": name, "EnergyLabel": energy,
-                "Variable": args.reference, "SpectrumType": spec_type, "Mode": "NoRebin",
-                "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
-                "Significance": sig_arr.tolist(), "SignificanceUnit": r"\sigma",
-                "SignificanceError+": None, "SignificanceError-": None,
-            })
 
     # ══════════════════════════════════════════════════════════════════════════
     # HEP — comparison mode
@@ -616,7 +626,11 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
             base_row = smoothed_row if not smoothed_row.empty else raw_row
             xvals = np.asarray(base_row["Exposure"].values[0], dtype=float)
-            yvals = _safe_array(smoothed_row["Significance"].values[0] if not smoothed_row.empty else np.zeros_like(xvals))
+            # PL has no Smoothed row — fall back to Raw so the solid trace shows the correct curve.
+            yvals = _safe_array(
+                smoothed_row["Significance"].values[0] if not smoothed_row.empty
+                else (raw_row["Significance"].values[0] if not raw_row.empty else np.zeros_like(xvals))
+            )
             yraw = _safe_array(raw_row["Significance"].values[0] if not raw_row.empty else np.zeros_like(xvals))
 
             y_upper = None

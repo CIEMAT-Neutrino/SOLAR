@@ -646,6 +646,17 @@
         "src/physics/common/exposure_plot.py --mode comparison/reference (HEP_Exposure)"
       ],
       "in_pnfs": "partial \u2014 each file written to both {analysis}_pnfs and {analysis}_local",
+      "spectrum_type_defaults": {
+        "DayNight": {
+          "Gaussian": "Smoothed",
+          "Asimov": "Smoothed"
+        },
+        "HEP": {
+          "ProfileLikelihood": "Raw",
+          "Asimov": "Smoothed",
+          "Gaussian": "Smoothed"
+        }
+      },
       "themes": [
         "daynight",
         "hep"
@@ -943,6 +954,22 @@
         "detector"
       ],
       "publication_export": false
+    },
+    "SENSITIVITY_TEMPLATE_EXPORT": {
+      "description": "Publication-ready tidy DataFrame of signal and background sensitivity templates at the best-cut point. One row per component (Signal/Background) × (config, name, energy, folder). Columns: Config, Name, EnergyLabel, Folder, NHits, OpHits, AdjCl, Component, EnergyBins, NadirBins, Counts (2-D array as nested list, shape [n_nadir × n_energy]).",
+      "base": "{root}/output/data/analysis/sensitivity/{config}/{name}/{folder}",
+      "filename": "{config}_{name}_{energy}_Sensitivity_Templates.pkl",
+      "full_path": "{root}/output/data/analysis/sensitivity/{config}/{name}/{folder}/{config}_{name}_{energy}_Sensitivity_Templates.pkl",
+      "written_by": "src/physics/sensitivity/template_plot.py (save_df, always written when template data available)",
+      "read_by": [
+        "LOWE_RECONSTRUCTION_PUBLICATION via scripts/sync_solar_data.sh"
+      ],
+      "in_pnfs": false,
+      "themes": [
+        "sensitivity",
+        "publication"
+      ],
+      "publication_export": true
     }
   },
   "_themes": {

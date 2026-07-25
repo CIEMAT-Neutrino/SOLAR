@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 
 
-save_path = f"{root}/output/images/analysis/sensitivity/templates"
+save_path  = f"{root}/output/images/analysis/sensitivity/templates"
+data_path  = f"{root}/output/data/analysis/sensitivity"
 
 
 parser = argparse.ArgumentParser(
@@ -356,3 +357,33 @@ if args.debug:
         rprint(f"[cyan][INFO][/cyan] Background template source: {background_path}")
     if signal_path is not None:
         rprint(f"[cyan][INFO][/cyan] Signal template source: {signal_path}")
+
+# Export publication-ready DataFrame for LOWE_RECONSTRUCTION_PUBLICATION
+_template_rows = []
+for _component, _tmpl in [("Signal", signal_template), ("Background", background_template)]:
+    if _tmpl is None:
+        continue
+    _template_rows.append({
+        "Config":      args.config,
+        "Name":        args.name,
+        "EnergyLabel": args.energy,
+        "Folder":      args.folder,
+        "NHits":       int(nhits_value),
+        "OpHits":      int(ophits_value),
+        "AdjCl":       int(adjcl_value),
+        "Component":   _component,
+        "EnergyBins":  sensitivity_rebin_centers.tolist(),
+        "NadirBins":   nadir_axis.tolist(),
+        "Counts":      np.asarray(_tmpl, dtype=float).tolist(),
+    })
+if _template_rows:
+    save_df(
+        pd.DataFrame(_template_rows),
+        data_path,
+        config=args.config,
+        name=args.name,
+        subfolder=args.folder.lower(),
+        filename=f"{args.energy}_Sensitivity_Templates",
+        rm=args.rewrite,
+        debug=args.debug,
+    )

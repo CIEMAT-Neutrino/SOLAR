@@ -1,5 +1,5 @@
 {
-  "_generated": "2026-07-24T17:02:02+00:00",
+  "_generated": "2026-07-25T09:57:58+00:00",
   "_description": "Nested directory tree of output/data/. Each leaf is {size_bytes, type, themes, publication_export}. Regenerate with: python3 src/tools/generate_data_index.py",
   "_root": "output/data",
   "_registry": "config/analysis/pkl_paths.json",
@@ -14,6 +14,17 @@
     "detector": "Detector characterization diagnostics (PDS, TPC, vertex, preselection)",
     "fiducial": "Fiducial volume optimization (scan DataFrames, best-fiducial JSON)",
     "publication": "Publication-ready outputs for LOWE_RECONSTRUCTION_PUBLICATION"
+  },
+  "_spectrum_type_defaults": {
+    "DayNight": {
+      "Gaussian": "Smoothed",
+      "Asimov": "Smoothed"
+    },
+    "HEP": {
+      "ProfileLikelihood": "Raw",
+      "Asimov": "Smoothed",
+      "Gaussian": "Smoothed"
+    }
   },
   "_publication_exports": [
     "analysis/day-night/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_DayNight_Counts.pkl",
@@ -72,7 +83,7 @@
     "event/hd_1x2x6_centralAPA_marley_edep_event_8179_display.pkl",
     "event/hd_1x2x6_centralAPA_marley_edep_event_8719_display.pkl"
   ],
-  "file_count": 2105,
+  "file_count": 2107,
   "tree": {
     "PDS": {
       "adjopflash": {
@@ -4342,6 +4353,24 @@
             },
             "hd_1x2x6_centralAPA_neutron_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 253229,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            }
+          },
+          "radiological": {
+            "hd_1x2x6_centralAPA_radiological_Adjacent_Cluster_Counts.pkl": {
+              "size_bytes": 460213193,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_radiological_Adjacent_Cluster_Distributions.pkl": {
+              "size_bytes": 200674,
               "type": "pkl",
               "themes": [
                 "detector"
