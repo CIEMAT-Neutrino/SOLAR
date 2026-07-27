@@ -153,7 +153,17 @@ run, mask, output = compute_filtered_run(
 )
 rprint(output)
 
-reco_df = npy2df(run, "Reco", debug=False)
+_reco_branches = [
+    "MatchedOpFlashPur", "MatchedOpFlashPE",
+    "ErrorX", "ErrorY", "ErrorZ",
+    "SignalParticleX", "SignalParticleY", "SignalParticleZ",
+    "SignalParticleK", "Geometry", "Version", "Name",
+]
+reco_df = npy2df(run, "Reco", branches=_reco_branches, debug=False)
+del run, mask
+
+_float_cols = [c for c in reco_df.select_dtypes("float64").columns]
+reco_df[_float_cols] = reco_df[_float_cols].astype("float32")
 
 hist_list, purity_list, sigma_list = [], [], []
 
@@ -176,7 +186,6 @@ for config in configs:
             & (reco_df["Name"] == name)
         ]
 
-        fig1 = make_subplots(rows=1, cols=3, subplot_titles=["RecoX", "RecoY", "RecoZ"])
         for idx, (coord, error) in enumerate(
             zip(["X", "Y", "Z"], ["ErrorX", "ErrorY", "ErrorZ"])
         ):
@@ -194,27 +203,13 @@ for config in configs:
             perr = perr_tmp
             popt_overall, perr_overall = popt, perr
             _xc = 0.5 * (edges[1:] + edges[:-1])
-            fit_y = _get_fit_meta(fit_function)["func"](_xc, *popt)
 
             # Find percentage of events within 1, 2 and 3 sigma
-            sigma1 = len(
-                this_reco_df[error][
-                    (this_reco_df[error] > (popt[1] - 1 * popt[2]))
-                    & (this_reco_df[error] < (popt[1] + 1 * popt[2]))
-                ]
-            ) / len(this_reco_df[error])
-            sigma2 = len(
-                this_reco_df[error][
-                    (this_reco_df[error] > (popt[1] - 3 * popt[2]))
-                    & (this_reco_df[error] < (popt[1] + 3 * popt[2]))
-                ]
-            ) / len(this_reco_df[error])
-            sigma3 = len(
-                this_reco_df[error][
-                    (this_reco_df[error] > (popt[1] - 5 * popt[2]))
-                    & (this_reco_df[error] < (popt[1] + 5 * popt[2]))
-                ]
-            ) / len(this_reco_df[error])
+            _err = this_reco_df[error]
+            _n = len(_err)
+            sigma1 = (((_err - popt[1]).abs() < 1 * popt[2]).sum()) / _n
+            sigma2 = (((_err - popt[1]).abs() < 3 * popt[2]).sum()) / _n
+            sigma3 = (((_err - popt[1]).abs() < 5 * popt[2]).sum()) / _n
 
             # Make a 2D histogram of the purity vs the error
             if coord == "X":

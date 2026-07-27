@@ -155,18 +155,23 @@ def compute_adjcl_basics(
             run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1
         )
 
+    # Same-gen mask across all events: excludes same-gen clusters from ExternalBkg
+    # so that background events whose Generator ∈ EXTERNAL_BACKGROUNDS don't cause
+    # double-counting that makes IntrinsicBkgNum negative.
+    _same_gen_full = (
+        run["Reco"]["AdjClGen"]
+        == run["Reco"]["Generator"][:, np.newaxis]
+    )
     for limit in radial_limits:
-        run["Reco"][f"TotalAdjClExternalBkgNum{limit}"] = np.sum(
-            (np.isin(run["Reco"]["AdjClGen"], info["EXTERNAL_BACKGROUNDS"]))
-            * (run["Reco"]["AdjClR"] < limit)
-            * (run["Reco"]["AdjClR"] > 0),
-            axis=1
+        _ext = (
+            np.isin(run["Reco"]["AdjClGen"], info["EXTERNAL_BACKGROUNDS"])
+            & ~_same_gen_full
+            & (run["Reco"]["AdjClR"] < limit)
+            & (run["Reco"]["AdjClR"] > 0)
         )
+        run["Reco"][f"TotalAdjClExternalBkgNum{limit}"] = np.sum(_ext, axis=1)
         run["Reco"][f"TotalAdjClExternalBkgCharge{limit}"] = np.sum(
-            (np.isin(run["Reco"]["AdjClGen"], info["EXTERNAL_BACKGROUNDS"]))
-            * (run["Reco"]["AdjClR"] < limit)
-            * (run["Reco"]["AdjClR"] > 0)
-            * run["Reco"]["AdjClCharge"],
+            _ext * run["Reco"]["AdjClCharge"],
             axis=1,
         )
         

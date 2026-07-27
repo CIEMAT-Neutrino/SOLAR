@@ -164,6 +164,27 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        _slim_n = 10_000
+        _rng = np.random.default_rng(42)
+        _slim_rows = []
+        for _, _row in df.iterrows():
+            _s = _row["AdjClNum"]
+            if len(_s) > _slim_n:
+                _idx = np.sort(_rng.choice(len(_s), size=_slim_n, replace=False))
+                _row = _row.copy()
+                _row["AdjClNum"] = _s.iloc[_idx].reset_index(drop=True)
+            _slim_rows.append(_row)
+        save_df(
+            pd.DataFrame(_slim_rows).reset_index(drop=True),
+            data_path,
+            config,
+            name,
+            decimals=3,
+            filename="Adjacent_Cluster_Counts_Slim",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
         explode_branches = [
             "AdjClGen",
             "AdjClR",
