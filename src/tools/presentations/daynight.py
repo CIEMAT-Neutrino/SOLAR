@@ -93,24 +93,27 @@ def gather_best_sigma_rows(energy):
     for pattern in patterns:
         for json_path in sorted(glob(pattern)):
             p = Path(json_path)
-            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-3]
+            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-2]
             if folder not in rows:
                 continue
 
             payload = read_json(p)
-            for cfg, samples in payload.items():
-                marley = samples.get("marley", {})
-                if not marley:
+            for cfg, energies in payload.items():
+                # Old PNFS files may retain {config: {name: {energy: {...}}}} — unwrap if needed
+                first_val = next(iter(energies.values()), None)
+                if isinstance(first_val, dict) and "NHits" not in first_val:
+                    energies = energies.get("marley", {})
+                if not energies:
                     continue
 
                 energy_key = None
                 for candidate in energy_candidates(energy):
-                    if candidate in marley:
+                    if candidate in energies:
                         energy_key = candidate
                         break
                 if energy_key is None:
                     continue
-                vals = marley[energy_key]
+                vals = energies[energy_key]
                 row_key = (folder, cfg, energy_key)
                 if row_key in row_map:
                     continue
@@ -488,8 +491,8 @@ def build_markdown(
     ### Workflow Outputs
     
     - Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
-    - Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../../data/analysis/best-sigma-json/daynight/truncated)
-    - Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
+    - Best cut summaries (JSON): [config/*/best-sigma-json/daynight/{{folder}}/{{config}}_highest_DayNight.json](../../config)
+    - Local fallback: [config/*/daynight-json/{{folder}}/{{config}}_highest_DayNight.json](../../config)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated)
     - Figures: [output/images/analysis/day-night/truncated](../../output/images/analysis/day-night/truncated)
     
