@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from lib import (
@@ -37,11 +37,14 @@ from lib import (
     plot_adjflash_event,
     plot_pds_event,
     plot_tpc_event,
+    get_edep_positions,
+    add_data_to_event,
 )
+from lib.solar import get_pdg_color
 from plotly.subplots import make_subplots
 
 DEFAULTS = {
-    "edep":     {"config": "hd_1x2x6_centralAPA",              "name": "marley_edep"},
+    "edep":     {"config": "hd_1x2x6_centralAPA",               "name": "marley_edep"},
     "adjflash": {"config": "vd_1x8x14_3view_30deg_optimistic",  "name": "marley_yzprojected"},
     "ophit":    {"config": "vd_1x8x14_3view_30deg",             "name": "marley_ophit"},
     "tpc":      {"config": "vd_1x8x14_3view_30deg_optimistic",  "name": "marley"},
@@ -65,7 +68,7 @@ def parse_args():
                        help=f"{wf} dataset name (default: {d['name']})")
 
     p.add_argument("--plots", nargs="+",
-                   choices=["edep", "adjflash", "ophit", "tpc"],
+                   choices=["edep", "adjflash", "ophit", "tpc", "edep-tpc"],
                    default=["edep", "adjflash", "ophit", "tpc"],
                    help="Which displays to generate (default: all)")
     p.add_argument("--event", type=int, default=None,
@@ -82,6 +85,14 @@ def parse_args():
                    help="Output directory for DataFrames (pkl)")
     p.add_argument("--no-show", action="store_true",
                    help="Do not call fig.show() (useful in batch mode)")
+    p.add_argument("--cut-flash", action="store_true",
+                   help="TPC: require MatchedOpFlashPur > 0")
+    p.add_argument("--cut-energy", type=float, default=None, metavar="MAX_MEV",
+                   help="TPC: require SignalParticleK < MAX_MEV")
+    p.add_argument("--min-adjcl", type=int, default=None, metavar="N", dest="min_adjcl",
+                   help="TPC: require at least N adjacent clusters")
+    p.add_argument("--layout", choices=["truth", "reco"], default="truth",
+                   help="TPC projection: 'truth'=col2 is (X,Y); 'reco'=col2 is (Z,X) (default: truth)")
     p.add_argument("--debug", action="store_true")
     return p.parse_args()
 
@@ -91,87 +102,107 @@ def parse_args():
 # ---------------------------------------------------------------------------
 
 def _build_edep_df(run, config, name, idx, tree="Truth"):
+    event_num = int(run[tree]["Event"][idx])
+    nu_energy = float(run[tree]["SignalParticleE"][idx])
+    title     = f"Neutrino CC Interaction on LAr. $E_\\nu$ = {nu_energy:.2f} MeV"
+
+    # EDep deposits — matches "circle" markers in plot_edep_event
     x   = [v for v in run[tree]["TSignalXDepList"][idx]   if v != 0]
     y   = [v for v in run[tree]["TSignalYDepList"][idx]   if v != 0]
     z   = [v for v in run[tree]["TSignalZDepList"][idx]   if v != 0]
     e   = [v for v in run[tree]["TSignalEDepList"][idx]   if v != 0]
-    pdg = [v for v in run[tree]["TSignalPDGDepList"][idx] if v != 0]
-    n = min(len(x), len(y), len(z), len(e), len(pdg))
+    pdg = [str(v) for v in run[tree]["TSignalPDGDepList"][idx] if v != 0]
+    n   = min(len(x), len(y), len(z), len(e), len(pdg))
 
-    event_num = int(run[tree]["Event"][idx])
-    nu_energy = float(run[tree]["SignalParticleE"][idx])
-    title = f"Neutrino CC Interaction on LAr. $E_\\nu$ = {nu_energy:.2f} MeV"
-
-    # Match Reco cluster by event number
-    reco_idx = np.where(np.asarray(run["Reco"]["Event"]) == event_num)[0]
-    if len(reco_idx) > 0:
-        r = reco_idx[0]
-        cluster_x   = float(run["Reco"]["RecoX"][r])
-        cluster_y   = float(run["Reco"]["RecoY"][r])
-        cluster_z   = float(run["Reco"]["RecoZ"][r])
-        cluster_q   = float(run["Reco"]["Charge"][r])
-        cluster_pur = float(run["Reco"]["MatchedOpFlashPur"][r])
-        cluster_pdg = str(int(run["Reco"]["MainPDG"][r]))
-    else:
-        cluster_x = cluster_y = cluster_z = cluster_q = cluster_pur = float("nan")
-        cluster_pdg = ""
-
-    return pd.DataFrame({
-        "Config":          config,
-        "Name":            name,
-        "Variable":        "EDep",
-        "Title":           title,
-        "X":               x[:n],
-        "Y":               y[:n],
-        "Z":               z[:n],
-        "E":               e[:n],
-        "PDG":             [str(p) for p in pdg[:n]],
-        "Event":           event_num,
-        "ClusterX":        cluster_x,
-        "ClusterY":        cluster_y,
-        "ClusterZ":        cluster_z,
-        "ClusterCharge":   cluster_q,
-        "ClusterPurity":   cluster_pur,
-        "ClusterPDG":      cluster_pdg,
-    })
-
-
-def _build_tpc_df(run, config, name, idx, tree="Reco"):
-    nu_energy = float(run[tree]["SignalParticleE"][idx])
-    title = f"Neutrino CC Interaction on LAr. $E_\\nu$ = {nu_energy:.2f} MeV"
-    event_num = int(run[tree]["Event"][idx])
-    rows = []
-    rows.append({
+    rows = [{
         "Config":   config,
         "Name":     name,
-        "Variable": "MainCluster",
+        "Variable": "truth",
         "Title":    title,
-        "X": float(run[tree]["RecoX"][idx]),
-        "Y": float(run[tree]["RecoY"][idx]),
-        "Z": float(run[tree]["RecoZ"][idx]),
-        "E": float(run[tree]["SignalParticleK"][idx]),
-        "PDG": str(run[tree]["MainPDG"][idx]),
-        "Event": event_num,
-    })
-    adj_x   = [v for v in run[tree]["AdjClRecoX"][idx]    if v != 0 and v > -1e6]
-    adj_y   = [v for v in run[tree]["AdjClRecoY"][idx]    if v != 0 and v > -1e6]
-    adj_z   = [v for v in run[tree]["AdjClRecoZ"][idx]    if v != 0 and v > -1e6]
-    adj_pdg = [v for v in run[tree]["AdjClMainPDG"][idx]  if v != 0]
-    n = min(len(adj_x), len(adj_y), len(adj_z))
-    for i in range(n):
+        "Event":    event_num,
+        "X":        x[:n],
+        "Y":        y[:n],
+        "Z":        z[:n],
+        "E":        e[:n],
+        "PDG":      pdg[:n],
+        "Charge":   [float("nan")] * n,
+        "Purity":   [float("nan")] * n,
+    }]
+
+    # CC daughters — matches "square-open" markers in plot_edep_event
+    cc_x   = [v for v in run[tree]["TSignalX"][idx]   if v != 0]
+    cc_y   = [v for v in run[tree]["TSignalY"][idx]   if v != 0]
+    cc_z   = [v for v in run[tree]["TSignalZ"][idx]   if v != 0]
+    cc_pdg = [str(v) for v in run[tree]["TSignalPDG"][idx] if v not in [0, 1000190419]]
+    nc     = min(len(cc_x), len(cc_y), len(cc_z), len(cc_pdg))
+    if nc > 0:
         rows.append({
             "Config":   config,
             "Name":     name,
-            "Variable": "AdjCluster",
+            "Variable": "ccint",
             "Title":    title,
-            "X": adj_x[i],
-            "Y": adj_y[i],
-            "Z": adj_z[i],
-            "E": float("nan"),
-            "PDG": str(adj_pdg[i]) if i < len(adj_pdg) else "0",
-            "Event": event_num,
+            "Event":    event_num,
+            "X":        cc_x[:nc],
+            "Y":        cc_y[:nc],
+            "Z":        cc_z[:nc],
+            "E":        [float("nan")] * nc,
+            "PDG":      cc_pdg[:nc],
+            "Charge":   [float("nan")] * nc,
+            "Purity":   [float("nan")] * nc,
         })
+
     return pd.DataFrame(rows)
+
+
+def _build_tpc_df(run, config, name, idx, tree="Reco"):
+    event_num = int(run[tree]["Event"][idx])
+    nu_energy = float(run[tree]["SignalParticleE"][idx])
+    title     = f"Neutrino CC Interaction on LAr. $E_\\nu$ = {nu_energy:.2f} MeV"
+
+    # truth: neutrino vertex + CC daughters
+    d_x   = [v for v in run[tree]["TSignalX"][idx]   if v != 0]
+    d_y   = [v for v in run[tree]["TSignalY"][idx]   if v != 0]
+    d_z   = [v for v in run[tree]["TSignalZ"][idx]   if v != 0]
+    d_pdg = [str(v) for v in run[tree]["TSignalPDG"][idx] if v not in [0, 1000190419]]
+    nd    = min(len(d_x), len(d_y), len(d_z), len(d_pdg))
+    truth_x   = [float(run[tree]["SignalParticleX"][idx])] + d_x[:nd]
+    truth_y   = [float(run[tree]["SignalParticleY"][idx])] + d_y[:nd]
+    truth_z   = [float(run[tree]["SignalParticleZ"][idx])] + d_z[:nd]
+    truth_e   = [float(run[tree]["SignalParticleE"][idx])] + [float("nan")] * nd
+    truth_pdg = ["12"] + d_pdg[:nd]
+
+    # reco: main cluster + adj clusters
+    adj_x   = [v for v in run[tree]["AdjClRecoX"][idx]   if v != 0 and v > -1e6]
+    adj_y   = [v for v in run[tree]["AdjClRecoY"][idx]   if v != 0 and v > -1e6]
+    adj_z   = [v for v in run[tree]["AdjClRecoZ"][idx]   if v != 0 and v > -1e6]
+    adj_pdg = [str(v) for v in run[tree]["AdjClMainPDG"][idx] if v != 0]
+    adj_q   = [v for v in run[tree]["AdjClCharge"][idx]  if v != 0]
+    na      = min(len(adj_x), len(adj_y), len(adj_z))
+    reco_x   = [float(run[tree]["RecoX"][idx])]           + adj_x[:na]
+    reco_y   = [float(run[tree]["RecoY"][idx])]           + adj_y[:na]
+    reco_z   = [float(run[tree]["RecoZ"][idx])]           + adj_z[:na]
+    reco_e   = [float(run[tree]["SignalParticleK"][idx])] + [float("nan")] * na
+    reco_pdg = [str(run[tree]["MainPDG"][idx])]           + adj_pdg[:na]
+    reco_q   = [float(run[tree]["Charge"][idx])]          + [float(v) for v in adj_q[:na]]
+
+    return pd.DataFrame([
+        {
+            "Config": config, "Name": name, "Variable": "truth",
+            "Title": title, "Event": event_num,
+            "X": truth_x, "Y": truth_y, "Z": truth_z,
+            "E": truth_e, "PDG": truth_pdg,
+            "Charge": [float("nan")] * len(truth_x),
+            "Purity": [float("nan")] * len(truth_x),
+        },
+        {
+            "Config": config, "Name": name, "Variable": "reco",
+            "Title": title, "Event": event_num,
+            "X": reco_x, "Y": reco_y, "Z": reco_z,
+            "E": reco_e, "PDG": reco_pdg,
+            "Charge": reco_q,
+            "Purity": [float(run[tree]["Purity"][idx])] + [float(v) for v in run[tree]["AdjClPur"][idx][:na]],
+        },
+    ])
 
 
 def _extract_2d_fig(fig):
@@ -216,6 +247,21 @@ def _save_fig(fig, args, filename):
 
 
 # ---------------------------------------------------------------------------
+# Legend helpers
+# ---------------------------------------------------------------------------
+
+def _relabel_edep_legend(fig):
+    """Rename plot_edep_event's internal legend groups to physics-meaningful labels.
+
+    plot_edep_event assigns:
+      legendgroup="1" (title "Raw")    → Geant4 energy deposits
+      legendgroup="0" (title "Reco")   → CC daughter track starts (truth, not reco)
+    """
+    fig.update_traces(legendgrouptitle_text="EDep Truth",   selector=dict(legendgroup="1"))
+    fig.update_traces(legendgrouptitle_text="Signal Truth", selector=dict(legendgroup="0"))
+
+
+# ---------------------------------------------------------------------------
 # Per-workflow runners
 # ---------------------------------------------------------------------------
 
@@ -238,16 +284,24 @@ def run_edep(args, event_idx):
         debug=args.debug,
     )
 
+    if event_idx is not None:
+        truth_matches = np.where(np.asarray(run["Truth"]["Event"]) == event_idx)[0]
+        if len(truth_matches) == 0:
+            raise ValueError(f"Event {event_idx} not found in EDep Truth array")
+        event_idx = int(truth_matches[0])
+
     fig, idx = plot_edep_event(run, configs, idx=event_idx, tracked="Truth", zoom=False)
     fig.update_layout(width=1200, height=600)
+    _relabel_edep_legend(fig)
 
+    event_num = int(run["Truth"]["Event"][idx])
     if not args.no_show:
         fig.show()
     if args.save:
-        _save_fig(fig, args, f"EDep_event_{idx}")
+        _save_fig(fig, args, f"{config}_{name}_EDep_event_{event_num}")
 
     df = _build_edep_df(run, config, name, idx, tree="Truth")
-    return fig, idx, df
+    return fig, event_num, df
 
 
 def run_adjflash(args, event_idx):
@@ -285,7 +339,7 @@ def run_adjflash(args, event_idx):
     if not args.no_show:
         fig.show()
     if args.save:
-        _save_fig(fig, args, f"PDS_event_{idx}")
+        _save_fig(fig, args, f"{config}_{name}_PDS_event_{idx}")
 
     return fig, idx
 
@@ -321,7 +375,7 @@ def run_ophit(args, event_idx):
     if not args.no_show:
         fig.show()
     if args.save:
-        _save_fig(fig, args, f"OpHit_event_{idx}")
+        _save_fig(fig, args, f"{config}_{name}_OpHit_event_{idx}")
 
     return fig, idx
 
@@ -335,17 +389,43 @@ def run_tpc(args, event_idx):
     run = compute_reco_workflow(run, configs, params={}, workflow="VERTEXING", debug=False)
 
     info = json.load(open(ROOT / "config" / config / f"{config}_config.json"))
+    run["Reco"]["NAdjCl"] = np.sum(run["Reco"]["AdjClCharge"] > 0, axis=1)
+
+    tpc_params = {
+        ("Reco", "Geometry"): ("equal", info["GEOMETRY"]),
+        ("Reco", "Version"):  ("equal", info["VERSION"]),
+    }
+    if args.cut_flash:
+        tpc_params[("Reco", "MatchedOpFlashPur")] = ("bigger", 0)
+    if args.cut_energy is not None:
+        tpc_params[("Reco", "SignalParticleK")] = ("smaller", args.cut_energy)
+    if args.min_adjcl is not None:
+        tpc_params[("Reco", "NAdjCl")] = ("bigger", args.min_adjcl - 1)
+
     this_run, _, _ = compute_filtered_run(
         run, configs,
         presets=["VERTEXING"],
-        params={
-            ("Reco", "Geometry"):         ("equal", info["GEOMETRY"]),
-            ("Reco", "Version"):          ("equal", info["VERSION"]),
-            ("Reco", "MatchedOpFlashPur"): ("bigger", 0),
-            ("Reco", "SignalParticleK"):   ("smaller", 20),
-        },
+        params=tpc_params,
         debug=args.debug,
     )
+
+    reco = this_run["Reco"]
+    if "AdjClRecoX" not in reco:
+        adj_dt = reco["AdjClTime"] - reco["Time"][:, np.newaxis]
+        recox  = reco["RecoX"][:, np.newaxis]
+        scale  = info["DETECTOR_SIZE_X"] / 2 / info["EVENT_TICKS"]
+        sign   = np.where(reco["TPC"][:, np.newaxis] % 2 == 0, 1.0, -1.0)
+        reco["AdjClRecoX"] = adj_dt * sign * scale + recox
+    if "AdjClRecoY" not in reco:
+        reco["AdjClRecoY"] = reco["AdjClMainY"]
+    if "AdjClRecoZ" not in reco:
+        reco["AdjClRecoZ"] = reco["AdjClMainZ"]
+
+    if event_idx is not None:
+        matches = np.where(np.asarray(this_run["Reco"]["Event"]) == event_idx)[0]
+        if len(matches) == 0:
+            raise ValueError(f"Event {event_idx} not found in TPC filtered array (filtered out by cuts?)")
+        event_idx = int(matches[0])
 
     fig, idx = plot_tpc_event(
         this_run, configs,
@@ -354,17 +434,99 @@ def run_tpc(args, event_idx):
         adjclnum=1,
         get_adj_color=True,
         unzoom=1.25,
+        projection=args.layout,
         debug=args.debug,
     )
     fig.update_layout(width=1200, height=600)
 
     if not args.no_show:
         fig.show()
+    event_num = int(this_run["Reco"]["Event"][idx])
     if args.save:
-        _save_fig(fig, args, f"TPC_event_{idx}")
+        _save_fig(fig, args, f"{config}_{name}_TPC_event_{event_num}")
 
     df = _build_tpc_df(this_run, config, name, idx, tree="Reco")
-    return fig, idx, df
+    return fig, event_num, df
+
+
+# ---------------------------------------------------------------------------
+# Hybrid EDep + TPC
+# ---------------------------------------------------------------------------
+
+def run_edep_tpc(args, event_idx):
+    config = getattr(args, "tpc_config")
+    name   = getattr(args, "tpc_name")
+    configs = {config: [name]}
+
+    # EDEP: truth deposits (same ROOT file as VERTEXING → event numbers match)
+    run_e, _ = load_multi(configs, preset="EDEP", debug=args.debug)
+    run_e = compute_reco_workflow(run_e, configs, {}, workflow="EDEP", debug=args.debug)
+
+    # VERTEXING: reco clusters (main + adj) with correctly reconstructed RecoX/Y/Z
+    run_v, _ = load_multi(configs, preset="VERTEXING", debug=args.debug)
+
+    info = json.load(open(ROOT / "config" / config / f"{config}_config.json"))
+
+    # Same AdjClRecoX fix as run_tpc
+    reco_v = run_v["Reco"]
+    if "AdjClRecoX" not in reco_v:
+        adj_dt = reco_v["AdjClTime"] - reco_v["Time"][:, np.newaxis]
+        scale  = info["DETECTOR_SIZE_X"] / 2 / info["EVENT_TICKS"]
+        sign   = np.where(reco_v["TPC"][:, np.newaxis] % 2 == 0, 1.0, -1.0)
+        reco_v["AdjClRecoX"] = adj_dt * sign * scale + reco_v["RecoX"][:, np.newaxis]
+    if "AdjClRecoY" not in reco_v:
+        reco_v["AdjClRecoY"] = reco_v["AdjClMainY"]
+    if "AdjClRecoZ" not in reco_v:
+        reco_v["AdjClRecoZ"] = reco_v["AdjClMainZ"]
+
+    # Resolve --event to EDEP Truth array index
+    if event_idx is not None:
+        truth_matches = np.where(np.asarray(run_e["Truth"]["Event"]) == event_idx)[0]
+        if len(truth_matches) == 0:
+            raise ValueError(f"Event {event_idx} not found in EDep Truth array")
+        truth_edep_idx = int(truth_matches[0])
+    else:
+        truth_edep_idx = None
+
+    # Truth EDep deposits → base figure
+    fig, truth_idx = plot_edep_event(run_e, configs, idx=truth_edep_idx,
+                                     tracked="Truth", zoom=False)
+    fig.update_layout(width=1200, height=600)
+    _relabel_edep_legend(fig)
+    event_num = int(run_e["Truth"]["Event"][truth_idx])
+
+    # Overlay VERTEXING reco clusters (main + adj)
+    reco_matches = np.where(np.asarray(run_v["Reco"]["Event"]) == event_num)[0]
+    tpc_reco_df = None
+    if len(reco_matches) > 0:
+        r = int(reco_matches[0])
+        tpc_reco_df = _build_tpc_df(run_v, config, name, r, tree="Reco")
+        reco_row = tpc_reco_df[tpc_reco_df["Variable"] == "reco"].iloc[0]
+
+        # Main cluster (index 0) + adj clusters (1+) in one overlay call
+        reco_xyz  = [reco_row["X"], reco_row["Y"], reco_row["Z"]]
+        reco_pdgs = reco_row["PDG"]
+        colors = ["red"] + [
+            list(get_pdg_color([pdg]).values())[0] for pdg in reco_pdgs[1:]
+        ]
+        symbols = ["circle"] + ["circle-open"] * (len(reco_pdgs) - 1)
+        fig = add_data_to_event(fig, info["GEOMETRY"], reco_xyz, "2",
+                                "Reco Cluster", "main",
+                                reco_pdgs, symbols, 15, colors, {"lw": 1},
+                                projection=args.layout)
+
+    if not args.no_show:
+        fig.show()
+    if args.save:
+        _save_fig(fig, args, f"{config}_{name}_EDep-TPC_event_{event_num}")
+
+    edep_df = _build_edep_df(run_e, config, name, truth_idx, tree="Truth")
+    # edep-tpc: truth=edep deposits only, reco=RecoXYZ+AdjCl (no ccint row)
+    df = edep_df[edep_df["Variable"] == "truth"].copy()
+    if tpc_reco_df is not None:
+        df = pd.concat([df, tpc_reco_df[tpc_reco_df["Variable"] == "reco"].copy()],
+                       ignore_index=True)
+    return fig, event_num, df
 
 
 # ---------------------------------------------------------------------------
@@ -381,31 +543,42 @@ def main():
     plots = set(args.plots)
     dfs = {}
 
+    # When edep+tpc both run without a fixed event, TPC drives event selection
+    # so we only pick events that exist in both Truth and VERTEXING Reco.
+    synced_event = args.event
+    if "tpc" in plots:
+        print("[TPC] Loading and plotting...")
+        _, tpc_idx, tpc_df = run_tpc(args, synced_event)
+        dfs["tpc"] = (args.tpc_config, args.tpc_name, tpc_idx, tpc_df)
+        print(f"[TPC] Done — event {tpc_idx}, {len(tpc_df)} cluster points")
+        synced_event = tpc_idx  # propagate resolved event number to other plots
+
     if "edep" in plots:
         print("[EDep] Loading and plotting...")
-        _, edep_idx, edep_df = run_edep(args, args.event)
+        _, edep_idx, edep_df = run_edep(args, synced_event)
         dfs["edep"] = (args.edep_config, args.edep_name, edep_idx, edep_df)
         print(f"[EDep] Done — event {edep_idx}, {len(edep_df)} deposition points")
 
     if "adjflash" in plots:
         print("[AdjFlash] Loading and plotting...")
-        _, adjflash_idx = run_adjflash(args, args.event)
+        _, adjflash_idx = run_adjflash(args, synced_event)
         print(f"[AdjFlash] Done — event {adjflash_idx}")
 
     if "ophit" in plots:
         print("[OpHit] Loading and plotting...")
-        _, ophit_idx = run_ophit(args, args.event)
+        _, ophit_idx = run_ophit(args, synced_event)
         print(f"[OpHit] Done — event {ophit_idx}")
 
-    if "tpc" in plots:
-        print("[TPC] Loading and plotting...")
-        _, tpc_idx, tpc_df = run_tpc(args, args.event)
-        dfs["tpc"] = (args.tpc_config, args.tpc_name, tpc_idx, tpc_df)
-        print(f"[TPC] Done — event {tpc_idx}, {len(tpc_df)} cluster points")
+    if "edep-tpc" in plots:
+        print("[EDep-TPC] Loading and plotting...")
+        _, hybrid_idx, hybrid_df = run_edep_tpc(args, synced_event)
+        dfs["edep-tpc"] = (args.tpc_config, args.tpc_name, hybrid_idx, hybrid_df)
+        print(f"[EDep-TPC] Done — event {hybrid_idx}, {len(hybrid_df)} rows")
+        synced_event = hybrid_idx
 
     if args.save:
         for plot, (cfg, nm, evt, df) in dfs.items():
-            pkl_path = args.data_output / f"{cfg}_{nm}_event_{evt}_display.pkl"
+            pkl_path = args.data_output / f"{cfg}_{nm}_{plot}_event_{evt}_display.pkl"
             df.to_pickle(pkl_path)
             print(f"Saved DataFrame → {pkl_path}")
 

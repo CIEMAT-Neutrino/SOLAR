@@ -28,7 +28,7 @@ parser.add_argument(
     default="hd_1x2x6_centralAPA",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
+    "--signal", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
     "--reference_analysis",
@@ -93,6 +93,7 @@ parser.add_argument(
     help="The energy for the analysis",
     choices=[
         "SignalParticleK",
+        "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -124,6 +125,18 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Fa
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--test", action=argparse.BooleanOptionalAction)
 parser.add_argument(
+    "--study_label",
+    type=str,
+    default=None,
+    help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
+)
+parser.add_argument(
+    "--charge_threshold",
+    type=float,
+    default=0,
+    help="Charge threshold Q (ADC). When >0, reads signal/background templates from labeled subfolders.",
+)
+parser.add_argument(
     "--workers",
     type=int,
     default=None,
@@ -137,8 +150,12 @@ args = parser.parse_args()
 if args.debug:
     rprint(args)
 
+_ctx = study_context(args)
+_study_suffix    = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
+
 config = args.config
-name = args.name
+name = args.signal
 configs = {config: [name]}
 
 threshold = args.threshold
@@ -201,18 +218,20 @@ def resolve_background_template(background_path: str, config: str, nhits: int, a
 
 
 def _load_best_cut_map(info: dict, args, config: str, name: str):
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference_analysis.upper()]))
     tried = []
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{config}/{name}/"
-            f"{config}_{name}_highest_{analysis}.pkl"
-        )
-        tried.append(filepath)
-        if os.path.exists(filepath):
-            if args.debug:
-                rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}")
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{config}/{name}/"
+                f"{config}_{name}_highest_{analysis}{suffix}.pkl"
+            )
+            tried.append(filepath)
+            if os.path.exists(filepath):
+                if args.debug:
+                    rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                return pickle.load(open(filepath, "rb"))
 
     rprint(
         "[yellow][WARNING][/yellow] Unable to load any best-cut map. Checked:\n"
@@ -301,8 +320,8 @@ for config in configs:
         energy = args.energy
 
         paths = {
-            "signal_path": f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}",
-            "background_path": f"{info['PATH']}/SENSITIVITY/{config}/background/{args.folder.lower()}/{energy}",
+            "signal_path": f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}{_template_suffix}",
+            "background_path": f"{info['PATH']}/SENSITIVITY/{config}/background/{args.folder.lower()}/{energy}{_template_suffix}",
         }
 
         cut_entries = _resolve_cut_entries(paths, info, args, analysis_info, config, name)
@@ -588,7 +607,7 @@ for config in configs:
                 f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}",
                 config=config,
                 name=name,
-                filename="highest_SENSITIVITY",
+                filename=f"highest_SENSITIVITY{_study_suffix}",
                 rm=args.rewrite,
                 debug=args.debug,
             )
@@ -600,6 +619,7 @@ for config in configs:
             for (cfg, nm, en), values in best_payload.items():
                 # Flatten to config/energy level (all samples combined)
                 json_payload.setdefault(cfg, {}).setdefault(en, {}).update(values)
+            _json_stem = f"highest_Sensitivity{_study_suffix}"
             for local_dir in [
                 f"{root}/config/{config}/sensitivity-json/{args.folder.lower()}",
                 f"{root}/config/{config}/best-sigma-json/sensitivity/{args.folder.lower()}",
@@ -607,7 +627,7 @@ for config in configs:
                 if not os.path.exists(local_dir):
                     os.makedirs(local_dir)
                 merge_and_write_json(
-                    f"{local_dir}/{config}_highest_Sensitivity.json",
+                    f"{local_dir}/{config}_{_json_stem}.json",
                     json_payload,
                     debug=args.debug,
                 )

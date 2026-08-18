@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(
     description="Plot precomputed sensitivity templates without regenerating them"
 )
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
-parser.add_argument("--name", type=str, default="marley")
+parser.add_argument("--signal", type=str, default="marley")
 parser.add_argument(
     "--reference",
     type=str,
@@ -34,7 +34,7 @@ parser.add_argument(
     "--energy",
     type=str,
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -74,14 +74,17 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation backend used when computing templates. Determines fallback for nadir axis when pkl is absent.",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
 
-
-if not os.path.exists(f"{save_path}/{args.folder.lower()}"):
-    os.makedirs(f"{save_path}/{args.folder.lower()}")
+_ctx = study_context(args)
+_save_subfolder   = _ctx.save_subfolder
+_save_folder_path = f"{save_path}/{_save_subfolder}"
+if not os.path.exists(_save_folder_path):
+    os.makedirs(_save_folder_path)
 
 
 analysis_info = load_analysis_info(str(root))
@@ -89,14 +92,16 @@ info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json")
 
 
 def load_best_cut_map() -> Optional[dict]:
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.name}/"
-            f"{args.config}_{args.name}_highest_{analysis}.pkl"
-        )
-        if os.path.exists(filepath):
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            )
+            if os.path.exists(filepath):
+                return pickle.load(open(filepath, "rb"))
     return None
 
 
@@ -108,7 +113,7 @@ def select_cuts() -> Optional[Tuple[int, int, int]]:
     if best_map is None:
         return None
 
-    key = (args.config, args.name, args.energy)
+    key = (args.config, args.signal, args.energy)
     selected = best_map.get(key)
     if selected is None and len(best_map) > 0:
         selected = next(iter(best_map.values()))
@@ -158,16 +163,16 @@ def load_signal_template(nhits: int, ophits: int, adjcl: int):
     sin12 = analysis_info["SIN12"] if args.sin12 is None else float(args.sin12)
 
     exact = (
-        f"{info['PATH']}/SENSITIVITY/{args.config}/{args.name}/{args.folder.lower()}/{args.energy}/"
-        f"{args.config}_{args.name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+        f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}/"
+        f"{args.config}_{args.signal}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
         f"_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
     )
     if os.path.exists(exact):
         return exact, np.asarray(pd.read_pickle(exact), dtype=float)
 
     pattern = (
-        f"{info['PATH']}/SENSITIVITY/{args.config}/{args.name}/{args.folder.lower()}/{args.energy}/"
-        f"{args.config}_{args.name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_*_sin13_*_sin12_*.pkl"
+        f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}/"
+        f"{args.config}_{args.signal}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_*_sin13_*_sin12_*.pkl"
     )
     matches = sorted(glob_files(pattern))
     if not matches:
@@ -198,7 +203,7 @@ def load_oscillation_axis() -> np.ndarray:
 cuts = select_cuts()
 if cuts is None:
     rprint(
-        f"[yellow][WARNING][/yellow] Unable to resolve cut triplet for {args.config} {args.name} {args.energy}."
+        f"[yellow][WARNING][/yellow] Unable to resolve cut triplet for {args.config} {args.signal} {args.energy}."
     )
     raise SystemExit(0)
 
@@ -254,8 +259,8 @@ if signal_template is not None:
     _sig_tmpl_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", range=[sensitivity_rebin_centers.min(), sensitivity_rebin_centers.max()])
     _sig_tmpl_fig.update_yaxes(title="cos(η) Nadir Angle", range=[-1.0, 1.0])
     save_figure(
-        _sig_tmpl_fig, f"{save_path}/{args.folder.lower()}",
-        config=args.config, name=args.name, subfolder=None,
+        _sig_tmpl_fig, _save_folder_path,
+        config=args.config, name=args.signal, subfolder=None,
         filename=f"SignalTemplate_{args.energy}",
         rm=args.rewrite, debug=args.plot,
     )
@@ -281,8 +286,8 @@ if background_template is not None:
     _bkg_tmpl_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", range=[sensitivity_rebin_centers.min(), sensitivity_rebin_centers.max()])
     _bkg_tmpl_fig.update_yaxes(title="cos(η) Nadir Angle", range=[-1.0, 1.0])
     save_figure(
-        _bkg_tmpl_fig, f"{save_path}/{args.folder.lower()}",
-        config=args.config, name=args.name, subfolder=None,
+        _bkg_tmpl_fig, _save_folder_path,
+        config=args.config, name=args.signal, subfolder=None,
         filename=f"BackgroundTemplate_{args.energy}",
         rm=args.rewrite, debug=args.plot,
     )
@@ -325,7 +330,7 @@ for idx, (title, template_data, colorscale, use_log) in enumerate(panel_specs, s
 fig = format_coustom_plotly(
     fig,
     title=(
-        f"Sensitivity Templates {args.config} {args.name} {args.energy} "
+        f"Sensitivity Templates {args.config} {args.signal} {args.energy} "
         f"NHits{nhits_value} OpHits{ophits_value} AdjCl{adjcl_value}"
     ),
     tickformat=(".1f", ".1f"),
@@ -343,9 +348,9 @@ fig.update_layout(
 figure_name = f"Sensitivity_Templates_{args.energy}_NHits{nhits_value}_AdjCl{adjcl_value}_OpHits{ophits_value}"
 save_figure(
     fig,
-    f"{save_path}/{args.folder.lower()}",
+    _save_folder_path,
     config=args.config,
-    name=args.name,
+    name=args.signal,
     subfolder=None,
     filename=figure_name,
     rm=args.rewrite,
@@ -365,7 +370,7 @@ for _component, _tmpl in [("Signal", signal_template), ("Background", background
         continue
     _template_rows.append({
         "Config":      args.config,
-        "Name":        args.name,
+        "Name":        args.signal,
         "EnergyLabel": args.energy,
         "Folder":      args.folder,
         "NHits":       int(nhits_value),
@@ -381,8 +386,8 @@ if _template_rows:
         pd.DataFrame(_template_rows),
         data_path,
         config=args.config,
-        name=args.name,
-        subfolder=args.folder.lower(),
+        name=args.signal,
+        subfolder=_save_subfolder,
         filename=f"{args.energy}_Sensitivity_Templates",
         rm=args.rewrite,
         debug=args.debug,

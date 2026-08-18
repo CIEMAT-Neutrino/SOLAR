@@ -22,7 +22,7 @@ parser.add_argument(
     default="hd_1x2x6_centralAPA",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
+    "--signal", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
     "--folder",
@@ -38,6 +38,7 @@ parser.add_argument(
     help="The energy for the analysis",
     choices=[
         "SignalParticleK",
+        "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -58,13 +59,12 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
 )
-
 args = parser.parse_args()
 config = args.config
-name = args.name
+name = args.signal
 configs = {config: [name]}
 sample_key = name.split("_")[0].lower()
 
@@ -131,7 +131,7 @@ run = compute_reco_workflow(
             "PARTICLE_WEIGHTING": "volume",
             "OSCILLATION_BACKEND": args.oscillation_backend,
         }
-        if "marley" in args.name
+        if "marley" in args.signal
         else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
     ),
     rm_branches=False,
@@ -168,7 +168,7 @@ for config in configs:
         _reco_y_arr   = run["Reco"]["RecoY"]
         _reco_z_arr   = run["Reco"]["RecoZ"]
         _energy_arr   = run["Reco"][energy]
-        _is_marley    = "marley" in args.name
+        _is_marley    = "marley" in args.signal
 
         _n_bins        = len(reco_energy_edges) - 1
         _all_bin_idx   = np.digitize(_energy_arr, reco_energy_edges) - 1
@@ -208,7 +208,7 @@ for config in configs:
                     user_input["colors"][sample_key],
                 ),
             ),
-            total=(3 if "marley" in args.name else 1)
+            total=(3 if "marley" in args.signal else 1)
             * len(np.arange(0.00, detector_x / 4, 20))
             * len(np.arange(0.00, detector_y / 4, 20))
             * len(np.arange(0.00, detector_z / 4, 20)),

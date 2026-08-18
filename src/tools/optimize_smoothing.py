@@ -307,7 +307,7 @@ def run_optimization(config: str, name: str, energy: str, folder: str,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", nargs="+", required=True)
-    parser.add_argument("--name", nargs="+", default=["marley"])
+    parser.add_argument("--signal", nargs="+", default=["marley"])
     parser.add_argument(
         "--energy", nargs="+",
         default=["SolarEnergy"],
@@ -340,7 +340,7 @@ def main():
     base_dir = Path(args.output_dir) if args.output_dir else Path(str(root)) / "output" / "data" / "smoothing"
 
     for config, name, energy, analysis in product(
-        args.config, args.name, args.energy, args.analysis
+        args.config, args.signal, args.energy, args.analysis
     ):
         out_dir = base_dir / config / name
         run_optimization(config, name, energy, args.folder, analysis,

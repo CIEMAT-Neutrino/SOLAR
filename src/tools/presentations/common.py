@@ -54,8 +54,8 @@ def analysis_json_globs(analysis, filename_pattern):
     pnfs_dir = Path('/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR') / analysis_key
     return [
         str(pnfs_dir / '*' / '*' / 'marley' / filename_pattern),
-        str(ROOT / 'config' / '*' / f'best-sigma-json' / analysis_dir / '*' / '*' / filename_pattern),
-        str(ROOT / 'config' / '*' / f'{analysis_dir}-json' / '*' / '*' / filename_pattern),
+        str(ROOT / 'config' / '*' / f'best-sigma-json' / analysis_dir / '*' / filename_pattern),
+        str(ROOT / 'config' / '*' / f'{analysis_dir}-json' / '*' / filename_pattern),
     ]
 
 

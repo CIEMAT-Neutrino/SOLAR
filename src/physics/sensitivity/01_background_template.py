@@ -15,7 +15,7 @@ save_path = f"{root}/output/images/analysis/sensitivity/templates"
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-# Define flags for the analysis config and args.name with the python parser
+# Define flags for the analysis config and args.signal with the python parser
 parser = argparse.ArgumentParser(
     description="Plot the energy distribution of the particles"
 )
@@ -33,7 +33,7 @@ parser.add_argument(
     default="hd_1x2x6_centralAPA",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
+    "--signal", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
     "--folder",
@@ -65,7 +65,7 @@ parser.add_argument(
     type=str,
     help="The energy for the analysis",
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -89,11 +89,15 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation backend. 'file' uses pre-computed pkl files for the nadir axis; 'prob3'/'nufast' derive it from config/analysis/physics.json.",
 )
+parser.add_argument("--study_label", type=str, default=None,
+    help="Tag appended to template subfolder and used to locate labeled background Rebins for charge study variants.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix = _ctx.study_suffix
 if args.debug:
     rprint(args)
 # smoothing_config = get_smoothing_config(
@@ -109,18 +113,20 @@ smoothing_info = smoothing_metadata(smoothing_config_1d)
 
 
 def _load_best_cut_map(info: dict, args):
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.name}/"
-            f"{args.config}_{args.name}_highest_{analysis}.pkl"
-        )
-        tried.append(filepath)
-        if os.path.exists(filepath):
-            if args.debug:
-                rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}")
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            )
+            tried.append(filepath)
+            if os.path.exists(filepath):
+                if args.debug:
+                    rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                return pickle.load(open(filepath, "rb"))
 
     rprint(
         "[yellow][WARNING][/yellow] Unable to load any best-cut map. Checked:\n"
@@ -170,7 +176,7 @@ detector_mass = get_full_detector_mass(args.config, info)
 
 df_list = []
 background_samples = []
-for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy):
+for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=args.study_label):
     bkg_df = pd.read_pickle(filepath)
     df_list.append(bkg_df)
     background_samples.append(bkg)
@@ -228,7 +234,7 @@ _nadir_fig = format_coustom_plotly(
 _nadir_fig.update_xaxes(title="cos(η) Zenith Angle")
 _nadir_fig.update_yaxes(title="Time-Fraction per Bin")
 save_figure(
-    _nadir_fig, save_path, config=args.config, name=args.name, subfolder=args.folder.lower(),
+    _nadir_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
     filename="NadirDistribution", rm=args.rewrite, debug=args.plot,
 )
 
@@ -351,8 +357,9 @@ for idx, cut in enumerate(cut_entries):
             row=1,
             col=1,
         )
-        # print(total)
-        # print(y)
+        if len(y) != len(total):
+            rprint(f"[yellow][WARNING][/yellow] Bin count mismatch for {bkg}: expected {len(total)}, got {len(y)}. Stale pkl — regenerate with current sensitivity_rebin. Skipping.")
+            continue
         total = total + np.array(y)
         total_error = total_error + y_error**2
 
@@ -390,7 +397,7 @@ for idx, cut in enumerate(cut_entries):
         _bkg_1d_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
         _bkg_1d_fig.update_yaxes(title="Counts per Energy (kt·yr·MeV)⁻¹", type="log", range=[-1, 7])
         save_figure(
-            _bkg_1d_fig, save_path, config=args.config, name=args.name, subfolder=args.folder.lower(),
+            _bkg_1d_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
             filename=f"Background1D_{energy}", rm=args.rewrite, debug=args.plot,
         )
 
@@ -413,7 +420,7 @@ for idx, cut in enumerate(cut_entries):
         f"{info['PATH']}/SENSITIVITY",
         config=args.config,
         name=f"background",
-        subfolder=f"{args.folder.lower()}/{energy}",
+        subfolder=f"{args.folder.lower()}/{energy}{_study_suffix}",
         filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
         rm=args.rewrite,
         debug=args.debug,
@@ -521,7 +528,7 @@ for idx, cut in enumerate(cut_entries):
         fig,
         f"{save_path}",
         config=args.config,
-        name=args.name,
+        name=args.signal,
         subfolder=args.folder.lower(),
         filename=f"Background_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
         rm=args.rewrite,

@@ -53,13 +53,13 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="Sensitivity")
 parser.add_argument("--config",   type=str, default="hd_1x2x6_centralAPA")
-parser.add_argument("--name",     type=str, default="marley")
+parser.add_argument("--signal",     type=str, default="marley")
 parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal"], default="Truncated")
 parser.add_argument("--energy",   type=str, default="SolarEnergy",
-    choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+    choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--exposure", type=float, default=30)
 parser.add_argument(
-    "--oscillation_backend", type=str, choices=["file", "prob3", "nufast"], default="file",
+    "--oscillation_backend", type=str, choices=["file", "prob3", "nufast"], default="nufast",
     help="'file': load pre-computed pkl; 'prob3'/'nufast': compute on-the-fly.",
 )
 parser.add_argument(
@@ -73,11 +73,14 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_save_subfolder = _ctx.save_subfolder
 
 config = args.config
-name   = args.name
+name   = args.signal
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 _analysis_dir = {
@@ -196,7 +199,7 @@ _osc_df = pd.DataFrame([{
 save_df(
     _osc_df, data_path,
     config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Oscillogram",
     rm=args.rewrite, debug=args.plot,
 )
@@ -232,7 +235,7 @@ _fig_osc.update_xaxes(title_text="True Neutrino Energy (MeV)")
 _fig_osc.update_yaxes(title_text="cos(η) Nadir Angle")
 save_figure(
     _fig_osc, save_path, config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Oscillogram_{args.energy}",
     rm=args.rewrite, debug=args.plot,
 )
@@ -259,7 +262,7 @@ _fig_osc_w.update_xaxes(title_text="True Neutrino Energy (MeV)")
 _fig_osc_w.update_yaxes(title_text="cos(η) Nadir Angle")
 save_figure(
     _fig_osc_w, save_path, config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Oscillogram_NadirWeighted_{args.energy}",
     rm=args.rewrite, debug=args.plot,
 )
@@ -287,7 +290,7 @@ _fig_proj.update_xaxes(title_text="True Neutrino Energy (MeV)")
 _fig_proj.update_yaxes(title_text="⟨P(νe→νe)⟩")
 save_figure(
     _fig_proj, save_path, config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Oscillogram_NadirProjection_{args.energy}",
     rm=args.rewrite, debug=args.plot,
 )
@@ -297,7 +300,7 @@ if not args.signal_1d:
     rprint("[bold green]oscillogram_plot complete.[/bold green]")
     raise SystemExit(0)
 
-_ref_dir = os.path.join(export_path, config, name, args.folder.lower())
+_ref_dir = os.path.join(export_path, config, name, _save_subfolder)
 
 
 def _load_ref(filename: str) -> np.ndarray:
@@ -353,7 +356,7 @@ _sig_df = pd.DataFrame(_sig_records)
 save_df(
     _sig_df, data_path,
     config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Signal1D_{args.energy}",
     rm=args.rewrite, debug=args.debug,
 )
@@ -380,7 +383,7 @@ _fig_1d.update_xaxes(title_text=f"Reconstructed Energy — {args.energy} (MeV)")
 _fig_1d.update_yaxes(title_text="Events / (kt·yr · MeV)")
 save_figure(
     _fig_1d, save_path, config=config, name=name,
-    subfolder=args.folder.lower(),
+    subfolder=_save_subfolder,
     filename=f"Signal1D_{args.energy}_FidOnly",
     rm=args.rewrite, debug=args.plot,
 )

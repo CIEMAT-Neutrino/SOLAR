@@ -10,11 +10,11 @@ parser = argparse.ArgumentParser(
                 "(sin²θ₁₂ vs Δm²₂₁ and sin²θ₁₃ vs Δm²₂₁)."
 )
 parser.add_argument("--config",  type=str, default="hd_1x2x6_centralAPA")
-parser.add_argument("--name",    type=str, default="marley")
+parser.add_argument("--signal",    type=str, default="marley")
 parser.add_argument("--folder",  type=str, default="Nominal",
                     choices=["Reduced", "Truncated", "Nominal"])
 parser.add_argument("--energy",  type=str, default="SolarEnergy",
-                    choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy",
+                    choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy",
                              "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--nhits",   type=int, default=None)
 parser.add_argument("--ophits",  type=int, default=None)
@@ -39,6 +39,7 @@ parser.add_argument(
     "--smooth_window", type=int, default=11,
     help="Savitzky-Golay window length for 1D chi2 profiles (odd int ≥ 5; 0 = no smoothing).",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
 
 # ── NuFit 6.1 (2025) reference data ────────────────────────────────────────────
@@ -160,16 +161,18 @@ def _has_coverage(vals: np.ndarray, chi2: np.ndarray, label: str, fig, row: int,
 # ── path helpers ────────────────────────────────────────────────────────────────
 
 def _load_best_cut_map(info: dict):
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.name}/"
-            f"{args.config}_{args.name}_highest_{analysis}.pkl"
-        )
-        if os.path.exists(filepath):
-            if args.debug:
-                rprint(f"[cyan][INFO][/cyan] Best-cut map from {analysis}: {filepath}")
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            )
+            if os.path.exists(filepath):
+                if args.debug:
+                    rprint(f"[cyan][INFO][/cyan] Best-cut map from {analysis}{suffix}: {filepath}")
+                return pickle.load(open(filepath, "rb"))
     rprint("[yellow][WARNING][/yellow] No best-cut map found; falling back to defaults.")
     return None
 
@@ -178,7 +181,7 @@ def _resolve_cuts(info):
     if args.nhits is not None and args.adjcls is not None and args.ophits is not None:
         return args.nhits, args.adjcls, args.ophits
     cut_map = _load_best_cut_map(info)
-    key = (args.config, args.name, args.energy)
+    key = (args.config, args.signal, args.energy)
     if cut_map is not None and key in cut_map:
         c = cut_map[key]
         return int(c["NHits"]), int(c["AdjCl"]), int(c["OpHits"])
@@ -187,7 +190,7 @@ def _resolve_cuts(info):
 
 
 def _results_path(info, nhits, adjcl, ophits, profile_name):
-    sig_path = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.name}/{args.folder.lower()}/{args.energy}"
+    sig_path = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}"
     suffix = (
         f"signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
         if args.background
@@ -199,6 +202,8 @@ def _results_path(info, nhits, adjcl, ophits, profile_name):
 # ── main ────────────────────────────────────────────────────────────────────────
 
 save_path = f"{root}/output/images/analysis/sensitivity"
+if args.study_label:
+    save_path = f"{save_path}/{args.study_label}"
 os.makedirs(save_path, exist_ok=True)
 
 info         = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
@@ -212,7 +217,7 @@ data_path = _results_path(info, nhits, adjcl, ophits, profile_name)
 
 rprint(f"[cyan][INFO][/cyan] Loading chi2 dataframes from {data_path}")
 
-prefix = f"{data_path}/{args.name}_{args.energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+prefix = f"{data_path}/{args.signal}_{args.energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
 
 solar_sin12_df = pd.read_pickle(f"{prefix}_solar_sin12_df.pkl").astype(float)
 solar_sin13_df = pd.read_pickle(f"{prefix}_solar_sin13_df.pkl").astype(float)
@@ -279,8 +284,8 @@ DUNE_COLOR_REACT = "#ff7f0e"
 
 compare_tag = "_NuFit61" if args.compare else ""
 _cut_tag    = f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
-_base_tag   = f"{args.config}_{args.name}_{args.folder}_{args.energy}_{_cut_tag}"
-_subtitle   = f"{args.config} · {args.name} · {args.folder} · {args.energy} · {_cut_tag}"
+_base_tag   = f"{args.config}_{args.signal}_{args.folder}_{args.energy}_{_cut_tag}"
+_subtitle   = f"{args.config} · {args.signal} · {args.folder} · {args.energy} · {_cut_tag}"
 
 
 def _add_sigma_lines(fig, row, col):

@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(
     allow_abbrev=False,
 )
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Nominal")
 parser.add_argument("--signal_uncertainty", type=float, default=0.00)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
@@ -78,6 +78,12 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
+    "--study_label",
+    type=str,
+    default=None,
+    help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
+)
+parser.add_argument(
     "--all_metrics",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -99,6 +105,8 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix = _ctx.study_suffix
 if args.debug:
     rprint(args)
 explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
@@ -173,18 +181,22 @@ if args.debug:
         f"[cyan][INFO][/cyan] DayNight smoothing method={smoothing_info['SmoothingMethod']} sigma={smoothing_info.get('SmoothingSigma', 0.0):.2f} enabled={smoothing_info['SmoothingEnabled']}"
     )
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
     sigmas = []
     significance_bins = []
-    plot_df = pd.read_pickle(
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
+    _rebin_study_path = (
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin_{args.study_label}.pkl"
+        if args.study_label else None
     )
+    _rebin_std_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
+    _rebin_path = _rebin_study_path if (_rebin_study_path and os.path.exists(_rebin_study_path)) else _rebin_std_path
+    plot_df = pd.read_pickle(_rebin_path)
     configured_backgrounds = get_background_samples(str(root), "DAYNIGHT")
     loaded_backgrounds = []
-    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
+    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy, study_label=args.study_label):
         bkg_df = pd.read_pickle(filepath)
         plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
         loaded_backgrounds.append(bkg)
@@ -665,7 +677,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
         config=config,
         name=name,
-        filename=f"{energy}_DayNight_Results",
+        filename=f"{energy}_DayNight_Results{_study_suffix}",
         key_cols=["Config", "Name", "Energy", "NHits", "OpHits", "AdjCl"],
         debug=args.debug,
     )
@@ -674,7 +686,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
         config=config,
         name=name,
-        filename=f"{energy}_DayNight_Results",
+        filename=f"{energy}_DayNight_Results{_study_suffix}",
         rm=args.rewrite,
         debug=args.debug,
     )
@@ -685,7 +697,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
             config=config,
             name=name,
-            filename=f"{energy}_DayNight_SignificanceBins",
+            filename=f"{energy}_DayNight_SignificanceBins{_study_suffix}",
             rm=args.rewrite,
             debug=args.debug,
         )

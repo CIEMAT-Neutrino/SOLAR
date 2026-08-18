@@ -71,6 +71,7 @@ from lib import *
 
 ENERGY_CHOICES = [
     "SignalParticleK",
+    "MainK",
     "ClusterEnergy",
     "TotalEnergy",
     "SelectedEnergy",
@@ -226,11 +227,12 @@ parser.add_argument(
     default=["hd_1x2x6_centralAPA"],
 )
 parser.add_argument(
-    "--names",
+    "--signals",
     nargs="+",
     type=str,
-    help="The sample names to process",
-    default=["marley", "gamma", "neutron", "radiological"],
+    help="Signal source name(s) to process (e.g. marley, marley_official). "
+         "Background components (gamma, neutron, radiological) are auto-discovered from analysis config.",
+    default=["marley"],
 )
 parser.add_argument(
     "--analysis",
@@ -258,9 +260,10 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis in years",
-    default=30,
+    help="The exposure for the analysis in years. When not set, each script uses its own default (significance_plot.py reads EVALUATION_EXPOSURE_YEARS from config).",
+    default=None,
 )
+
 parser.add_argument(
     "--signal_uncertainty",
     type=float,
@@ -284,6 +287,7 @@ parser.add_argument(
 parser.add_argument("--nhits", type=int, help="The nhit cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
+parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC) passed to 03_analysis.py. Default 0 (no charge cut).")
 parser.add_argument(
     "--fiducial_mc_threshold",
     type=float,
@@ -424,6 +428,15 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--dm2",
+    type=float,
+    default=None,
+    help=(
+        "Override oscillation Δm²₂₁ (eV²) propagated to signal Rebin stages. "
+        "Default: SOLAR_DM2 from physics.json. Ignored for 'file' backend."
+    ),
+)
+parser.add_argument(
     "--optimization",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -468,6 +481,27 @@ parser.add_argument(
     help=(
         "Run signal/04_weighted.py after the cut scan to write per-NHits weighted "
         "distribution DataFrames to output/data/solar/nhits/. Off by default."
+    ),
+)
+parser.add_argument(
+    "--study_label",
+    type=str,
+    default=None,
+    help=(
+        "Tag appended to output pkl filenames and image subdirectories to isolate study "
+        "variants from the main analysis. E.g. 'unc_sig6' produces "
+        "{config}_{name}_SENSITIVITY_Significance_full_unc_sig6.pkl alongside the nominal. "
+        "When None (default), all output paths are identical to the main analysis."
+    ),
+)
+parser.add_argument(
+    "--skip_best_cuts",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Skip the 04_best_cuts.py step in the Sensitivity pipeline. "
+        "Use when running study variants to preserve the nominal best-cut selection. "
+        "Pass --skip_best_cuts to enable."
     ),
 )
 
@@ -529,6 +563,7 @@ def exposure_arg_for() -> List[str]:
 
 
 
+
 def cut_args_for() -> List[str]:
     cut_args: List[str] = []
     if args.nhits is not None:
@@ -539,6 +574,20 @@ def cut_args_for() -> List[str]:
         cut_args.extend(["--adjcls", str(args.adjcls)])
     return cut_args
 
+
+def charge_scan_args_for() -> List[str]:
+    if args.charge_threshold > 0:
+        result = ["--charge_threshold", str(args.charge_threshold)]
+        if args.study_label:
+            result += ["--study_label", args.study_label]
+        return result
+    return []
+
+
+def charge_threshold_only_args_for() -> List[str]:
+    if args.charge_threshold > 0:
+        return ["--charge_threshold", str(args.charge_threshold)]
+    return []
 
 
 def common_analysis_args_for(energies: List[str]) -> List[str]:
@@ -562,7 +611,16 @@ def base_args_for(config: str, folder: str, include_background: bool = False) ->
 
 
 def oscillation_args_for() -> List[str]:
-    return ["--oscillation_backend", args.oscillation_backend]
+    result = ["--oscillation_backend", args.oscillation_backend]
+    if args.dm2 is not None:
+        result += ["--dm2", str(args.dm2)]
+    return result
+
+
+def study_label_args_for() -> List[str]:
+    if args.study_label:
+        return ["--study_label", args.study_label]
+    return []
 
 
 def stacked_args_for() -> List[str]:
@@ -599,26 +657,29 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
 
     if args.fiducialization:
         for name in available_names:
-            sample_args = base_args + ["--name", name]
+            sample_args = base_args + ["--signal", name]
             run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + oscillation_args_for())
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/01_fiducialize.py (--no-fiducialization).")
 
-    for name in available_names:
-        if "marley" not in name:
-            continue
-        sample_args = base_args + ["--name", name]
-        run_analysis_script(
-            "src/physics/signal/02_best_fiducial.py",
-            sample_args
-            + energy_args
-            + exposure_args
-            + analysis_selection_args
-            + ["--mc_threshold", str(args.fiducial_mc_threshold)],
-        )
+    if args.fiducialization:
+        for name in available_names:
+            if "marley" not in name:
+                continue
+            sample_args = base_args + ["--signal", name]
+            run_analysis_script(
+                "src/physics/signal/02_best_fiducial.py",
+                sample_args
+                + energy_args
+                + exposure_args
+                + analysis_selection_args
+                + ["--mc_threshold", str(args.fiducial_mc_threshold)],
+            )
+    else:
+        rprint("[cyan][INFO][/cyan] Skipping signal/02_best_fiducial.py (--no-fiducialization).")
 
     # Visualize fiducial results before lengthy analysis
-    plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", available_names[0]]
+    plot_base_args = base_args_for(config, folder, include_background=False) + ["--signal", available_names[0]]
     run_analysis_script(
         "src/physics/common/significance_plot.py",
         plot_base_args + energy_args_for(args.energy) + exposure_arg_for()
@@ -628,13 +689,14 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
     if args.rebin:
         for name in available_names:
-            sample_args = base_args + ["--name", name]
+            sample_args = base_args + ["--signal", name]
             run_analysis_script(
                 "src/physics/signal/03_analysis.py",
                 sample_args
                 + analysis_selection_args
                 + energy_args
                 + cut_args
+                + charge_scan_args_for()
                 + oscillation_args_for()
                 + ["--export_fiducial"],
             )
@@ -642,13 +704,14 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
         rprint("[cyan][INFO][/cyan] Skipping signal/03_analysis.py cut scan (--no-rebin).")
         # Still export raw arrays + FiducializationMask even when skipping cut scan
         for name in available_names:
-            sample_args = base_args + ["--name", name]
+            sample_args = base_args + ["--signal", name]
             run_analysis_script(
                 "src/physics/signal/03_analysis.py",
                 sample_args
                 + analysis_selection_args
                 + energy_args
                 + cut_args
+                + charge_scan_args_for()
                 + oscillation_args_for()
                 + ["--export_fiducial", "--skip_scan", "--no-plot"],
             )
@@ -657,7 +720,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
         for name in available_names:
             run_analysis_script(
                 "src/physics/signal/04_weighted.py",
-                base_args_for(config, folder, include_background=False) + ["--name", name] + oscillation_args_for(),
+                base_args_for(config, folder, include_background=False) + ["--signal", name] + oscillation_args_for(),
             )
 
 
@@ -707,7 +770,7 @@ def run_smoothing_optimization(config: str, folder: str, name: str, analysis_nam
     command = [
         "python3", script_path,
         "--config", config,
-        "--name", name,
+        "--signal", name,
         "--folder", folder,
         "--analysis", analysis_name,
         "--strategy", args.smoothing_strategy,
@@ -721,8 +784,8 @@ def run_smoothing_optimization(config: str, folder: str, name: str, analysis_nam
 
 def run_daynight_stage(config: str, folder: str, name: str):
     run_smoothing_optimization(config, folder, name, "DayNight")
-    plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
-    analysis_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
+    plot_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
+    analysis_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
     common_args = common_analysis_args_for(args.energy)
     selector_args = energy_args_for(args.energy) + cut_args_for()
     reference = args.reference or "Smoothed"
@@ -752,8 +815,8 @@ def run_daynight_stage(config: str, folder: str, name: str):
 
 def run_hep_stage(config: str, folder: str, name: str):
     run_smoothing_optimization(config, folder, name, "HEP")
-    plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
-    analysis_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
+    plot_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
+    analysis_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
     common_args = common_analysis_args_for(args.energy)
     selector_args = energy_args_for(args.energy) + cut_args_for()
     reference = args.reference or "Smoothed"
@@ -792,33 +855,35 @@ def run_hep_stage(config: str, folder: str, name: str):
         candidate_thresholds = [10, 5, 2, 1, 0]
         selected_by_energy = []
 
+        # Use labeled Rebin pkls for charge variants — no fallback to nominal.
+        _rebin_study_label = args.study_label if args.charge_threshold > 0 else None
         for energy in energies:
             signal_path = (
                 f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{folder.lower()}/HEP/"
+                f"{config}/{name}/{config}_{name}_{energy}_Rebin_{_rebin_study_label}.pkl"
+                if _rebin_study_label
+                else f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{folder.lower()}/HEP/"
                 f"{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
             )
             if not os.path.exists(signal_path):
-                rprint(
-                    f"[yellow][WARNING][/yellow] Missing HEP signal file for auto mc-threshold selection: {signal_path}. "
-                    "Using mc_threshold=0 for this energy."
+                raise SystemExit(
+                    f"[ERROR] Missing HEP signal Rebin pkl for auto mc-threshold selection: {signal_path}\n"
+                    "Run the cut scan (03_analysis.py) for this config/folder first."
                 )
-                selected_by_energy.append(0)
-                continue
 
             plot_df = pd.read_pickle(signal_path)
             for _, filepath in load_available_background_dataframes(
-                str(root), "HEP", folder, config, energy
+                str(root), "HEP", folder, config, energy,
+                study_label=_rebin_study_label,
             ):
                 bkg_df = pd.read_pickle(filepath)
                 plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
 
             if plot_df.empty or "Energy" not in plot_df.columns:
-                rprint(
-                    f"[yellow][WARNING][/yellow] Invalid HEP input dataframe while auto-selecting mc-threshold "
-                    f"for {config} {name} {energy}. Using mc_threshold=0."
+                raise SystemExit(
+                    f"[ERROR] Invalid HEP input dataframe for auto mc-threshold selection: "
+                    f"{config} {name} {energy}. DataFrame is empty or missing 'Energy' column."
                 )
-                selected_by_energy.append(0)
-                continue
 
             energy_axis = np.asarray(plot_df.iloc[0]["Energy"], dtype=float)
             hep_threshold = get_analysis_threshold(
@@ -827,8 +892,10 @@ def run_hep_stage(config: str, folder: str, name: str):
             threshold_idx = int(np.searchsorted(energy_axis, hep_threshold, side="left"))
             cut_rows = plot_df[["NHits", "OpHits", "AdjCl"]].drop_duplicates()
             if cut_rows.empty:
-                selected_by_energy.append(0)
-                continue
+                raise SystemExit(
+                    f"[ERROR] No NHits/OpHits/AdjCl cut rows found in HEP dataframe for "
+                    f"{config} {name} {energy}."
+                )
 
             mc_by_component = {component: {} for component in essential_components}
             for component in essential_components:
@@ -948,8 +1015,9 @@ def run_hep_stage(config: str, folder: str, name: str):
 
 def run_sensitivity_stage(config: str, folder: str, name: str):
     run_smoothing_optimization(config, folder, name, "Sensitivity")
-    plot_base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
-    background_base_args = base_args_for(config, folder, include_background=True) + ["--name", name]
+    plot_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
+    template_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for() + charge_threshold_only_args_for()
+    background_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name] + study_label_args_for()
     uncertainty_args = uncertainty_args_for("SENSITIVITY")
     reference_args = ["--reference", "SENSITIVITY"]
 
@@ -972,23 +1040,27 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             # Phase 1 — background templates (all cuts)
             run_analysis_script(
                 "src/physics/sensitivity/03_template_compute.py",
-                plot_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for(),
+                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for(),
             )
-            # Phase 2 — cut optimisation: score all background-candidate cuts, write highest_SENSITIVITY.pkl
-            run_analysis_script(
-                "src/physics/sensitivity/04_best_cuts.py",
-                background_base_args + energy_args + uncertainty_args + oscillation_args_for(),
-            )
+            # Phase 2 — cut optimisation: score all background-candidate cuts, write highest_SENSITIVITY{_study_suffix}.pkl
+            if not args.skip_best_cuts:
+                cutopt_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name]
+                run_analysis_script(
+                    "src/physics/sensitivity/04_best_cuts.py",
+                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for(),
+                )
+            else:
+                rprint("[cyan][INFO][/cyan] Skipping 04_best_cuts.py (--skip_best_cuts): using existing best-cut selection.")
             # Phase 3 — full signal template grid for the selected best cut
             run_analysis_script(
                 "src/physics/sensitivity/03_template_compute.py",
-                plot_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for(),
+                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for(),
             )
             # Phase 4 — sensitivity analysis with best cut (no re-optimisation)
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + nuisance_profile_args_for(profile_name) + oscillation_args_for(),
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for(),
                 )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
@@ -997,11 +1069,11 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         for profile_name in profile_names:
             run_analysis_script(
                 "src/physics/sensitivity/contour_plot.py",
-                background_base_args + reference_args + energy_args + nuisance_profile_args_for(profile_name),
+                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for(),
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
-                background_base_args + energy_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name),
+                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for(),
             )
         run_analysis_script(
             "src/physics/common/significance_plot.py",
@@ -1019,7 +1091,7 @@ def run_oscillogram_stage(config: str, folder: str, name: str):
     """
     if not args.plot:
         return
-    base_args = base_args_for(config, folder, include_background=False) + ["--name", name]
+    base_args = base_args_for(config, folder, include_background=False) + ["--signal", name]
     for analysis_name in args.analysis:
         for energy in args.energy:
             run_analysis_script(
@@ -1047,18 +1119,23 @@ def run_presentations():
                 run_presentation_script(script_name, energy, folder=folder, stop_on_error=False)
 
 
+_background_component_names: List[str] = list(
+    analysis_info.get("BACKGROUND_SAMPLES", {}).get("default", [])
+)
+
 for config, folder in product(args.config, args.folder):
     available_names = []
     skipped_by_policy = []
     missing_essential = []
     missing_optional = []
 
-    for name in args.names:
+    _signal_keys = {s.split("_")[0].lower() for s in args.signals}
+    for name in list(args.signals) + _background_component_names:
         sample_key = name.split("_")[0].lower()
         component_is_essential = is_essential_component(sample_key, analysis_info)
         is_explicitly_in_analysis = sample_key in selected_background_components
 
-        if sample_key != "marley" and not component_is_essential and not is_explicitly_in_analysis:
+        if sample_key not in _signal_keys and not component_is_essential and not is_explicitly_in_analysis:
             skipped_by_policy.append(name)
             continue
 
@@ -1099,7 +1176,7 @@ for config, folder in product(args.config, args.folder):
     # Show fiducial selections early, right after best_fiducial optimization completes
 
     for name in available_names:
-        if "marley" not in name:
+        if name not in args.signals:
             continue
         if "DayNight" in args.analysis:
             run_daynight_stage(config, folder, name)
@@ -1109,14 +1186,14 @@ for config, folder in product(args.config, args.folder):
             run_sensitivity_stage(config, folder, name)
         run_oscillogram_stage(config, folder, name)
 
-    # Pass 3: post-analysis — export AnalysisMask at best cuts for all productions
-    # Best-cuts JSONs exist for marley; apply same cuts to all samples
+    # Pass 3: post-analysis — export AnalysisMask at best cuts for all productions and analyses
+    # Best-cuts JSONs: Sensitivity from 04_best_cuts.py, HEP/DayNight from 05_best_sigmas.py
     if args.computation:
         base_args = base_args_for(config, folder, include_background=False)
         analysis_selection_args = ["--analysis", *args.analysis]
         energy_args = energy_args_for(args.energy)
         for name in available_names:
-            sample_args = base_args + ["--name", name]
+            sample_args = base_args + ["--signal", name]
             run_analysis_script(
                 "src/physics/signal/03_analysis.py",
                 sample_args

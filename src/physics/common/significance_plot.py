@@ -395,11 +395,11 @@ parser.add_argument(
 )
 # shared
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--signal_uncertainty", type=float, default=None)
 parser.add_argument("--background_uncertainty", type=float, default=None)
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for plot scaling. Defaults to EVALUATION_EXPOSURE_YEARS from config (20 if not set).")
 parser.add_argument(
     "--energy", nargs="+", type=str,
     default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
@@ -446,10 +446,21 @@ parser.add_argument(
     default="AsimovTS",
     help="Overlay metric shown in HEP intuitive lower panel",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 # ── post-parse defaults ────────────────────────────────────────────────────────
+
+if args.exposure is None:
+    _params_path = f"{root}/config/{args.config[0]}/{args.config[0]}_params.json"
+    _config_exposure = 20.0
+    if os.path.exists(_params_path):
+        _config_exposure = float(json.load(open(_params_path)).get("EVALUATION_EXPOSURE_YEARS", 20.0))
+    args.exposure = _config_exposure
 
 if args.reference is None:
     if args.analysis == "DayNight":
@@ -521,7 +532,7 @@ _significance_list = []
 
 # ── main loop ──────────────────────────────────────────────────────────────────
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
@@ -529,20 +540,30 @@ for config, name, energy in product(args.config, args.name, args.energy):
     # DayNight
     # ══════════════════════════════════════════════════════════════════════════
     if args.analysis == "DayNight":
-        sigma = pickle.load(
-            open(
-                f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.name[0]}"
-                f"/{config}_{args.name[0]}_highest_DayNight.pkl",
-                "rb",
-            )
+        _dn_labeled = (
+            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.signal[0]}"
+            f"/{config}_{args.signal[0]}_highest_DayNight{_study_suffix}.pkl"
+        ) if _study_suffix else None
+        _dn_nominal = (
+            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.signal[0]}"
+            f"/{config}_{args.signal[0]}_highest_DayNight.pkl"
         )
-        sigmas_df = pd.read_pickle(
+        _dn_path = _dn_labeled if (_dn_labeled and os.path.exists(_dn_labeled)) else _dn_nominal
+        if not os.path.exists(_dn_path):
+            rprint(f"[yellow][WARNING][/yellow] Missing DayNight best-cut map: {_dn_path}. Skipping config {config}.")
+            continue
+        sigma = pickle.load(open(_dn_path, "rb"))
+        _dn_results_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results{_study_suffix}.pkl"
         )
+        if not os.path.exists(_dn_results_path):
+            rprint(f"[yellow][WARNING][/yellow] Missing DayNight Results pkl for {config} {name} {energy}. Skipping.")
+            continue
+        sigmas_df = pd.read_pickle(_dn_results_path)
         significance_bins_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins{_study_suffix}.pkl"
         )
         if not os.path.exists(significance_bins_path):
             rprint(f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}.")
@@ -552,10 +573,14 @@ for config, name, energy in product(args.config, args.name, args.energy):
             rprint(f"[yellow][WARNING][/yellow] Empty or invalid SignificanceBins pkl for {config} {name} {energy}. Regenerate with the DayNight significance pipeline.")
             continue
 
-        plot_df = pd.read_pickle(
+        _rebin_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
             f"/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
         )
+        if not os.path.exists(_rebin_path):
+            rprint(f"[yellow][WARNING][/yellow] Missing Rebin pkl for {config} {name} {energy}. Skipping.")
+            continue
+        plot_df = pd.read_pickle(_rebin_path)
         background_samples = []
         for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
             plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
@@ -721,7 +746,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": args.exposure, "ExposureUnit": "year",
                     "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-                    "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": r"counts \cdot MeV^{-1}",
+                    "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
                     "CountsError": np.asarray(errors_per_energy).tolist(),
                     "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
                     "SignificanceUnit": r"\sigma",
@@ -818,7 +843,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             x_range=[6.75, 26], figure_name=figure_name,
             positive_count_values=positive_count_values,
             log_default_range=[-2, np.log10(detector_mass * args.exposure * 1e4)],
-            save_path=save_path, config=config, save_name=name, folder=args.folder.lower(),
+            save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
             rewrite=args.rewrite, debug_plot=args.plot,
             stacked_range=[False, True] if args.stacked else [False],
             zoom=args.zoom, threshold=args.threshold,
@@ -832,18 +857,18 @@ for config, name, energy in product(args.config, args.name, args.energy):
             [pd.DataFrame(_counts_list), pd.DataFrame(_significance_list)],
             ["DayNight_Counts", "DayNight_Significance"],
         ):
-            _merged = upsert_df_rows(df, data_path, config, name, subfolder=args.folder.lower(), filename=df_name, debug=args.debug)
+            _merged = upsert_df_rows(df, data_path, config, name, subfolder=_save_subfolder, filename=df_name, debug=args.debug)
             save_df(
                 _merged, data_path, config, name,
-                subfolder=args.folder.lower(), filename=df_name,
+                subfolder=_save_subfolder, filename=df_name,
                 rm=True, debug=True if df_name == "DayNight_Counts" else args.debug,
             )
             if df_name == "DayNight_Counts":
-                _merged_local = upsert_df_rows(df, local_data_path, config, name, subfolder=args.folder.lower(), filename=df_name)
+                _merged_local = upsert_df_rows(df, local_data_path, config, name, subfolder=_save_subfolder, filename=df_name)
                 save_df(
                     _merged_local, local_data_path, config, name,
-                    subfolder=args.folder.lower(), filename=df_name,
-                    rm=True, debug=False,
+                    subfolder=_save_subfolder, filename=df_name,
+                    rm=True, debug=True,
                 )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -852,7 +877,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
     elif args.analysis == "HEP":
         sigma_map_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{args.pkl_label}_HEP.pkl"
+            f"/{config}/{name}/{config}_{name}_{args.pkl_label}_HEP{_study_suffix}.pkl"
         )
         if not os.path.exists(sigma_map_path):
             rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for {config} {name}: {sigma_map_path}")
@@ -871,7 +896,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
         significance_bins_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins{_study_suffix}.pkl"
         )
         if not os.path.exists(significance_bins_path):
             rprint(f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}.")
@@ -1179,7 +1204,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 lower_y_title=reference_label if mode == "rigorous" else local_proxy_label,
                 x_range=[8, 30], figure_name=_hep_figure_name,
                 positive_count_values=positive_count_values, log_default_range=[-2, 10],
-                save_path=save_path, config=config, save_name=name, folder=args.folder.lower(),
+                save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
                 rewrite=args.rewrite, debug_plot=args.plot,
                 stacked_range=[False, True] if args.stacked else [False],
                 zoom=args.zoom, threshold=args.threshold,
@@ -1247,7 +1272,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": args.exposure, "ExposureUnit": "year",
                     "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr[tail_slice]).tolist(), "CountsUnit": f"{args.exposure:.0f} year",
+                    "Counts": (scale * cnt_arr[tail_slice] / no_rebin_width).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
                     "CountsError": None,
                     "Significance": (
                         raw_local_density.tolist() if (_is_sig and spec_type == "Raw")
@@ -1260,23 +1285,23 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
         if args.pkl_label == "highest":
             _hep_counts_df = pd.DataFrame(_counts_list)
-            _merged_hc = upsert_df_rows(_hep_counts_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Counts", debug=args.debug)
+            _merged_hc = upsert_df_rows(_hep_counts_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Counts", debug=args.debug)
             save_df(
-                _merged_hc, data_path, config=args.config[0], name=args.name[0],
-                subfolder=args.folder.lower(), filename="HEP_Counts",
+                _merged_hc, data_path, config=args.config[0], name=args.signal[0],
+                subfolder=_save_subfolder, filename="HEP_Counts",
                 rm=True, debug=True,
             )
-            _merged_hc_local = upsert_df_rows(_hep_counts_df, local_data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Counts")
+            _merged_hc_local = upsert_df_rows(_hep_counts_df, local_data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Counts")
             save_df(
-                _merged_hc_local, local_data_path, config=args.config[0], name=args.name[0],
-                subfolder=args.folder.lower(), filename="HEP_Counts",
-                rm=True, debug=False,
+                _merged_hc_local, local_data_path, config=args.config[0], name=args.signal[0],
+                subfolder=_save_subfolder, filename="HEP_Counts",
+                rm=True, debug=True,
             )
             _hep_sig_df = pd.DataFrame(_significance_list)
-            _merged_hs = upsert_df_rows(_hep_sig_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename="HEP_Significance", debug=args.debug)
+            _merged_hs = upsert_df_rows(_hep_sig_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Significance", debug=args.debug)
             save_df(
-                _merged_hs, data_path, config=args.config[0], name=args.name[0],
-                subfolder=args.folder.lower(), filename="HEP_Significance",
+                _merged_hs, data_path, config=args.config[0], name=args.signal[0],
+                subfolder=_save_subfolder, filename="HEP_Significance",
                 rm=True, debug=args.debug,
             )
 
@@ -1284,10 +1309,15 @@ for config, name, energy in product(args.config, args.name, args.energy):
     # Sensitivity
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "Sensitivity":
-        best_cut_path = (
+        _bc_labeled = (
+            f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}"
+            f"/{config}/{name}/{config}_{name}_highest_SENSITIVITY{_study_suffix}.pkl"
+        ) if _study_suffix else None
+        _bc_nominal = (
             f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}"
             f"/{config}/{name}/{config}_{name}_highest_SENSITIVITY.pkl"
         )
+        best_cut_path = _bc_labeled if (_bc_labeled and os.path.exists(_bc_labeled)) else _bc_nominal
         if not os.path.exists(best_cut_path):
             rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for Sensitivity {config} {name}: {best_cut_path}")
             continue
@@ -1388,8 +1418,8 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": args.exposure, "ExposureUnit": "year",
                     "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr).tolist(), "CountsUnit": f"{args.exposure:.0f} year",
-                    "CountsError": (scale * err_arr).tolist(),
+                    "Counts": (scale * cnt_arr / bin_widths).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
+                    "CountsError": (scale * err_arr / bin_widths).tolist(),
                     "Significance": None,
                     "SignificanceUnit": None,
                     "SignificanceLabel": None,
@@ -1437,7 +1467,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             upper_y_title="Counts", lower_y_title="Asimov TS density",
             x_range=None, figure_name=figure_name,
             positive_count_values=positive_count_values, log_default_range=[-2, 10],
-            save_path=save_path, config=config, save_name=name, folder=args.folder.lower(),
+            save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
             rewrite=args.rewrite, debug_plot=args.plot,
             stacked_range=[False, True] if args.stacked else [False],
             zoom=args.zoom, threshold=args.threshold,
@@ -1460,30 +1490,30 @@ for config, name, energy in product(args.config, args.name, args.energy):
         })
 
         _sens_counts_df = pd.DataFrame(_counts_list)
-        _merged_sc = upsert_df_rows(_sens_counts_df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Counts", debug=args.debug)
+        _merged_sc = upsert_df_rows(_sens_counts_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts", debug=args.debug)
         save_df(
             _merged_sc, data_path, config=config, name=name,
-            subfolder=args.folder.lower(), filename="Sensitivity_Counts",
+            subfolder=_save_subfolder, filename="Sensitivity_Counts",
             rm=True, debug=True,
         )
-        _merged_sc_local = upsert_df_rows(_sens_counts_df, local_data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Counts")
+        _merged_sc_local = upsert_df_rows(_sens_counts_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts")
         save_df(
             _merged_sc_local, local_data_path, config=config, name=name,
-            subfolder=args.folder.lower(), filename="Sensitivity_Counts",
-            rm=True, debug=False,
+            subfolder=_save_subfolder, filename="Sensitivity_Counts",
+            rm=True, debug=True,
         )
         _sens_sig_df = pd.DataFrame(_significance_list)
-        _merged_ss = upsert_df_rows(_sens_sig_df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Significance", debug=args.debug)
+        _merged_ss = upsert_df_rows(_sens_sig_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance", debug=args.debug)
         save_df(
             _merged_ss, data_path, config=config, name=name,
-            subfolder=args.folder.lower(), filename="Sensitivity_Significance",
+            subfolder=_save_subfolder, filename="Sensitivity_Significance",
             rm=True, debug=args.debug,
         )
-        _merged_ss_local = upsert_df_rows(_sens_sig_df, local_data_path, config=config, name=name, subfolder=args.folder.lower(), filename="Sensitivity_Significance")
+        _merged_ss_local = upsert_df_rows(_sens_sig_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance")
         save_df(
             _merged_ss_local, local_data_path, config=config, name=name,
-            subfolder=args.folder.lower(), filename="Sensitivity_Significance",
-            rm=True, debug=False,
+            subfolder=_save_subfolder, filename="Sensitivity_Significance",
+            rm=True, debug=True,
         )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1580,7 +1610,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     lower_y_title="Significance (σ)",
                     x_range=[-2, 32], figure_name=f"{energy}_{analysis_key}_{fiducial_label}Fiducial_Significance",
                     positive_count_values=positive_count_values, log_default_range=[-2, 10],
-                    save_path=save_path, config=config, save_name=name, folder=args.folder.lower(),
+                    save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
                     rewrite=args.rewrite, debug_plot=args.plot,
                     stacked_range=[args.stacked],
                     zoom=args.zoom, threshold=None,

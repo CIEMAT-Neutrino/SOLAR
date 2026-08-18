@@ -189,31 +189,34 @@ def gather_best_sigma_rows(energy):
     row_map = {}
     patterns = [
         str(PNFS_HEP / "*" / "*" / "marley" / "*_highest_HEP.json"),
-        str(LOCAL_JSON / "*" / "hep-json" / "*" / "*" / "*_highest_HEP.json"),
+        str(LOCAL_JSON / "*" / "hep-json" / "*" / "*_highest_HEP.json"),
     ]
 
     for pattern in patterns:
         for json_path in sorted(glob(pattern)):
             p = Path(json_path)
-            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-3]
+            folder = p.parts[-4] if "/pnfs/" in json_path else p.parts[-2]
             if folder not in rows:
                 continue
 
             payload = read_json(p)
-            for cfg, samples in payload.items():
-                marley = samples.get("marley", {})
-                if not marley:
+            for cfg, energies in payload.items():
+                # Old PNFS files may retain {config: {name: {energy: {...}}}} — unwrap if needed
+                first_val = next(iter(energies.values()), None)
+                if isinstance(first_val, dict) and "NHits" not in first_val:
+                    energies = energies.get("marley", {})
+                if not energies:
                     continue
 
                 selected_key = None
                 for candidate in energy_candidates(energy):
-                    if candidate in marley:
+                    if candidate in energies:
                         selected_key = candidate
                         break
                 if selected_key is None:
                     continue
 
-                vals = marley[selected_key]
+                vals = energies[selected_key]
                 row_key = (folder, cfg, selected_key)
                 if row_key in row_map:
                     continue
@@ -1020,7 +1023,7 @@ def build_markdown(
     ### Workflow Outputs
 
     - Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
-    - Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
+    - Best cut summaries (JSON): [config/*/hep-json/{{folder}}/{{config}}_highest_HEP.json](../../config)
     - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
     - Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)
 

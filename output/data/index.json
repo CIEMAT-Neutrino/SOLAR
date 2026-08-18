@@ -1,5 +1,5 @@
 {
-  "_generated": "2026-07-25T09:57:58+00:00",
+  "_generated": "2026-07-25T14:21:59+00:00",
   "_description": "Nested directory tree of output/data/. Each leaf is {size_bytes, type, themes, publication_export}. Regenerate with: python3 src/tools/generate_data_index.py",
   "_root": "output/data",
   "_registry": "config/analysis/pkl_paths.json",
@@ -83,7 +83,7 @@
     "event/hd_1x2x6_centralAPA_marley_edep_event_8179_display.pkl",
     "event/hd_1x2x6_centralAPA_marley_edep_event_8719_display.pkl"
   ],
-  "file_count": 2107,
+  "file_count": 2187,
   "tree": {
     "PDS": {
       "adjopflash": {
@@ -4155,6 +4155,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204425,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_marley_official_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 325365,
               "type": "pkl",
@@ -4181,6 +4189,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_marley_ophit_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204422,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_marley_ophit_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 334891,
               "type": "pkl",
@@ -4195,6 +4211,14 @@
           "gamma": {
             "hd_1x2x6_centralAPA_gamma_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 50413426,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_gamma_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204426,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4227,6 +4251,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_marley_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204427,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_marley_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 487624,
               "type": "pkl",
@@ -4253,6 +4285,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_marley_exponent0_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204437,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_marley_exponent0_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 508874,
               "type": "pkl",
@@ -4265,6 +4305,14 @@
           "marley_exponent1": {
             "hd_1x2x6_centralAPA_marley_exponent1_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 7729105,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_marley_exponent1_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204437,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4289,6 +4337,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_marley_exponent2_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204437,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_marley_exponent2_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 487634,
               "type": "pkl",
@@ -4307,6 +4363,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_marley_maximum_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204435,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_marley_maximum_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 487632,
               "type": "pkl",
@@ -4319,6 +4383,14 @@
           "marley_official": {
             "hd_1x2x6_centralAPA_marley_official_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 45696236,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204436,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4351,6 +4423,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_neutron_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204428,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_neutron_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 253229,
               "type": "pkl",
@@ -4363,6 +4443,14 @@
           "radiological": {
             "hd_1x2x6_centralAPA_radiological_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 460213193,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_radiological_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204433,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4383,6 +4471,14 @@
           "gamma": {
             "hd_1x2x6_lateralAPA_gamma_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 42791626,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_gamma_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204426,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4415,6 +4511,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_lateralAPA_marley_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204427,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_marley_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 468784,
               "type": "pkl",
@@ -4441,6 +4545,14 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_lateralAPA_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204436,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_marley_official_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 508633,
               "type": "pkl",
@@ -4453,6 +4565,14 @@
           "neutron": {
             "hd_1x2x6_lateralAPA_neutron_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 54009468,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_neutron_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204428,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4491,6 +4611,14 @@
             },
             "vd_1x8x14_3view_30deg_marley_official_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 38381398,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204438,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4567,6 +4695,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_nominal_marley_exponent1_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204456,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_marley_exponent1_official_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 517053,
               "type": "pkl",
@@ -4579,6 +4715,14 @@
           "marley_exponent2_official": {
             "vd_1x8x14_3view_30deg_nominal_marley_exponent2_official_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 5048204,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_marley_exponent2_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204456,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4603,6 +4747,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_nominal_marley_maximum_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204454,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_marley_maximum_official_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 517051,
               "type": "pkl",
@@ -4615,6 +4767,14 @@
           "marley_official": {
             "vd_1x8x14_3view_30deg_nominal_marley_official_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 11106726,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204446,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4661,6 +4821,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_gamma_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204437,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_gamma_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 332816,
               "type": "pkl",
@@ -4673,6 +4841,14 @@
           "marley": {
             "vd_1x8x14_3view_30deg_shielded_marley_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 8415118,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_marley_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204438,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4697,6 +4873,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_marley_exponent0_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204448,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_marley_exponent0_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 517405,
               "type": "pkl",
@@ -4709,6 +4893,14 @@
           "marley_exponent1": {
             "vd_1x8x14_3view_30deg_shielded_marley_exponent1_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 16795088,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_marley_exponent1_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204448,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4733,6 +4925,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_marley_exponent2_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204448,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_marley_exponent2_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 521965,
               "type": "pkl",
@@ -4745,6 +4945,14 @@
           "marley_maximum": {
             "vd_1x8x14_3view_30deg_shielded_marley_maximum_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 16810926,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_marley_maximum_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204446,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -4769,6 +4977,14 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_marley_official_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204447,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_marley_official_Adjacent_Cluster_Distributions.pkl": {
               "size_bytes": 521844,
               "type": "pkl",
@@ -4781,6 +4997,14 @@
           "neutron": {
             "vd_1x8x14_3view_30deg_shielded_neutron_Adjacent_Cluster_Counts.pkl": {
               "size_bytes": 6007827,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_neutron_Adjacent_Cluster_Counts_slim.pkl": {
+              "size_bytes": 1204439,
               "type": "pkl",
               "themes": [
                 "detector"
@@ -6309,7 +6533,7 @@
                 "publication_export": true
               },
               "hd_1x2x6_centralAPA_marley_HEP_Exposure.pkl": {
-                "size_bytes": 13716,
+                "size_bytes": 12311,
                 "type": "pkl",
                 "themes": [
                   "hep"
@@ -6355,7 +6579,7 @@
                 "publication_export": true
               },
               "hd_1x2x6_lateralAPA_marley_HEP_Exposure.pkl": {
-                "size_bytes": 13716,
+                "size_bytes": 12311,
                 "type": "pkl",
                 "themes": [
                   "hep"
@@ -6401,7 +6625,7 @@
                 "publication_export": true
               },
               "vd_1x8x14_3view_30deg_nominal_marley_HEP_Exposure.pkl": {
-                "size_bytes": 13726,
+                "size_bytes": 12321,
                 "type": "pkl",
                 "themes": [
                   "hep"
@@ -6447,7 +6671,7 @@
                 "publication_export": true
               },
               "vd_1x8x14_3view_30deg_shielded_marley_HEP_Exposure.pkl": {
-                "size_bytes": 13727,
+                "size_bytes": 12322,
                 "type": "pkl",
                 "themes": [
                   "hep"
@@ -8769,8 +8993,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 399,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_gamma_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 3254219,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_gamma_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 18536,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -8793,8 +9033,24 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 9344,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits8_AdjCl4.pkl": {
               "size_bytes": 2056,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_gamma_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 406920,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -8811,6 +9067,14 @@
             },
             "hd_1x2x6_centralAPA_gamma_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 3254219,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_gamma_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 18536,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9265,8 +9529,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 412,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_neutron_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 4955843,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_neutron_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 382233,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9289,8 +9569,24 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_centralAPA_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 191197,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_centralAPA_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits8_AdjCl4.pkl": {
               "size_bytes": 30976,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_neutron_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 619623,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9307,6 +9603,14 @@
             },
             "hd_1x2x6_centralAPA_neutron_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 4955843,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_neutron_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 382233,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9583,8 +9887,24 @@
       "hd_1x2x6_lateralAPA": {
         "gamma": {
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 399,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_gamma_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 2852667,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_gamma_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 106529,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9607,8 +9927,24 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_lateralAPA_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 53336,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits3_OpHits10_AdjCl2.pkl": {
               "size_bytes": 10596,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_gamma_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 356726,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9625,6 +9961,14 @@
             },
             "hd_1x2x6_lateralAPA_gamma_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 2852667,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_gamma_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 106529,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9815,8 +10159,24 @@
         },
         "neutron": {
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 400,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_neutron_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 3600523,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_neutron_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 419609,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9839,8 +10199,24 @@
               ],
               "publication_export": false
             },
+            "hd_1x2x6_lateralAPA_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 209885,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "hd_1x2x6_lateralAPA_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits3_OpHits10_AdjCl2.pkl": {
               "size_bytes": 5760,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_neutron_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 450208,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -9857,6 +10233,14 @@
             },
             "hd_1x2x6_lateralAPA_neutron_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 3600523,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_lateralAPA_neutron_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 419609,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10134,8 +10518,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 396,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 576707,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 177433,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10158,8 +10558,24 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 88797,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits8_OpHits10_AdjCl8.pkl": {
               "size_bytes": 703,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 72231,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10176,6 +10592,14 @@
             },
             "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 576707,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_gamma_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 177433,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10662,8 +11086,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 410,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 2027179,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 609611,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10686,8 +11126,24 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 304887,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits8_OpHits10_AdjCl8.pkl": {
               "size_bytes": 471,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 253540,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -10704,6 +11160,14 @@
             },
             "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 2027179,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_nominal_neutron_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 609611,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11128,8 +11592,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 396,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 576707,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 170257,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11152,8 +11632,24 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 85209,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits8_OpHits10_AdjCl10.pkl": {
               "size_bytes": 615,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 72231,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11170,6 +11666,14 @@
             },
             "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 576707,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_gamma_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 170257,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11656,8 +12160,24 @@
             }
           },
           "truncated": {
+            "analysis_cuts_SENSITIVITY.json": {
+              "size_bytes": 410,
+              "type": "json",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisData_SolarEnergy_Ref.pkl": {
               "size_bytes": 2027179,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisData_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 603131,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11680,8 +12200,24 @@
               ],
               "publication_export": false
             },
+            "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 301647,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
             "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisEnergy_SolarEnergy_SENSITIVITY_NHits8_OpHits10_AdjCl10.pkl": {
               "size_bytes": 499,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisMask_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 253540,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -11698,6 +12234,14 @@
             },
             "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisWeights_SolarEnergy_Ref.pkl": {
               "size_bytes": 2027179,
+              "type": "pkl",
+              "themes": [
+                "signal"
+              ],
+              "publication_export": false
+            },
+            "vd_1x8x14_3view_30deg_shielded_neutron_AnalysisWeights_SolarEnergy_SENSITIVITY_NHits1_OpHits4_AdjCl20.pkl": {
+              "size_bytes": 603131,
               "type": "pkl",
               "themes": [
                 "signal"
@@ -12304,7 +12848,111 @@
         }
       },
       "weighted": {
-        "truncated": {}
+        "hd_1x2x6_centralAPA": {
+          "gamma": {
+            "truncated": {
+              "hd_1x2x6_centralAPA_gamma_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3317,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          },
+          "neutron": {
+            "truncated": {
+              "hd_1x2x6_centralAPA_neutron_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3345,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          }
+        },
+        "hd_1x2x6_lateralAPA": {
+          "gamma": {
+            "truncated": {
+              "hd_1x2x6_lateralAPA_gamma_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3334,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          },
+          "neutron": {
+            "truncated": {
+              "hd_1x2x6_lateralAPA_neutron_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3344,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          }
+        },
+        "truncated": {},
+        "vd_1x8x14_3view_30deg_nominal": {
+          "gamma": {
+            "truncated": {
+              "vd_1x8x14_3view_30deg_nominal_gamma_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3355,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          },
+          "neutron": {
+            "truncated": {
+              "vd_1x8x14_3view_30deg_nominal_neutron_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3359,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          }
+        },
+        "vd_1x8x14_3view_30deg_shielded": {
+          "gamma": {
+            "truncated": {
+              "vd_1x8x14_3view_30deg_shielded_gamma_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3356,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          },
+          "neutron": {
+            "truncated": {
+              "vd_1x8x14_3view_30deg_shielded_neutron_SolarEnergy_Sensitivity_AnalysisData.pkl": {
+                "size_bytes": 3361,
+                "type": "pkl",
+                "themes": [
+                  "signal"
+                ],
+                "publication_export": false
+              }
+            }
+          }
+        }
       }
     },
     "vertex": {
@@ -13701,6 +14349,40 @@
             },
             "hd_1x2x6_centralAPA_neutron_Vertex_Resolution.pkl": {
               "size_bytes": 13008,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            }
+          },
+          "radiological": {
+            "hd_1x2x6_centralAPA_radiological_Purity_Match_Resolution.pkl": {
+              "size_bytes": 232518,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_radiological_Resolution.pkl": {
+              "size_bytes": 104472,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_radiological_Vertex_Matrix_X.pkl": {
+              "size_bytes": 65214645,
+              "type": "pkl",
+              "themes": [
+                "detector"
+              ],
+              "publication_export": false
+            },
+            "hd_1x2x6_centralAPA_radiological_Vertex_Resolution.pkl": {
+              "size_bytes": 15409,
               "type": "pkl",
               "themes": [
                 "detector"

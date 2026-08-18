@@ -48,7 +48,7 @@ parser.add_argument(
     default=["hd_1x2x6_centralAPA"],
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     nargs="+",
     type=str,
     help="The name of the configuration",
@@ -85,14 +85,14 @@ parser.add_argument(
     type=str,
     help="The energy for the analysis",
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
         "SolarEnergy",
     ],
     default=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -136,47 +136,57 @@ parser.add_argument(
     help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked'). "
          "Controls both the input pkl path and a suffix added to the output filename.",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 hep_exposure = []
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="HEP", dimensions="1d", stage="significance"
 )
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
-    plot_df = pd.read_pickle(
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
-    )
+    _rebin_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
+    if not os.path.exists(_rebin_path):
+        raise SystemExit(f"[ERROR] Missing Rebin pkl: {_rebin_path}\nRun 03_analysis.py cut scan first.")
+    plot_df = pd.read_pickle(_rebin_path)
 
     for bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy):
         plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
 
-    sigmas_df = pd.read_pickle(
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results.pkl",
-    )
+    _results_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results{_study_suffix}.pkl"
+    if not os.path.exists(_results_path):
+        raise SystemExit(f"[ERROR] Missing Results pkl: {_results_path}\nRun 01_hep.py first.")
+    sigmas_df = pd.read_pickle(_results_path)
     required_base_columns = ["Config", "Name", "NHits", "OpHits", "AdjCl", "Exposure"]
     missing_base_columns = [
         column for column in required_base_columns if column not in sigmas_df.columns
     ]
     if sigmas_df.empty or missing_base_columns:
-        rprint(
-            f"[yellow][WARNING][/yellow] Skipping exposure plot for {config} {name} {energy}: "
-            f"results dataframe is empty or missing required columns {missing_base_columns}."
+        raise SystemExit(
+            f"[ERROR] Results DataFrame for {config} {name} {energy} is "
+            f"{'empty' if sigmas_df.empty else f'missing columns {missing_base_columns}'}.\n"
+            f"Source: {_results_path}"
         )
-        continue
 
     for sigma_name, sigma_label in zip(
         [args.pkl_label],
         [args.pkl_label.replace("_", " ").title()],
     ):
 
-        sigma = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{sigma_name}_{args.analysis}.pkl",
-        )
+        _bestcut_base = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{sigma_name}_{args.analysis}"
+        _bestcut_labeled = f"{_bestcut_base}{_study_suffix}.pkl" if _study_suffix else None
+        _bestcut_path = _bestcut_labeled if (_bestcut_labeled and os.path.exists(_bestcut_labeled)) else f"{_bestcut_base}.pkl"
+        if not os.path.exists(_bestcut_path):
+            rprint(f"[yellow][WARNING][/yellow] Missing best-cut pkl for {config} {name} {energy}. Skipping.")
+            continue
+        sigma = pd.read_pickle(_bestcut_path)
 
         try:
             ref_plot = sigma[(config, name, energy)]
@@ -231,10 +241,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
         significance_peak = 0.0
 
         if plot_sigmas.empty:
-            rprint(
-                f"[yellow][WARNING] Not found {sigma_label} for {config} {name} {energy}[/yellow]"
+            raise SystemExit(
+                f"[ERROR] No rows matching sigma label '{sigma_label}' for {config} {name} {energy}.\n"
+                "Check pkl_label and Results pkl content."
             )
-            continue
 
         significance_plot_styles = {
             "Asimov": {"label": "asimov", "dash": "solid", "raw_dash": "dot"},
@@ -282,28 +292,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
             exposure_values = np.asarray(this_plot_sigmas["Exposure"].values[0], dtype=float)
             smoothed_significance = np.nan_to_num(
                 np.asarray(this_plot_sigmas[significance].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
+                nan=0.0, posinf=0.0, neginf=0.0,
             )
-            # When no raw variant exists (PL uses unsmoothed spectra), raw == smoothed.
+            # When RawProfileLikelihood absent, PL raw == smoothed (PL uses unsmoothed spectra).
             raw_significance = np.nan_to_num(
                 np.asarray(this_plot_sigmas[_raw_col if _has_raw else significance].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
+                nan=0.0, posinf=0.0, neginf=0.0,
             )
             significance_plus = np.nan_to_num(
                 np.asarray(this_plot_sigmas[significance + "+Error"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
+                nan=0.0, posinf=0.0, neginf=0.0,
             )
             significance_minus = np.nan_to_num(
                 np.asarray(this_plot_sigmas[significance + "-Error"].values[0], dtype=float),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
+                nan=0.0, posinf=0.0, neginf=0.0,
             )
 
             # Enforce monotonicity on PL curves at load time so plot and pkl are consistent.
@@ -317,9 +319,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
             ):
                 if significance.startswith("PreIsotonic"):
                     continue
-                # PL uses unsmoothed spectra — no smoothed variant exists when RawProfileLikelihood absent.
-                if spectrum_type == "Smoothed" and significance == "ProfileLikelihood" and not _has_raw:
-                    continue
                 hep_exposure.append(
                     {
                         "Geometry": info["GEOMETRY"],
@@ -329,10 +328,12 @@ for config, name, energy in product(args.config, args.name, args.energy):
                         "OpHits": int(ref_plot["OpHits"]),
                         "AdjCl": int(ref_plot["AdjCl"]),
                         "Exposure": exposure_values,
+                        "ExposureUnit": "year",
                         "EnergyLabel": energy,
                         "Variable": significance,
                         "SpectrumType": spectrum_type,
                         "Significance": this_significance,
+                        "SignificanceUnit": r"\sigma",
                         "SignificanceError+": np.subtract(
                             significance_plus,
                             smoothed_significance,
@@ -454,7 +455,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             save_path,
             config=config,
             name=name,
-            subfolder=args.folder.lower(),
+            subfolder=_save_subfolder,
             filename=figure_name,
             rm=args.rewrite,
             debug=args.plot,
@@ -470,7 +471,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     data_path,
                     config=config,
                     name=name,
-                    subfolder=args.folder.lower(),
+                    subfolder=_save_subfolder,
                     filename=df_name,
                     rm=args.rewrite,
                     debug=True,
@@ -480,7 +481,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     local_data_path,
                     config=config,
                     name=name,
-                    subfolder=args.folder.lower(),
+                    subfolder=_save_subfolder,
                     filename=df_name,
                     rm=args.rewrite,
                     debug=False,

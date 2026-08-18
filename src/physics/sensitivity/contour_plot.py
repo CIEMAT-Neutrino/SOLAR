@@ -24,7 +24,7 @@ parser.add_argument(
     default="hd_1x2x6_centralAPA",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
+    "--signal", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
     "--folder",
@@ -50,7 +50,7 @@ parser.add_argument(
     type=str,
     help="The energy for the analysis",
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -83,26 +83,34 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads chi2 grids from labeled template subfolders.")
 
 args = parser.parse_args()
-configs = {args.config: [args.name]}
+_ctx = study_context(args)
+_study_suffix    = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
+_save_subfolder  = _ctx.save_subfolder
+configs = {args.config: [args.signal]}
 if args.debug:
     rprint(args)
 
 
 def _load_best_cut_map(info: dict, args):
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.name}/"
-            f"{args.config}_{args.name}_highest_{analysis}.pkl"
-        )
-        tried.append(filepath)
-        if os.path.exists(filepath):
-            if args.debug:
-                rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}")
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            )
+            tried.append(filepath)
+            if os.path.exists(filepath):
+                if args.debug:
+                    rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                return pickle.load(open(filepath, "rb"))
 
     rprint(
         "[yellow][WARNING][/yellow] Unable to load any best-cut map. Checked:\n"
@@ -121,14 +129,14 @@ for config in configs:
     energy = args.energy
     nhits, adjcl, ophits = -1, -1, -1
 
-    fastest_sigma = {(args.config, args.name, args.energy): None}
+    fastest_sigma = {(args.config, args.signal, args.energy): None}
     if args.nhits is None or args.adjcls is None or args.ophits is None:
         loaded = _load_best_cut_map(info, args)
         if loaded is not None:
             fastest_sigma = loaded
         else:
             fastest_sigma = {
-                (args.config, args.name, args.energy): {
+                (args.config, args.signal, args.energy): {
                     "NHits": 4,
                     "AdjCl": 10,
                     "OpHits": 4,
@@ -141,7 +149,7 @@ for config in configs:
     cut_keys = (
         list(fastest_sigma.keys())
         if args.nhits is None or args.adjcls is None or args.ophits is None
-        else [(args.config, args.name, args.energy)]
+        else [(args.config, args.signal, args.energy)]
     )
 
     for name, key in product(configs[config], cut_keys):
@@ -151,9 +159,9 @@ for config in configs:
             energy = key[2]
 
         if args.background:
-            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
         else:
-            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.name}/{args.folder.lower()}/{energy}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
 
         if args.nhits is not None:
             nhits = args.nhits
@@ -345,7 +353,7 @@ for config in configs:
                 save_path,
                 config=config,
                 name=name,
-                subfolder=f"{args.folder.lower()}/{profile_name}",
+                subfolder=f"{_save_subfolder}/{profile_name}",
                 filename=figure_name,
                 rm=args.rewrite,
                 debug=args.plot,
@@ -356,7 +364,7 @@ for config in configs:
         f"{analysis_info['PATH']}/SENSITIVITY",
         config=config,
         name=name,
-        subfolder=args.folder.lower(),
+        subfolder=_save_subfolder,
         filename=f"Sensitivity_{energy}" if args.nhits is None and args.adjcls is None and args.ophits is None else f"Sensitivity_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
         rm=args.rewrite,
         debug=args.debug,

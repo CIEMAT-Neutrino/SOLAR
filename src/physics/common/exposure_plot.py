@@ -117,23 +117,24 @@ def _safe_array(values):
     return np.nan_to_num(np.asarray(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
 
 
-def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Namespace, analysis_key: str):
+def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Namespace, analysis_key: str, study_suffix: str = ""):
     """Resolve cuts: explicit args > best-cut pkl > defaults."""
     if args.nhits is not None and args.ophits is not None and args.adjcls is not None:
         return int(args.nhits), int(args.ophits), int(args.adjcls)
 
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
 
+    pkl_label = getattr(args, 'pkl_label', 'highest')
     # Sensitivity path: SENSITIVITY/{folder}/{config}/{name}/...
     if analysis_key == "SENSITIVITY":
         sigma_path = (
             f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}/"
-            f"{config}/{name}/{config}_{name}_{getattr(args, 'pkl_label', 'highest')}_{analysis_key}.pkl"
+            f"{config}/{name}/{config}_{name}_{pkl_label}_{analysis_key}{study_suffix}.pkl"
         )
     else:
         sigma_path = (
             f"{info['PATH']}/{analysis_key}/{args.folder.lower()}/"
-            f"{config}/{name}/{config}_{name}_{getattr(args, 'pkl_label', 'highest')}_{analysis_key}.pkl"
+            f"{config}/{name}/{config}_{name}_{pkl_label}_{analysis_key}{study_suffix}.pkl"
         )
 
     if not os.path.exists(sigma_path):
@@ -141,6 +142,18 @@ def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Name
 
     try:
         sigma_map = pd.read_pickle(sigma_path)
+        _is_empty = (sigma_map.empty if hasattr(sigma_map, 'empty') else len(sigma_map) == 0)
+        if _is_empty and pkl_label != 'highest':
+            _fallback_path = sigma_path.replace(
+                f"_{pkl_label}_{analysis_key}{study_suffix}.pkl",
+                f"_highest_{analysis_key}{study_suffix}.pkl",
+            )
+            if os.path.exists(_fallback_path):
+                rprint(
+                    f"[yellow][WARNING][/yellow] _get_selection_cuts: '{args.pkl_label}' pkl empty for "
+                    f"{config}/{name}/{energy} — falling back to 'highest'."
+                )
+                sigma_map = pd.read_pickle(_fallback_path)
         ref_plot = sigma_map[(config, name, energy)]
     except (KeyError, FileNotFoundError):
         return None
@@ -236,7 +249,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="DayNight")
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal"])
 parser.add_argument("--exposure", type=float, default=30)
 parser.add_argument("--energy", nargs="+", type=str)
@@ -259,8 +272,14 @@ parser.add_argument("--background_uncertainty", type=float, default=None)
 parser.add_argument("--nuisance_profile", type=str, default=None)
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--smooth_window", type=int, default=11)
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads Sensitivity chi2 grids from labeled template subfolders.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix    = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
+_save_subfolder  = _ctx.save_subfolder
 
 # ── POST-PARSE DEFAULTS ────────────────────────────────────────────────────────
 
@@ -324,28 +343,28 @@ exposure_records = []
 
 # ── MAIN LOOP ──────────────────────────────────────────────────────────────────
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
 
     # ══════════════════════════════════════════════════════════════════════════
     # DayNight
     # ══════════════════════════════════════════════════════════════════════════
     if args.analysis == "DayNight":
-        sigma_path = f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{name}/{config}_{name}_highest_DayNight.pkl"
+        sigma_path = f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{name}/{config}_{name}_highest_DayNight{_study_suffix}.pkl"
         if not os.path.exists(sigma_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for {config} {name}")
-            continue
+            raise SystemExit(f"[ERROR] Missing best-cut pkl: {sigma_path}\nRun 05_best_sigmas.py first.")
 
         sigma = pickle.load(open(sigma_path, "rb"))
-        try:
-            ref_plot = sigma[(config, name, energy)]
-        except KeyError:
-            rprint(f"[yellow][WARNING][/yellow] Not found highest for {config} {name} {energy}")
-            continue
+        if (config, name, energy) not in sigma:
+            raise KeyError(
+                f"Key ({config}, {name}, {energy}) not found in {sigma_path}. "
+                f"Available keys: {list(sigma.keys())[:5]}"
+            )
+        ref_plot = sigma[(config, name, energy)]
 
         sigmas_df = pd.read_pickle(
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results{_study_suffix}.pkl"
         )
 
         nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
@@ -359,8 +378,10 @@ for config, name, energy in product(args.config, args.name, args.energy):
         ].copy()
 
         if plot_sigmas.empty:
-            rprint(f"[yellow][WARNING][/yellow] Missing payload for {config} {name} {energy}")
-            continue
+            raise SystemExit(
+                f"[ERROR] No rows for {config} {name} {energy} with NHits={nhits_value} "
+                f"OpHits={ophits_value} AdjCl={adjcl_value} in DayNight Results pkl."
+            )
 
         exposure_values = np.asarray(plot_sigmas["Exposure"].values[0], dtype=float)
         raw_gaussian = _safe_array(plot_sigmas["RawGaussian"].values[0])
@@ -413,7 +434,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.threshold is not None:
             figure_name += f"_Threshold_{args.threshold:.0f}"
 
-        save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=figure_name, rm=args.rewrite, debug=args.plot)
 
         exposure_records.append({
@@ -461,7 +482,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
     # HEP — exposure mode
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "HEP" and args.mode in ["exposure", "all"]:
-        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP", _study_suffix)
         if cuts is None:
             rprint(f"[yellow][WARNING][/yellow] Missing best-cut selection for {config} {name} {energy}")
             continue
@@ -470,7 +491,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
         sigmas_df = pd.read_pickle(
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_HEP_Results.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_HEP_Results{_study_suffix}.pkl"
         )
 
         required_base_columns = ["Config", "Name", "NHits", "OpHits", "AdjCl", "Exposure"]
@@ -500,8 +521,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
         }
 
         for significance, style in significance_plot_styles.items():
-            # "Raw" + significance is optional for PL: the PL test uses raw (unsmoothed)
-            # spectra only, so no smoothed variant exists. Fall back to the primary column.
             _raw_col = "Raw" + significance
             _has_raw = _raw_col in plot_sigmas.columns
             required_sig_columns = [significance, significance + "+Error", significance + "-Error"]
@@ -512,9 +531,9 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 continue
 
             smoothed_sig = _safe_array(plot_sigmas[significance].values[0])
-            # When no raw variant exists (PL uses unsmoothed spectra), raw == smoothed.
-            raw_sig = _safe_array(plot_sigmas[_raw_col if _has_raw else significance].values[0])
-            sig_plus = _safe_array(plot_sigmas[significance + "+Error"].values[0])
+            # When RawProfileLikelihood absent, PL raw == smoothed (PL uses unsmoothed spectra).
+            raw_sig   = _safe_array(plot_sigmas[_raw_col if _has_raw else significance].values[0])
+            sig_plus  = _safe_array(plot_sigmas[significance + "+Error"].values[0])
             sig_minus = _safe_array(plot_sigmas[significance + "-Error"].values[0])
 
             # Enforce monotonicity at load time so plot and pkl are consistent.
@@ -523,9 +542,6 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 raw_sig      = _monotone_for_export(raw_sig)
 
             for spec_type, sig_arr in [("Raw", raw_sig), ("Smoothed", smoothed_sig)]:
-                # PL uses unsmoothed spectra — no smoothed variant exists when RawProfileLikelihood absent.
-                if spec_type == "Smoothed" and significance == "ProfileLikelihood" and not _has_raw:
-                    continue
                 exposure_records.append({
                     "Analysis": "HEP", "Geometry": info["GEOMETRY"],
                     "Config": config, "Name": name, "EnergyLabel": energy,
@@ -573,22 +589,21 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.pkl_label != "highest":
             figure_name += f"_{args.pkl_label}"
 
-        save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=figure_name, rm=args.rewrite, debug=args.plot)
 
     # ══════════════════════════════════════════════════════════════════════════
     # HEP — comparison mode
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "HEP" and args.mode in ["comparison", "all"]:
-        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP", _study_suffix)
         if cuts is None:
             continue
         nhits_value, ophits_value, adjcl_value = cuts
 
-        exposure_file = Path(data_path) / config / name / args.folder.lower() / f"{config}_{name}_HEP_Exposure.pkl"
+        exposure_file = Path(data_path) / config / name / _save_subfolder / f"{config}_{name}_HEP_Exposure.pkl"
         if not exposure_file.exists():
-            rprint(f"[yellow][WARNING][/yellow] Missing saved HEP exposure data for {config} {name}. Run exposure mode first.")
-            continue
+            raise SystemExit(f"[ERROR] Missing HEP Exposure pkl: {exposure_file}\nRun exposure_plot.py --mode exposure first.")
 
         exposure_df = pd.read_pickle(exposure_file)
         required_columns = ["Config", "Name", "EnergyLabel", "Variable", "SpectrumType", "Exposure", "Significance"]
@@ -675,21 +690,21 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.threshold is not None:
             figure_name += f"_Threshold_{args.threshold:.0f}"
 
-        save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=figure_name, rm=args.rewrite, debug=args.plot)
 
     # ══════════════════════════════════════════════════════════════════════════
     # HEP — rebin mode
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "HEP" and args.mode in ["rebin", "all"]:
-        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP", _study_suffix)
         if cuts is None:
             continue
         nhits_value, ophits_value, adjcl_value = cuts
 
         sigmas_df = pd.read_pickle(
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_HEP_Results.pkl"
+            f"/{config}/{name}/{config}_{name}_{energy}_HEP_Results{_study_suffix}.pkl"
         )
 
         required_sigma_columns = ["Config", "Name", "NHits", "OpHits", "AdjCl", "Exposure"]
@@ -784,24 +799,27 @@ for config, name, energy in product(args.config, args.name, args.energy):
             if args.threshold is not None:
                 figure_name += f"_Threshold_{args.threshold:.0f}"
 
-            save_figure(fig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+            save_figure(fig, save_path, config=config, name=name, subfolder=_save_subfolder,
                        filename=figure_name, rm=args.rewrite, debug=args.plot)
 
     # ══════════════════════════════════════════════════════════════════════════
     # HEP — reference mode
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "HEP" and args.mode in ["reference", "all"]:
-        cuts = _get_selection_cuts(config, name, energy, args, "HEP")
+        cuts = _get_selection_cuts(config, name, energy, args, "HEP", _study_suffix)
         if cuts is None:
             continue
         nhits_value, ophits_value, adjcl_value = cuts
 
-        significance_file = Path(data_path) / config / name / args.folder.lower() / f"{config}_{name}_HEP_Significance.pkl"
-        exposure_file = Path(data_path) / config / name / args.folder.lower() / f"{config}_{name}_HEP_Exposure.pkl"
+        significance_file = Path(data_path) / config / name / _save_subfolder / f"{config}_{name}_HEP_Significance.pkl"
+        exposure_file = Path(data_path) / config / name / _save_subfolder / f"{config}_{name}_HEP_Exposure.pkl"
 
-        if not significance_file.exists() or not exposure_file.exists():
-            rprint(f"[yellow][WARNING][/yellow] Missing HEP plot data for {config} {name}. Run plotting macros first.")
-            continue
+        missing = [str(f) for f in [significance_file, exposure_file] if not f.exists()]
+        if missing:
+            raise SystemExit(
+                "[ERROR] Missing HEP Significance/Exposure pkls — run exposure_plot.py --mode significance first:\n"
+                + "\n".join(f"  {p}" for p in missing)
+            )
 
         significance_df = pd.read_pickle(significance_file)
         exposure_df = pd.read_pickle(exposure_file)
@@ -872,7 +890,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.threshold is not None:
             figure_name += f"_Threshold_{args.threshold:.0f}"
 
-        save_figure(fig_sig, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_sig, save_path, config=config, name=name, subfolder=_save_subfolder,
                    filename=figure_name, rm=args.rewrite, debug=args.plot)
 
         # Exposure comparison figure
@@ -909,20 +927,20 @@ for config, name, energy in product(args.config, args.name, args.energy):
         if args.threshold is not None:
             figure_name += f"_Threshold_{args.threshold:.0f}"
 
-        save_figure(fig_exp, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_exp, save_path, config=config, name=name, subfolder=_save_subfolder,
                    filename=figure_name, rm=args.rewrite, debug=args.plot)
 
     # ══════════════════════════════════════════════════════════════════════════
     # Sensitivity — 4 single-panel chi2 projections
     # ══════════════════════════════════════════════════════════════════════════
     elif args.analysis == "Sensitivity":
-        cuts = _get_selection_cuts(config, name, energy, args, "SENSITIVITY")
+        cuts = _get_selection_cuts(config, name, energy, args, "SENSITIVITY", _study_suffix)
         if cuts is None:
             cuts = (4, 10, 4)
         nhits, ophits, adjcl = cuts
 
         # Path from sensitivity/06_significance.py output
-        sig_path = f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}"
+        sig_path = f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/{energy}{_template_suffix}"
         suffix = (
             f"signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
             if args.background else f"signal_{100*args.signal_uncertainty:.0f}%_only"
@@ -1003,7 +1021,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig_dm2_solar.update_yaxes(title_text="Δχ²", row=1, col=1, range=[0, 12])
         fig_dm2_solar = format_coustom_plotly(fig_dm2_solar, title=f"Δm²₂₁ (Solar) — {_base_tag}", add_watermark=True)
 
-        save_figure(fig_dm2_solar, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_dm2_solar, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=f"{_base_tag}_dm2_solar_projection{compare_tag}", rm=args.rewrite, debug=args.plot)
 
         # ── Figure 2: Δχ²(Δm²₂₁) reactor ──
@@ -1029,7 +1047,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig_dm2_react.update_yaxes(title_text="Δχ²", row=1, col=1, range=[0, 12])
         fig_dm2_react = format_coustom_plotly(fig_dm2_react, title=f"Δm²₂₁ (Reactor) — {_base_tag}", add_watermark=True)
 
-        save_figure(fig_dm2_react, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_dm2_react, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=f"{_base_tag}_dm2_reactor_projection{compare_tag}", rm=args.rewrite, debug=args.plot)
 
         # ── Figure 3: Δχ²(sin²θ₁₂) ──
@@ -1063,7 +1081,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig_sin12.update_yaxes(title_text="Δχ²", row=1, col=1, range=[0, 12])
         fig_sin12 = format_coustom_plotly(fig_sin12, title=f"sin²θ₁₂ — {_base_tag}", add_watermark=True)
 
-        save_figure(fig_sin12, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_sin12, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=f"{_base_tag}_sin12_projection{compare_tag}", rm=args.rewrite, debug=args.plot)
 
         # ── Figure 4: Δχ²(sin²θ₁₃) ──
@@ -1096,7 +1114,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         fig_sin13.update_yaxes(title_text="Δχ²", row=1, col=1, range=[0, 12])
         fig_sin13 = format_coustom_plotly(fig_sin13, title=f"sin²θ₁₃ — {_base_tag}", add_watermark=True)
 
-        save_figure(fig_sin13, save_path, config=config, name=name, subfolder=args.folder.lower(),
+        save_figure(fig_sin13, save_path, config=config, name=name, subfolder=_save_subfolder,
                     filename=f"{_base_tag}_sin13_projection{compare_tag}", rm=args.rewrite, debug=args.plot)
 
 # ── SINGLE SAVE ────────────────────────────────────────────────────────────────
@@ -1104,24 +1122,24 @@ for config, name, energy in product(args.config, args.name, args.energy):
 if exposure_records and args.analysis != "Sensitivity":
     _df = pd.DataFrame(exposure_records)
     _filename = f"{args.analysis}_Exposure"
-    _merged_exp = upsert_df_rows(_df, data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename=_filename, debug=args.debug)
+    _merged_exp = upsert_df_rows(_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename=_filename, debug=args.debug)
     if "Variable" in _merged_exp.columns:
         _merged_exp = _merged_exp.loc[~_merged_exp["Variable"].astype(str).str.startswith("PreIsotonic")].reset_index(drop=True)
     save_df(
         _merged_exp, data_path,
-        config=args.config[0], name=args.name[0],
-        subfolder=args.folder.lower(),
+        config=args.config[0], name=args.signal[0],
+        subfolder=_save_subfolder,
         filename=_filename,
         rm=True, debug=args.debug,
     )
     if local_data_path:
-        _merged_exp_local = upsert_df_rows(_df, local_data_path, config=args.config[0], name=args.name[0], subfolder=args.folder.lower(), filename=_filename)
+        _merged_exp_local = upsert_df_rows(_df, local_data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename=_filename)
         if "Variable" in _merged_exp_local.columns:
             _merged_exp_local = _merged_exp_local.loc[~_merged_exp_local["Variable"].astype(str).str.startswith("PreIsotonic")].reset_index(drop=True)
         save_df(
             _merged_exp_local, local_data_path,
-            config=args.config[0], name=args.name[0],
-            subfolder=args.folder.lower(),
+            config=args.config[0], name=args.signal[0],
+            subfolder=_save_subfolder,
             filename=_filename,
             rm=True, debug=False,
         )

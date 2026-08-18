@@ -9,7 +9,7 @@ from lib import *
 analysis_info = load_analysis_info(str(root))
 
 save_path = f"{root}/output/images/analysis/day-night"
-data_path = f"{root}/output/data/daynight"
+data_path = f"{root}/output/data/analysis/day-night"
 
 for this_path in [save_path, data_path]:
     if not os.path.exists(this_path):
@@ -41,7 +41,7 @@ parser.add_argument(
     default=["hd_1x2x6_centralAPA"],
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     nargs="+",
     type=str,
     help="The name of the configuration",
@@ -108,8 +108,12 @@ parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance"
@@ -117,7 +121,7 @@ smoothing_config = get_smoothing_config(
 day_night_counts = []
 day_night_exposure = []
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
@@ -132,7 +136,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
     plot_df = pd.concat(df_list, ignore_index=True)
 
     sigmas_df = pd.read_pickle(
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results.pkl",
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results{_study_suffix}.pkl",
     )
 
     for sigma_name, sigma_label in zip(
@@ -140,7 +144,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         ["Highest"],
     ):
         sigma_path = (
-            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{name}/{config}_{name}_{sigma_name}_DayNight.pkl"
+            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{name}/{config}_{name}_{sigma_name}_DayNight{_study_suffix}.pkl"
         )
         try:
             sigma = pickle.load(open(sigma_path, "rb"))
@@ -242,6 +246,26 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 nan=0.0, posinf=0.0, neginf=0.0,
             )
 
+        # Background normalization uncertainty: ErrorGaussian/ErrorAsimov are always required.
+        # Both 01_daynight.py (default background_uncertainty=0.02) and the unc_bkg* study
+        # variants write these columns.  Hard-fail if absent — no silent fallback.
+        error_gaussian_central = np.nan_to_num(
+            np.asarray(plot_sigmas["ErrorGaussian"].values[0], dtype=float),
+            nan=0.0, posinf=0.0, neginf=0.0,
+        )
+        error_gaussian_upper = np.nan_to_num(
+            np.asarray(plot_sigmas["ErrorGaussian+Error"].values[0], dtype=float),
+            nan=0.0, posinf=0.0, neginf=0.0,
+        )
+        error_gaussian_lower = np.nan_to_num(
+            np.asarray(plot_sigmas["ErrorGaussian-Error"].values[0], dtype=float),
+            nan=0.0, posinf=0.0, neginf=0.0,
+        )
+
+        # ErrorAsimov is NOT extracted: the Asimov LLR tests the day/night ratio (shape),
+        # so a fully-correlated background normalization uncertainty cancels to first order.
+        # Only Gaussian sensitivity is meaningfully degraded by background normalization σ_bkg.
+
         for spectrum_type, significance in [
             ("Raw", raw_significance),
             ("Smoothed", smoothed_significance),
@@ -273,6 +297,45 @@ for config, name, energy in product(args.config, args.name, args.energy):
                     "Significance": significance,
                     "SignificanceError+": np.subtract(asimov_upper, smoothed_asimov) if spectrum_type == "Smoothed" else None,
                     "SignificanceError-": np.subtract(smoothed_asimov, asimov_lower) if spectrum_type == "Smoothed" else None,
+                })
+
+        # Background-uncertainty scenario rows: 3 physics scenarios × 2 metrics (Gaussian + Asimov).
+        # SpectrumType encodes the scenario so downstream readers can filter without a Mode column.
+        # Each row has Significance = realistic (ErrorGaussian/ErrorAsimov, with bkg systematics)
+        # and SignificanceError+ = ideal − realistic (band upward to no-bkg-unc estimate).
+        # Background-uncertainty scenario rows.
+        # Gaussian: Significance = ErrorGaussian[scenario] (realistic, with σ_bkg);
+        #           SignificanceError+ = Gaussian[scenario] − ErrorGaussian[scenario] (band upward to ideal).
+        # Asimov:   Significance = Asimov[scenario] (normalization-invariant, no σ_bkg degradation);
+        #           SignificanceError+ = 0 (no band — bkg normalization cancels in shape test).
+        _bkg_scenario_defs = [
+            ("MaxScenario",     significance_upper,    error_gaussian_upper,    asimov_upper    if _has_asimov else None),
+            ("CentralScenario", smoothed_significance, error_gaussian_central,  smoothed_asimov if _has_asimov else None),
+            ("MinScenario",     significance_lower,    error_gaussian_lower,    asimov_lower    if _has_asimov else None),
+        ]
+        for scenario_key, ideal_g, real_g, asimov_scenario in _bkg_scenario_defs:
+            day_night_exposure.append({
+                "Geometry": info["GEOMETRY"],
+                "Config": config,
+                "Name": name,
+                "Variable": "Gaussian",
+                "Exposure": exposure_values,
+                "SpectrumType": f"Smoothed/{scenario_key}",
+                "Significance": real_g,
+                "SignificanceError+": np.subtract(ideal_g, real_g),
+                "SignificanceError-": np.zeros_like(real_g),
+            })
+            if _has_asimov:
+                day_night_exposure.append({
+                    "Geometry": info["GEOMETRY"],
+                    "Config": config,
+                    "Name": name,
+                    "Variable": "Asimov",
+                    "Exposure": exposure_values,
+                    "SpectrumType": f"Smoothed/{scenario_key}",
+                    "Significance": asimov_scenario,
+                    "SignificanceError+": np.zeros_like(asimov_scenario),
+                    "SignificanceError-": np.zeros_like(asimov_scenario),
                 })
 
         fig.add_trace(
@@ -432,11 +495,90 @@ for config, name, energy in product(args.config, args.name, args.energy):
             save_path,
             config=config,
             name=name,
-            subfolder=args.folder.lower(),
+            subfolder=_save_subfolder,
             filename=figure_name,
             rm=args.rewrite,
             debug=args.plot,
         )
+
+        # 3-scenario plots: each asymmetry scenario (max/central/min) with background
+        # normalization uncertainty bands.  Band = ideal (no bkg unc.) − realistic (with bkg unc.).
+        _scenario_plot_defs = [
+            ("MaxScenario",     "Maximum asymmetry (+13% PREM, +5% osc.)",
+             significance_upper,    error_gaussian_upper,    asimov_upper    if _has_asimov else None),
+            ("CentralScenario", "Central asymmetry estimate",
+             smoothed_significance, error_gaussian_central,  smoothed_asimov if _has_asimov else None),
+            ("MinScenario",     "Minimum asymmetry (-13% PREM, -5% osc.)",
+             significance_lower,    error_gaussian_lower,    asimov_lower    if _has_asimov else None),
+        ]
+        for scenario_key, scenario_title, ideal_g, real_g, asimov_scenario in _scenario_plot_defs:
+            sfig = make_subplots(rows=1, cols=1, subplot_titles=(
+                f"{energy} — {scenario_title}<br>"
+                f"min#Hits {ref_plot['NHits']:.0f}, min#OpHits {ref_plot['OpHits']:.0f}, max#AdjCl {ref_plot['AdjCl']:.0f}",
+            ))
+
+            # Gaussian: ideal (no bkg unc.) + shaded band down to ErrorGaussian (with σ_bkg)
+            sfig.add_trace(go.Scatter(
+                x=exposure_values, y=ideal_g, name="Gaussian (no bkg unc.)",
+                mode="lines", line=dict(color="black", width=2),
+                legendgroup="Gaussian", legendgrouptitle=dict(text="Significance"),
+                showlegend=True,
+            ))
+            sfig.add_trace(go.Scatter(
+                x=exposure_values, y=ideal_g,
+                mode="lines", marker=dict(color="black"), line=dict(width=0),
+                showlegend=False,
+            ))
+            sfig.add_trace(go.Scatter(
+                x=exposure_values, y=real_g,
+                mode="lines", marker=dict(color="black"), line=dict(width=0),
+                fillcolor="rgba(68, 68, 68, 0.3)", fill="tonexty",
+                name="Bkg. norm. unc. (Gaussian)", showlegend=True,
+                legendgroup="Gaussian",
+            ))
+
+            # Asimov: plain line for this scenario — no bkg-unc band (normalization-invariant shape test)
+            if _has_asimov:
+                sfig.add_trace(go.Scatter(
+                    x=exposure_values, y=asimov_scenario, name="Asimov",
+                    mode="lines", line=dict(color="rgb(31,119,180)", width=2),
+                    legendgroup="Asimov", legendgrouptitle=dict(text=""),
+                    showlegend=True,
+                ))
+
+            sfig = format_coustom_plotly(
+                sfig,
+                tickformat=(".1f", ".0e"),
+                add_units=False,
+                title=f"Day-Night Asymmetry — {scenario_title}<br>{args.folder} — {config}",
+                matches=(None, None),
+                legend=dict(font=dict(size=14), bgcolor="rgba(255,255,255,0.7)"),
+            )
+            sfig.update_yaxes(
+                tickformat=".1f", dtick=1, range=[0, 4],
+                title="Significance (σ)",
+            )
+            sfig.update_xaxes(
+                range=[-1, args.exposure], zeroline=False,
+                title="Exposure (year)",
+            )
+            for sigma_line, cl in zip([1, 2, 3], [0.6827, 0.9545, 0.9973]):
+                sfig.add_hline(y=sigma_line, line_dash="dash", line_color="black")
+                sfig.add_annotation(
+                    x=2, y=sigma_line + 0.2,
+                    text=f"{100*cl:.2f}% CL", showarrow=False,
+                )
+
+            save_figure(
+                sfig,
+                save_path,
+                config=config,
+                name=name,
+                subfolder=_save_subfolder,
+                filename=f"{figure_name}_{scenario_key}",
+                rm=args.rewrite,
+                debug=args.plot,
+            )
 
         for df, df_name in zip(
             [pd.DataFrame(day_night_exposure)],
@@ -447,7 +589,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
                 data_path,
                 config,
                 name,
-                subfolder=args.folder.lower(),
+                subfolder=_save_subfolder,
                 filename=df_name,
                 rm=args.rewrite,
                 debug=True,

@@ -76,7 +76,7 @@ parser.add_argument(
     help="Detector config short name (required for kinematic_threshold).",
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     type=str,
     default=None,
     help="Sample name (required for kinematic_threshold).",
@@ -232,7 +232,7 @@ def run_kinematic_threshold():
     Requires --config and --name to locate the input DataFrame.
     """
     config = args.config
-    name   = args.name
+    name   = args.signal
     if config is None or name is None:
         rprint(
             "[yellow][WARNING][/yellow] kinematic_threshold requires --config and --name. Skipping."

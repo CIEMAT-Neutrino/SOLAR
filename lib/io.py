@@ -240,7 +240,8 @@ def save_df(
         return
 
     if isinstance(df, pd.DataFrame):
-        pass
+        if df.empty:
+            return
     else:
         rprint("The input df is not a known type: ", type(df))
 
@@ -344,6 +345,8 @@ def upsert_df_rows(
     Call before save_df(rm=True) so that only the current energy label's rows
     are replaced while rows for other energy labels are preserved.
     """
+    if new_df.empty:
+        return new_df
     filepath, _, _ = prepare_file_save(
         path=path,
         config=config,

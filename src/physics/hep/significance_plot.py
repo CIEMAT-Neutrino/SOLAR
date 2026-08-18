@@ -38,7 +38,7 @@ parser.add_argument(
     help="Quantity shown in the Local Proxy: rigorous grouped-bin proxy, intuitive local proxy, or both outputs",
 )
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument(
     "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal"]
 )
@@ -48,14 +48,14 @@ parser.add_argument(
     nargs="+",
     type=str,
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
         "SolarEnergy",
     ],
     default=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -90,7 +90,11 @@ parser.add_argument(
     default="AsimovTS",
     help="Metric to show in the Local Proxy lower panel (AsimovTS, Fisher, SNR, Purity)",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 
 reference_for_bins = "Asimov" if args.reference == "ProfileLikelihood" else args.reference
@@ -223,13 +227,13 @@ def _add_rebinned_overlay(
         )
 
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
     sigma_map_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/"
-        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{args.pkl_label}_{args.analysis}.pkl"
+        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{args.pkl_label}_{args.analysis}{_study_suffix}.pkl"
     )
     if not os.path.exists(sigma_map_path):
         rprint(
@@ -252,7 +256,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
 
     significance_bins_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/"
-        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins.pkl"
+        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins{_study_suffix}.pkl"
     )
     if not os.path.exists(significance_bins_path):
         rprint(
@@ -830,7 +834,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             save_path,
             config=config,
             name=name,
-            subfolder=args.folder.lower(),
+            subfolder=_save_subfolder,
             filename=figure_name,
             rm=args.rewrite,
             debug=args.plot,
@@ -1082,8 +1086,8 @@ if hep_counts and args.pkl_label == "highest":
         pd.DataFrame(hep_counts),
         data_path,
         config=args.config[0],
-        name=args.name[0],
-        subfolder=args.folder.lower(),
+        name=args.signal[0],
+        subfolder=_save_subfolder,
         filename="HEP_Counts",
         rm=args.rewrite,
         debug=args.debug,
@@ -1094,8 +1098,8 @@ if hep_significance and args.pkl_label == "highest":
         pd.DataFrame(hep_significance),
         data_path,
         config=args.config[0],
-        name=args.name[0],
-        subfolder=args.folder.lower(),
+        name=args.signal[0],
+        subfolder=_save_subfolder,
         filename="HEP_Significance",
         rm=args.rewrite,
         debug=args.debug,

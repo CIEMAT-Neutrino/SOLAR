@@ -17,19 +17,19 @@ parser = argparse.ArgumentParser(
     "chi2 figure-of-merit, and writes highest_SENSITIVITY.pkl."
 )
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
-parser.add_argument("--name",   type=str, default="marley")
+parser.add_argument("--signal",   type=str, default="marley")
 parser.add_argument(
     "--folder", type=str, choices=["Reduced", "Truncated", "Nominal"], default="Nominal"
 )
 parser.add_argument(
     "--energy",
     type=str,
-    choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
+    choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
     default="SolarEnergy",
 )
 parser.add_argument(
     "--oscillation_backend",
-    type=str, choices=["file", "prob3", "nufast"], default="file",
+    type=str, choices=["file", "prob3", "nufast"], default="nufast",
 )
 parser.add_argument("--exposure",              type=float, default=30.0)
 parser.add_argument("--signal_uncertainty",    type=float, default=None)
@@ -38,7 +38,12 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--study_label",     type=str,   default=None, help="Tag appended to output pkl filename to isolate study results.")
+parser.add_argument("--charge_threshold", type=float, default=0,   help="Charge threshold Q (ADC). When >0, reads templates from labeled subfolders.")
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix    = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
@@ -54,8 +59,8 @@ thld = int(np.where(sensitivity_rebin_centers >= threshold)[0][0]) if threshold 
 expected_ecols = len(sensitivity_rebin_centers)
 expected_nrows = analysis_info["NADIR_BINS"]
 
-signal_path     = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.name}/{args.folder.lower()}/{args.energy}"
-background_path = f"{info['PATH']}/SENSITIVITY/{args.config}/background/{args.folder.lower()}/{args.energy}"
+signal_path     = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}{_template_suffix}"
+background_path = f"{info['PATH']}/SENSITIVITY/{args.config}/background/{args.folder.lower()}/{args.energy}{_template_suffix}"
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ def _parse_cut(filepath: str):
 
 def _pkl_path(nhits, adjcl, ophits, dm2):
     return (
-        f"{signal_path}/{args.config}_{args.name}"
+        f"{signal_path}/{args.config}_{args.signal}"
         f"_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
         f"_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
     )
@@ -107,7 +112,7 @@ def _generate_templates(cuts):
     cmd = [
         "python3", f"{root}/src/physics/sensitivity/02_signal_template.py",
         "--config",               args.config,
-        "--name",                 args.name,
+        "--signal",                 args.signal,
         "--folder",               args.folder,
         "--energy",               args.energy,
         "--cuts",                 json.dumps(cuts),
@@ -119,6 +124,10 @@ def _generate_templates(cuts):
         "--no-debug",
         "--no-test",
     ]
+    if args.charge_threshold > 0:
+        cmd += ["--charge_threshold", str(args.charge_threshold)]
+    if args.study_label:
+        cmd += ["--study_label", args.study_label]
     cmd_str = " ".join(quote(str(c)) for c in cmd)
     rprint(f"\n[green][CMD][/green] {cmd_str}")
     result = subprocess.run(cmd, check=False)
@@ -147,7 +156,7 @@ if not cut_candidates:
 
 rprint(
     f"[cyan][INFO][/cyan] Found {len(cut_candidates)} background-template cut candidates "
-    f"for {args.config} {args.name} {args.folder} {args.energy}."
+    f"for {args.config} {args.signal} {args.folder} {args.energy}."
 )
 
 # ── generate scan templates and score ──────────────────────────────────────────
@@ -253,7 +262,7 @@ rprint(
 # ── save highest_SENSITIVITY.pkl and JSON ──────────────────────────────────────
 
 best_payload = {
-    (args.config, args.name, args.energy): {
+    (args.config, args.signal, args.energy): {
         "NHits":             int(best["NHits"]),
         "AdjCl":             int(best["AdjCl"]),
         "OpHits":            int(best["OpHits"]),
@@ -267,8 +276,8 @@ save_pkl(
     best_payload,
     f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}",
     config=args.config,
-    name=args.name,
-    filename="highest_SENSITIVITY",
+    name=args.signal,
+    filename=f"highest_SENSITIVITY{_study_suffix}",
     rm=args.rewrite,
     debug=args.debug,
 )
@@ -286,7 +295,7 @@ for local_dir in [
     if not os.path.exists(local_dir):
         os.makedirs(local_dir)
     merge_and_write_json(
-        f"{local_dir}/{args.config}_highest_Sensitivity.json",
+        f"{local_dir}/{args.config}_highest_Sensitivity{_study_suffix}.json",
         json_payload,
         debug=args.debug,
     )

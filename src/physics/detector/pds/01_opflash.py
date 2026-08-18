@@ -341,8 +341,11 @@ for config in configs:
                             "Cut": cut,
                             "Modulator": modulator,
                             "Charge": int(charge),
+                            "ChargeUnit": "ADC x tick",
                             "Time": fit_x,
+                            "TimeUnit": r"$\mu$s",
                             "PE": 10**fit_y,
+                            "PEUnit": "PE",
                             "FitFunction": quadratic_cut,
                             "FitFunctionLabel": "Light-Map",
                             "FitFunctionFormula": r"$y = a - a \cdot b \cdot \frac{x}{t_{max}} + c \cdot \left(\frac{x}{t_{max}}\right)^2$",
@@ -351,6 +354,9 @@ for config in configs:
                             "ParamsLabel": ["Amplitude", "Attenuation", "Correction"],
                             "ParamsUnit": ["log10(PE)", r"$\mu$s", "log10(PE)"],
                             "ParamsFormat": [".2f", ".2f", ".2f"],
+                            "p0": popt[0],
+                            "p1": popt[1],
+                            "p2": popt[2],
                         }
                     )
 
@@ -408,13 +414,16 @@ for config in configs:
 
                     light_map.append(
                         {
+                            "Geometry": info["GEOMETRY"],
                             "Config": config,
                             "Name": name,
                             "Cut": cut,
                             "Parameter": label,
                             "Modulator": modulator,
                             "Charge": fit_x,
+                            "ChargeUnit": "ADC x tick",
                             "PE": fit_y,
+                            "PEUnit": None,
                             "FitFunction": quadratic_function,
                             "FitFunctionLabel": f"Quadratic",
                             "FitFunctionFormula": r"$y = a \cdot x^2 + b \cdot x + c$",

@@ -456,8 +456,11 @@ for config in configs:
                 "Name": name,
                 "Clustering": charge,
                 "Values": x,
+                "ValuesUnit": "#Hits",
                 "Factor": y,
+                "FactorUnit": "ADC x tick / MeV",
                 "FactorError": y_error,
+                "FactorErrorUnit": "ADC x tick / MeV",
                 "FitFunction": correction_func,
                 "FitFunctionLabel": f"Exponential + Sigmoid",
                 "FitFunctionFormula": f"a * exp(-b * x) + c / (1 + exp(-d * x))",
@@ -471,6 +474,10 @@ for config in configs:
                 "ParamsFormat": [".0f", ".1f", ".0f", ".1f"],
                 "ParamsError": perr[f"{charge}Charge"],
                 "ParamsUnit": ["ADC x tick / MeV", "1 / #hits", "ADC x tick / MeV", "1 / #hits"],
+                "p0": popt[f"{charge}Charge"][0],
+                "p1": popt[f"{charge}Charge"][1],
+                "p2": popt[f"{charge}Charge"][2],
+                "p3": popt[f"{charge}Charge"][3],
             }
         )
 

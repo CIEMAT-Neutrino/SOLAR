@@ -5,6 +5,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 
 def double_gaussian(x, a_core, mu, sigma_core, a_tail, sigma_tail):
@@ -315,6 +317,89 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        # --- Diagnostic: 3D vertex error distribution with quantile thresholds ---
+        # 4 energy slices overlaid; per-energy 1/2/3σ vlines in matching color, varying dash.
+        _diag_energies = [
+            e for e in [6, 10, 14, 18]
+            if _3d_quantile_thresholds.get(e) is not None
+        ]
+        _sigma_dash = {1: "solid", 2: "dash", 3: "dot"}
+        _x_max_d = 1e3
+
+        # Shared log-spaced bin edges across all energy slices
+        _all_pos = _3d_error_all[_purity_base & (_3d_error_all > 0) & (_3d_error_all <= _x_max_d)]
+        _log_edges = np.logspace(np.log10(_all_pos.min()), np.log10(_x_max_d), 51)
+
+        _fig_dist = make_subplots(rows=1, cols=1)
+        _vlines_to_draw = []  # collect vlines; draw after format_coustom_plotly
+        for _di, _eq in enumerate(_diag_energies):
+            _color_d = colors[_di % len(colors)]
+            _qmask_d = _purity_base & (
+                (_reco["SignalParticleK"] >= _eq - lowe_ebin / 2)
+                & (_reco["SignalParticleK"] < _eq + lowe_ebin / 2)
+            )
+            _r_hp_d = _3d_error_all[_qmask_d]
+            if len(_r_hp_d) < 10:
+                continue
+            _r_hp_pos = _r_hp_d[(_r_hp_d > 0) & (_r_hp_d <= _x_max_d)]
+            _h_counts, _h_edges = np.histogram(_r_hp_pos, bins=_log_edges, density=True)
+            _fig_dist.add_trace(
+                go.Scatter(
+                    x=_h_edges,
+                    y=np.append(_h_counts, _h_counts[-1]),
+                    mode="lines",
+                    name=f"{_eq} MeV",
+                    line=dict(width=1.5, shape="hv", color=_color_d),
+                    opacity=0.9,
+                    legendgroup="energy",
+                    legendgrouptitle_text="Energy" if _di == 0 else "",
+                ),
+                row=1, col=1,
+            )
+            _thresholds_d = _3d_quantile_thresholds[_eq]
+            for _s, _dash in _sigma_dash.items():
+                if _s in _thresholds_d:
+                    _vlines_to_draw.append((_thresholds_d[_s], _dash, _color_d))
+
+        for _si, (_s, _dash) in enumerate(_sigma_dash.items()):
+            _fig_dist.add_trace(
+                go.Scatter(
+                    x=[None], y=[None],
+                    mode="lines",
+                    name=f"{_s}σ",
+                    line=dict(dash=_dash, color="gray", width=1.5),
+                    legendgroup="sigma",
+                    legendgrouptitle_text="Threshold" if _si == 0 else "",
+                    showlegend=True,
+                ),
+                row=1, col=1,
+            )
+
+        _fig_dist = format_coustom_plotly(
+            _fig_dist,
+            title=f"3D Vertex Error Distribution — {config} {name}",
+            log=(True, True),
+        )
+        _fig_dist.update_xaxes(title_text="3D Vertex Error (cm)", range=[None, 3])
+        _fig_dist.update_yaxes(title_text="Density")
+
+        for _thresh_x, _dash, _color_d in _vlines_to_draw:
+            _fig_dist.add_vline(
+                x=_thresh_x,
+                line_dash=_dash,
+                line_color=_color_d,
+                line_width=1.5,
+            )
+        save_figure(
+            _fig_dist,
+            save_path,
+            config,
+            name,
+            filename="Vertex_3D_Error_Distribution",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+
         for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z", None]):
             if energy not in df["Energy"].values and energy is not None:
                 missing_energies.append(energy)
@@ -391,8 +476,9 @@ for config in configs:
                     + run["Reco"]["ErrorZ"] ** 2
                 )
             else:
+                _coord_bin_filter = df["CoordinateBin"].isna() if "CoordinateBin" in df.columns else True
                 _axis_sigma_rows = df[
-                    (df["Coordinate"] == coord) & _emask_df & df["CoordinateBin"].isna()
+                    (df["Coordinate"] == coord) & _emask_df & _coord_bin_filter
                 ]["Sigma"].values
                 _can_use_sigma = len(_axis_sigma_rows) > 0
                 _axis_sigma = float(_axis_sigma_rows[0]) if _can_use_sigma else np.nan

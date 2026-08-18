@@ -53,18 +53,26 @@ def save_sigma_summary_json(
     analysis_dir = str(analysis).lower()
     pnfs_out_dir = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}/{config}/{name}"
     local_out_dirs = [
-        f"{root}/config/{config}/best-sigma-json/{analysis_dir}/{folder.lower()}/{name}",
-        f"{root}/config/{config}/{analysis_dir}-json/{folder.lower()}/{name}",
+        f"{root}/config/{config}/best-sigma-json/{analysis_dir}/{folder.lower()}",
+        f"{root}/config/{config}/{analysis_dir}-json/{folder.lower()}",
     ]
 
+    # Flat structure: {config: {energy: {...}}} — same as Sensitivity JSON.
     payload = {}
     for (cfg, sample_name, energy_label), values in sigma_results.items():
-        payload.setdefault(cfg, {}).setdefault(sample_name, {})[energy_label] = {
-            key: _to_builtin(val) for key, val in values.items()
-        }
+        flat = {key: _to_builtin(val) for key, val in values.items()}
+        existing = payload.setdefault(cfg, {}).get(energy_label)
+        if existing is not None and existing != flat:
+            rprint(
+                f"[yellow][WARNING][/yellow] save_sigma_summary_json: conflicting best cuts for "
+                f"{cfg}/{energy_label} from signal '{sample_name}' — overwriting. "
+                "Pass a single reference signal to avoid ambiguity."
+            )
+        payload[cfg][energy_label] = flat
 
-    filename = f"{config}_{name}_{sigma_results_label}_{analysis}.json"
-    pnfs_out_path = f"{pnfs_out_dir}/{filename}"
+    pnfs_filename = f"{config}_{name}_{sigma_results_label}_{analysis}.json"
+    local_filename = f"{config}_{sigma_results_label}_{analysis}.json"
+    pnfs_out_path = f"{pnfs_out_dir}/{pnfs_filename}"
 
     try:
         if not os.path.exists(pnfs_out_dir):
@@ -76,7 +84,7 @@ def save_sigma_summary_json(
         )
 
     for local_out_dir in local_out_dirs:
-        local_out_path = f"{local_out_dir}/{filename}"
+        local_out_path = f"{local_out_dir}/{local_filename}"
         try:
             if not os.path.exists(local_out_dir):
                 os.makedirs(local_out_dir)
@@ -112,7 +120,7 @@ parser.add_argument(
     default=["hd_1x2x6_centralAPA"],
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     nargs="+",
     type=str,
     help="The name of the configuration",
@@ -128,6 +136,7 @@ parser.add_argument(
     help="The energy for the analysis",
     choices=[
         "SignalParticleK",
+        "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -162,6 +171,12 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--study_label",
+    type=str,
+    default=None,
+    help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
+)
 parser.add_argument(
     "--max_pl_jump",
     type=float,
@@ -208,12 +223,15 @@ rprint(
 fastest_sigma2, fastest_sigma3, highest_sigma, highest_spiked_sigma = {}, {}, {}, {}
 fastest_sigmas = [fastest_sigma2, fastest_sigma3]
 
+_ctx = study_context(args)
+_study_suffix = _ctx.study_suffix
+
 plot_data = {}
 processed_any = False
-for config, name, energy_label in product(args.config, args.name, args.energy):
+for config, name, energy_label in product(args.config, args.signal, args.energy):
     input_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_{energy_label}_{args.analysis}_Results.pkl"
+        f"{config}/{name}/{config}_{name}_{energy_label}_{args.analysis}_Results{_study_suffix}.pkl"
     )
     try:
         sigmas_df = pd.read_pickle(input_path)
@@ -411,13 +429,13 @@ for config, name, energy_label in product(args.config, args.name, args.energy):
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}",
             config,
             name,
-            filename=f"{sigma_results_label}_{args.analysis}",
+            filename=f"{sigma_results_label}_{args.analysis}{_study_suffix}",
             rm=args.rewrite,
             debug=args.debug,
         )
         save_sigma_summary_json(
             sigma_results,
-            sigma_results_label,
+            f"{sigma_results_label}{_study_suffix}",
             args.analysis,
             args.folder,
             config,

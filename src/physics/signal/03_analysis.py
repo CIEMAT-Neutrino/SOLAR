@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -18,12 +19,10 @@ _ANALYSIS_LOCAL_DIR = {
     "HEP": "hep-json",
     "Sensitivity": "sensitivity-json",
 }
-
-
 def _load_best_cuts(analysis, folder, config):
-    """Load best cuts from combined (all-samples) optimization. Not sample-specific.
+    """Load best cuts. Returns dict: {energy: {NHits, AdjCl, OpHits, Score, ...}}
 
-    Returns dict: {energy: {NHits, AdjCl, OpHits, Score, ...}}
+    All analyses use the same JSON structure: {config: {energy: {...}}}
     """
     dir_name = _ANALYSIS_LOCAL_DIR.get(analysis)
     if not dir_name:
@@ -34,7 +33,6 @@ def _load_best_cuts(analysis, folder, config):
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: file not found — {path}")
         return {}
     d = json.load(open(path))
-    # JSON structure: {config: {energy: {NHits, AdjCl, OpHits, ...}}}
     result = d.get(config, {})
     if not result:
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: JSON exists but no entry for {config} — {path}")
@@ -107,10 +105,10 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
 
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
-parser.add_argument("--name", type=str, help="The name of the configuration", default="marley")
+parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
 parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
-parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--nhits", type=int, help="The nhits cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
@@ -134,22 +132,41 @@ parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, 
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
 parser.add_argument("--minimal_cuts", action=argparse.BooleanOptionalAction, default=False, help="Scan only the minimally restrictive cut point: NHits=min, OpHits=min, AdjCl=max (i.e. NHits=1, OpHits=4, AdjCl=20). Useful for background flux plots with no selection applied.")
+parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, adds Charge>Q and sum(AdjClCharge>Q)<AdjCl cuts on top of the NHits scan. Default 0 (no charge cut).")
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
+)
+parser.add_argument(
+    "--dm2",
+    type=float,
+    default=None,
+    help="Override oscillation Δm²₂₁ (eV²) for signal weights. Default: SOLAR_DM2 from physics.json. Ignored for 'file' backend.",
 )
 
 args = parser.parse_args()
+_ctx = study_context(args)
 config = args.config
-name = args.name
+name = args.signal
 configs = {config: [name]}
 
 for path in [save_path, data_path, export_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
         os.makedirs(f"{path}/{args.folder.lower()}")
+
+_log_dir  = f"{root}/output/logs/signal"
+os.makedirs(_log_dir, exist_ok=True)
+_log_file = f"{_log_dir}/{args.config}_{args.signal}_{args.folder.lower()}.log"
+logging.basicConfig(
+    filename=_log_file, filemode="a",
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.DEBUG,
+)
 
 user_input = {
     "workflow": "SIGNIFICANCE",
@@ -202,8 +219,9 @@ run = compute_reco_workflow(
             "PARTICLE_TYPE": "signal",
             "PARTICLE_WEIGHTING": "volume",
             "OSCILLATION_BACKEND": args.oscillation_backend,
+            **({} if args.dm2 is None else {"DEFAULT_SIGNAL_DM2": args.dm2}),
         }
-        if "marley" in args.name
+        if "marley" in args.signal
         else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
     ),
     workflow=user_input["workflow"],
@@ -222,10 +240,24 @@ for config in configs:
             save_pkl(run["Reco"]["SignalParticleK"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
             save_pkl(run["Reco"][energy], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
             save_pkl(run["Reco"]["SignalParticleWeight"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["NHits"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisNHits_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["MatchedOpFlashNHits"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisOpHits_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["AdjClNum"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisAdjCl_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["MatchedOpFlashPlane"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisOpFlashPlane_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            save_pkl(run["Reco"]["MatchedOpFlashPE"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisOpFlashPE_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+            if "marley" in name:
+                save_pkl(run["Reco"]["SignalParticleWeightOscMean"],  export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeightsSolar_{energy}_Ref",      rm=user_input["rewrite"], debug=args.export_raw)
+                save_pkl(run["Reco"]["SignalParticleWeightOscDay"],   export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeightsSolarDay_{energy}_Ref",   rm=user_input["rewrite"], debug=args.export_raw)
+                save_pkl(run["Reco"]["SignalParticleWeightOscNight"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeightsSolarNight_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+                save_pkl(run["Reco"]["SignalParticleWeightb8OscMean"],   export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights8B_{energy}_Ref",  rm=user_input["rewrite"], debug=args.export_raw)
+                save_pkl(run["Reco"]["SignalParticleWeighthepOscMean"], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeightshep_{energy}_Ref", rm=user_input["rewrite"], debug=args.export_raw)
+
+        if args.skip_scan and not args.export_fiducial:
+            continue
 
         plot_lists = {analysis: [] for analysis in args.analysis}
-        fiducials_by_analysis = {analysis: get_best_fiducial(fiducials, config, energy, analysis) for analysis in args.analysis}
-        band_fiducials_by_analysis = {analysis: get_best_fiducial_bands(fiducials, config, energy, analysis) for analysis in args.analysis}
+        fiducials_by_analysis     = {a: get_best_fiducial(fiducials, config, energy, a)       for a in args.analysis}
+        band_fiducials_by_analysis = {a: get_best_fiducial_bands(fiducials, config, energy, a) for a in args.analysis}
         analysis_cache = {}
         _prev_cut = None
 
@@ -275,6 +307,14 @@ for config in configs:
         _true_energy_arr = run["Reco"]["SignalParticleK"]
         _n_bins = len(true_energy_edges) - 1
 
+        # Pre-compute charge filter arrays once per (config, name, energy) iteration.
+        _reco_charge_ok: Optional[np.ndarray] = None
+        _reco_adjcl_above_Q: Optional[np.ndarray] = None
+        if args.charge_threshold > 0:
+            _Q = float(args.charge_threshold)
+            _reco_charge_ok = run["Reco"]["Charge"] > _Q
+            _reco_adjcl_above_Q = np.sum(run["Reco"]["AdjClCharge"] > _Q, axis=1).astype(int)
+
         # Track last quality mask to recompute only when cut values change.
         _quality_mask_cut: tuple = ()
         _quality_mask: np.ndarray = np.ones(0, dtype=bool)
@@ -282,11 +322,8 @@ for config in configs:
         best_cuts_by_analysis = {}
         if args.nhits is None and args.ophits is None and args.adjcls is None and (args.export_raw or args.best_cuts_only):
             for analysis in args.analysis:
-                # Best cuts only exist for Sensitivity (04_best_cuts.py)
-                # DayNight/HEP don't have best cuts JSON files
-                if analysis == "Sensitivity":
-                    cuts = _load_best_cuts(analysis, args.folder, config)
-                    best_cuts_by_analysis[analysis] = cuts.get(energy, {})
+                cuts = _load_best_cuts(analysis, args.folder, config)
+                best_cuts_by_analysis[analysis] = cuts.get(energy, {})
 
         # Build scan ranges: full grid by default; reduced to best-cut tuples for Pass 3.
         if args.best_cuts_only:
@@ -339,6 +376,12 @@ for config in configs:
                     & (_reco_op_pe    > 0)
                     & (_reco_op_nhits > this_ophit - 1)
                 )
+                if args.charge_threshold > 0:
+                    _quality_mask = (
+                        _quality_mask
+                        & _reco_charge_ok
+                        & (_reco_adjcl_above_Q < this_adjcl)
+                    )
                 _quality_mask_cut = _cur_cut
             if _prev_cut is not None and _cur_cut != _prev_cut:
                 for _a in args.analysis:
@@ -360,11 +403,11 @@ for config in configs:
                     true_bin_valid = (true_bin_idx >= 0) & (true_bin_idx < _n_bins)
                     mc_counts = np.bincount(reco_bin_idx[reco_bin_valid], minlength=_n_bins)
                     mc_filter = mc_counts >= args.mc_filter_threshold
-                    if args.debug and np.any(~mc_filter):
-                        rprint(
-                            f"[yellow][WARNING][/yellow] {np.sum(~mc_filter)} bins with MC < "
-                            f"{args.mc_filter_threshold} zeroed for {energy} "
-                            f"NHits={this_nhit} OpHits={this_ophit} AdjCl={this_adjcl}"
+                    if np.any(~mc_filter):
+                        logging.debug(
+                            "%d bins with MC < %d zeroed for %s NHits=%d OpHits=%d AdjCl=%d",
+                            np.sum(~mc_filter), args.mc_filter_threshold,
+                            energy, this_nhit, this_ophit, this_adjcl,
                         )
                     h_rel_error = np.zeros_like(mc_counts, dtype=float)
                     non_zero_bins = mc_counts > 0
@@ -475,4 +518,5 @@ for config in configs:
                     rebin_cache[df_id] = rebin_df_columns(df, rebin_dict[analysis], "Energy", "Counts", "Counts/Energy", "Error", "MCCounts")
                 rebin_df = rebin_cache[df_id]
 
-                save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name]}/{analysis.upper()}", config=config, name=name, filename=f"{energy}_Rebin", rm=user_input['rewrite'], debug=user_input['debug'])
+                _rebin_label = _ctx.rebin_label(energy)
+                save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name]}/{analysis.upper()}", config=config, name=name, filename=_rebin_label, rm=user_input['rewrite'], debug=user_input['debug'])

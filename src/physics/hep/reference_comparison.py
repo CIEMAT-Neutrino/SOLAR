@@ -42,7 +42,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--analysis", type=str, default="HEP")
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--exposure", type=float, default=30)
 parser.add_argument("--signal_uncertainty", type=float, default=0.04)
@@ -93,7 +93,7 @@ comparison_styles = {
 
 reference_variables = ["Asimov", "AsimovProxy", "Gaussian", "ProfileLikelihood"]
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     selection = get_selection_cuts(config, name, energy, args)
     if selection is None:
         rprint(

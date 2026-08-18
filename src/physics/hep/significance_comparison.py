@@ -21,7 +21,7 @@ def get_selection_cuts(config: str, name: str, energy: str, args: argparse.Names
 
     sigma_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}/"
-        f"{config}/{name}/{config}_{name}_{args.pkl_label}_HEP.pkl"
+        f"{config}/{name}/{config}_{name}_{args.pkl_label}_HEP{_study_suffix}.pkl"
     )
     if not os.path.exists(sigma_path):
         return None
@@ -42,7 +42,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--analysis", type=str, default="HEP")
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--exposure", type=float, default=30)
 parser.add_argument("--signal_uncertainty", type=float, default=0.04)
@@ -52,14 +52,14 @@ parser.add_argument(
     nargs="+",
     type=str,
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
         "SolarEnergy",
     ],
     default=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -84,7 +84,11 @@ parser.add_argument(
     default="highest",
     help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked').",
 )
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 comparison_styles = {
     ("Asimov", "Raw"):      dict(color="black",    dash="dot",   width=2),
@@ -97,7 +101,7 @@ comparison_styles = {
 
 reference_variables = ["Asimov", "AsimovProxy", "Gaussian"]
 
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     selection = get_selection_cuts(config, name, energy, args)
     if selection is None:
         rprint(
@@ -110,7 +114,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         Path(data_path)
         / config
         / name
-        / args.folder.lower()
+        / _save_subfolder
         / f"{config}_{name}_HEP_Significance.pkl"
     )
     if not significance_file.exists():
@@ -397,7 +401,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         save_path,
         config=config,
         name=name,
-        subfolder=args.folder.lower(),
+        subfolder=_save_subfolder,
         filename=figure_name,
         rm=args.rewrite,
         debug=args.plot,

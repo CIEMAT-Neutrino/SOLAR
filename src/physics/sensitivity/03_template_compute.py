@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(
     description="Compute sensitivity templates (signal/background) without generating plots"
 )
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
-parser.add_argument("--name", type=str, default="marley")
+parser.add_argument("--signal", type=str, default="marley")
 parser.add_argument(
     "--reference",
     type=str,
@@ -34,6 +34,7 @@ parser.add_argument(
     type=str,
     choices=[
         "SignalParticleK",
+        "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -57,9 +58,13 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation backend forwarded to BackgroundTemplate and SignalTemplate.",
 )
+parser.add_argument("--charge_threshold", type=float, default=0,
+    help="Charge threshold Q (ADC) forwarded to signal/background template scripts.")
+parser.add_argument("--study_label", type=str, default=None,
+    help="Tag forwarded to template scripts to label output subfolders for charge study variants.")
 args = parser.parse_args()
 
 
@@ -67,8 +72,8 @@ def build_common_args() -> List[str]:
     common = [
         "--config",
         args.config,
-        "--name",
-        args.name,
+        "--signal",
+        args.signal,
         "--reference",
         args.reference,
         "--folder",
@@ -92,6 +97,10 @@ def build_common_args() -> List[str]:
         common.extend(["--ophits", str(args.ophits)])
     if args.adjcls is not None:
         common.extend(["--adjcls", str(args.adjcls)])
+    if args.charge_threshold > 0:
+        common.extend(["--charge_threshold", str(args.charge_threshold)])
+    if args.study_label:
+        common.extend(["--study_label", args.study_label])
     return common
 
 

@@ -31,7 +31,7 @@ parser.add_argument(
     default="hd_1x2x6_centralAPA",
 )
 parser.add_argument(
-    "--name", type=str, help="The name of the configuration", default="marley"
+    "--signal", type=str, help="The name of the configuration", default="marley"
 )
 parser.add_argument(
     "--folder",
@@ -63,7 +63,7 @@ parser.add_argument(
     type=str,
     help="The energy for the analysis",
     choices=[
-        "SignalParticleK",
+        "SignalParticleK", "MainK",
         "ClusterEnergy",
         "TotalEnergy",
         "SelectedEnergy",
@@ -88,7 +88,7 @@ parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
-    default="file",
+    default="nufast",
     help="Oscillation backend for signal template convolution. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
 )
 parser.add_argument(
@@ -105,8 +105,14 @@ parser.add_argument(
     help='JSON list of cut dicts [{"NHits":N,"AdjCl":A,"OpHits":O}, ...]. '
          "When provided, processes all listed cuts in a single invocation.",
 )
+parser.add_argument("--charge_threshold", type=float, default=0,
+    help="Charge threshold Q (ADC). When >0, applies Charge>Q cut to signal template events.")
+parser.add_argument("--study_label", type=str, default=None,
+    help="Tag appended to template subfolder to isolate charge study variants.")
 
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix = _ctx.study_suffix
 
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="SENSITIVITY", dimensions="2d", stage="significance"
@@ -152,18 +158,20 @@ elif args.debug:
 
 
 def _load_best_cut_map(info: dict, args):
+    _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
     for analysis in candidates:
-        filepath = (
-            f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.name}/"
-            f"{args.config}_{args.name}_highest_{analysis}.pkl"
-        )
-        tried.append(filepath)
-        if os.path.exists(filepath):
-            if args.debug:
-                rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}")
-            return pickle.load(open(filepath, "rb"))
+        for suffix in ([_suffix, ""] if _suffix else [""]):
+            filepath = (
+                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            )
+            tried.append(filepath)
+            if os.path.exists(filepath):
+                if args.debug:
+                    rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                return pickle.load(open(filepath, "rb"))
 
     rprint(
         "[yellow][WARNING][/yellow] Unable to load any best-cut map. Checked:\n"
@@ -172,7 +180,7 @@ def _load_best_cut_map(info: dict, args):
     return None
 
 folder = args.folder
-configs = {args.config: [args.name]}
+configs = {args.config: [args.signal]}
 
 for path in [save_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
@@ -195,7 +203,7 @@ run = compute_reco_workflow(
         "PARTICLE_TYPE": "signal",
         "PARTICLE_WEIGHTING": "volume",
         "OSCILLATION_BACKEND": args.oscillation_backend,
-    } if "marley" in args.name else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"},
+    } if "marley" in args.signal else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"},
     workflow="SIGNIFICANCE",
     rm_branches=False,
     debug=args.debug)
@@ -283,15 +291,16 @@ for config in configs:
             (
                 (run["Reco"]["SignalParticleSurface"] >= 0)
                 & (run["Reco"]["SignalParticleSurface"] < 3)
-                if args.name.split("_")[0] in ["gamma", "neutron"]
+                if args.signal.split("_")[0] in ["gamma", "neutron"]
                 else np.ones(len(run["Reco"]["NHits"]), dtype=bool)
             )
-            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.name.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
+            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.signal.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
             & (run["Reco"]["MatchedOpFlashPlane"] == analysis_info["QUALITY_CUTS"]["OPFLASH_PLANE"])
             & (run["Reco"]["MatchedOpFlashPE"] > 0)
             & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
+            & (run["Reco"]["Charge"] > args.charge_threshold if args.charge_threshold > 0 else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
         )
         spatial_mask = build_energy_band_spatial_mask(
             run, config, detector_x, detector_y, info, args.folder,
@@ -382,8 +391,8 @@ for config in configs:
                 args.exposure * detector_mass * rebin_z,
                 f"{info['PATH']}/SENSITIVITY",
                 config=args.config,
-                name=args.name,
-                subfolder=f"{folder.lower()}/{energy}",
+                name=args.signal,
+                subfolder=f"{folder.lower()}/{energy}{_study_suffix}",
                 filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
                 rm=args.rewrite,
                 debug=args.debug,
@@ -408,7 +417,7 @@ for config in configs:
                 _osc_fig.update_xaxes(title="True Neutrino Energy (MeV)")
                 _osc_fig.update_yaxes(title="cos(η) Zenith Angle")
                 save_figure(
-                    _osc_fig, save_path, config=args.config, name=args.name, subfolder=args.folder.lower(),
+                    _osc_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
                     filename=f"Oscillogram_{energy}", rm=args.rewrite, debug=args.plot,
                 )
 
@@ -428,7 +437,7 @@ for config in configs:
                 _sig_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
                 _sig_fig.update_yaxes(title="Events (kt·yr)⁻¹ MeV⁻¹")
                 save_figure(
-                    _sig_fig, save_path, config=args.config, name=args.name, subfolder=args.folder.lower(),
+                    _sig_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
                     filename=f"Signal1D_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}", rm=args.rewrite, debug=args.plot,
                 )
 
@@ -461,7 +470,7 @@ for config in configs:
         fig.update_layout(coloraxis=dict(colorbar=dict(title="log(Counts)")))
         save_figure(
             fig, f"{save_path}",
-            config=args.config, name=args.name, subfolder=f"{args.folder.lower()}",
+            config=args.config, name=args.signal, subfolder=f"{args.folder.lower()}",
             filename=f"Selected_Signal_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
             rm=args.rewrite, debug=args.plot,
         )

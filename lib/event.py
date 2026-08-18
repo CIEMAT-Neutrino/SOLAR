@@ -188,6 +188,7 @@ def add_data_to_event(
     size: Union[int, list] = 20,
     color: Union[str, list] = "black",
     options: dict = {"lw": 0, "marker": None, "colorscale": "Turbo"},
+    projection: str = "truth",
     debug: bool = False,
 ):
     default_options = {"lw": 0, "marker": None, "colorscale": "Turbo"}
@@ -201,12 +202,12 @@ def add_data_to_event(
         # Search fo rvalues in coord that are <= -1e6 and set them to 0
         coord[:] = [x if x > -1e6 else 0 for x in coord]
 
-    if geometry == "vd":
-        x, y, z = data[0], data[1], data[2]
-    elif geometry == "hd":
-        x, y, z = data[0], data[1], data[2]
+    x, y, z = data[0], data[1], data[2]
 
-    # print(data)
+    # col=2: "truth" → (X, Y);  "reco" → (Z, X)
+    col2_x = x if projection == "truth" else z
+    col2_y = y if projection == "truth" else x
+
     fig.add_trace(
         go.Scatter3d(
             text=name,
@@ -239,8 +240,8 @@ def add_data_to_event(
             text=name,
             legendgroup=idx,
             marker_symbol=symbol,
-            x=x,
-            y=y,
+            x=col2_x,
+            y=col2_y,
             mode="markers",
             marker=dict(
                 size=np.asarray(size) + 5,
@@ -308,7 +309,10 @@ def add_particle_legend(fig, run, tracked, varaibales: dict, idx):
 
     for key, value in color_dict.items():
         if key != "background":
-            key = Particle.from_pdgid(key).name
+            try:
+                key = Particle.from_pdgid(key).name
+            except Exception:
+                pass  # nuclear/unknown PDG — use raw ID string
         fig.add_trace(
             go.Scatter(
                 x=[None],
@@ -535,6 +539,7 @@ def plot_tpc_event(
     adjclnum=0,
     get_adj_color=False,
     unzoom=1,
+    projection="truth",
     debug=False,
 ):
     specs = [
@@ -559,7 +564,7 @@ def plot_tpc_event(
         ccint, true_name, true_color = get_signal_positions(run, tracked, idx)
         main, main_name, main_color = get_main_positions(run, tracked, idx, tracked)
         adj, adjcl_name, adjcl_color = get_adjcl_positions(
-            run, tracked, idx, tracked, color_dict, get_adjacent_color=False
+            run, tracked, idx, tracked, color_dict, get_adjacent_color=get_adj_color
         )
         if debug:
             print(f"**True X: {neut[0][0]:.2f} Y: {neut[1][0]:.2f} Z: {neut[2][0]:.2f}")
@@ -579,6 +584,7 @@ def plot_tpc_event(
             15,
             neut_color,
             {"lw": 1},
+            projection=projection,
         )
         fig = add_data_to_event(
             fig,
@@ -592,6 +598,7 @@ def plot_tpc_event(
             15,
             true_color,
             {"lw": 1},
+            projection=projection,
         )
         fig = add_data_to_event(
             fig,
@@ -605,6 +612,7 @@ def plot_tpc_event(
             10,
             main_color,
             {"lw": 1},
+            projection=projection,
         )
         fig = add_data_to_event(
             fig,
@@ -617,6 +625,7 @@ def plot_tpc_event(
             "square",
             10,
             adjcl_color,
+            projection=projection,
         )
 
         fig = format_coustom_plotly(fig, figsize=(None, 600), add_watermark=False)
@@ -625,9 +634,12 @@ def plot_tpc_event(
             % (run["Reco"]["SignalParticleK"][idx], idx, config),
             title_x=0.5,
         )
+        col2_xlabel = "X [cm]" if projection == "truth" else "Z [cm]"
+        col2_ylabel = "Y [cm]" if projection == "truth" else "X [cm]"
         fig.update_xaxes(matches=None, title_text="Z [cm]", row=1, col=1)
-        fig.update_xaxes(matches=None, title_text="X [cm]", row=1, col=2)
+        fig.update_xaxes(matches=None, title_text=col2_xlabel, row=1, col=2)
         fig.update_yaxes(title_text="Y [cm]", row=1, col=1)
+        fig.update_yaxes(title_text=col2_ylabel, row=1, col=2)
         fig = add_geometry_planes(fig, info["GEOMETRY"], unzoom, row=1, col=3)
 
         if zoom:

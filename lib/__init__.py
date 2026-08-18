@@ -59,6 +59,7 @@ from .event import *
 from .fiducial import *
 from .background import *
 from .log import configure_global_logging, get_global_logging_config
+from .study import StudyContext, study_context
 
 # Config the external libraries
 np.seterr(divide="ignore", invalid="ignore")

@@ -970,6 +970,17 @@
         "publication"
       ],
       "publication_export": true
+    },
+    "CUTFLOW_SPECTRA": {
+      "description": "Successive-cut histograms of Counts-weighted RecoEnergy. One pkl per named sample. Stages: Pre-Fiducial, Fiducial (Component=All, from Ref pkls), All, NHits, NHits+OpHits, NHits+OpHits+AdjCl (per component, from Weighted_Distributions). One row per (Component, Stage). Columns: Config, Name, Folder, Component, Stage, NHits, OpHits, AdjCl, Energy (array), Counts (array), EnergyUnit, CountsUnit.",
+      "base": "{root}/output/data/solar/cutflow/{config}/{name}/{folder}",
+      "filename": "{config}_{name}_{energy}_Cutflow.pkl",
+      "full_path": "{root}/output/data/solar/cutflow/{config}/{name}/{folder}/{config}_{name}_{energy}_Cutflow.pkl",
+      "written_by": "src/physics/signal/cutflow_plot.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false,
+      "themes": ["signal", "publication"],
+      "publication_export": true
     }
   },
   "_themes": {

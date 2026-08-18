@@ -54,7 +54,7 @@ parser.add_argument(
     ],
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     type=str,
     nargs="+",
     help="Sample names to process",
@@ -86,11 +86,11 @@ _rw_flag      = ["--rewrite" if args.rewrite else "--no-rewrite"]
 
 rprint(f"\n[bold]Analysis pipeline[/bold]")
 rprint(f"  Configs : {args.config}")
-rprint(f"  Names   : {args.name}")
+rprint(f"  Names   : {args.signal}")
 rprint(f"  Verbose : {args.verbose}")
 
-for config, name in product(args.config, args.name):
-    base = ["--config", config, "--name", name] + _rw_flag + _verbose_flag
+for config, name in product(args.config, args.signal):
+    base = ["--config", config, "--signal", name] + _rw_flag + _verbose_flag
     run_python_command(["python3", f"{root}/src/pipelines/run_preselection.py"] + base)
     run_python_command(["python3", f"{root}/src/pipelines/run_pds.py"]          + base)
     run_python_command(["python3", f"{root}/src/pipelines/run_tpc.py"]          + base)

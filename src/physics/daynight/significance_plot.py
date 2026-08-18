@@ -21,7 +21,7 @@ parser.add_argument(
     "--reference", type=str, choices=["Gaussian", "Asimov"], default="Gaussian"
 )
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
-parser.add_argument("--name", nargs="+", type=str, default=["marley"])
+parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--signal_uncertainty", type=float, default=0.00)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
@@ -49,7 +49,11 @@ parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=Fal
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
+_ctx = study_context(args)
+_study_suffix   = _ctx.study_suffix
+_save_subfolder = _ctx.save_subfolder
 
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="DAYNIGHT", dimensions="1d", stage="significance"
@@ -57,20 +61,20 @@ smoothing_config = get_smoothing_config(
 day_night_counts = []
 day_night_significance = []
 smoothing_info = smoothing_metadata(smoothing_config)
-for config, name, energy in product(args.config, args.name, args.energy):
+for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     sigma = pickle.load(
         open(
-            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.name[0]}/{config}_{args.name[0]}_highest_DayNight.pkl",
+            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.signal[0]}/{config}_{args.signal[0]}_highest_DayNight{_study_suffix}.pkl",
             "rb",
         )
     )
     sigmas_df = pd.read_pickle(
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results.pkl",
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_{args.analysis}_Results{_study_suffix}.pkl",
     )
     significance_bins_path = (
         f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/"
-        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins.pkl"
+        f"{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins{_study_suffix}.pkl"
     )
     if not os.path.exists(significance_bins_path):
         rprint(
@@ -494,7 +498,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
         save_path,
         config=config,
         name=name,
-        subfolder=args.folder.lower(),
+        subfolder=_save_subfolder,
         filename=figure_name,
         rm=args.rewrite,
         debug=args.plot,
@@ -509,7 +513,7 @@ for config, name, energy in product(args.config, args.name, args.energy):
             data_path,
             config,
             name,
-            subfolder=args.folder.lower(),
+            subfolder=_save_subfolder,
             filename=df_name,
             rm=args.rewrite,
             debug=args.debug,

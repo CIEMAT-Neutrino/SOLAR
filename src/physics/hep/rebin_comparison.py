@@ -70,7 +70,7 @@ parser.add_argument(
     help="Detector configuration(s) to process.",
 )
 parser.add_argument(
-    "--name",
+    "--signal",
     nargs="+",
     type=str,
     default=["marley"],
@@ -93,7 +93,7 @@ parser.add_argument(
     "--energy",
     nargs="+",
     type=str,
-    choices=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
+    choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
     default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
     help="Energy label(s) to process.",
 )
@@ -163,12 +163,21 @@ parser.add_argument(
     default="highest",
     help="Label of the best-cut pkl to read (e.g. 'highest', 'highest_spiked').",
 )
+parser.add_argument(
+    "--study_label",
+    type=str,
+    default=None,
+    help="Tag appended to image subdirectory to isolate study variant outputs.",
+)
 args = parser.parse_args()
+
+_ctx = study_context(args)
+_save_subfolder = _ctx.save_subfolder
 
 _STYLE_PRE  = dict(color=compare[1], dash="dash",  width=2)
 _STYLE_POST = dict(color="black",    dash="solid", width=3)
 
-for config, name in product(args.config, args.name):
+for config, name in product(args.config, args.signal):
     comparison_rows = []
 
     for energy in args.energy:
@@ -319,7 +328,7 @@ for config, name in product(args.config, args.name):
                 figure_name += f"_Threshold_{args.threshold:.0f}"
             save_figure(
                 fig, save_path,
-                config=config, name=name, subfolder=args.folder.lower(),
+                config=config, name=name, subfolder=_save_subfolder,
                 filename=figure_name, rm=args.rewrite, debug=args.debug,
             )
 
@@ -329,7 +338,7 @@ for config, name in product(args.config, args.name):
             data_path,
             config=config,
             name=name,
-            subfolder=args.folder.lower(),
+            subfolder=_save_subfolder,
             filename="HEP_AdaptiveRebin_Comparison",
             rm=args.rewrite,
             debug=args.debug,

@@ -1,6 +1,5 @@
 import json
 import os
-import warnings
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
@@ -84,17 +83,19 @@ def load_available_background_dataframes(
     folder: str,
     config: str,
     energy: str,
+    study_label: str = None,
 ) -> List[Any]:
     essential = get_essential_backgrounds(root)
     frames = []
     for sample in get_background_samples(root, analysis_name):
-        filepath = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/{analysis_name.upper()}/{config}/{sample}/{config}_{sample}_{energy}_Rebin.pkl"
+        base = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/{analysis_name.upper()}/{config}/{sample}/{config}_{sample}_{energy}"
+        labeled = f"{base}_Rebin_{study_label}.pkl" if study_label else None
+        standard = f"{base}_Rebin.pkl"
+        filepath = labeled if (labeled and os.path.exists(labeled)) else standard
         if os.path.exists(filepath):
             frames.append((sample, filepath))
         elif essential.get(sample, False):
-            warnings.warn(
-                f"Essential background '{sample}' missing for {analysis_name} {config} {energy}: {filepath}",
-                RuntimeWarning,
-                stacklevel=2,
+            raise RuntimeError(
+                f"Essential background '{sample}' missing for {analysis_name} {config} {energy}: {filepath}"
             )
     return frames
