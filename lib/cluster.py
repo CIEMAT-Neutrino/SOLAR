@@ -350,6 +350,74 @@ def compute_total_energy(
     return run, output, new_branches
 
 
+def recompute_reco_energy_with_charge_threshold(
+    run: dict,
+    configs: dict,
+    charge_threshold: float,
+    params: Optional[dict] = None,
+    output: str = "",
+    debug: bool = False,
+) -> tuple[dict, str]:
+    """
+    Recompute all AdjCl-based energy features with a minimum charge floor.
+
+    Applies AdjClCharge > charge_threshold to every AdjCl-based sum — both the
+    Selected* features (which already carry per-config R and MAX_BKG_CHARGE cuts)
+    and the Total* / Max features (which normally sum unconditionally).  No BDT is
+    involved; the charge study uses SelectedEnergy as its analysis metric, which is a
+    direct sum (Energy + SelectedAdjClEnergy) and requires no retraining.
+
+    Called from 03_analysis.py after compute_reco_workflow when --charge_threshold > 0.
+    The charge variants in run_studies.py pass energy_override="SelectedEnergy" so
+    that the Rebin pkls written afterwards use the charge-corrected SelectedEnergy axis.
+    """
+    if output is None:
+        output = ""
+    output += f"\t[magenta][LOG][/magenta] Recomputing AdjCl energy features with Q>{charge_threshold:.0f} ADC...\n"
+
+    for config in configs:
+        info, this_params, output = get_param_dict(
+            f"{root}/config/{config}/{config}", params, output, debug=debug
+        )
+        idx = np.where(
+            (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
+            * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
+        )
+
+        adj_charge = run["Reco"]["AdjClCharge"][idx]
+        adj_energy = run["Reco"]["AdjClEnergy"][idx]
+        charge_floor = adj_charge > charge_threshold
+
+        # Total* features: sum / max over all AdjCl above the charge floor.
+        run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(adj_energy, where=charge_floor, axis=1)
+        run["Reco"]["MaxAdjClEnergy"][idx]   = np.max(adj_energy, where=charge_floor, axis=1, initial=0)
+        run["Reco"]["TotalEnergy"][idx]      = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx]
+
+        # Selected* features: existing R + MAX_BKG_CHARGE filter, then charge floor.
+        selected_filter = np.where(
+            (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"])
+            + (adj_charge > this_params["MAX_BKG_CHARGE"]),
+            False,
+            True,
+        )
+        selected_filter_Q = selected_filter & charge_floor
+
+        run["Reco"]["SelectedAdjClNum"][idx]         = np.sum(selected_filter_Q, axis=1)
+        run["Reco"]["SelectedAdjClEnergy"][idx]      = np.sum(adj_energy, where=selected_filter_Q, axis=1)
+        run["Reco"]["SelectedMaxAdjClEnergy"][idx]   = np.max(adj_energy, where=selected_filter_Q, axis=1, initial=0)
+        run["Reco"]["SelectedEnergy"][idx]           = (
+            run["Reco"]["Energy"][idx] + run["Reco"]["SelectedAdjClEnergy"][idx]
+        )
+        run["Reco"]["SelectedAdjClEnergyRatio"][idx] = np.where(
+            run["Reco"]["Energy"][idx] != 0,
+            run["Reco"]["SelectedAdjClEnergy"][idx] / run["Reco"]["Energy"][idx],
+            0.0,
+        )
+
+    output += f"\tAdjCl energy features recomputed with Q>{charge_threshold:.0f} ADC\t-> Done!\n\n"
+    return run, output
+
+
 def compute_reco_energy(
     run,
     configs,

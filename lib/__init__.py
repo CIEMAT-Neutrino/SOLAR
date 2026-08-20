@@ -41,7 +41,7 @@ from .filters import (
     update_json_file,
 )
 from .weights import compute_particle_weights, compute_particle_surface
-from .cluster import compute_total_energy
+from .cluster import compute_total_energy, recompute_reco_energy_with_charge_threshold
 from .dataframe import *
 from .fitting import *
 from .geometry import *

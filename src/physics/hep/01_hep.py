@@ -355,14 +355,16 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     cuts_with_any_data = 0
     cuts_with_all_components = 0
     cuts_passing_mc_threshold = 0
-    _rebin_study_path = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin_{args.study_label}.pkl"
-        if args.study_label else None
-    )
-    _rebin_std_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
-    _rebin_path = _rebin_study_path if (_rebin_study_path and os.path.exists(_rebin_study_path)) else _rebin_std_path
+    _rebin_stem = _ctx.rebin_label(energy)
+    _rebin_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{_rebin_stem}.pkl"
+    if not os.path.exists(_rebin_path):
+        raise SystemExit(
+            f"[ERROR] Missing HEP signal Rebin pkl: {_rebin_path}\n"
+            "Run 03_analysis.py for this config/folder/study first."
+        )
     plot_df = pd.read_pickle(_rebin_path)
-    for bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy, study_label=args.study_label):
+    _bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
+    for bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy, study_label=_bkg_study_label):
         bkg_df = pd.read_pickle(filepath)
         plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
 

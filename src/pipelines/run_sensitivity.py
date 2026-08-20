@@ -617,6 +617,12 @@ def oscillation_args_for() -> List[str]:
     return result
 
 
+def fiducialize_oscillation_args_for() -> List[str]:
+    # dm2 not forwarded — fiducial volume scan optimises detector geometry only,
+    # not oscillation weights; 01_fiducialize.py does not accept --dm2.
+    return ["--oscillation_backend", args.oscillation_backend]
+
+
 def study_label_args_for() -> List[str]:
     if args.study_label:
         return ["--study_label", args.study_label]
@@ -658,7 +664,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     if args.fiducialization:
         for name in available_names:
             sample_args = base_args + ["--signal", name]
-            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + oscillation_args_for())
+            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for())
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/01_fiducialize.py (--no-fiducialization).")
 
@@ -687,6 +693,8 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     )
 
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
+    # study_label_args_for() is included so charge/dm2 variants write labeled Rebin pkls for
+    # backgrounds — prevents charge-filtered Rebins from overwriting the standard unlabeled path.
     if args.rebin:
         for name in available_names:
             sample_args = base_args + ["--signal", name]
@@ -698,6 +706,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + cut_args
                 + charge_scan_args_for()
                 + oscillation_args_for()
+                + study_label_args_for()
                 + ["--export_fiducial"],
             )
     else:
@@ -713,6 +722,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + cut_args
                 + charge_scan_args_for()
                 + oscillation_args_for()
+                + study_label_args_for()
                 + ["--export_fiducial", "--skip_scan", "--no-plot"],
             )
 

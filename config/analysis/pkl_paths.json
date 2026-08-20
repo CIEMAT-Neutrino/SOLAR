@@ -993,14 +993,17 @@
     "calibration": "Detector calibration pipeline (charge, discriminant, reconstruction)",
     "detector": "Detector characterization diagnostics (PDS, TPC, vertex, preselection)",
     "fiducial": "Fiducial volume optimization (scan DataFrames, best-fiducial JSON)",
-    "publication": "Publication-ready outputs for LOWE_RECONSTRUCTION_PUBLICATION"
+    "publication": "Publication-ready outputs for LOWE_RECONSTRUCTION_PUBLICATION",
+    "solar_paper": "Main analysis plot inputs for the SOLAR paper: cutflow, NHits distributions, DayNight and HEP exposure and counts for all 4 geometries (truncated fiducialization)"
   },
   "_path_themes": {
     "analysis/day-night": [
-      "daynight"
+      "daynight",
+      "solar_paper"
     ],
     "analysis/hep": [
-      "hep"
+      "hep",
+      "solar_paper"
     ],
     "analysis/sensitivity": [
       "sensitivity"
@@ -1020,8 +1023,12 @@
     "marley/stacked": [
       "signal"
     ],
+    "solar/cutflow": [
+      "solar_paper"
+    ],
     "solar/nhits": [
-      "signal"
+      "signal",
+      "solar_paper"
     ],
     "solar/weighted": [
       "signal"

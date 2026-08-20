@@ -187,16 +187,20 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
     sigmas = []
     significance_bins = []
-    _rebin_study_path = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin_{args.study_label}.pkl"
-        if args.study_label else None
-    )
-    _rebin_std_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
-    _rebin_path = _rebin_study_path if (_rebin_study_path and os.path.exists(_rebin_study_path)) else _rebin_std_path
+    _rebin_stem = _ctx.rebin_label(energy)
+    _rebin_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/DAYNIGHT/{config}/{name}/{config}_{name}_{_rebin_stem}.pkl"
+    if not os.path.exists(_rebin_path):
+        raise SystemExit(
+            f"[ERROR] Missing DayNight signal Rebin pkl: {_rebin_path}\n"
+            "Run 03_analysis.py for this config/folder/study first."
+        )
     plot_df = pd.read_pickle(_rebin_path)
+    # Background Rebin pkls are labeled only for charge variants — charge filtering modifies
+    # the background spectrum.  dm2/unc_bkg/unc_sig variants leave backgrounds unchanged.
+    _bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
     configured_backgrounds = get_background_samples(str(root), "DAYNIGHT")
     loaded_backgrounds = []
-    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy, study_label=args.study_label):
+    for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy, study_label=_bkg_study_label):
         bkg_df = pd.read_pickle(filepath)
         plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
         loaded_backgrounds.append(bkg)

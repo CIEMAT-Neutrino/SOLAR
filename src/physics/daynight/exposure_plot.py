@@ -65,7 +65,7 @@ parser.add_argument(
     nargs="+",
     type=str,
     help="The energy for the analysis",
-    default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
+    default=["SolarEnergy"],
     choices=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
 parser.add_argument(

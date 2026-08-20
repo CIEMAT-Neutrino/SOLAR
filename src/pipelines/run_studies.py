@@ -72,13 +72,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # Scan bracketing the default 30%: tighter (20%) and looser (40%)
         {"label": "unc_sig20", "skip_rebin": True, "skip_best_cuts": True, "analysis_override": ["HEP"], "extra": ["--signal_uncertainty", "0.20"]},
         {"label": "unc_sig40", "skip_rebin": True, "skip_best_cuts": True, "analysis_override": ["HEP"], "extra": ["--signal_uncertainty", "0.40"]},
-        # Signal uncertainty — Sensitivity chi² only (tighter range around config default ~4%)
-        {"label": "unc_sig2",  "skip_rebin": True, "skip_best_cuts": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.02"]},
-        {"label": "unc_sig6",  "skip_rebin": True, "skip_best_cuts": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06"]},
-        {"label": "unc_sig8",  "skip_rebin": True, "skip_best_cuts": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.08"]},
-        # Background uncertainty — both analyses; effect enters ErrorGaussian error bands
+        # Background uncertainty — both analyses; effect enters significance when σ_bkg²·N_bkg > 1.
+        # Extended scan: systematic dominates only for large backgrounds or high σ_bkg.
+        # σ_bkg² · N_bkg > 1  →  N_bkg > 1/σ_bkg²  (6%→278, 10%→100, 20%→25 events)
         {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "extra": ["--background_uncertainty", "0.00"]},
         {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "extra": ["--background_uncertainty", "0.04"]},
+        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "extra": ["--background_uncertainty", "0.06"]},
+        {"label": "unc_bkg10", "skip_rebin": True, "skip_best_cuts": True, "extra": ["--background_uncertainty", "0.10"]},
+        {"label": "unc_bkg20", "skip_rebin": True, "skip_best_cuts": True, "extra": ["--background_uncertainty", "0.20"]},
     ],
     # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
@@ -92,11 +93,15 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"folder": "Reduced",   "skip_rebin": True, "skip_best_cuts": True},
         {"folder": "Truncated", "skip_rebin": True, "skip_best_cuts": True},
     ],
-    # 9.2.3 — charge threshold scan (regenerates Rebin pkls with additional charge cut)
+    # 9.2.3 — charge threshold scan
+    # AdjCl energy features are recomputed with AdjClCharge > Q before the Rebin pkl is
+    # written, so the energy axis itself reflects the charge cut — not just event selection.
+    # SelectedEnergy (= Energy + SelectedAdjClEnergy) is used as the analysis metric:
+    # it is a direct calorimetric sum that needs no BDT retraining.
     "charge": [
-        {"label": "charge_Q50",  "skip_rebin": False, "skip_best_cuts": False, "extra": ["--charge_threshold",  "50"]},
-        {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": False, "extra": ["--charge_threshold", "100"]},
-        {"label": "charge_Q200", "skip_rebin": False, "skip_best_cuts": False, "extra": ["--charge_threshold", "200"]},
+        {"label": "charge_Q50",  "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold",  "50"]},
+        {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "100"]},
+        {"label": "charge_Q200", "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "200"]},
     ],
     # 9.2.4 — background model normalization (folder provides isolation)
     "bkgmodel": [

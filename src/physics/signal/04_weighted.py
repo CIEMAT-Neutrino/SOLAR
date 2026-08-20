@@ -38,6 +38,7 @@ parser.add_argument(
 parser.add_argument("--nhits",  type=int, default=None, help="NHits cut override (else from PNFS)")
 parser.add_argument("--ophits", type=int, default=None, help="OpHits cut override (else from PNFS)")
 parser.add_argument("--adjcls", type=int, default=None, help="AdjCl cut override (else from PNFS)")
+parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per energy bin; bins below are zeroed (matches 03_analysis.py default).")
 
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -165,6 +166,23 @@ def _scan_lt(vals, wts, thresholds):
     return cs[idx], idx.astype(int)
 
 
+def _mc_event_filter(energy_all, mask, rb_edges, threshold):
+    """Per-event bool (length = sum(mask)): True if energy bin has >= threshold MC events.
+
+    Mirrors 03_analysis.py: mc_counts computed at rebinned (1 MeV) level; bins below
+    threshold are zeroed. Applied only to weighted Counts, not NEvents.
+    """
+    _rb_bins = len(rb_edges) - 1
+    e = energy_all[mask]
+    idx = np.digitize(e, rb_edges) - 1
+    valid = (idx >= 0) & (idx < _rb_bins)
+    mc_counts = np.bincount(idx[valid], minlength=_rb_bins)
+    mc_filter_rb = mc_counts >= threshold
+    event_ok = np.zeros(len(e), dtype=bool)
+    event_ok[valid] = mc_filter_rb[idx[valid]]
+    return event_ok
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 
 nhits_list          = []   # full per-event distributions (original schema)
@@ -172,6 +190,10 @@ nhits_fiducial_list = []   # threshold-scan summary per (stage, hit variable)
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _params_path = f"{root}/config/{config}/{config}_params.json"
+    _exposure    = float(json.loads(open(_params_path).read()).get("EVALUATION_EXPOSURE_YEARS", 20.0)) if os.path.exists(_params_path) else 20.0
+    _scale       = get_full_detector_mass(config, info) * _exposure   # kT·yr → events/raw_weight
+
     for name in configs[config]:
 
         # ── Resolve best cuts (fiducial summary only) ──────────────────────────
@@ -244,7 +266,7 @@ for config in configs:
         # Stages: (name, nhits_base, ophits_base, adjcls_base, nc, oc, ac)
         # nhits_base / ophits_base / adjcls_base = base mask for each hit-variable scan.
         # For Raw and Fiducial all three bases are the same.
-        # For NHits+OpHits+AdjCls each base fixes the other two cuts at best values.
+        # For NHits+OpHits+AdjCl each base fixes the other two cuts at best values.
         _scan_stages: list[tuple] = [
             ("Raw",      _all_mask, _all_mask, _all_mask, None, None, None),
             ("Fiducial", _fid_mask, _fid_mask, _fid_mask, None, None, None),
@@ -254,39 +276,60 @@ for config in configs:
             _opv = _reco["MatchedOpFlashNHits"]
             _acv = _reco["AdjClNum"]
             _scan_stages.append((
-                "NHits+OpHits+AdjCls",
+                "NHits+OpHits+AdjCl",
                 _fid_mask & (_opv >= _ophits) & (_acv < _adjcls),   # scan NHits
                 _fid_mask & (_nhv >= _nhits)  & (_acv < _adjcls),   # scan OpHits
                 _fid_mask & (_nhv >= _nhits)  & (_opv >= _ophits),  # scan AdjCls
                 _nhits, _ophits, _adjcls,
             ))
         else:
-            rprint(f"[yellow][WARNING][/yellow] No cut values for {config}/{name}. NHits+OpHits+AdjCls stage skipped.")
+            rprint(f"[yellow][WARNING][/yellow] No cut values for {config}/{name}. NHits+OpHits+AdjCl stage skipped.")
+
+        # Precompute per-event mc_filter for each (stage, scan_var) — weight-independent.
+        # Uses SolarEnergy + hep_rebin (1 MeV bins, same as 03_analysis.py).
+        _energy_for_filter = _reco["SolarEnergy"]
+        _mc_filters = [
+            (
+                _mc_event_filter(_energy_for_filter, m_nh, hep_rebin, args.mc_filter_threshold),
+                _mc_event_filter(_energy_for_filter, m_op, hep_rebin, args.mc_filter_threshold),
+                _mc_event_filter(_energy_for_filter, m_ac, hep_rebin, args.mc_filter_threshold),
+            )
+            for _, m_nh, m_op, m_ac, *_ in _scan_stages
+        ]
 
         for weight, weight_labels, color in _weights_list:
             wts = _reco[weight]
-            for stage_name, m_nhits, m_ophits, m_adjcls, nc, oc, ac in _scan_stages:
+            for (stage_name, m_nhits, m_ophits, m_adjcls, nc, oc, ac), (mcf_nh, mcf_op, mcf_ac) in zip(_scan_stages, _mc_filters):
                 _meta = {
-                    "Config":     config,
-                    "Name":       name,
-                    "Folder":     args.folder,
-                    "Component":  weight_labels,
-                    "Weight":     weight,
-                    "Type":       "signal" if "marley" in name else "background",
-                    "Stage":      stage_name,
-                    "NHits_cut":  nc,
-                    "OpHits_cut": oc,
-                    "AdjCl_cut":  ac,
+                    "Config":      config,
+                    "Name":        name,
+                    "Folder":      args.folder,
+                    "Component":   weight_labels,
+                    "Weight":      weight,
+                    "Type":        "signal" if "marley" in name else "background",
+                    "Stage":       stage_name,
+                    "NHits":       nc,
+                    "OpHits":      oc,
+                    "AdjCl":       ac,
+                    "Exposure":    _exposure,
+                    "CountsUnit":  f"events / {_exposure:.0f} yr",
                 }
 
-                c, n = _scan_ge(_reco["NHits"][m_nhits],               wts[m_nhits],  _t_nhits)
-                nhits_fiducial_list.append({**_meta, "#Hits": _t_nhits,  "#OpHits": np.nan, "#AdjCls": np.nan, "Counts": c, "NEvents": n})
+                # NEvents uses raw unweighted counts (no mc_filter); Counts zeroes low-stat bins.
+                _nh_vals = _reco["NHits"][m_nhits]
+                c, n = _scan_ge(_nh_vals[mcf_nh], wts[m_nhits][mcf_nh], _t_nhits)
+                _, n_raw = _scan_ge(_nh_vals, wts[m_nhits], _t_nhits)
+                nhits_fiducial_list.append({**_meta, "#Hits": _t_nhits,  "#OpHits": np.nan, "#AdjCls": np.nan, "Counts": c * _scale, "NEvents": n_raw})
 
-                c, n = _scan_ge(_reco["MatchedOpFlashNHits"][m_ophits], wts[m_ophits], _t_ophits)
-                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": _t_ophits, "#AdjCls": np.nan, "Counts": c, "NEvents": n})
+                _op_vals = _reco["MatchedOpFlashNHits"][m_ophits]
+                c, n = _scan_ge(_op_vals[mcf_op], wts[m_ophits][mcf_op], _t_ophits)
+                _, n_raw = _scan_ge(_op_vals, wts[m_ophits], _t_ophits)
+                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": _t_ophits, "#AdjCls": np.nan, "Counts": c * _scale, "NEvents": n_raw})
 
-                c, n = _scan_lt(_reco["AdjClNum"][m_adjcls],            wts[m_adjcls], _t_adjcls)
-                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": np.nan, "#AdjCls": _t_adjcls, "Counts": c, "NEvents": n})
+                _ac_vals = _reco["AdjClNum"][m_adjcls]
+                c, n = _scan_lt(_ac_vals[mcf_ac], wts[m_adjcls][mcf_ac], _t_adjcls)
+                _, n_raw = _scan_lt(_ac_vals, wts[m_adjcls], _t_adjcls)
+                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": np.nan, "#AdjCls": _t_adjcls, "Counts": c * _scale, "NEvents": n_raw})
 
 # ── Save ───────────────────────────────────────────────────────────────────────
 
@@ -307,8 +350,8 @@ if nhits_fiducial_list:
         f"{data_path}",
         config=config,
         name=name,
-        filename=f"Weighted_Distributions_Fiducial",
-        subfolder=f"{args.folder.lower()}",
+        filename=f"Weighted_Distributions_Fiducial_{args.analysis}",
+        subfolder=f"{args.folder.lower()}/{args.analysis.lower()}",
         rm=user_input["rewrite"],
         debug=user_input["debug"],
     )

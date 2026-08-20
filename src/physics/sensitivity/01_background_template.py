@@ -176,7 +176,8 @@ detector_mass = get_full_detector_mass(args.config, info)
 
 df_list = []
 background_samples = []
-for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=args.study_label):
+_bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
+for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_bkg_study_label):
     bkg_df = pd.read_pickle(filepath)
     df_list.append(bkg_df)
     background_samples.append(bkg)

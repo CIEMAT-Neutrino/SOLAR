@@ -229,6 +229,12 @@ run = compute_reco_workflow(
     debug=args.debug,
 )
 
+if args.charge_threshold > 0:
+    run, _charge_output = recompute_reco_energy_with_charge_threshold(
+        run, configs, args.charge_threshold, debug=args.debug,
+    )
+    rprint(_charge_output)
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
@@ -402,7 +408,21 @@ for config in configs:
                     reco_bin_valid = (reco_bin_idx >= 0) & (reco_bin_idx < _n_bins)
                     true_bin_valid = (true_bin_idx >= 0) & (true_bin_idx < _n_bins)
                     mc_counts = np.bincount(reco_bin_idx[reco_bin_valid], minlength=_n_bins)
-                    mc_filter = mc_counts >= args.mc_filter_threshold
+                    # mc_filter is computed at the rebinned (1 MeV) output level, then
+                    # expanded back to the 60-bin scan resolution. This prevents marginal
+                    # events split across 0.5 MeV sub-bins from being zeroed when their
+                    # combined count in the 1 MeV output bin would pass the threshold.
+                    _rebin_edges_map = {"DayNight": daynight_rebin, "Sensitivity": sensitivity_rebin, "HEP": hep_rebin}
+                    _rb_edges = _rebin_edges_map[analysis]
+                    _rb_bins = len(_rb_edges) - 1
+                    _rb_idx = np.digitize(sel_reco, _rb_edges) - 1
+                    _rb_valid = (_rb_idx >= 0) & (_rb_idx < _rb_bins)
+                    _mc_counts_rb = np.bincount(_rb_idx[_rb_valid], minlength=_rb_bins)
+                    _mc_filter_rb = _mc_counts_rb >= args.mc_filter_threshold
+                    # Expand from 30-bin to 60-bin: find parent 30-bin for each 60-bin center
+                    _bin_centers_60 = (true_energy_edges[:-1] + true_energy_edges[1:]) / 2
+                    _parent_rb = np.clip(np.digitize(_bin_centers_60, _rb_edges) - 1, 0, _rb_bins - 1)
+                    mc_filter = _mc_filter_rb[_parent_rb]
                     if np.any(~mc_filter):
                         logging.debug(
                             "%d bins with MC < %d zeroed for %s NHits=%d OpHits=%d AdjCl=%d",

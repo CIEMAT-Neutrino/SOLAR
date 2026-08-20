@@ -91,7 +91,16 @@ def load_available_background_dataframes(
         base = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/{analysis_name.upper()}/{config}/{sample}/{config}_{sample}_{energy}"
         labeled = f"{base}_Rebin_{study_label}.pkl" if study_label else None
         standard = f"{base}_Rebin.pkl"
-        filepath = labeled if (labeled and os.path.exists(labeled)) else standard
+        if labeled:
+            if os.path.exists(labeled):
+                filepath = labeled
+            else:
+                raise RuntimeError(
+                    f"Missing labeled background Rebin for study '{study_label}': {labeled}\n"
+                    "Run 03_analysis.py for this config/folder/study (including backgrounds) first."
+                )
+        else:
+            filepath = standard
         if os.path.exists(filepath):
             frames.append((sample, filepath))
         elif essential.get(sample, False):

@@ -259,10 +259,10 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
         h_full,
     ]
 
-# ── Smoothing config (1-D, SENSITIVITY stage — mirrors 01_background_template.py) ──
+# ── Smoothing config (1-D, analysis-specific — matches significance_plot.py) ──
 
 _smoothing_cfg = get_smoothing_config(
-    str(root), analysis_name="SENSITIVITY", dimensions="1d", stage="significance"
+    str(root), analysis_name=args.analysis.upper(), dimensions="1d", stage="significance"
 )
 
 
