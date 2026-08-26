@@ -84,6 +84,18 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--dm2",
+    type=float,
+    default=None,
+    help="Δm²₂₁ override (eV²). When set, reads the labeled Rebin pkl produced with this dm2 value.",
+)
+parser.add_argument(
+    "--charge_threshold",
+    type=float,
+    default=0,
+    help="Charge threshold Q (ADC) forwarded from the charge study variant. When >0, reads labeled Rebin pkls produced with this charge cut.",
+)
+parser.add_argument(
     "--all_metrics",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -116,10 +128,12 @@ explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
 # combined in quadrature to form a single total band:
 #   earth_density_band : MSW matter effect from Earth density profile variations (PREM)
 #   oscillation_band   : residual uncertainty from theta12 and dm221 (PDG values)
-# The three asymmetry_scales bracket the full predicted range:
-#   upper  (1 + total_band): stronger matter effect / larger oscillation parameters
-#   nominal (1.0)           : best-fit prediction
-#   lower  (1 - total_band): weaker matter effect / smaller oscillation parameters
+#
+# The asymmetry amplitude θ is treated as a profiled nuisance: θ ~ N(1, total_band).
+# For each scenario scale θ_s ∈ {1+band, 1, 1-band}, the Asimov LLR is penalised by
+# the Gaussian constraint term ((θ_s − 1) / total_band)², so off-nominal bands are
+# correctly deflated rather than reported as raw unpenalised q0 values.
+# At θ_s = 1 (nominal) the penalty is zero and q0 is unchanged.
 total_asymmetry_band = float(np.sqrt(args.earth_density_band**2 + args.oscillation_band**2))
 asymmetry_scales = [1.0 + total_asymmetry_band, 1.0, 1.0 - total_asymmetry_band]
 
@@ -316,10 +330,6 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         sigma2_curve = []
         sigma3_curve = []
 
-        found_asimov_sigma2 = False
-        found_asimov_sigma3 = False
-        asimov_sigma2 = 0.0
-        asimov_sigma3 = 0.0
         asimov_sigma2_curve = []
         asimov_sigma3_curve = []
 
@@ -474,7 +484,15 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         + raw_n_day_k[_raw_mask] * np.log(raw_n_day_k[_raw_mask]   / (day_fraction   * raw_total_k[_raw_mask]))
                     )
                     raw_llr = np.nan_to_num(raw_llr, nan=0.0, posinf=0.0, neginf=0.0)
-                    raw_asimov_significances[kdx].append(float(np.sqrt(max(float(np.sum(raw_llr)), 0.0))))
+                    # Gaussian constraint penalty on θ: ((θ_s − 1) / σ_band)²
+                    # Zero for nominal (kdx=1, asymmetry_scale=1.0); deflates ±band q0 by 1.
+                    _theta_penalty = (
+                        ((asymmetry_scale - 1.0) / total_asymmetry_band) ** 2
+                        if total_asymmetry_band > 0.0 else 0.0
+                    )
+                    raw_asimov_significances[kdx].append(
+                        float(np.sqrt(max(float(np.sum(raw_llr)) - _theta_penalty, 0.0)))
+                    )
 
                     smoothed_signal_night_k = smoothed_signal_day + asymmetry_scale * (smoothed_signal_night - smoothed_signal_day)
                     smoothed_n_night_k = factor * (night_fraction * smoothed_background + smoothed_signal_night_k)
@@ -487,15 +505,25 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         + smoothed_n_day_k[_sm_mask] * np.log(smoothed_n_day_k[_sm_mask]   / (day_fraction   * smoothed_total_k[_sm_mask]))
                     )
                     smoothed_llr = np.nan_to_num(smoothed_llr, nan=0.0, posinf=0.0, neginf=0.0)
-                    smoothed_asimov_significances[kdx].append(float(np.sqrt(max(float(np.sum(smoothed_llr)), 0.0))))
+                    smoothed_asimov_significances[kdx].append(
+                        float(np.sqrt(max(float(np.sum(smoothed_llr)) - _theta_penalty, 0.0)))
+                    )
                 else:
                     raw_asimov_significances[kdx].append(0.0)
                     smoothed_asimov_significances[kdx].append(0.0)
 
-            if smoothed_gaussian_significances[1][-1] > sigmamax:
-                sigmamax = smoothed_gaussian_significances[1][-1]
+            # Primary metric for cut optimisation: profiled Asimov LLR (nominal, smoothed).
+            # Gaussian retained as diagnostic but no longer drives the scan.
+            _primary_sig = (
+                smoothed_asimov_significances[1][-1]
+                if _compute_asimov
+                else smoothed_gaussian_significances[1][-1]
+            )
 
-            if smoothed_gaussian_significances[1][-1] > 2 and not found_sigma2:
+            if _primary_sig > sigmamax:
+                sigmamax = _primary_sig
+
+            if _primary_sig > 2 and not found_sigma2:
                 sigma2 = factor
                 found_sigma2 = True
                 if sigma2 < last_sigma2 and args.debug:
@@ -505,7 +533,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 if sigma2 < last_sigma2:
                     last_sigma2 = sigma2
 
-            if smoothed_gaussian_significances[1][-1] > 3 and not found_sigma3:
+            if _primary_sig > 3 and not found_sigma3:
                 sigma3 = factor
                 found_sigma3 = True
                 if sigma3 < last_sigma3 and args.debug:
@@ -517,16 +545,9 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
             sigma2_curve.append(sigma2)
             sigma3_curve.append(sigma3)
-
-            if _compute_asimov:
-                if smoothed_asimov_significances[1][-1] > 2 and not found_asimov_sigma2:
-                    asimov_sigma2 = factor
-                    found_asimov_sigma2 = True
-                if smoothed_asimov_significances[1][-1] > 3 and not found_asimov_sigma3:
-                    asimov_sigma3 = factor
-                    found_asimov_sigma3 = True
-            asimov_sigma2_curve.append(asimov_sigma2)
-            asimov_sigma3_curve.append(asimov_sigma3)
+            # AsimovSigma2/Sigma3 alias Sigma2/Sigma3 — both are now Asimov-based.
+            asimov_sigma2_curve.append(sigma2)
+            asimov_sigma3_curve.append(sigma3)
 
         crossing_summary = compute_crossing_summary(
             exposure_grid,

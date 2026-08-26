@@ -178,6 +178,16 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--reference_study_label",
+    type=str,
+    default=None,
+    help=(
+        "When set, evaluate significance at the best cuts from this study label's highest pkl "
+        "instead of re-optimizing. Empty string uses the nominal (no-label) highest pkl. "
+        "Ensures apples-to-apples comparison across unc variants."
+    ),
+)
+parser.add_argument(
     "--max_pl_jump",
     type=float,
     default=1.0,
@@ -225,6 +235,13 @@ fastest_sigmas = [fastest_sigma2, fastest_sigma3]
 
 _ctx = study_context(args)
 _study_suffix = _ctx.study_suffix
+
+# Build reference-cut suffix (empty string = nominal/no-label highest pkl)
+_ref_suffix = (
+    f"_{args.reference_study_label}"
+    if args.reference_study_label is not None and args.reference_study_label != ""
+    else ""
+)
 
 plot_data = {}
 processed_any = False
@@ -303,6 +320,31 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
 
     processed_any = True
 
+    # Load reference cuts for fixed-cut evaluation (--reference_study_label)
+    _ref_nhits = _ref_ophits = _ref_adjcl = None
+    if args.reference_study_label is not None:
+        _ref_pkl_path = (
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
+            f"{config}/{name}/highest_{args.analysis}{_ref_suffix}.pkl"
+        )
+        if os.path.exists(_ref_pkl_path):
+            try:
+                _ref_df = pd.read_pickle(_ref_pkl_path)
+                _ref_nhits = _ref_df.loc["NHits", (config, name, energy_label)]
+                _ref_ophits = _ref_df.loc["OpHits", (config, name, energy_label)]
+                _ref_adjcl = _ref_df.loc["AdjCl", (config, name, energy_label)]
+            except (KeyError, Exception) as exc:
+                rprint(
+                    f"[yellow][WARNING][/yellow] Could not read reference cuts for "
+                    f"{config}/{name}/{energy_label} from {_ref_pkl_path}: {exc}. "
+                    "Falling back to max selection."
+                )
+        else:
+            rprint(
+                f"[yellow][WARNING][/yellow] Reference highest pkl not found: {_ref_pkl_path}. "
+                "Falling back to max selection."
+            )
+
     rprint(f"Evaluating {energy_label}")
     for idx, sigma_label in enumerate(["Sigma2", "Sigma3"]):
         # Find the entry with the highest significance (max this_sigma_df["sigma_label"])
@@ -327,10 +369,28 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
             clean_df = this_sigma_df
 
         if idx == 0:
-            # Highest from clean rows
-            this_sigma_df_best = clean_df.loc[
-                clean_df[reference_column] == clean_df[reference_column].max()
-            ].copy()
+            # Highest from clean rows — use reference cuts if --reference_study_label set
+            if _ref_nhits is not None:
+                _fixed = clean_df.loc[
+                    (clean_df["NHits"] == _ref_nhits)
+                    & (clean_df["OpHits"] == _ref_ophits)
+                    & (clean_df["AdjCl"] == _ref_adjcl)
+                ].copy()
+                if _fixed.empty:
+                    rprint(
+                        f"[yellow][WARNING][/yellow] Reference cuts "
+                        f"(NHits={_ref_nhits}, OpHits={_ref_ophits}, AdjCl={_ref_adjcl}) "
+                        f"not found in {config} {name} {energy_label}. Falling back to max."
+                    )
+                    this_sigma_df_best = clean_df.loc[
+                        clean_df[reference_column] == clean_df[reference_column].max()
+                    ].copy()
+                else:
+                    this_sigma_df_best = _fixed
+            else:
+                this_sigma_df_best = clean_df.loc[
+                    clean_df[reference_column] == clean_df[reference_column].max()
+                ].copy()
             this_sigma = _pick_first_row(this_sigma_df_best)
             if this_sigma is None:
                 rprint(
@@ -382,13 +442,10 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
         # Find the entry with the fastest sigma (min crossing time).
         # Use PL-specific crossing column when reference is ProfileLikelihood so cut
         # selection reflects PL discovery time, not Asimov.
-        # NOTE: sigma crossings in the results pkl are tracked via the Gaussian significance
-        # path in daynight/01_daynight.py regardless of the current significance_reference. When
-        # reference_column is Asimov, the cut with max Asimov may have Sigma3=0 (its
-        # Gaussian curve never crossed 3σ even though its Asimov did), so requiring
-        # reference_column == max would silently produce no result. Instead: among all
-        # clean rows that have a crossing (crossing_label > 0), pick the one with the
-        # minimum crossing time; break ties by highest reference_column value.
+        # Sigma2/Sigma3 and AsimovSigma2/AsimovSigma3 are both Asimov-based after
+        # the daynight/01_daynight.py refactor — the crossing columns are consistent.
+        # Among all clean rows that have a crossing (crossing_label > 0), pick the one
+        # with the minimum crossing time; break ties by highest reference_column value.
         crossing_label = f"{_sigma_crossing_prefix}{sigma_label}"
         if crossing_label not in clean_df.columns:
             crossing_label = sigma_label

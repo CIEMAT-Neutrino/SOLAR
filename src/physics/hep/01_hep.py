@@ -256,6 +256,12 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--charge_threshold",
+    type=float,
+    default=0,
+    help="Charge threshold Q (ADC) forwarded from the charge study variant. When >0, reads labeled Rebin pkls produced with this charge cut.",
+)
+parser.add_argument(
     "--all_metrics",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -289,7 +295,7 @@ essential_background_components = [
 _n_bkg = len(_hep_bkg_components)
 _component_oscs = ["Truth"] * _n_bkg + ["Osc", "Osc"]
 _component_uncertainties = (
-    [args.background_uncertainty] * _n_bkg + [args.signal_uncertainty, args.signal_uncertainty]
+    [args.background_uncertainty] * _n_bkg + [args.background_uncertainty, args.signal_uncertainty]
 )
 threshold_idx = np.where(hep_rebin_centers >= args.threshold)[0][0]
 exposure_grid = np.logspace(-1, np.log10(args.exposure), 100)

@@ -39,6 +39,7 @@ parser.add_argument("--nhits",  type=int, default=None, help="NHits cut override
 parser.add_argument("--ophits", type=int, default=None, help="OpHits cut override (else from PNFS)")
 parser.add_argument("--adjcls", type=int, default=None, help="AdjCl cut override (else from PNFS)")
 parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per energy bin; bins below are zeroed (matches 03_analysis.py default).")
+parser.add_argument("--energy", type=str, default="SolarEnergy", help="Energy variable used to resolve FiducializationMask Ref pkl (must match 03_analysis.py --energy used during export).")
 
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -54,6 +55,10 @@ args = parser.parse_args()
 config = args.config
 name = args.signal
 configs = {config: [name]}
+
+_analysis_info = load_analysis_info(str(root))
+_OP_PLANE_CUT  = _analysis_info.get("QUALITY_CUTS", {}).get("OPFLASH_PLANE", 0)
+_export_path   = f"{root}/output/data/results"   # mirrors 03_analysis.py export_path
 
 if not os.path.exists(f"{save_path}/{args.folder.lower()}"):
     os.makedirs(f"{save_path}/{args.folder.lower()}")
@@ -142,35 +147,52 @@ def _load_best_cuts(cfg, sig, analysis, folder, info):
 
 # ── Threshold-scan helpers ─────────────────────────────────────────────────────
 
-def _scan_ge(vals, wts, thresholds):
-    """sum(wts[vals >= t]) and count(vals >= t) for each t in thresholds."""
+def _scan_ge(vals, wts, thresholds, w_var=None):
+    """sum(wts[vals >= t]), count(vals >= t), and sum(w_var[vals >= t]) for each t."""
     if len(vals) == 0:
         z = np.zeros(len(thresholds))
-        return z, z.astype(int)
+        return z, z.astype(int), z
     order = np.argsort(vals)
     sv, sw = vals[order], wts[order]
     cs = np.concatenate([[0.0], np.cumsum(sw)])
     idx = np.searchsorted(sv, thresholds, side="left")
-    return cs[-1] - cs[idx], (len(vals) - idx).astype(int)
+    counts   = cs[-1] - cs[idx]
+    nevents  = (len(vals) - idx).astype(int)
+    if w_var is not None:
+        sv2 = w_var[order]
+        cs2 = np.concatenate([[0.0], np.cumsum(sv2)])
+        variance = cs2[-1] - cs2[idx]
+    else:
+        variance = np.zeros(len(thresholds))
+    return counts, nevents, variance
 
 
-def _scan_lt(vals, wts, thresholds):
-    """sum(wts[vals < t]) and count(vals < t) for each t in thresholds."""
+def _scan_lt(vals, wts, thresholds, w_var=None):
+    """sum(wts[vals < t]), count(vals < t), and sum(w_var[vals < t]) for each t."""
     if len(vals) == 0:
         z = np.zeros(len(thresholds))
-        return z, z.astype(int)
+        return z, z.astype(int), z
     order = np.argsort(vals)
     sv, sw = vals[order], wts[order]
     cs = np.concatenate([[0.0], np.cumsum(sw)])
     idx = np.searchsorted(sv, thresholds, side="left")
-    return cs[idx], idx.astype(int)
+    counts  = cs[idx]
+    nevents = idx.astype(int)
+    if w_var is not None:
+        sv2 = w_var[order]
+        cs2 = np.concatenate([[0.0], np.cumsum(sv2)])
+        variance = cs2[idx]
+    else:
+        variance = np.zeros(len(thresholds))
+    return counts, nevents, variance
 
 
 def _mc_event_filter(energy_all, mask, rb_edges, threshold):
-    """Per-event bool (length = sum(mask)): True if energy bin has >= threshold MC events.
+    """Per-event (bool, mc_count) for events in mask.
 
-    Mirrors 03_analysis.py: mc_counts computed at rebinned (1 MeV) level; bins below
-    threshold are zeroed. Applied only to weighted Counts, not NEvents.
+    bool    : True if energy bin has >= threshold unweighted MC events.
+    mc_count: unweighted MC events in that bin (used to compute error weights w²/mc).
+    Mirrors 03_analysis.py: computed at rebinned (1 MeV) level.
     """
     _rb_bins = len(rb_edges) - 1
     e = energy_all[mask]
@@ -180,7 +202,9 @@ def _mc_event_filter(energy_all, mask, rb_edges, threshold):
     mc_filter_rb = mc_counts >= threshold
     event_ok = np.zeros(len(e), dtype=bool)
     event_ok[valid] = mc_filter_rb[idx[valid]]
-    return event_ok
+    per_event_mc = np.zeros(len(e), dtype=float)
+    per_event_mc[valid] = mc_counts[idx[valid]]
+    return event_ok, per_event_mc
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -208,8 +232,31 @@ for config in configs:
 
         _has_cuts = None not in (_nhits, _ophits, _adjcls)
         _reco     = run["Reco"]
-        _fid_mask = _reco["SignalParticleSurface"] < 3
         _all_mask = np.ones(len(_reco["Event"]), dtype=bool)
+
+        # Load FiducializationMask exported by 03_analysis.py (surface + spatial fiducial).
+        # Path mirrors save_pkl(export_path, config, name, subfolder=folder, filename=...).
+        _fid_pkl = (
+            f"{_export_path}/{config}/{name}/{args.folder.lower()}/"
+            f"{config}_{name}_FiducializationMask_{args.energy}_{args.analysis.upper()}.pkl"
+        )
+        if os.path.exists(_fid_pkl):
+            _geo_fid = np.asarray(pickle.load(open(_fid_pkl, "rb")), dtype=bool)
+        else:
+            rprint(
+                f"[yellow][WARNING][/yellow] FiducializationMask not found: {_fid_pkl}\n"
+                f"  Run: 03_analysis.py --config {config} --signal {name} "
+                f"--folder {args.folder} --energy {args.energy} --export_fiducial --skip_scan\n"
+                f"  Falling back to SignalParticleSurface < 3."
+            )
+            _geo_fid = _reco["SignalParticleSurface"] < 3
+
+        # Quality cuts: TPC-PDS matching — same as 03_analysis.py build_analysis_mask.
+        _flash_mask = (
+            (_reco["MatchedOpFlashPlane"] == _OP_PLANE_CUT)
+            & (_reco["MatchedOpFlashPE"] > 0)
+        )
+        _fid_mask = _geo_fid & _flash_mask
 
         # Global threshold ranges (full dataset so all stages share the same x-axis)
         _t_nhits  = np.arange(0, int(np.max(_reco["NHits"]))               + 2)
@@ -299,7 +346,8 @@ for config in configs:
 
         for weight, weight_labels, color in _weights_list:
             wts = _reco[weight]
-            for (stage_name, m_nhits, m_ophits, m_adjcls, nc, oc, ac), (mcf_nh, mcf_op, mcf_ac) in zip(_scan_stages, _mc_filters):
+            for (stage_name, m_nhits, m_ophits, m_adjcls, nc, oc, ac), \
+                    ((mcf_nh, mc_nh), (mcf_op, mc_op), (mcf_ac, mc_ac)) in zip(_scan_stages, _mc_filters):
                 _meta = {
                     "Config":      config,
                     "Name":        name,
@@ -315,21 +363,30 @@ for config in configs:
                     "CountsUnit":  f"events / {_exposure:.0f} yr",
                 }
 
-                # NEvents uses raw unweighted counts (no mc_filter); Counts zeroes low-stat bins.
+                # NEvents: raw unweighted count (no mc_filter).
+                # Counts: weighted sum with mc_filter applied (low-stat bins zeroed).
+                # CountsError: scale * sqrt(sum(w²/mc_count_bin)) — same MC-stat error as 03_analysis.py.
+
                 _nh_vals = _reco["NHits"][m_nhits]
-                c, n = _scan_ge(_nh_vals[mcf_nh], wts[m_nhits][mcf_nh], _t_nhits)
-                _, n_raw = _scan_ge(_nh_vals, wts[m_nhits], _t_nhits)
-                nhits_fiducial_list.append({**_meta, "#Hits": _t_nhits,  "#OpHits": np.nan, "#AdjCls": np.nan, "Counts": c * _scale, "NEvents": n_raw})
+                _wf = wts[m_nhits][mcf_nh];  _mf = mc_nh[mcf_nh]
+                c, _, var = _scan_ge(_nh_vals[mcf_nh], _wf, _t_nhits, w_var=_wf**2 / np.maximum(_mf, 1))
+                _, n_raw, _ = _scan_ge(_nh_vals, wts[m_nhits], _t_nhits)
+                nhits_fiducial_list.append({**_meta, "#Hits": _t_nhits, "#OpHits": np.nan, "#AdjCls": np.nan,
+                                            "Counts": c * _scale, "CountsError": np.sqrt(var) * _scale, "NEvents": n_raw})
 
                 _op_vals = _reco["MatchedOpFlashNHits"][m_ophits]
-                c, n = _scan_ge(_op_vals[mcf_op], wts[m_ophits][mcf_op], _t_ophits)
-                _, n_raw = _scan_ge(_op_vals, wts[m_ophits], _t_ophits)
-                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": _t_ophits, "#AdjCls": np.nan, "Counts": c * _scale, "NEvents": n_raw})
+                _wf = wts[m_ophits][mcf_op]; _mf = mc_op[mcf_op]
+                c, _, var = _scan_ge(_op_vals[mcf_op], _wf, _t_ophits, w_var=_wf**2 / np.maximum(_mf, 1))
+                _, n_raw, _ = _scan_ge(_op_vals, wts[m_ophits], _t_ophits)
+                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": _t_ophits, "#AdjCls": np.nan,
+                                            "Counts": c * _scale, "CountsError": np.sqrt(var) * _scale, "NEvents": n_raw})
 
                 _ac_vals = _reco["AdjClNum"][m_adjcls]
-                c, n = _scan_lt(_ac_vals[mcf_ac], wts[m_adjcls][mcf_ac], _t_adjcls)
-                _, n_raw = _scan_lt(_ac_vals, wts[m_adjcls], _t_adjcls)
-                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": np.nan, "#AdjCls": _t_adjcls, "Counts": c * _scale, "NEvents": n_raw})
+                _wf = wts[m_adjcls][mcf_ac]; _mf = mc_ac[mcf_ac]
+                c, _, var = _scan_lt(_ac_vals[mcf_ac], _wf, _t_adjcls, w_var=_wf**2 / np.maximum(_mf, 1))
+                _, n_raw, _ = _scan_lt(_ac_vals, wts[m_adjcls], _t_adjcls)
+                nhits_fiducial_list.append({**_meta, "#Hits": np.nan, "#OpHits": np.nan, "#AdjCls": _t_adjcls,
+                                            "Counts": c * _scale, "CountsError": np.sqrt(var) * _scale, "NEvents": n_raw})
 
 # ── Save ───────────────────────────────────────────────────────────────────────
 

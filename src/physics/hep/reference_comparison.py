@@ -460,7 +460,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         title="Significance (σ)",
     )
     fig_exposure.update_xaxes(
-        range=[-1, args.exposure], zeroline=False, title="Exposure (kT·year)"
+        range=[-1, args.exposure], zeroline=False, title="Exposure (year)"
     )
 
     figure_name = f"{energy}_HEP_Exposure_Comparison"

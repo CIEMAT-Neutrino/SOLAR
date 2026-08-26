@@ -266,18 +266,30 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # so a fully-correlated background normalization uncertainty cancels to first order.
         # Only Gaussian sensitivity is meaningfully degraded by background normalization σ_bkg.
 
+        _nhits_val  = int(ref_plot["NHits"])
+        _ophits_val = int(ref_plot["OpHits"])
+        _adjcl_val  = int(ref_plot["AdjCl"])
+
         for spectrum_type, significance in [
             ("Raw", raw_significance),
             ("Smoothed", smoothed_significance),
         ]:
             day_night_exposure.append({
+                "Analysis": "DayNight",
                 "Geometry": info["GEOMETRY"],
                 "Config": config,
                 "Name": name,
+                "EnergyLabel": energy,
                 "Variable": "Gaussian",
-                "Exposure": exposure_values,
                 "SpectrumType": spectrum_type,
+                "Mode": "PerBin",
+                "NHits": _nhits_val,
+                "OpHits": _ophits_val,
+                "AdjCl": _adjcl_val,
+                "Exposure": exposure_values,
+                "ExposureUnit": "year",
                 "Significance": significance,
+                "SignificanceUnit": r"\sigma",
                 "SignificanceError+": np.subtract(significance_upper, smoothed_significance) if spectrum_type == "Smoothed" else None,
                 "SignificanceError-": np.subtract(smoothed_significance, significance_lower) if spectrum_type == "Smoothed" else None,
             })
@@ -288,13 +300,21 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 ("Smoothed", smoothed_asimov),
             ]:
                 day_night_exposure.append({
+                    "Analysis": "DayNight",
                     "Geometry": info["GEOMETRY"],
                     "Config": config,
                     "Name": name,
+                    "EnergyLabel": energy,
                     "Variable": "Asimov",
-                    "Exposure": exposure_values,
                     "SpectrumType": spectrum_type,
+                    "Mode": "PerBin",
+                    "NHits": _nhits_val,
+                    "OpHits": _ophits_val,
+                    "AdjCl": _adjcl_val,
+                    "Exposure": exposure_values,
+                    "ExposureUnit": "year",
                     "Significance": significance,
+                    "SignificanceUnit": r"\sigma",
                     "SignificanceError+": np.subtract(asimov_upper, smoothed_asimov) if spectrum_type == "Smoothed" else None,
                     "SignificanceError-": np.subtract(smoothed_asimov, asimov_lower) if spectrum_type == "Smoothed" else None,
                 })
@@ -315,25 +335,41 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         ]
         for scenario_key, ideal_g, real_g, asimov_scenario in _bkg_scenario_defs:
             day_night_exposure.append({
+                "Analysis": "DayNight",
                 "Geometry": info["GEOMETRY"],
                 "Config": config,
                 "Name": name,
+                "EnergyLabel": energy,
                 "Variable": "Gaussian",
-                "Exposure": exposure_values,
                 "SpectrumType": f"Smoothed/{scenario_key}",
+                "Mode": "PerBin",
+                "NHits": _nhits_val,
+                "OpHits": _ophits_val,
+                "AdjCl": _adjcl_val,
+                "Exposure": exposure_values,
+                "ExposureUnit": "year",
                 "Significance": real_g,
+                "SignificanceUnit": r"\sigma",
                 "SignificanceError+": np.subtract(ideal_g, real_g),
                 "SignificanceError-": np.zeros_like(real_g),
             })
             if _has_asimov:
                 day_night_exposure.append({
+                    "Analysis": "DayNight",
                     "Geometry": info["GEOMETRY"],
                     "Config": config,
                     "Name": name,
+                    "EnergyLabel": energy,
                     "Variable": "Asimov",
-                    "Exposure": exposure_values,
                     "SpectrumType": f"Smoothed/{scenario_key}",
+                    "Mode": "PerBin",
+                    "NHits": _nhits_val,
+                    "OpHits": _ophits_val,
+                    "AdjCl": _adjcl_val,
+                    "Exposure": exposure_values,
+                    "ExposureUnit": "year",
                     "Significance": asimov_scenario,
+                    "SignificanceUnit": r"\sigma",
                     "SignificanceError+": np.zeros_like(asimov_scenario),
                     "SignificanceError-": np.zeros_like(asimov_scenario),
                 })

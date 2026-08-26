@@ -28,7 +28,7 @@ parser.add_argument(
 )
 parser.add_argument("--signal_uncertainty", type=float, default=0.04)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
-parser.add_argument("--exposure", type=float, default=30.0)
+parser.add_argument("--exposure", type=float, default=30.0, help="Exposure in years. Saved templates are absolute counts scaled as exposure_yr × detector_mass_kT × rate.")
 parser.add_argument(
     "--energy",
     type=str,

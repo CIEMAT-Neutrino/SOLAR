@@ -98,7 +98,7 @@ python3 src/pipelines/run_sensitivity.py \
 | `--analysis` | all three | `DayNight` / `HEP` / `Sensitivity` |
 | `--folder` | `Truncated` | Fiducial folder(s) |
 | `--energy` | `SolarEnergy` | Energy estimator |
-| `--exposure` | `30` | Exposure in kt·yr |
+| `--exposure` | `30` | Exposure in years |
 | `--oscillation_backend` | `file` | `file` / `prob3` / `nufast` |
 | `--no-fiducialization` | | Skip signal fiducialization step |
 | `--no-rebin` | | Skip signal rebin step |

@@ -137,6 +137,8 @@ parser.add_argument(
          "Controls both the input pkl path and a suffix added to the output filename.",
 )
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--charge_threshold", type=float, default=0,
+    help="Charge threshold Q (ADC). When >0, reads the labeled Rebin pkl produced with this charge cut.")
 
 args = parser.parse_args()
 _ctx = study_context(args)
@@ -152,7 +154,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
-    _rebin_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{energy}_Rebin.pkl"
+    _rebin_path = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
     if not os.path.exists(_rebin_path):
         raise SystemExit(f"[ERROR] Missing Rebin pkl: {_rebin_path}\nRun 03_analysis.py cut scan first.")
     plot_df = pd.read_pickle(_rebin_path)
@@ -321,6 +323,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     continue
                 hep_exposure.append(
                     {
+                        "Analysis": "HEP",
                         "Geometry": info["GEOMETRY"],
                         "Config": config,
                         "Name": name,
@@ -332,6 +335,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "EnergyLabel": energy,
                         "Variable": significance,
                         "SpectrumType": spectrum_type,
+                        "Mode": "NoRebin",
                         "Significance": this_significance,
                         "SignificanceUnit": r"\sigma",
                         "SignificanceError+": np.subtract(
@@ -462,27 +466,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         )
 
         if args.pkl_label == "highest":
-            for df, df_name in zip(
-                [pd.DataFrame(hep_exposure)],
-                ["HEP_Exposure"],
-            ):
-                save_df(
-                    df,
-                    data_path,
-                    config=config,
-                    name=name,
-                    subfolder=_save_subfolder,
-                    filename=df_name,
-                    rm=args.rewrite,
-                    debug=True,
-                )
-                save_df(
-                    df,
-                    local_data_path,
-                    config=config,
-                    name=name,
-                    subfolder=_save_subfolder,
-                    filename=df_name,
-                    rm=args.rewrite,
-                    debug=False,
-                )
+            _df = pd.DataFrame(hep_exposure)
+            _filename = "HEP_Exposure"
+            for _path in [data_path, local_data_path]:
+                _merged = upsert_df_rows(_df, _path, config=config, name=name, subfolder=_save_subfolder, filename=_filename)
+                if "Variable" in _merged.columns:
+                    _merged = _merged.loc[~_merged["Variable"].astype(str).str.startswith("PreIsotonic")].reset_index(drop=True)
+                save_df(_merged, _path, config=config, name=name, subfolder=_save_subfolder, filename=_filename, rm=True, debug=True)

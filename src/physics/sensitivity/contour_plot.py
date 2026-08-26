@@ -70,7 +70,7 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis in kton-years",
+    help="The exposure for the analysis in years.",
     default=30.0,
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)

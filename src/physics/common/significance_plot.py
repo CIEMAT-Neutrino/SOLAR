@@ -1606,7 +1606,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     add_upper_fn=lambda fig, st, _rl=render_list: _add_fiducial_upper(fig, _rl, st),
                     subplot_title=f"{analysis_name} {energy} — X={fiducialx}cm Y={fiducialy}cm Z={fiducialz}cm",
                     fig_title=f"{analysis_name} {energy}",
-                    upper_y_title=f"Counts ({args.exposure}·kT·year·MeV)⁻¹",
+                    upper_y_title="Counts / (kT·year·MeV)",
                     lower_y_title="Significance (σ)",
                     x_range=[-2, 32], figure_name=f"{energy}_{analysis_key}_{fiducial_label}Fiducial_Significance",
                     positive_count_values=positive_count_values, log_default_range=[-2, 10],

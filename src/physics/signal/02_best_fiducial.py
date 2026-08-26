@@ -314,7 +314,7 @@ parser.add_argument("--signal", type=str, help="The name of the configuration", 
 parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The analyses to optimize fiducials for", choices=ANALYSIS_CHOICES, default=ANALYSIS_CHOICES)
 parser.add_argument("--energy", nargs="+", type=str, help="The energy for the analysis", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
-parser.add_argument("--exposure", type=float, help="The exposure in kT·year", default=100)
+parser.add_argument("--exposure", type=float, help="The exposure in years.", default=100)
 parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
     "--mc_threshold",
@@ -325,6 +325,25 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Load '_fiduc_truth'-labeled Fiducial_Scan pkls (produced by 01_fiducialize.py "
+        "--truth_fiducial) and write best fiducials to BestFiducials_fiduc_truth.json."
+    ),
+)
+parser.add_argument(
+    "--ignore_energy_window",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Ignore the analysis-specific energy_min/energy_max window during fiducialization. "
+        "Use when the energy variable (e.g. SignalParticleK, MainK) has signal below the "
+        "standard analysis window (e.g. HEP 14-30 MeV) and you still want a fiducial entry."
+    ),
+)
 
 args = parser.parse_args()
 config = args.config
@@ -335,20 +354,25 @@ for path in [save_path, data_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
         os.makedirs(f"{path}/{args.folder.lower()}")
 
-filename = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+_best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
 if os.path.exists(filename):
     best_fiducials = json.loads(open(filename, "r").read())
 else:
     best_fiducials = {}
 
+_scan_suffix = "_fiduc_truth" if args.truth_fiducial else ""
+
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):
         df_list = []
         signal_df = pd.read_pickle(
-            f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan.pkl"
+            f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy_label}_Fiducial_Scan{_scan_suffix}.pkl"
         )
         df_list.append(signal_df)
         for bkg_label in get_background_samples(str(root)):
+            # Background scans never use truth coordinates — they have no truth particle position.
+            # Always load the nominal background scan regardless of --truth_fiducial.
             filepath = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
             if not os.path.exists(filepath):
                 continue
@@ -379,6 +403,10 @@ for config in configs:
                 )
                 analysis_config = dict(analysis_config)
                 analysis_config["significance_type"] = _sig_ref
+            if args.ignore_energy_window:
+                analysis_config = dict(analysis_config)
+                analysis_config.pop("energy_min", None)
+                analysis_config.pop("energy_max", None)
             gated_plot_df = apply_fiducial_mc_threshold(
                 plot_df,
                 analysis_config,

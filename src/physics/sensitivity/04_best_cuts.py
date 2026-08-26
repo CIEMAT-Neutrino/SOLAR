@@ -31,7 +31,7 @@ parser.add_argument(
     "--oscillation_backend",
     type=str, choices=["file", "prob3", "nufast"], default="nufast",
 )
-parser.add_argument("--exposure",              type=float, default=30.0)
+parser.add_argument("--exposure",              type=float, default=30.0, help="Exposure in years.")
 parser.add_argument("--signal_uncertainty",    type=float, default=None)
 parser.add_argument("--background_uncertainty",type=float, default=None)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)

@@ -54,6 +54,7 @@ def parse_args():
         default=DEFAULT_ENERGY,
         choices=[
             "SignalParticleK",
+            "MainK",
             "ClusterEnergy",
             "TotalEnergy",
             "SelectedEnergy",
@@ -525,7 +526,7 @@ def build_markdown(
     ### Day-Night Discovery Statistic Details
 
     - Both Gaussian and Asimov curves are stored per cut; **Asimov is the default** for best-cut selection in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py) and exposure plots.
-    - σ2/σ3 crossing exposures are tracked independently for both statistics: `Sigma2`/`Sigma3` (Gaussian) and `AsimovSigma2`/`AsimovSigma3`; fastest-discovery selection uses the Asimov crossing columns.
+    - σ2/σ3 crossing exposures: `Sigma2`/`Sigma3` and `AsimovSigma2`/`AsimovSigma3` are both Asimov-based (profiled nuisance); Gaussian significance is stored as a diagnostic only.
     - MC threshold gate: cuts where any essential background (gamma, neutron) has fewer than `--mc_threshold` MC events are skipped; prevents selecting cuts that deplete backgrounds statistically.
     - Smoothing is applied per component above threshold; the threshold slice keeps unsmoothed bins below threshold and replaces bins above with smoothed values.
 

@@ -1,8 +1,11 @@
 import json
 from copy import deepcopy
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
+
+_DEFAULT_POS_KEYS: Tuple[str, str, str] = ("RecoX", "RecoY", "RecoZ")
+_TRUTH_POS_KEYS:   Tuple[str, str, str] = ("SignalParticleX", "SignalParticleY", "SignalParticleZ")
 
 from .defaults import load_analysis_info, get_folder_flags
 
@@ -83,30 +86,56 @@ def get_fiducialization_config(root: str, analysis_name: Optional[str] = None) -
     return config
 
 
-def build_fiducial_spatial_mask(run: dict, config: str, detector_x: float, detector_y: float, info: dict, folder: str, fiducial: Dict[str, Any]) -> np.ndarray:
-    """Spatial-only fiducial mask (X/Y/Z cuts). Shared by analysis scripts."""
+def build_fiducial_spatial_mask(
+    run: dict,
+    config: str,
+    detector_x: float,
+    detector_y: float,
+    info: dict,
+    folder: str,
+    fiducial: Dict[str, Any],
+    pos_keys: Tuple[str, str, str] = _DEFAULT_POS_KEYS,
+) -> np.ndarray:
+    """Spatial-only fiducial mask (X/Y/Z cuts). Shared by analysis scripts.
+
+    pos_keys selects which coordinate arrays to read from run["Reco"]:
+      default  = ("RecoX", "RecoY", "RecoZ")   — reco flash-matched position
+      truth    = ("SignalParticleX", "SignalParticleY", "SignalParticleZ")
+    """
+    xk, yk, zk = pos_keys
     return np.asarray(
         (
             (
-                np.absolute(run["Reco"]["RecoX"]) > fiducial["FiducialX"]
+                np.absolute(run["Reco"][xk]) > fiducial["FiducialX"]
                 if config == "hd_1x2x6_lateralAPA"
                 else (
-                    np.absolute(run["Reco"]["RecoX"]) < detector_x / 2 - fiducial["FiducialX"]
+                    np.absolute(run["Reco"][xk]) < detector_x / 2 - fiducial["FiducialX"]
                     if config == "hd_1x2x6_centralAPA"
-                    else run["Reco"]["RecoX"] < detector_x / 2 - fiducial["FiducialX"]
+                    else run["Reco"][xk] < detector_x / 2 - fiducial["FiducialX"]
                 )
             )
-            * (np.absolute(run["Reco"]["RecoY"]) < detector_y / 2 - fiducial["FiducialY"])
-            * (((run["Reco"]["RecoZ"] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])) if folder == "Nominal" else 1)
-            * (((run["Reco"]["RecoZ"] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])) if folder == "Nominal" else 1)
+            * (np.absolute(run["Reco"][yk]) < detector_y / 2 - fiducial["FiducialY"])
+            * (((run["Reco"][zk] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])) if folder == "Nominal" else 1)
+            * (((run["Reco"][zk] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])) if folder == "Nominal" else 1)
         ),
         dtype=bool,
     )
 
 
-def build_energy_band_spatial_mask(run: dict, config: str, detector_x: float, detector_y: float, info: dict, folder: str, fiducial: Dict[str, Any], band_fiducials: List[Dict[str, Any]], energy: str) -> np.ndarray:
+def build_energy_band_spatial_mask(
+    run: dict,
+    config: str,
+    detector_x: float,
+    detector_y: float,
+    info: dict,
+    folder: str,
+    fiducial: Dict[str, Any],
+    band_fiducials: List[Dict[str, Any]],
+    energy: str,
+    pos_keys: Tuple[str, str, str] = _DEFAULT_POS_KEYS,
+) -> np.ndarray:
     """Spatial mask with per-energy-band overrides. Events outside all bands use the global fiducial."""
-    spatial_mask = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, fiducial)
+    spatial_mask = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, fiducial, pos_keys)
     if not band_fiducials:
         return spatial_mask
     event_energies = run["Reco"][energy]
@@ -115,7 +144,7 @@ def build_energy_band_spatial_mask(run: dict, config: str, detector_x: float, de
         if not np.any(e_mask):
             continue
         band_fid = {"FiducialX": band["FiducialX"], "FiducialY": band["FiducialY"], "FiducialZ": band["FiducialZ"]}
-        spatial_mask[e_mask] = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, band_fid)[e_mask]
+        spatial_mask[e_mask] = build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, folder, band_fid, pos_keys)[e_mask]
     return spatial_mask
 
 

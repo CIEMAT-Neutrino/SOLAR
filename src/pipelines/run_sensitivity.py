@@ -181,7 +181,12 @@ def run_presentation_script(script_name: str, energy: str, folder: Optional[str]
 
 
 def sample_input_exists(config: str, name: str) -> bool:
-    info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
+    config_path = f"{root}/config/{config}/{config}_config.json"
+    try:
+        info = json.load(open(config_path, "r"))
+    except FileNotFoundError:
+        rprint(f"[red][ERROR][/red] Config file not found: {config_path}. Check --config spelling (must include full prefix, e.g. hd_1x2x6_centralAPA).")
+        raise
     required_file = (
         f"{info['PATH']}/data/{info['GEOMETRY']}/{info['VERSION']}/"
         f"{info['NAME']}{name}/Config/GEANT4Label.npy"
@@ -417,6 +422,27 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--ignore_energy_window",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Pass --ignore_energy_window to 02_best_fiducial.py — evaluate fiducial significance "
+        "over the full energy spectrum, bypassing analysis-specific energy_min/energy_max. "
+        "Required when energy variable (e.g. SignalParticleK, MainK) has no events in the "
+        "standard HEP/Sensitivity window."
+    ),
+)
+parser.add_argument(
+    "--skip_best_sigmas",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Pass --reference_study_label '' to 05_best_sigmas.py — evaluate significance at the "
+        "nominal (no-label) best cuts rather than re-optimizing per study variant. "
+        "Ensures monotonic results across uncertainty scan variants."
+    ),
+)
+parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
@@ -504,8 +530,42 @@ parser.add_argument(
         "Pass --skip_best_cuts to enable."
     ),
 )
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Run the fiducialization stage with true MC particle coordinates (SignalParticleX/Y/Z) "
+        "instead of reco flash-matched coordinates (RecoX/Y/Z). Produces labeled output files "
+        "(BestFiducials_fiduc_truth.json, _Fiducial_Scan_fiduc_truth.pkl) that do not overwrite "
+        "the nominal fiducial outputs. Requires --fiducialization (enabled automatically)."
+    ),
+)
 
 args = parser.parse_args()
+
+# Auto-generate study_label from exposure when the user passes --exposure but no --study_label.
+# Templates are pre-scaled as exposure_yr × detector_mass_kT × rate, so a non-default exposure
+# produces a distinct set of pkl files that must not overwrite the 30 yr default output.
+# The auto label (e.g. "10yr") is forwarded to every sub-script via study_label_args_for(),
+# and lib/study.py will set template_suffix = study_suffix for non-default exposures so that
+# template pkls land in their own subfolder ({energy}_10yr/ instead of {energy}/).
+_DEFAULT_SENSITIVITY_EXPOSURE = 30.0
+if (
+    args.exposure is not None
+    and args.exposure != _DEFAULT_SENSITIVITY_EXPOSURE
+    and args.study_label is None
+):
+    args.study_label = f"{args.exposure:.0f}yr"
+    rprint(
+        f"[cyan][INFO][/cyan] Non-default exposure ({args.exposure} yr): "
+        f"auto-setting study_label='{args.study_label}' to isolate output files."
+    )
+
+if args.truth_fiducial and not args.fiducialization:
+    rprint("[cyan][INFO][/cyan] --truth_fiducial requires fiducialization stage — enabling automatically.")
+    args.fiducialization = True
+
 configure_global_logging(verbose=args.verbose)
 analysis_info = load_analysis_info(str(root))
 selected_background_components = get_selected_background_components(args.analysis, analysis_info)
@@ -617,10 +677,30 @@ def oscillation_args_for() -> List[str]:
     return result
 
 
+def truth_fiducial_args_for() -> List[str]:
+    return ["--truth_fiducial"] if args.truth_fiducial else []
+
+
 def fiducialize_oscillation_args_for() -> List[str]:
     # dm2 not forwarded — fiducial volume scan optimises detector geometry only,
     # not oscillation weights; 01_fiducialize.py does not accept --dm2.
     return ["--oscillation_backend", args.oscillation_backend]
+
+
+def daynight_oscillation_args_for() -> List[str]:
+    # 01_daynight.py does not accept --oscillation_backend; only --dm2 is needed
+    # to select the labeled Rebin pkl produced with the overridden dm2 value.
+    if args.dm2 is not None:
+        return ["--dm2", str(args.dm2)]
+    return []
+
+
+def ignore_energy_window_args_for() -> List[str]:
+    return ["--ignore_energy_window"] if args.ignore_energy_window else []
+
+
+def skip_best_sigmas_args_for() -> List[str]:
+    return ["--reference_study_label", ""] if args.skip_best_sigmas else []
 
 
 def study_label_args_for() -> List[str]:
@@ -664,7 +744,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     if args.fiducialization:
         for name in available_names:
             sample_args = base_args + ["--signal", name]
-            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for())
+            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for() + truth_fiducial_args_for())
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/01_fiducialize.py (--no-fiducialization).")
 
@@ -679,7 +759,9 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + energy_args
                 + exposure_args
                 + analysis_selection_args
-                + ["--mc_threshold", str(args.fiducial_mc_threshold)],
+                + ["--mc_threshold", str(args.fiducial_mc_threshold)]
+                + ignore_energy_window_args_for()
+                + truth_fiducial_args_for(),
             )
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/02_best_fiducial.py (--no-fiducialization).")
@@ -707,6 +789,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + charge_scan_args_for()
                 + oscillation_args_for()
                 + study_label_args_for()
+                + truth_fiducial_args_for()
                 + ["--export_fiducial"],
             )
     else:
@@ -723,6 +806,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + charge_scan_args_for()
                 + oscillation_args_for()
                 + study_label_args_for()
+                + truth_fiducial_args_for()
                 + ["--export_fiducial", "--skip_scan", "--no-plot"],
             )
 
@@ -810,10 +894,10 @@ def run_daynight_stage(config: str, folder: str, name: str):
                 "--day_fraction", str(args.day_fraction),
                 "--day_fraction_band", str(args.day_fraction_band),
             ]
-            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + test_statistic_args_for() + all_metrics_args_for())
+            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + daynight_oscillation_args_for() + test_statistic_args_for() + all_metrics_args_for() + charge_threshold_only_args_for())
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
-            plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference],
+            plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference] + skip_best_sigmas_args_for(),
         )
     run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"])
     run_analysis_script(
@@ -961,11 +1045,11 @@ def run_hep_stage(config: str, folder: str, name: str):
         if args.significance:
             run_analysis_script(
                 "src/physics/hep/01_hep.py",
-                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for(),
+                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for() + charge_threshold_only_args_for(),
             )
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
-            plot_base_args + selector_args + ["--analysis", "HEP", "--reference", reference],
+            plot_base_args + selector_args + ["--analysis", "HEP", "--reference", reference] + skip_best_sigmas_args_for(),
         )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
@@ -999,7 +1083,7 @@ def run_hep_stage(config: str, folder: str, name: str):
     )
     run_analysis_script(
         "src/physics/hep/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + reference_args_for(hep_significance_reference),
+        analysis_base_args + common_args + uncertainty_args + reference_args_for(hep_significance_reference) + charge_threshold_only_args_for(),
     )
     if args.all_metrics:
         run_analysis_script(

@@ -65,8 +65,9 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
     return quality_mask * spatial_mask
 
 
-def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name):
+def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, pos_keys=("RecoX", "RecoY", "RecoZ")):
     events = len(run["Reco"]["Event"])
+    xk, yk, zk = pos_keys
     surface = (
         (run["Reco"]["SignalParticleSurface"] >= 0)
         * (run["Reco"]["SignalParticleSurface"] < 3)
@@ -74,18 +75,18 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
         else np.ones(len(run["Reco"]["Event"]), dtype=bool)
     )
     fiducialx = (
-        np.absolute(run["Reco"]["RecoX"]) > fiducial["FiducialX"]
+        np.absolute(run["Reco"][xk]) > fiducial["FiducialX"]
         if config == "hd_1x2x6_lateralAPA"
         else (
-            np.absolute(run["Reco"]["RecoX"]) < detector_x / 2 - fiducial["FiducialX"]
+            np.absolute(run["Reco"][xk]) < detector_x / 2 - fiducial["FiducialX"]
             if config == "hd_1x2x6_centralAPA"
-            else run["Reco"]["RecoX"] < detector_x / 2 - fiducial["FiducialX"]
+            else run["Reco"][xk] < detector_x / 2 - fiducial["FiducialX"]
         )
     )
-    fiducialy = np.absolute(run["Reco"]["RecoY"]) < detector_y / 2 - fiducial["FiducialY"]
+    fiducialy = np.absolute(run["Reco"][yk]) < detector_y / 2 - fiducial["FiducialY"]
     # build_cut_impact reports per-axis efficiency so keeps per-axis cuts separate
-    fiducialz = (run["Reco"]["RecoZ"] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"]) & (
-        run["Reco"]["RecoZ"] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"]
+    fiducialz = (run["Reco"][zk] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"]) & (
+        run["Reco"][zk] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"]
     )
     return {
         f"NHits>{this_nhit-1}_AdjClNum<{this_adjcl}_OpHits>{this_ophit-1}": {
@@ -134,6 +135,15 @@ parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, d
 parser.add_argument("--minimal_cuts", action=argparse.BooleanOptionalAction, default=False, help="Scan only the minimally restrictive cut point: NHits=min, OpHits=min, AdjCl=max (i.e. NHits=1, OpHits=4, AdjCl=20). Useful for background flux plots with no selection applied.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, adds Charge>Q and sum(AdjClCharge>Q)<AdjCl cuts on top of the NHits scan. Default 0 (no charge cut).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Load BestFiducials_fiduc_truth.json and apply fiducial cuts using true MC particle "
+        "coordinates (SignalParticleX/Y/Z) instead of reco flash-matched coordinates (RecoX/Y/Z)."
+    ),
+)
 parser.add_argument(
     "--oscillation_backend",
     type=str,
@@ -237,7 +247,8 @@ if args.charge_threshold > 0:
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    _best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{_best_fiducials_stem}.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 
@@ -269,6 +280,8 @@ for config in configs:
 
         # Pre-compute spatial masks per analysis — independent of NHits/OpHits/AdjCl.
         # Avoids recomputing the expensive spatial mask N_cuts times.
+        from lib.fiducial import _DEFAULT_POS_KEYS, _TRUTH_POS_KEYS
+        _pos_keys = _TRUTH_POS_KEYS if args.truth_fiducial else _DEFAULT_POS_KEYS
         _spatial_masks = {}
         for _an in args.analysis:
             _fid = fiducials_by_analysis[_an]
@@ -276,10 +289,12 @@ for config in configs:
             if _bfid and energy:
                 _spatial_masks[_an] = np.asarray(build_energy_band_spatial_mask(
                     run, config, detector_x, detector_y, info, args.folder, _fid, _bfid, energy,
+                    pos_keys=_pos_keys,
                 ), dtype=bool)
             else:
                 _spatial_masks[_an] = np.asarray(build_fiducial_spatial_mask(
-                    run, config, detector_x, detector_y, info, args.folder, _fid
+                    run, config, detector_x, detector_y, info, args.folder, _fid,
+                    pos_keys=_pos_keys,
                 ), dtype=bool)
 
         # Surface cut and reco arrays extracted once to avoid per-iteration dict lookups.
@@ -429,10 +444,6 @@ for config in configs:
                             np.sum(~mc_filter), args.mc_filter_threshold,
                             energy, this_nhit, this_ophit, this_adjcl,
                         )
-                    h_rel_error = np.zeros_like(mc_counts, dtype=float)
-                    non_zero_bins = mc_counts > 0
-                    h_rel_error[non_zero_bins] = 1.0 / np.sqrt(mc_counts[non_zero_bins])
-
                     analysis_cache[cache_key] = {
                         "mask": mask,
                         "reco_bin_idx": reco_bin_idx,
@@ -441,7 +452,6 @@ for config in configs:
                         "true_bin_valid": true_bin_valid,
                         "mc_counts": mc_counts,
                         "mc_filter": mc_filter,
-                        "h_rel_error": h_rel_error,
                     }
 
                 cached = analysis_cache[cache_key]
@@ -458,17 +468,19 @@ for config in configs:
                     ["", "OscDay", "OscNight", "OscMean"] if "marley" in name else [""],
                 ):
                     selected_weights = run["Reco"][f"{weight}{mean_label}"][mask]
-                    h = np.bincount(
-                        _reco_bidx, weights=selected_weights[_reco_bvalid], minlength=_n_bins
-                    ).astype(float)
+                    _sel_w = selected_weights[_reco_bvalid]
+                    h = np.bincount(_reco_bidx, weights=_sel_w, minlength=_n_bins).astype(float)
+                    w2 = np.bincount(_reco_bidx, weights=_sel_w**2, minlength=_n_bins)
                     h_true = np.bincount(
                         _true_bidx, weights=selected_weights[_true_bvalid], minlength=_n_bins
                     ).astype(float)
-                    h *= cached["mc_filter"]
+                    h  *= cached["mc_filter"]
+                    w2 *= cached["mc_filter"]
                     if folder_applies_reduction(str(root), args.folder):
-                        h = h / get_component_reduction_factor(str(root), args.folder, name)
-                    h_error = h * cached["h_rel_error"]
-                    h_error[np.isnan(h_error)] = 0
+                        _factor = get_component_reduction_factor(str(root), args.folder, name)
+                        h  = h  / _factor
+                        w2 = w2 / _factor**2
+                    h_error = np.sqrt(w2)
 
                     plot_lists[analysis].append({
                         "Geometry": config.split("_")[0],
@@ -500,7 +512,7 @@ for config in configs:
                         save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
                         save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}", rm=user_input["rewrite"], debug=user_input["debug"])
 
-                    cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name)
+                    cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name, pos_keys=_pos_keys)
                     cut_dir = f"{export_path}/{config}/{name}/{args.folder.lower()}"
                     if not os.path.exists(cut_dir):
                         os.makedirs(cut_dir)

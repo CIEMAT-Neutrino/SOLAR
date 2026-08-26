@@ -117,7 +117,7 @@ parser.add_argument(
     default=get_analysis_threshold(str(root), "SENSITIVITY", stage="SIGNIFICANCE", fallback=0.0),
 )
 parser.add_argument(
-    "--exposure", type=float, help="The exposure for the analysis in kton-years", default=30.0
+    "--exposure", type=float, help="The exposure for the analysis in years. Templates are pre-scaled as exposure_yr × detector_mass_kT × rate; this arg is metadata labeling only.", default=30.0
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)

@@ -136,6 +136,7 @@ def parse_args():
         default=DEFAULT_ENERGY,
         choices=[
             "SignalParticleK",
+            "MainK",
             "ClusterEnergy",
             "TotalEnergy",
             "SelectedEnergy",

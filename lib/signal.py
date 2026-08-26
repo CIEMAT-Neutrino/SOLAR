@@ -208,19 +208,19 @@ def compute_signal_energies(
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
             )
             for jdx, pdg in enumerate(pdg_list):
-                run[tree][new_branches[0]][idx][:, jdx] = np.sum(
+                run[tree][new_branches[0]][idx[0], jdx] = np.sum(
                     run[tree][f"TSignalE"][idx]
                     * (run[tree][f"TSignalMother"][idx] == 0)
                     * (run[tree][f"TSignalPDG"][idx] == pdg),
                     axis=1,
                 )
-                run[tree][new_branches[1]][idx][:, jdx] = np.sum(
+                run[tree][new_branches[1]][idx[0], jdx] = np.sum(
                     run[tree][f"TSignalP"][idx]
                     * (run[tree][f"TSignalMother"][idx] == 0)
                     * (run[tree][f"TSignalPDG"][idx] == pdg),
                     axis=1,
                 )
-                run[tree][new_branches[2]][idx][:, jdx] = np.sum(
+                run[tree][new_branches[2]][idx[0], jdx] = np.sum(
                     run[tree][f"TSignalK"][idx]
                     * (run[tree][f"TSignalMother"][idx] == 0)
                     * (run[tree][f"TSignalPDG"][idx] == pdg),

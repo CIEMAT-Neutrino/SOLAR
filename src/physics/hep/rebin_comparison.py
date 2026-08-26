@@ -281,7 +281,7 @@ for config, name in product(args.config, args.signal):
                 add_units=False, figsize=(800, 600), matches=("x", None), add_watermark=False,
             )
             fig.update_xaxes(title="", showticklabels=False, row=1, col=1)
-            fig.update_xaxes(title="Exposure (kT·year)", row=2, col=1)
+            fig.update_xaxes(title="Exposure (year)", row=2, col=1)
             fig.update_yaxes(
                 title="Significance (σ)",
                 range=[0, max(1.0, 1.1 * significance_peak)] if args.zoom else [0, 6],
@@ -316,7 +316,7 @@ for config, name in product(args.config, args.signal):
                 fig, title=f"ProfileLikelihood — {args.folder} — {config}",
                 add_units=False, figsize=(800, 400), matches=None, add_watermark=False,
             )
-            fig.update_xaxes(title="Exposure (kT·year)")
+            fig.update_xaxes(title="Exposure (year)")
             fig.update_yaxes(
                 title="Significance (σ)",
                 range=[0, max(1.0, 1.1 * significance_peak)] if args.zoom else [0, 6],

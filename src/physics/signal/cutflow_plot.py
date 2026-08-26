@@ -227,6 +227,27 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
             + "\n".join(f"  {p}" for p in missing)
         )
 
+    # Freshness check: Ref pkls must not predate the Rebin pkl (which feeds HEP Counts / significance_plot.py).
+    # If 03_analysis.py was rerun without --export_raw, Rebin pkl is newer → data inconsistent.
+    _dir_key   = "signal" if "marley" in name else "background"
+    _rebin_pkl = (
+        f"{info['PATH']}/{_dir_key}/{args.folder.lower()}/{args.analysis.upper()}/"
+        f"{args.config}/{name}/{args.config}_{name}_{args.energy}_Rebin.pkl"
+    )
+    if os.path.exists(_rebin_pkl):
+        _rebin_mtime = os.path.getmtime(_rebin_pkl)
+        _ref_mtime   = min(os.path.getmtime(p) for p in required)
+        if _ref_mtime < _rebin_mtime - 60:
+            rprint(
+                f"[yellow][WARNING][/yellow] Ref pkls for '{name}' are "
+                f"{(_rebin_mtime - _ref_mtime) / 60:.1f} min older than the Rebin pkl — "
+                f"Cutflow and HEP Counts may be from different 03_analysis.py runs.\n"
+                f"  Regenerate: python3 src/physics/signal/03_analysis.py "
+                f"--config {args.config} --signal {name} --folder {args.folder} "
+                f"--energy {args.energy} --analysis {args.analysis} "
+                f"--export_raw --export_fiducial --best_cuts_only"
+            )
+
     reco     = np.asarray(pickle.load(open(required[0], "rb")), dtype=float)
     weights  = np.asarray(pickle.load(open(required[1], "rb")), dtype=float)
     geo_fid  = np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
@@ -250,13 +271,23 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
 
     h_full = _histogram(reco, weights, full_mask) * _mc_filter
 
+    def _h_and_err(mask, mc_filter=None):
+        h = _histogram(reco, weights, mask)
+        w2, _ = np.histogram(reco[mask], bins=_edges, weights=weights[mask] ** 2)
+        if mc_filter is not None:
+            h  = h  * mc_filter
+            w2 = w2 * mc_filter
+        mc, _ = np.histogram(reco[mask], bins=_edges)
+        err = np.sqrt(w2)
+        return h, err, mc
+
     return [
-        _histogram(reco, weights, pre_mask),
-        _histogram(reco, weights, flash_mask),
-        _histogram(reco, weights, fid),
-        _histogram(reco, weights, nhits_mask),
-        _histogram(reco, weights, op_mask),
-        h_full,
+        _h_and_err(pre_mask),
+        _h_and_err(flash_mask),
+        _h_and_err(fid),
+        _h_and_err(nhits_mask),
+        _h_and_err(op_mask),
+        _h_and_err(full_mask, mc_filter=_mc_filter),
     ]
 
 # ── Smoothing config (1-D, analysis-specific — matches significance_plot.py) ──
@@ -306,14 +337,20 @@ for _name in args.signal:
             "Exposure": _exposure, "ExposureUnit": "year",
             "EnergyUnit": "MeV", "CountsUnit": f"events / MeV / {_exposure:.0f} yr",
         }
-        for stage, h in zip(_FID_STAGES + _CUT_STAGES, stage_hists):
-            h_scaled  = h * _scale          # events/(kT·yr) × kT·yr = events / bin (1 MeV bin → events/MeV)
-            sh_scaled = _smooth(h, _component_label) * _scale
+        for stage, (h, h_err, mc) in zip(_FID_STAGES + _CUT_STAGES, stage_hists):
+            h_scaled   = h     * _scale   # events/(kT·yr) × kT·yr → events/MeV (1 MeV bins)
+            err_scaled = h_err * _scale
+            sh_scaled  = _smooth(h,     _component_label) * _scale
+            se_scaled  = _smooth(h_err, _component_label) * _scale
             cutflow_rows.append({
                 **_meta, "Stage": stage["label"],
-                "Energy":         _centers.tolist(),
-                "Counts":         h_scaled.tolist(),
-                "SmoothedCounts": sh_scaled.tolist(),
+                "Energy":               _centers.tolist(),
+                "Counts":               h_scaled.tolist(),
+                "CountsError":          err_scaled.tolist(),
+                "SmoothedCounts":       sh_scaled.tolist(),
+                "SmoothedCountsError":  se_scaled.tolist(),
+                "MCCounts":             mc.tolist(),
+                "MCCountsError":        np.sqrt(mc).tolist(),
             })
 
     if not cutflow_rows:
@@ -359,7 +396,7 @@ for _name in args.signal:
         p_col = panel_idx %  n_cols + 1
         hists = _component_hists[(__, component)]
 
-        for stage, h in zip(_all_stages[:len(hists)], hists):
+        for stage, (h, _h_err, _mc) in zip(_all_stages[:len(hists)], hists):
             show_legend = stage["label"] not in _legend_added
             if show_legend:
                 _legend_added.add(stage["label"])

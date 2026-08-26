@@ -56,6 +56,16 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Use true MC particle coordinates (SignalParticleX/Y/Z) instead of reco "
+        "flash-matched coordinates (RecoX/Y/Z) for the fiducial volume scan. "
+        "Output pkl is saved with a '_fiduc_truth' suffix to avoid overwriting the nominal scan."
+    ),
+)
+parser.add_argument(
     "--oscillation_backend",
     type=str,
     choices=["file", "prob3", "nufast"],
@@ -164,9 +174,14 @@ for config in configs:
         _surface_arr  = run["Reco"]["SignalParticleSurface"]
         _op_plane_arr = run["Reco"]["MatchedOpFlashPlane"]
         _op_pe_arr    = run["Reco"]["MatchedOpFlashPE"]
-        _reco_x_arr   = run["Reco"]["RecoX"]
-        _reco_y_arr   = run["Reco"]["RecoY"]
-        _reco_z_arr   = run["Reco"]["RecoZ"]
+        if args.truth_fiducial:
+            _reco_x_arr = run["Reco"]["SignalParticleX"]
+            _reco_y_arr = run["Reco"]["SignalParticleY"]
+            _reco_z_arr = run["Reco"]["SignalParticleZ"]
+        else:
+            _reco_x_arr = run["Reco"]["RecoX"]
+            _reco_y_arr = run["Reco"]["RecoY"]
+            _reco_z_arr = run["Reco"]["RecoZ"]
         _energy_arr   = run["Reco"][energy]
         _is_marley    = "marley" in args.signal
 
@@ -290,12 +305,13 @@ for config in configs:
                 }
             )
 
+        scan_filename = f"{energy}_Fiducial_Scan_fiduc_truth" if args.truth_fiducial else f"{energy}_Fiducial_Scan"
         save_df(
             pd.DataFrame(plot_list),
             f"{data_path}/{args.folder.lower()}",
             config=config,
             name=name,
-            filename=f"{energy}_Fiducial_Scan",
+            filename=scan_filename,
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )

@@ -94,6 +94,8 @@ parser.add_argument(
 )
 parser.add_argument("--study_label", type=str, default=None,
     help="Tag appended to template subfolder and used to locate labeled background Rebins for charge study variants.")
+parser.add_argument("--charge_threshold", type=float, default=0,
+    help="Charge threshold Q (ADC) forwarded by run_sensitivity.py. Background Rebins are not charge-labeled; this arg is accepted to avoid argparse errors.")
 
 args = parser.parse_args()
 _ctx = study_context(args)

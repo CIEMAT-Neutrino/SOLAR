@@ -400,7 +400,7 @@ for config in configs:
 
             if is_solar_bf:
                 if args.debug:
-                    rprint(f"# of events (kT·year): {np.sum(convolved):.2f}")
+                    rprint(f"# of events (absolute counts at {args.exposure} yr × {detector_mass:.2f} kT): {np.sum(convolved):.2f}")
 
                 _osc_fig = make_subplots(rows=1, cols=1)
                 _osc_fig.add_trace(go.Heatmap(
@@ -432,10 +432,11 @@ for config in configs:
                     name="Solar ν Signal",
                 ), row=1, col=1)
                 _sig_fig = format_coustom_plotly(
-                    _sig_fig, title=f"1D Signal Spectrum {config} {energy} ({args.exposure} kt·yr)",
+                    _sig_fig, title=f"1D Signal Spectrum {config} {energy} ({args.exposure} yr × {detector_mass:.2f} kT)",
                 )
                 _sig_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
-                _sig_fig.update_yaxes(title="Events (kt·yr)⁻¹ MeV⁻¹")
+                # y shows absolute counts (exposure_yr × detector_mass_kT × rate) — not a rate
+                _sig_fig.update_yaxes(title="Events / MeV")
                 save_figure(
                     _sig_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
                     filename=f"Signal1D_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}", rm=args.rewrite, debug=args.plot,

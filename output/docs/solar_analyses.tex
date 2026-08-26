@@ -181,8 +181,11 @@ The total combined background uncertainty in bin $i$ is:
   \label{eq:combined_error}
 \end{equation}
 also convolved with the component-specific smoothing kernel.
-For signal components (hep, ${}^8$B) the corresponding quantity uses the
-signal systematic $\srel^{\mathrm{sig}} = 30\%$ (HEP) or $4\%$ (Sensitivity).
+For the hep signal component the corresponding quantity uses
+$\srel^{\mathrm{sig}} = 30\%$ (HEP) or $4\%$ (Sensitivity).
+In the HEP analysis ${}^8$B is treated as a background component and uses
+$\srel^{{}^8\mathrm{B}} = \srel^{\mathrm{bkg}} = 2\%$
+(Section~\ref{sec:hep_signal}).
 
 % ===========================================================================
 \section{Day-Night Asymmetry Analysis}
@@ -228,9 +231,9 @@ Event counts observed in day and night periods are:
   \label{eq:dn_n_day}
 \end{align}
 
-The \textbf{asymmetry signal} at scale factor $\xi$ (Section~\ref{sec:dn_band}) is:
+The \textbf{asymmetry signal} at scale factor $\theta_s$ (Section~\ref{sec:dn_band}) is:
 \begin{equation}
-  \si = \Ecal\cdot\xi\cdot\bigl(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}\bigr).
+  \si(\theta_s) = \Ecal\cdot\theta_s\cdot\bigl(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}\bigr).
   \label{eq:dn_signal}
 \end{equation}
 
@@ -323,7 +326,7 @@ set to zero wherever $\Beff = 0$.
 
 The Day-Night analysis also computes a two-sample Poisson log-likelihood
 ratio (Asimov) as an alternative to the Gaussian estimators.
-Under the signal hypothesis (asymmetry scale $\xi$), the Asimov
+Under the signal hypothesis (asymmetry scale $\theta_s$), the Asimov
 (expected) observed counts are $n_i^{\mathrm{night}}$ and
 $n_i^{\mathrm{day}}$ from Eqs.~\eqref{eq:dn_n_night}--\eqref{eq:dn_n_day}.
 The null hypothesis $H_0$ assumes no asymmetry: both periods share the same
@@ -334,9 +337,9 @@ per-bin total rate, allocated proportionally to period length:
   h_{0,i}^{\mathrm{day}}   = \fd\,(n_i^{\mathrm{night}} + n_i^{\mathrm{day}}).
   \label{eq:dn_h0}
 \end{equation}
-The two-sample log-likelihood ratio is:
+The per-bin log-likelihood ratio contribution is:
 \begin{equation}
-  q_i
+  q_i(\theta_s)
   = 2\!\left[
     n_i^{\mathrm{night}}\ln\frac{n_i^{\mathrm{night}}}{h_{0,i}^{\mathrm{night}}}
     +
@@ -345,11 +348,45 @@ The two-sample log-likelihood ratio is:
   \label{eq:dn_llr_bin}
 \end{equation}
 defined as zero whenever any count or null hypothesis count is non-positive.
-The global Asimov significance is:
+
+\medskip
+\noindent\textbf{Gaussian constraint on the asymmetry amplitude.}
+The asymmetry amplitude $\theta_s$ is treated as a constrained nuisance:
+$\theta_s \sim \mathcal{N}(1, \epstot^2)$, where $\epstot$ is the total
+band (Eq.~\eqref{eq:dn_band}).
+For each band scenario $\theta_s \in \{1+\epstot,\;1,\;1-\epstot\}$ the
+penalised test statistic is:
 \begin{equation}
-  \ZA = \sqrt{\max\!\left(0,\,\sum_{i \ge i_{\mathrm{th}}} q_i\right)}.
+  q^{\mathrm{pen}}(\theta_s)
+  = \sum_{i \ge i_{\mathrm{th}}} q_i(\theta_s)
+    - \left(\frac{\theta_s - 1}{\epstot}\right)^{\!2}.
+  \label{eq:dn_asimov_penalised}
+\end{equation}
+The Asimov significance for each band scenario is:
+\begin{equation}
+  \ZA(\theta_s) = \sqrt{\max\!\left(0,\,q^{\mathrm{pen}}(\theta_s)\right)}.
   \label{eq:dn_asimov_global}
 \end{equation}
+At the nominal point $\theta_s=1$ the penalty vanishes and
+Eq.~\eqref{eq:dn_asimov_global} reduces to the raw LLR sum.
+At $\theta_s = 1\pm\epstot$ the penalty equals $1$, deflating the raw
+sum by exactly $1\,\sigma^2$ relative to the nominal curve.
+This correctly reflects the prior information on the asymmetry scale: the
+off-nominal band significances are not free upper/lower bounds but
+penalised estimates constrained by the prior uncertainty.
+
+\medskip
+\noindent\textbf{Asimov as the primary cut-optimization metric.}
+The nominal-band smoothed Asimov significance $\ZA(\theta_s{=}1)$ is the
+primary metric for selecting the optimal topological cuts: the cut that
+minimises the exposure needed to reach $\ZA \ge 2\sigma$ is retained.
+The Gaussian significance is computed in parallel as a diagnostic output
+but does not drive cut selection.
+The output columns \texttt{Sigma2}/\texttt{Sigma3} and
+\texttt{AsimovSigma2}/\texttt{AsimovSigma3} are identical (both record
+the Asimov-based exposure thresholds); \texttt{AsimovSigma2} is an alias
+retained for backward compatibility with older result readers.
+
 This is the natural two-sample extension of the HEP Asimov formula
 (Section~\ref{sec:hep_gaussian_asimov}).
 
@@ -374,13 +411,26 @@ are combined in quadrature to define a total band $\epstot$:
 \end{equation}
 Three scale factors bracket the full predicted range:
 \begin{equation}
-  \xi \in \{1+\epstot,\;1,\;1-\epstot\}.
+  \theta_s \in \{1+\epstot,\;1,\;1-\epstot\}.
   \label{eq:dn_xi}
 \end{equation}
-The scale acts on the asymmetry signal only (Eq.~\eqref{eq:dn_signal}),
-leaving the total event rate and the background unchanged.
-This produces three significance curves (upper, nominal, lower) for each
-estimator.
+
+\medskip
+\noindent\textbf{Gaussian estimators.}
+The scale $\theta_s$ enters the signal multiplicatively
+(Eq.~\eqref{eq:dn_signal}),
+leaving the background unchanged.
+Three curves (upper, nominal, lower) are produced for each Gaussian estimator.
+
+\medskip
+\noindent\textbf{Asimov estimator.}
+For the Asimov LLR the asymmetry amplitude is treated as a constrained
+nuisance (Section~\ref{sec:dn_asimov}): $\theta_s$ enters both the signal
+and the Gaussian penalty term $(\theta_s-1)^2/\epstot^2$ in
+Eq.~\eqref{eq:dn_asimov_penalised}.
+The three Asimov curves are therefore deflated from their unconstrained
+values by the penalty, correctly encoding the prior information on the
+asymmetry scale.
 
 \subsection{Results}
 \label{sec:dn_results}
@@ -441,11 +491,31 @@ Signal (hep) and total background event counts in bin $i$ are:
 \end{align}
 The Asimov dataset sets observed counts to $\nni = \si + \bi$.
 
+\medskip
+\noindent\textbf{Component uncertainty assignment.}
+The analysis distinguishes three uncertainty classes:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Pure backgrounds} ($\gamma$, $n$, radiological):
+    $\srel^c = \srel^{\mathrm{bkg}}$ (\texttt{--background\_uncertainty}, default 2\%).
+  \item \textbf{${}^8$B solar (oscillated background)}:
+    also assigned $\srel^{{}^8\mathrm{B}} = \srel^{\mathrm{bkg}}$ (2\%).
+    Although ${}^8$B is an oscillated solar signal, at the energies probed
+    by HEP (14--30\,MeV) its rate is well constrained and it enters as a
+    known background.  Treating it with background uncertainty suppresses the
+    absorbing-plateau problem that would arise from inflating its normalization
+    freedom to the 30\% level.
+  \item \textbf{hep signal}: $\srel^{\mathrm{hep}} = \srel^{\mathrm{sig}}$
+    (\texttt{--signal\_uncertainty}, default 30\%).
+    The \texttt{--signal\_uncertainty} flag and the \texttt{unc\_sig} study
+    scan affect \emph{only} the hep component.
+\end{itemize}
+
 \subsection{Background Error Aggregation}
 \label{sec:hep_bkg_error}
 
-Each background component $c$ contributes an absolute uncertainty
-$\sigma_i^c$ (Eq.~\eqref{eq:bin_error}).
+Each background component $c \in \{\gamma, n, \mathrm{rad}, {}^8\mathrm{B}\}$
+contributes an absolute uncertainty $\sigma_i^c$ (Eq.~\eqref{eq:bin_error})
+computed with $\srel^c = \srel^{\mathrm{bkg}}$.
 The combined error and its smoothed counterpart enter the significance
 computation as:
 \begin{equation}
@@ -1120,7 +1190,7 @@ Observable
   & 1D energy spectrum
   & 2D (energy $\times$ azimuth) \\
 Signal
-  & $\si{=}\Ecal\xi(r_i^{\rm night}{-}r_i^{\rm day})$
+  & $\si{=}\Ecal\theta_s(r_i^{\rm night}{-}r_i^{\rm day})$
   & $\si{=}\Ecal r_i^{\rm hep}$
   & $\Tsig(\vec\theta)$ \\
 Goal
@@ -1128,7 +1198,7 @@ Goal
   & Discover hep flux
   & Map $(\Delta m^2,\sin^2\theta)$ contour \\
 Significance type
-  & Gaussian, two-sample Asimov
+  & Gaussian (diagnostic), two-sample Asimov (primary)
   & Gaussian, Asimov, PL
   & $\chi^2$ surface \\
 Nuisances
@@ -1156,7 +1226,7 @@ Barlow-Beeston mask
   & $N_i^{\rm MC}\ge N_{\rm MC}^{\min}$
   & $\Tbkg>0$ \\
 Asymmetry/signal band
-  & $\xi\in\{1\pm\epstot,1\}$
+  & $\theta_s\in\{1\pm\epstot,1\}$
   & $d\in\{2.9,3.0,3.1\}$
   & --- \\
 PL post-processing
@@ -1221,8 +1291,9 @@ Analysis & Label & Histogram & Rebinning & Estimator & Monotone? \\
  & \texttt{RawErrorGaussian}         & Raw    & None & Gaussian+$\seff$ & No \\
  & \texttt{Gaussian}                 & Smooth & None & Gaussian         & No \\
  & \texttt{ErrorGaussian}            & Smooth & None & Gaussian+$\seff$ & No \\
- & \texttt{RawAsimov}                & Raw    & None & Two-sample LLR   & No \\
- & \texttt{Asimov}                   & Smooth & None & Two-sample LLR   & No \\
+ & \texttt{RawAsimov}                & Raw    & None & Two-sample LLR (penalised) & No \\
+ & \texttt{Asimov}                   & Smooth & None & Two-sample LLR (penalised) & No \\
+ & \texttt{Sigma2} / \texttt{AsimovSigma2}  & Smooth & None & Asimov exposure threshold (alias pair) & --- \\
 \midrule
 \multicolumn{6}{l}{\textit{HEP}} \\
  & \texttt{RawGaussianNoRebin}       & Raw    & None     & Gaussian & No \\

@@ -478,6 +478,47 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 "SignificanceError-": (smoothed_asimov - asimov_lower).tolist(),
             })
 
+        # Background-uncertainty scenario rows (requires ErrorGaussian columns from 01_daynight.py)
+        _has_error_gaussian = all(
+            c in plot_sigmas.columns
+            for c in ["ErrorGaussian", "ErrorGaussian+Error", "ErrorGaussian-Error"]
+        )
+        if _has_error_gaussian:
+            error_gaussian_central = _safe_array(plot_sigmas["ErrorGaussian"].values[0])
+            error_gaussian_upper   = _safe_array(plot_sigmas["ErrorGaussian+Error"].values[0])
+            error_gaussian_lower   = _safe_array(plot_sigmas["ErrorGaussian-Error"].values[0])
+            _bkg_scenario_defs = [
+                ("MaxScenario",     gaussian_upper,    error_gaussian_upper),
+                ("CentralScenario", smoothed_gaussian, error_gaussian_central),
+                ("MinScenario",     gaussian_lower,    error_gaussian_lower),
+            ]
+            for scenario_key, ideal_g, real_g in _bkg_scenario_defs:
+                exposure_records.append({
+                    "Analysis": "DayNight", "Geometry": info["GEOMETRY"],
+                    "Config": config, "Name": name, "EnergyLabel": energy,
+                    "Variable": "Gaussian", "SpectrumType": f"Smoothed/{scenario_key}", "Mode": "PerBin",
+                    "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                    "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                    "Significance": real_g.tolist(), "SignificanceUnit": r"\sigma",
+                    "SignificanceError+": (ideal_g - real_g).tolist(),
+                    "SignificanceError-": np.zeros_like(real_g).tolist(),
+                })
+                if _has_asimov:
+                    _asimov_scenario = (
+                        asimov_upper if scenario_key == "MaxScenario"
+                        else (smoothed_asimov if scenario_key == "CentralScenario" else asimov_lower)
+                    )
+                    exposure_records.append({
+                        "Analysis": "DayNight", "Geometry": info["GEOMETRY"],
+                        "Config": config, "Name": name, "EnergyLabel": energy,
+                        "Variable": "Asimov", "SpectrumType": f"Smoothed/{scenario_key}", "Mode": "PerBin",
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
+                        "Significance": _asimov_scenario.tolist(), "SignificanceUnit": r"\sigma",
+                        "SignificanceError+": np.zeros_like(_asimov_scenario).tolist(),
+                        "SignificanceError-": np.zeros_like(_asimov_scenario).tolist(),
+                    })
+
     # ══════════════════════════════════════════════════════════════════════════
     # HEP — exposure mode
     # ══════════════════════════════════════════════════════════════════════════
@@ -549,7 +590,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
                     "Significance": sig_arr.tolist(), "SignificanceUnit": r"\sigma",
-                    "SignificanceError+": None, "SignificanceError-": None,
+                    "SignificanceError+": (sig_plus - smoothed_sig).tolist() if spec_type == "Smoothed" else None,
+                    "SignificanceError-": (smoothed_sig - sig_minus).tolist() if spec_type == "Smoothed" else None,
                 })
 
             # If --reference specified, plot only that metric; otherwise plot all available
@@ -684,7 +726,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         fig.update_yaxes(tickformat=".1f", dtick=1,
                          range=[0, max(1.0, 1.1 * significance_max)] if args.zoom else [0, 6],
                          title="Significance (sigma)", row=1, col=1)
-        fig.update_xaxes(range=[-1, args.exposure], zeroline=False, title="Exposure (kT·year)", row=1, col=1)
+        fig.update_xaxes(range=[-1, args.exposure], zeroline=False, title="Exposure (year)", row=1, col=1)
 
         figure_name = f"{energy}_HEP_Exposure_Comparison"
         if args.threshold is not None:
@@ -789,7 +831,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             fig = format_coustom_plotly(fig, title=f"Rebin Comparison - {args.folder} - {config}",
                                        add_units=False, figsize=(800, 600), matches=("x", None), add_watermark=False)
             fig.update_xaxes(title="", showticklabels=False, row=1, col=1)
-            fig.update_xaxes(title="Exposure (kT·year)", row=2, col=1)
+            fig.update_xaxes(title="Exposure (year)", row=2, col=1)
             fig.update_yaxes(title="Significance (σ)",
                            range=[0, max(1.0, 1.1 * significance_peak)] if args.zoom else [0, 6],
                            row=1, col=1)
@@ -921,7 +963,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         fig_exp.update_yaxes(tickformat=".1f", dtick=1,
                             range=[0, max(1.0, 1.1 * exposure_max)] if args.zoom else [0, 6],
                             title="Significance (σ)")
-        fig_exp.update_xaxes(range=[-1, args.exposure], zeroline=False, title="Exposure (kT·year)")
+        fig_exp.update_xaxes(range=[-1, args.exposure], zeroline=False, title="Exposure (year)")
 
         figure_name = f"{energy}_HEP_Exposure_Comparison"
         if args.threshold is not None:
@@ -1130,7 +1172,7 @@ if exposure_records and args.analysis != "Sensitivity":
         config=args.config[0], name=args.signal[0],
         subfolder=_save_subfolder,
         filename=_filename,
-        rm=True, debug=args.debug,
+        rm=True, debug=True,
     )
     if local_data_path:
         _merged_exp_local = upsert_df_rows(_df, local_data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename=_filename)
@@ -1141,5 +1183,5 @@ if exposure_records and args.analysis != "Sensitivity":
             config=args.config[0], name=args.signal[0],
             subfolder=_save_subfolder,
             filename=_filename,
-            rm=True, debug=False,
+            rm=True, debug=True,
         )
