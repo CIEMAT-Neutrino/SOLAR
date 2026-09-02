@@ -1,4 +1,4 @@
-# Chapter 8 Data Extraction — DUNE Solar Neutrino Sensitivity
+# Numerical Results — DUNE Solar Neutrino Sensitivity
 
 Generated: 2026-06-15. All values extracted directly from repository output files and configs.
 Fiducial: `truncated`. Signal: `marley`. Energy variable: `SolarEnergy` throughout.

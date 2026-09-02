@@ -89,6 +89,16 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.04"]},
         {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.06"]},
     ],
+    # 9.1.2 — nuisance parameter decomposition (Sensitivity only)
+    # Default profile is 'full' (sin²θ₁₃ + energy scale). Variants isolate each nuisance.
+    # DayNight Asimov is σ_bkg-invariant; no sin²θ₁₃/escale enter the LLR.
+    # HEP ProfileLikelihood handles its own nuisances inside the PL fit.
+    # skip_best_sigmas=True: cuts already optimised at 'full' profile; reuse them here.
+    "nuisance": [
+        {"label": "nuisance_nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "nominal"]},
+        {"label": "nuisance_sin13",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "marginalize_sin13"]},
+        {"label": "nuisance_escale",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "energy_scale"]},
+    ],
     # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
     "energy": [
@@ -121,9 +131,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # Rebin pkls with the reactor dm2 point (skip_rebin=False) using a labeled filename to
     # avoid overwriting the nominal solar-dm2 Rebin.  Background Rebin pkls are dm2-independent
     # (backgrounds use Truth weights, not oscillation weights) and are reused unchanged.
+    # Sensitivity stage is skipped for both variants: the Score is invariant to Δm²₂₁ because
+    # the discrimination is always computed between solar and reactor dm² templates regardless
+    # of which point the signal MC was simulated at (Score(oscpoint_reactor) = Score(default)).
     "oscpoint": [
-        {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True},
-        {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": False, "extra": ["--dm2", "7.54e-5"]},
+        {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "analysis_override": ["DayNight", "HEP"]},
+        {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True,  "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
     ],
     # 9.2.2 / 9.2.3 — truth x-fiducialisation vs reco flash-matching
     # Runs full fiducialization with SignalParticleX/Y/Z instead of RecoX/Y/Z.

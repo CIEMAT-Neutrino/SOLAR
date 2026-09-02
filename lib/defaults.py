@@ -129,6 +129,7 @@ DEFAULT_WORKFLOW_FLAGS: Dict[str, Dict] = {
         "pl_signal_bands": False,
         "pl_conservative_sigma": 0,
         "significance_bins": False,
+        "asimov_significance_bins": True,
     },
     "DAYNIGHT": {
         "background_error": False,
@@ -162,6 +163,7 @@ DEFAULT_WORKFLOW_METRICS: Dict[str, Any] = {
         "gaussian": False,
         "profile_likelihood": True,
         "significance_bins": False,
+        "asimov_significance_bins": True,
     },
     "DAYNIGHT": {
         "DEFAULT_METRIC": "asimov",

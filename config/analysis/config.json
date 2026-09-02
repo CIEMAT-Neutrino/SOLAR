@@ -63,12 +63,14 @@
       "pl_signal_bands": true,
       "pl_conservative_sigma": 1,
       "significance_bins": false,
+      "asimov_significance_bins": true,
       "DEFAULT_METRIC": "profile_likelihood",
       "METRICS": {
         "asimov": false,
         "gaussian": false,
         "profile_likelihood": true,
-        "significance_bins": false
+        "significance_bins": false,
+        "asimov_significance_bins": true
       }
     },
     "DAYNIGHT": {

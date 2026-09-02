@@ -13,7 +13,7 @@ _isotonic_regressor = _IsotonicRegression(increasing=True)
 
 def _monotone_for_export(arr: np.ndarray) -> np.ndarray:
     """Enforce non-decreasing constraint on a significance-vs-exposure array before pkl export."""
-    a = np.clip(np.asarray(arr, dtype=float), 0.0, None)
+    a = np.atleast_1d(np.clip(np.asarray(arr, dtype=float), 0.0, None))
     return np.asarray(_isotonic_regressor.fit_transform(np.arange(len(a)), a))
 
 
@@ -114,7 +114,7 @@ _NUFIT61_SIN13_PROFILES = {
 # ── HELPERS ────────────────────────────────────────────────────────────────────
 
 def _safe_array(values):
-    return np.nan_to_num(np.asarray(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    return np.atleast_1d(np.nan_to_num(np.asarray(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0))
 
 
 def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Namespace, analysis_key: str, study_suffix: str = ""):
@@ -142,18 +142,6 @@ def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Name
 
     try:
         sigma_map = pd.read_pickle(sigma_path)
-        _is_empty = (sigma_map.empty if hasattr(sigma_map, 'empty') else len(sigma_map) == 0)
-        if _is_empty and pkl_label != 'highest':
-            _fallback_path = sigma_path.replace(
-                f"_{pkl_label}_{analysis_key}{study_suffix}.pkl",
-                f"_highest_{analysis_key}{study_suffix}.pkl",
-            )
-            if os.path.exists(_fallback_path):
-                rprint(
-                    f"[yellow][WARNING][/yellow] _get_selection_cuts: '{args.pkl_label}' pkl empty for "
-                    f"{config}/{name}/{energy} — falling back to 'highest'."
-                )
-                sigma_map = pd.read_pickle(_fallback_path)
         ref_plot = sigma_map[(config, name, energy)]
     except (KeyError, FileNotFoundError):
         return None
@@ -273,6 +261,7 @@ parser.add_argument("--nuisance_profile", type=str, default=None)
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--smooth_window", type=int, default=11)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads Sensitivity chi2 grids from labeled template subfolders.")
 
 args = parser.parse_args()
@@ -280,6 +269,7 @@ _ctx = study_context(args)
 _study_suffix    = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 _save_subfolder  = _ctx.save_subfolder
+_study_name      = args.study_label or "default"
 
 # ── POST-PARSE DEFAULTS ────────────────────────────────────────────────────────
 
@@ -453,8 +443,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
             "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
             "Significance": smoothed_gaussian.tolist(), "SignificanceUnit": r"\sigma",
-            "SignificanceError+": (gaussian_upper - smoothed_gaussian).tolist(),
-            "SignificanceError-": (smoothed_gaussian - gaussian_lower).tolist(),
+            "SignificanceError+": np.maximum(gaussian_upper - smoothed_gaussian, 0).tolist(),
+            "SignificanceError-": np.maximum(smoothed_gaussian - gaussian_lower, 0).tolist(),
         })
 
         if _has_asimov:
@@ -474,8 +464,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                 "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
                 "Significance": smoothed_asimov.tolist(), "SignificanceUnit": r"\sigma",
-                "SignificanceError+": (asimov_upper - smoothed_asimov).tolist(),
-                "SignificanceError-": (smoothed_asimov - asimov_lower).tolist(),
+                "SignificanceError+": np.maximum(asimov_upper - smoothed_asimov, 0).tolist(),
+                "SignificanceError-": np.maximum(smoothed_asimov - asimov_lower, 0).tolist(),
             })
 
         # Background-uncertainty scenario rows (requires ErrorGaussian columns from 01_daynight.py)
@@ -590,8 +580,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
                     "Exposure": exposure_values.tolist(), "ExposureUnit": "year",
                     "Significance": sig_arr.tolist(), "SignificanceUnit": r"\sigma",
-                    "SignificanceError+": (sig_plus - smoothed_sig).tolist() if spec_type == "Smoothed" else None,
-                    "SignificanceError-": (smoothed_sig - sig_minus).tolist() if spec_type == "Smoothed" else None,
+                    "SignificanceError+": np.maximum(sig_plus - smoothed_sig, 0).tolist() if spec_type == "Smoothed" else None,
+                    "SignificanceError-": np.maximum(smoothed_sig - sig_minus, 0).tolist() if spec_type == "Smoothed" else None,
                 })
 
             # If --reference specified, plot only that metric; otherwise plot all available
@@ -945,7 +935,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 continue
 
             xvals = _safe_array(row["Exposure"].values[0])
-            y_raw = _safe_array(row["RawSignificance"].values[0] if "RawSignificance" in row.columns else row["Significance"].values[0])
+            if "RawSignificance" not in row.columns:
+                rprint(f"[yellow][WARNING][/yellow] Missing RawSignificance for {variable} {config} {name} {energy} — skipping.")
+                continue
+            y_raw = _safe_array(row["RawSignificance"].values[0])
             y_smooth = _safe_array(row["Significance"].values[0])
             exposure_max = max(exposure_max, float(np.max(y_smooth)))
 
@@ -1163,6 +1156,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
 if exposure_records and args.analysis != "Sensitivity":
     _df = pd.DataFrame(exposure_records)
+    _df["Study"] = _study_name
     _filename = f"{args.analysis}_Exposure"
     _merged_exp = upsert_df_rows(_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename=_filename, debug=args.debug)
     if "Variable" in _merged_exp.columns:

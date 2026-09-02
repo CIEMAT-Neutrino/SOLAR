@@ -59,6 +59,7 @@ Run examples
 """
 
 import os
+import shutil
 import sys
 import time
 import subprocess
@@ -709,6 +710,50 @@ def study_label_args_for() -> List[str]:
     return []
 
 
+def seed_study_artifacts_from_nominal(analysis: str, config: str, folder: str, name: str) -> None:
+    """Copy nominal best-cut / Results pkls to this study's labeled paths.
+
+    --skip_best_cuts skips 01_hep.py / 01_daynight.py, so a labeled study never produces
+    its own Results grid or best-cut map. The downstream plot scripts read those at the
+    labeled path, so seed them from the nominal ones.
+
+    Only fills in what is missing: a labeled artifact that a previous computation run
+    already produced is left untouched.
+
+    NOTE: the seeded Results grid carries the NOMINAL physics. For variants that change
+    the physics (e.g. --dm2), the study then reports nominal numbers under its own label.
+    Run without --skip_best_cuts to compute that variant's own grid.
+    """
+    if not (args.skip_best_cuts and args.study_label):
+        return
+
+    base = (
+        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}"
+        f"/{config}/{name}/{config}_{name}"
+    )
+    stems: List[str] = [f"{label}_{analysis}" for label in ("highest", "highest_spiked")]
+    for energy in args.energy:
+        stems += [f"{energy}_{analysis}_Results", f"{energy}_{analysis}_SignificanceBins"]
+
+    if args.dm2 is not None:
+        rprint(
+            f"[yellow][WARNING][/yellow] --skip_best_cuts with --dm2 {args.dm2}: seeding "
+            f"{analysis} '{args.study_label}' from nominal pkls, which hold the nominal dm2 "
+            "physics. Drop --skip_best_cuts to compute this dm2's own grid."
+        )
+
+    for stem in stems:
+        src = f"{base}_{stem}.pkl"
+        dst = f"{base}_{stem}_{args.study_label}.pkl"
+        if os.path.exists(dst):
+            continue
+        if not os.path.exists(src):
+            rprint(f"[yellow][WARNING][/yellow] No nominal {analysis} pkl to seed from: {src}")
+            continue
+        shutil.copy2(src, dst)
+        rprint(f"[cyan][INFO][/cyan] Seeded {os.path.basename(dst)} from nominal.")
+
+
 def stacked_args_for() -> List[str]:
     return ["--stacked"] if args.stacked else ["--no-stacked"]
 
@@ -771,7 +816,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     run_analysis_script(
         "src/physics/common/significance_plot.py",
         plot_base_args + energy_args_for(args.energy) + exposure_arg_for()
-        + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis],
+        + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis] + truth_fiducial_args_for(),
     )
 
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
@@ -894,15 +939,17 @@ def run_daynight_stage(config: str, folder: str, name: str):
                 "--day_fraction", str(args.day_fraction),
                 "--day_fraction_band", str(args.day_fraction_band),
             ]
-            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + daynight_oscillation_args_for() + test_statistic_args_for() + all_metrics_args_for() + charge_threshold_only_args_for())
+            run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + daynight_oscillation_args_for() + test_statistic_args_for() + all_metrics_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+    )
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference] + skip_best_sigmas_args_for(),
         )
-    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"])
+    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"] + truth_fiducial_args_for(),
+    )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
-        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"],
+        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"] + daynight_oscillation_args_for() + truth_fiducial_args_for(),
     )
 
 
@@ -1041,23 +1088,27 @@ def run_hep_stage(config: str, folder: str, name: str):
             f"for config={config} folder={folder}."
         )
 
+    seed_study_artifacts_from_nominal("HEP", config, folder, name)
+
     if args.computation:
-        if args.significance:
+        if args.significance and not args.skip_best_cuts:
             run_analysis_script(
                 "src/physics/hep/01_hep.py",
-                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for() + charge_threshold_only_args_for(),
-            )
+                analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for() + charge_threshold_only_args_for() + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+    )
+        elif args.skip_best_cuts:
+            rprint("[cyan][INFO][/cyan] Skipping 01_hep.py (--skip_best_cuts): using existing best-cut selection.")
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "HEP", "--reference", reference] + skip_best_sigmas_args_for(),
         )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure"] + reference_args_for(hep_significance_reference),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
     )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--pkl_label", "highest_spiked"] + reference_args_for(hep_significance_reference),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--pkl_label", "highest_spiked"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -1065,7 +1116,8 @@ def run_hep_stage(config: str, folder: str, name: str):
         + common_args
         + uncertainty_args
         + stacked_args_for()
-        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both"],
+        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both"]
+        + daynight_oscillation_args_for() + truth_fiducial_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -1073,17 +1125,19 @@ def run_hep_stage(config: str, folder: str, name: str):
         + common_args
         + uncertainty_args
         + stacked_args_for()
-        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl-label", "highest_spiked"],
+        + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl-label", "highest_spiked"]
+        + daynight_oscillation_args_for() + truth_fiducial_args_for(),
     )
     run_analysis_script("src/physics/hep/significance_comparison.py", analysis_base_args + common_args + uncertainty_args)
-    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"])
+    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"] + truth_fiducial_args_for(),
+    )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
     )
     run_analysis_script(
         "src/physics/hep/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + reference_args_for(hep_significance_reference) + charge_threshold_only_args_for(),
+        analysis_base_args + common_args + uncertainty_args + reference_args_for(hep_significance_reference) + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
     if args.all_metrics:
         run_analysis_script(
@@ -1141,8 +1195,8 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
                 cutopt_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name]
                 run_analysis_script(
                     "src/physics/sensitivity/04_best_cuts.py",
-                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for(),
-                )
+                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+    )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping 04_best_cuts.py (--skip_best_cuts): using existing best-cut selection.")
             # Phase 3 — full signal template grid for the selected best cut
@@ -1154,8 +1208,8 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for(),
-                )
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+    )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
             plot_base_args + reference_args + energy_args + ["--template", "all"] + oscillation_args_for(),
@@ -1167,12 +1221,12 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
-                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for(),
-            )
+                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+    )
         run_analysis_script(
             "src/physics/common/significance_plot.py",
-            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"],
-        )
+            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"] + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+    )
 
 
 

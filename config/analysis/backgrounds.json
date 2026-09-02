@@ -8,6 +8,10 @@
     },
     "default":          ["gamma", "neutron", "radiological"],
     "surface_filtered": ["gamma", "neutron"],
+    "_truth_position_keys_comment": "Truth fiducialisation reference per sample. Samples with no valid signal particle (radiological has SignalParticleSurface == -1 for every event) must use the Main* energy-deposit position instead of SignalParticle*.",
+    "truth_position_keys": {
+      "radiological": ["MainX", "MainY", "MainZ"]
+    },
     "ANALYSES": {
       "DAYNIGHT":    ["gamma", "neutron", "radiological"],
       "HEP":         ["gamma", "neutron", "radiological"],

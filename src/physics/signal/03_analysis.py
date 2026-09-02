@@ -280,8 +280,10 @@ for config in configs:
 
         # Pre-compute spatial masks per analysis — independent of NHits/OpHits/AdjCl.
         # Avoids recomputing the expensive spatial mask N_cuts times.
-        from lib.fiducial import _DEFAULT_POS_KEYS, _TRUTH_POS_KEYS
-        _pos_keys = _TRUTH_POS_KEYS if args.truth_fiducial else _DEFAULT_POS_KEYS
+        from lib.fiducial import _DEFAULT_POS_KEYS, get_truth_pos_keys
+        # Truth keys are per-sample: radiological has no valid signal particle and
+        # must fiducialise on Main* instead of SignalParticle*.
+        _pos_keys = get_truth_pos_keys(str(root), name) if args.truth_fiducial else _DEFAULT_POS_KEYS
         _spatial_masks = {}
         for _an in args.analysis:
             _fid = fiducials_by_analysis[_an]
@@ -304,6 +306,23 @@ for config in configs:
             else np.ones(len(run["Reco"]["Event"]), dtype=bool),
             dtype=bool,
         )
+        # The surface cut is the only selection applied to gamma/neutron but not to
+        # radiological. An all-False surface mask silently zeroes every cut in the scan
+        # (SignalParticleSurface stays at its -1 init when the Geometry/Version/Name match
+        # in compute_particle_surface finds nothing, or when no particle lies within 1 cm
+        # of a configured surface). Fail loudly instead of writing an all-zero Rebin pkl.
+        if is_surface_background(str(root), name) and not _surface_mask.any():
+            _surf_vals, _surf_counts = np.unique(
+                np.asarray(run["Reco"]["SignalParticleSurface"]), return_counts=True
+            )
+            raise SystemExit(
+                f"[ERROR] Surface cut rejected all {len(_surface_mask)} events for "
+                f"'{name}' ({config}, {args.folder}).\n"
+                f"  SignalParticleSurface distribution: {dict(zip(_surf_vals.tolist(), _surf_counts.tolist()))}\n"
+                "  Expected values in {0,1,2}. All -1 means compute_particle_surface matched no\n"
+                "  events (check Geometry/Version/Name) or config/import/surface_positions.json\n"
+                "  does not match this production's geometry."
+            )
 
         # ── First-pass export: FiducializationMask per analysis ──────────────
         # Surface + spatial mask at best fiducial; no quality cuts applied.
@@ -551,4 +570,16 @@ for config in configs:
                 rebin_df = rebin_cache[df_id]
 
                 _rebin_label = _ctx.rebin_label(energy)
+
+                # Never persist an all-zero template: it silently propagates into the cut
+                # optimiser, which then walks to the loosest grid corner because there is
+                # no background left to reject.
+                if float(np.sum([np.sum(_c) for _c in rebin_df["MCCounts"]])) == 0.0:
+                    raise SystemExit(
+                        f"[ERROR] Rebin template for '{name}' ({config}, {args.folder}, {analysis}, "
+                        f"{energy}) has zero MCCounts at every cut — refusing to overwrite "
+                        f"{_rebin_label}.pkl.\n"
+                        "  No event survived the surface/spatial/quality masks. Investigate before rerunning."
+                    )
+
                 save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name]}/{analysis.upper()}", config=config, name=name, filename=_rebin_label, rm=user_input['rewrite'], debug=user_input['debug'])

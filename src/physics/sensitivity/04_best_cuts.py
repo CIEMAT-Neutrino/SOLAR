@@ -39,6 +39,7 @@ parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--study_label",     type=str,   default=None, help="Tag appended to output pkl filename to isolate study results.")
+parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
 parser.add_argument("--charge_threshold", type=float, default=0,   help="Charge threshold Q (ADC). When >0, reads templates from labeled subfolders.")
 args = parser.parse_args()
 _ctx = study_context(args)

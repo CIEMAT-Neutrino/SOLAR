@@ -256,10 +256,22 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.",
+)
+parser.add_argument(
     "--charge_threshold",
     type=float,
     default=0,
     help="Charge threshold Q (ADC) forwarded from the charge study variant. When >0, reads labeled Rebin pkls produced with this charge cut.",
+)
+parser.add_argument(
+    "--dm2",
+    type=float,
+    default=None,
+    help="Δm²₂₁ override (eV²). When set, reads the labeled Rebin pkl produced with this dm2 value.",
 )
 parser.add_argument(
     "--all_metrics",
@@ -310,7 +322,12 @@ _metrics  = get_metrics_config(str(root), "HEP", all_metrics=args.all_metrics)
 
 _compute_pl                = _metrics.get("profile_likelihood", True)
 _compute_asimov_gaussian   = _metrics.get("asimov", False) or _metrics.get("gaussian", False)
-_compute_significance_bins = _metrics.get("significance_bins", False) and _workflow["significance_bins"]
+_compute_significance_bins = _metrics.get("significance_bins", False) and _workflow.get("significance_bins", False)
+_compute_asimov_significance_bins = (
+    _metrics.get("asimov_significance_bins", False)
+    and _workflow.get("asimov_significance_bins", False)
+    and not _compute_significance_bins
+)
 # Conservative offset: shifts the Asimov generation point for the nominal PL by
 # -pl_conservative_sigma × signal_uncertainty. At offset=1 the central PL curve
 # is evaluated at signal × (1 − σ_s), which equals the former −1σ band.
@@ -322,6 +339,7 @@ _active_metrics = [
     *(["profile_likelihood"] if _compute_pl else []),
     *(["asimov", "gaussian"] if _compute_asimov_gaussian else []),
     *(["significance_bins"]  if _compute_significance_bins else []),
+    *(["asimov_significance_bins"] if _compute_asimov_significance_bins else []),
 ]
 rprint(
     f"[cyan][INFO][/cyan] HEP metrics active: {', '.join(_active_metrics) or 'none'}"
@@ -687,6 +705,26 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 hep_rebin_centers[threshold_idx:],
                 smoothed_display["starts_adaptive"],
             )
+        elif _compute_asimov_significance_bins:
+            display_factor = args.exposure * detector_mass
+            display_detection_requirement = 3.0
+            raw_display = _hep_display_spectrum(
+                raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
+                display_factor, display_detection_requirement, args.signal_uncertainty,
+                detection_threshold, adaptive_rebin_config,
+            )
+            smoothed_display = _hep_display_spectrum(
+                smoothed_signal_rate, smoothed_background_rate, smoothed_bkg_error_rate,
+                display_factor, display_detection_requirement, args.signal_uncertainty,
+                detection_threshold, adaptive_rebin_config,
+            )
+            raw_asimov_spectrum      = raw_display["asimov_no_rebin"]
+            smoothed_asimov_spectrum = smoothed_display["asimov_no_rebin"]
+            raw_gaussian_spectrum = smoothed_gaussian_spectrum = _zeros_bins
+            raw_asimov_adaptive_spectrum = smoothed_asimov_adaptive_spectrum = _zeros_bins
+            raw_gaussian_adaptive_spectrum = smoothed_gaussian_adaptive_spectrum = _zeros_bins
+            adaptive_energy_axis_display = hep_rebin_centers[threshold_idx:]
+            adaptive_bin_widths_display = np.ones(_n_energy_bins, dtype=float)
         else:
             raw_asimov_spectrum = raw_gaussian_spectrum = _zeros_bins
             raw_asimov_adaptive_spectrum = raw_gaussian_adaptive_spectrum = _zeros_bins
@@ -883,6 +921,35 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     }
                 )
 
+        elif _compute_asimov_significance_bins:
+            _asb_energy = np.asarray(hep_rebin_centers[threshold_idx:], dtype=float)
+            _asb_width = float(np.median(np.diff(_asb_energy))) if len(_asb_energy) > 1 else 1.0
+            for bin_idx, (energy_value, raw_asimov_value, asimov_value) in enumerate(
+                zip(_asb_energy, raw_asimov_spectrum, smoothed_asimov_spectrum)
+            ):
+                significance_bins.append(
+                    {
+                        "Config": config,
+                        "Name": name,
+                        "EnergyLabel": energy,
+                        "NHits": int(nhit),
+                        "OpHits": int(ophit),
+                        "AdjCl": int(adjcl),
+                        "Threshold": float(args.threshold),
+                        "ExposureYears": float(args.exposure),
+                        "BinMode": "NoRebin",
+                        "BinIndex": int(bin_idx),
+                        "RecoEnergy": float(energy_value),
+                        "BinWidth": float(_asb_width),
+                        "RawAsimov": float(raw_asimov_value),
+                        "Asimov": float(asimov_value),
+                        "RawGaussian": 0.0,
+                        "Gaussian": 0.0,
+                        **smoothing_info,
+                        **adaptive_rebin_info,
+                    }
+                )
+
     if args.debug:
         rprint(f"Maximum significance for {energy}: {sigmamax:.2f} sigma")
     sigmas_df = pd.DataFrame(sigmas)
@@ -930,7 +997,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         rm=args.rewrite,
         debug=args.debug,
     )
-    if _compute_significance_bins:
+    if _compute_significance_bins or _compute_asimov_significance_bins:
         significance_bins_df = pd.DataFrame(significance_bins)
         save_df(
             significance_bins_df,

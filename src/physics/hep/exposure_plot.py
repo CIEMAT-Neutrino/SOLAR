@@ -12,8 +12,14 @@ _isotonic_regressor = _IsotonicRegression(increasing=True)
 
 def _monotone_for_export(arr: np.ndarray) -> np.ndarray:
     """Enforce non-decreasing constraint on a significance-vs-exposure array before pkl export."""
-    a = np.clip(np.asarray(arr, dtype=float), 0.0, None)
+    a = np.atleast_1d(np.clip(np.asarray(arr, dtype=float), 0.0, None))
     return np.asarray(_isotonic_regressor.fit_transform(np.arange(len(a)), a))
+
+
+def _safe_array(values) -> np.ndarray:
+    return np.atleast_1d(
+        np.nan_to_num(np.asarray(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+    )
 
 
 analysis_info = load_analysis_info(str(root))
@@ -137,6 +143,7 @@ parser.add_argument(
          "Controls both the input pkl path and a suffix added to the output filename.",
 )
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
 parser.add_argument("--charge_threshold", type=float, default=0,
     help="Charge threshold Q (ADC). When >0, reads the labeled Rebin pkl produced with this charge cut.")
 
@@ -144,6 +151,7 @@ args = parser.parse_args()
 _ctx = study_context(args)
 _study_suffix   = _ctx.study_suffix
 _save_subfolder = _ctx.save_subfolder
+_study_name     = args.study_label or "default"
 
 hep_exposure = []
 smoothing_config = get_smoothing_config(
@@ -182,9 +190,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         [args.pkl_label.replace("_", " ").title()],
     ):
 
-        _bestcut_base = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/{config}/{name}/{config}_{name}_{sigma_name}_{args.analysis}"
-        _bestcut_labeled = f"{_bestcut_base}{_study_suffix}.pkl" if _study_suffix else None
-        _bestcut_path = _bestcut_labeled if (_bestcut_labeled and os.path.exists(_bestcut_labeled)) else f"{_bestcut_base}.pkl"
+        _bestcut_path = (
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}"
+            f"/{config}/{name}/{config}_{name}_{sigma_name}_{args.analysis}{_study_suffix}.pkl"
+        )
         if not os.path.exists(_bestcut_path):
             rprint(f"[yellow][WARNING][/yellow] Missing best-cut pkl for {config} {name} {energy}. Skipping.")
             continue
@@ -291,24 +300,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 )
                 continue
 
-            exposure_values = np.asarray(this_plot_sigmas["Exposure"].values[0], dtype=float)
-            smoothed_significance = np.nan_to_num(
-                np.asarray(this_plot_sigmas[significance].values[0], dtype=float),
-                nan=0.0, posinf=0.0, neginf=0.0,
-            )
+            exposure_values = _safe_array(this_plot_sigmas["Exposure"].values[0])
+            smoothed_significance = _safe_array(this_plot_sigmas[significance].values[0])
             # When RawProfileLikelihood absent, PL raw == smoothed (PL uses unsmoothed spectra).
-            raw_significance = np.nan_to_num(
-                np.asarray(this_plot_sigmas[_raw_col if _has_raw else significance].values[0], dtype=float),
-                nan=0.0, posinf=0.0, neginf=0.0,
+            raw_significance = _safe_array(
+                this_plot_sigmas[_raw_col if _has_raw else significance].values[0]
             )
-            significance_plus = np.nan_to_num(
-                np.asarray(this_plot_sigmas[significance + "+Error"].values[0], dtype=float),
-                nan=0.0, posinf=0.0, neginf=0.0,
-            )
-            significance_minus = np.nan_to_num(
-                np.asarray(this_plot_sigmas[significance + "-Error"].values[0], dtype=float),
-                nan=0.0, posinf=0.0, neginf=0.0,
-            )
+            significance_plus = _safe_array(this_plot_sigmas[significance + "+Error"].values[0])
+            significance_minus = _safe_array(this_plot_sigmas[significance + "-Error"].values[0])
 
             # Enforce monotonicity on PL curves at load time so plot and pkl are consistent.
             if significance == "ProfileLikelihood":
@@ -467,6 +466,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
         if args.pkl_label == "highest":
             _df = pd.DataFrame(hep_exposure)
+            _df["Study"] = _study_name
             _filename = "HEP_Exposure"
             for _path in [data_path, local_data_path]:
                 _merged = upsert_df_rows(_df, _path, config=config, name=name, subfolder=_save_subfolder, filename=_filename)

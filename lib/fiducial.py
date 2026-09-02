@@ -7,6 +7,26 @@ import numpy as np
 _DEFAULT_POS_KEYS: Tuple[str, str, str] = ("RecoX", "RecoY", "RecoZ")
 _TRUTH_POS_KEYS:   Tuple[str, str, str] = ("SignalParticleX", "SignalParticleY", "SignalParticleZ")
 
+
+def get_truth_pos_keys(root: str, sample_name: str) -> Tuple[str, str, str]:
+    """Truth-position branches to fiducialise `sample_name` on.
+
+    Defaults to SignalParticle*, but samples without a valid signal particle
+    (radiological carries SignalParticleSurface == -1 for every event) are
+    mapped to their Main* energy-deposit position via
+    BACKGROUND_SAMPLES.truth_position_keys in config/analysis/backgrounds.json.
+    """
+    samples_config = load_analysis_info(root).get("BACKGROUND_SAMPLES", {})
+    overrides = samples_config.get("truth_position_keys", {})
+    keys = overrides.get(str(sample_name).split("_")[0].lower())
+    if keys is None:
+        return _TRUTH_POS_KEYS
+    if len(keys) != 3:
+        raise ValueError(
+            f"truth_position_keys for '{sample_name}' must list exactly 3 branches, got {keys}"
+        )
+    return (keys[0], keys[1], keys[2])
+
 from .defaults import load_analysis_info, get_folder_flags
 
 

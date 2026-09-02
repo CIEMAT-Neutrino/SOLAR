@@ -131,6 +131,12 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.",
+)
+parser.add_argument(
     "--charge_threshold",
     type=float,
     default=0,

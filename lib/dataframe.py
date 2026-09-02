@@ -245,27 +245,39 @@ def explode(
             result_df = df.explode(explode)
 
     except ValueError:
-        selected_columns = (keep + explode) if keep is not None else explode
-        # Convert Pandas DataFrame to Dask DataFrame but keep the columns in keep + explode
-        ddf = dd.from_pandas(df[selected_columns], npartitions=2)
-        # ddf = dd.from_pandas(df, npartitions=2)  # Adjust the number of partitions as needed
+        # pandas requires every exploded column to hold the same number of elements per
+        # row. Rows where one column carries a scalar instead of a list break that — e.g.
+        # a cut whose significance never crosses 2 sigma stores Sigma2 as a scalar while
+        # Exposure stays a 100-point list.
+        #
+        # This previously fell back to Dask, whose from_pandas converts object columns to
+        # string dtype: the list columns came back as their repr(), which downstream
+        # pd.to_numeric(errors="coerce").fillna(0.0) turned into 0.0 for every row. That
+        # silently zeroed the best-cut selection metric. Broadcast scalars to match the
+        # row's list length instead, then let pandas explode normally. Any remaining
+        # genuine mismatch (two lists of different lengths in one row) is re-raised
+        # rather than silently corrupted.
+        work = (df[keep + explode] if keep is not None else df).copy()
 
-        # Define a function to explode a column
-        @delayed
-        def explode_column(column):
-            return column.explode()
+        def _is_seq(value) -> bool:
+            return isinstance(value, (list, tuple, np.ndarray))
 
-        # Explode each column in parallel
-        exploded_columns = [explode_column(ddf[col]) for col in explode]
+        row_lengths = []
+        for _, row in work[explode].iterrows():
+            lengths = {len(v) for v in row if _is_seq(v)}
+            if len(lengths) > 1:
+                raise ValueError(
+                    f"explode(): columns {explode} have conflicting list lengths {sorted(lengths)} "
+                    "within a single row; cannot align them."
+                )
+            row_lengths.append(lengths.pop() if lengths else 1)
 
-        # Compute the results
-        try:
-            result_columns = dd.compute(*exploded_columns)
-        # If TypeError: 'dict_values' object does not support indexing, try:
-        except TypeError:
-            result_columns = dd.compute(*list(exploded_columns))
-        # Combine the results with regular columns
-        result_df = pd.concat([df.drop(columns=explode)] + list(result_columns), axis=1)
+        for col in explode:
+            work[col] = [
+                list(value) if _is_seq(value) else [value] * n
+                for value, n in zip(work[col], row_lengths)
+            ]
+        result_df = work.explode(explode)
 
     if debug:
         rprint("[green]Dataframe exploded![/green]")

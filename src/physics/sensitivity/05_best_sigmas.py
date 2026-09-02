@@ -258,6 +258,12 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
         )
         continue
 
+    # PL-only runs (asimov=False, gaussian=False) don't write Sigma2/Sigma3.
+    # Alias from PLSigma2/PLSigma3 so the rest of the pipeline works unchanged.
+    for _gaus, _pl in [("Sigma2", "PLSigma2"), ("Sigma3", "PLSigma3")]:
+        if _gaus not in sigmas_df.columns and _pl in sigmas_df.columns:
+            sigmas_df[_gaus] = sigmas_df[_pl]
+
     required_columns = [
         "Sigma2",
         "Sigma3",
@@ -311,7 +317,18 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
     sigmas_df = explode(sigmas_df, ["Sigma2", "Sigma3", "Exposure", reference_column] + pl_crossing_cols)
     for _col in ["Sigma2", "Sigma3", "Exposure", reference_column] + pl_crossing_cols:
         if _col in sigmas_df.columns:
-            sigmas_df[_col] = pd.to_numeric(sigmas_df[_col], errors="coerce").fillna(0.0)
+            _coerced = pd.to_numeric(sigmas_df[_col], errors="coerce")
+            # A fully-unparseable column silently becomes all-zero here, which makes every
+            # cut tie and collapses the best-cut selection onto the first row of the scan
+            # grid (the loosest corner). Fail instead of writing a meaningless best cut.
+            if _col == reference_column and len(_coerced) and _coerced.isna().all():
+                raise SystemExit(
+                    f"[ERROR] Selection metric '{reference_column}' is entirely non-numeric for "
+                    f"{config} {name} {energy_label} — every cut would tie at 0.0 and the best-cut "
+                    "selection would return the first grid point. Check that explode() expanded the "
+                    "per-exposure lists instead of stringifying them."
+                )
+            sigmas_df[_col] = _coerced.fillna(0.0)
     if sigmas_df.empty:
         rprint(
             f"[yellow][WARNING][/yellow] Skipping {config} {name} {energy_label}: exploded dataframe is empty."

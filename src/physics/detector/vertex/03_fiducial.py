@@ -20,132 +20,69 @@ def fiducial_mask(
 ):
     if coordinate is None:
         coordinate = ["X", "Y", "Z"]
-    true_mask = np.ones(len(run[reference]["SignalParticleX"]), dtype=bool)
-    reco_mask = np.ones(len(run["Reco"]["SignalParticleX"]), dtype=bool)
-    for coord in coordinate:
+
+    def axis_region(values, coord):
+        """Region test on one axis: inside the fiducial box if inverse, else outside."""
         if coord == "X":
             if info["VERSION"] == "hd_1x2x6_lateralAPA":
-                if inverse:
-                    true_mask = true_mask * (
-                        run[reference]["SignalParticleX"] > fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (run["Reco"][variable] > fiducial)
-                else:
-                    true_mask = true_mask * (
-                        run[reference]["SignalParticleX"] < fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (run["Reco"][variable] < fiducial)
+                return values > fiducial if inverse else values < fiducial
 
-            elif info["VERSION"] in [
-                "hd_1x2x6_centralAPA",
-                "hd_1x2x6",
-            ]:
-                if inverse:
-                    true_mask = true_mask * (
-                        np.absolute(run[reference]["SignalParticleX"])
-                        < info["DETECTOR_MAX_X"] - fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (
-                            np.absolute(run["Reco"][variable])
-                            < info["DETECTOR_MAX_X"] - fiducial
-                        )
-                else:
-                    true_mask = true_mask * (
-                        np.absolute(run[reference]["SignalParticleX"])
-                        > info["DETECTOR_MAX_X"] - fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (
-                            np.absolute(run["Reco"][variable])
-                            > info["DETECTOR_MAX_X"] - fiducial
-                        )
-
-            elif info["GEOMETRY"] == "vd":
-                if inverse:
-                    true_mask = true_mask * (
-                        run[reference]["SignalParticleX"]
-                        < info["DETECTOR_MAX_X"] - fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (
-                            run["Reco"][variable] < info["DETECTOR_MAX_X"] - fiducial
-                        )
-                else:
-                    true_mask = true_mask * (
-                        run[reference]["SignalParticleX"]
-                        > info["DETECTOR_MAX_X"] - fiducial
-                    )
-                    for variable in ["RecoX", "SignalParticleX"]:
-                        reco_mask = reco_mask * (
-                            run["Reco"][variable] > info["DETECTOR_MAX_X"] - fiducial
-                        )
-
-            else:
-                rprint(
-                    f"[red]ERROR[/red] Unknown geometry {info['GEOMETRY']} and version {info['VERSION']} for fiducial cut in X"
+            if info["VERSION"] in ["hd_1x2x6_centralAPA", "hd_1x2x6"]:
+                edge = info["DETECTOR_MAX_X"] - fiducial
+                return (
+                    np.absolute(values) < edge
+                    if inverse
+                    else np.absolute(values) > edge
                 )
+
+            if info["GEOMETRY"] == "vd":
+                edge = info["DETECTOR_MAX_X"] - fiducial
+                return values < edge if inverse else values > edge
+
+            rprint(
+                f"[red]ERROR[/red] Unknown geometry {info['GEOMETRY']} and version {info['VERSION']} for fiducial cut in X"
+            )
+            return np.ones(len(values), dtype=bool)
 
         if coord == "Y":
-            if inverse:
-                true_mask = true_mask * (
-                    np.absolute(run[reference]["SignalParticleY"])
-                    < info["DETECTOR_MAX_Y"] - fiducial
-                )
-                for variable in ["RecoY", "SignalParticleY"]:
-                    reco_mask = reco_mask * (
-                        np.absolute(run["Reco"][variable])
-                        < info["DETECTOR_MAX_Y"] - fiducial
-                    )
-            else:
-                true_mask = true_mask * (
-                    (
-                        np.absolute(run[reference]["SignalParticleY"])
-                        > info["DETECTOR_MAX_Y"] - fiducial
-                    )
-                )
-                for variable in ["RecoY", "SignalParticleY"]:
-                    reco_mask = reco_mask * (
-                        (
-                            np.absolute(run["Reco"][variable])
-                            > info["DETECTOR_MAX_Y"] - fiducial
-                        )
-                    )
+            edge = info["DETECTOR_MAX_Y"] - fiducial
+            return np.absolute(values) < edge if inverse else np.absolute(values) > edge
 
         if coord == "Z":
-            if inverse:
-                true_mask = true_mask * (
-                    (run[reference]["SignalParticleZ"] > info["DETECTOR_MIN_Z"] + fiducial)
-                    + (
-                        run[reference]["SignalParticleZ"]
-                        < info["DETECTOR_MAX_Z"] - fiducial
-                    )
-                )
-                for variable in ["RecoZ", "SignalParticleZ"]:
-                    reco_mask = reco_mask * (
-                        (run["Reco"]["SignalParticleZ"] > info["DETECTOR_MIN_Z"] + fiducial)
-                        + (run["Reco"][variable] < info["DETECTOR_MAX_Z"] - fiducial)
-                    )
-            else:
-                true_mask = true_mask * (
-                    (
-                        run[reference]["SignalParticleZ"]
-                        > info["DETECTOR_MAX_Z"] - fiducial
-                    )
-                    + (run[reference]["SignalParticleZ"] < info["DETECTOR_MIN_Z"] + fiducial)
-                )
-                for variable in ["RecoZ", "SignalParticleZ"]:
-                    reco_mask = reco_mask * (
-                        (
-                            (
-                                run["Reco"]["SignalParticleZ"]
-                                > info["DETECTOR_MAX_Z"] - fiducial
-                            )
-                            + (run["Reco"]["SignalParticleZ"] < info["DETECTOR_MIN_Z"] + fiducial)
-                        )
-                    )
+            low = info["DETECTOR_MIN_Z"] + fiducial
+            high = info["DETECTOR_MAX_Z"] - fiducial
+            return (
+                (values > low) * (values < high)
+                if inverse
+                else (values > high) + (values < low)
+            )
+
+        return np.ones(len(values), dtype=bool)
+
+    def combine(tree, prefix, size):
+        """Combine the per-axis region tests of one position variable.
+
+        inverse=True selects the inner fiducial box, so the axes intersect (AND).
+        inverse=False selects the outer veto shell, whose combination is the De
+        Morgan dual: outside along ANY axis (OR). ANDing three shells would keep
+        only the 8 corners of the detector.
+        """
+        mask = np.ones(size, dtype=bool) if inverse else np.zeros(size, dtype=bool)
+        for coord in coordinate:
+            this_axis = axis_region(tree[f"{prefix}{coord}"], coord)
+            mask = mask * this_axis if inverse else mask + this_axis
+        return mask
+
+    n_true = len(run[reference]["SignalParticleX"])
+    n_reco = len(run["Reco"]["SignalParticleX"])
+
+    # Each position variable is combined across axes on its own before the reco and
+    # true requirements intersect. Combining them per-axis instead would demand that
+    # the reco vertex leave the box through the same face as the true vertex.
+    true_mask = combine(run[reference], "SignalParticle", n_true)
+    reco_mask = combine(run["Reco"], "Reco", n_reco) * combine(
+        run["Reco"], "SignalParticle", n_reco
+    )
 
     return true_mask, reco_mask
 
@@ -169,6 +106,18 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--drop_default_recox",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Reject clusters whose RecoX carries the flash-matching failure default. "
+        "compute_main_variables replaces the upstream -1e6 sentinel with "
+        "+/-DETECTOR_MAX_X (sign taken from the true SignalParticleX), which parks "
+        "every failed match inside the outer |X| > MAX_X - fiducial shell and "
+        "credits it as a success there. Local to this script."
+    ),
+)
 
 args = parser.parse_args()
 config = args.config
@@ -225,8 +174,35 @@ for config in configs:
         )
         rprint(output)
 
+        # Clusters whose flash match failed reach this script with RecoX already
+        # overwritten by compute_main_variables: the upstream -1e6 sentinel becomes
+        # +/-DETECTOR_MAX_X, with the sign read off the true SignalParticleX. Those
+        # land at |RecoX| = MAX_X, i.e. inside every outer shell the inverse=False
+        # branch scans, so each failed match is scored as a containment success and
+        # the shell efficiency is inflated by the whole failure rate. The same
+        # comparison also catches unphysical drift overruns.
+        valid_recox = np.ones(len(run["Reco"]["RecoX"]), dtype=bool)
+        if args.drop_default_recox:
+            # Match the two sentinel constants exactly. A wider |RecoX| >= MAX_X test
+            # would also discard clusters that merely overrun the nominal half-width,
+            # which is a large, legitimate population wherever RecoX does not share
+            # the config's X convention.
+            _recox = run["Reco"]["RecoX"]
+            valid_recox = (_recox != info["DETECTOR_MAX_X"]) * (
+                _recox != info["DETECTOR_MIN_X"]
+            )
+            rprint(
+                f"[cyan][INFO][/cyan] Default RecoX rejected: "
+                f"{100 * (1 - np.mean(valid_recox)):.2f}% "
+                f"(exactly {info['DETECTOR_MIN_X']} or {info['DETECTOR_MAX_X']} cm) | "
+                f"for reference, |RecoX| > MAX_X holds for "
+                f"{100 * np.mean(np.absolute(_recox) > info['DETECTOR_MAX_X']):.2f}% "
+                f"and |RecoX| == MAX_X for "
+                f"{100 * np.mean(np.absolute(_recox) == info['DETECTOR_MAX_X']):.2f}%"
+            )
+
         for reference, inverse, coord, energy in product(
-            ["Reco", "Truth"], [True, False], ["X", "Y", "Z"], lowe_energy_centers
+            ["Reco", "Truth"], [True, False], ["X", "Y", "Z", None], lowe_energy_centers
         ):
             counts = []
             counts_error = []
@@ -234,7 +210,8 @@ for config in configs:
             efficiency_error = []
             for fiducial in np.arange(0, 220, 20):
                 true_mask, reco_mask = fiducial_mask(
-                    run, info, reference, fiducial, inverse, [coord]
+                    run, info, reference, fiducial, inverse,
+                    [coord] if coord is not None else ["X", "Y", "Z"],
                 )
                 if energy is None:
                     true_energy_mask = np.ones(
@@ -263,6 +240,18 @@ for config in configs:
                     * (run["Reco"]["Name"] == name)
                     * reco_energy_mask
                 )
+
+                # A default RecoX never counts as a reconstructed vertex. With
+                # reference="Reco" the denominator is drawn from the same tree, so the
+                # cluster leaves both terms and the ratio becomes a containment
+                # efficiency conditional on a successful flash match. With
+                # reference="Truth" the denominator is the truth tree and keeps it, so
+                # the failure stays in the sample and the ratio is the absolute
+                # efficiency including flash-matching loss.
+                this_reco_mask = this_reco_mask * valid_recox
+                if reference == "Reco":
+                    this_true_mask = this_true_mask * valid_recox
+
                 counts.append(sum(this_reco_mask))
                 counts_error.append(np.sqrt(sum(this_reco_mask)))
                 efficiency.append(
@@ -281,7 +270,7 @@ for config in configs:
                     "Geometry": info["GEOMETRY"],
                     "Config": config,
                     "Name": name,
-                    "Variable": coord if coord is not None else "XYZ",
+                    "Variable": coord,
                     "Energy": energy,
                     "Values": np.arange(0, 220, 20),
                     "Counts": counts,
