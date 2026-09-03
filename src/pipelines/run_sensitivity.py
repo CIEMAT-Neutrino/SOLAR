@@ -748,7 +748,10 @@ def seed_study_artifacts_from_nominal(analysis: str, config: str, folder: str, n
         if os.path.exists(dst):
             continue
         if not os.path.exists(src):
-            rprint(f"[yellow][WARNING][/yellow] No nominal {analysis} pkl to seed from: {src}")
+            # highest_spiked is only written when spiked curves are detected; its absence
+            # is normal and must not be reported as a problem.
+            if not stem.startswith("highest_spiked"):
+                rprint(f"[yellow][WARNING][/yellow] No nominal {analysis} pkl to seed from: {src}")
             continue
         shutil.copy2(src, dst)
         rprint(f"[cyan][INFO][/cyan] Seeded {os.path.basename(dst)} from nominal.")
@@ -930,8 +933,10 @@ def run_daynight_stage(config: str, folder: str, name: str):
     reference = args.reference or "Smoothed"
     uncertainty_args = uncertainty_args_for("DAYNIGHT")
 
+    seed_study_artifacts_from_nominal("DayNight", config, folder, name)
+
     if args.computation:
-        if args.significance:
+        if args.significance and not args.skip_best_cuts:
             daynight_args = [
                 "--mc_threshold", str(args.daynight_mc_threshold),
                 "--earth_density_band", str(args.earth_density_band),
@@ -941,6 +946,8 @@ def run_daynight_stage(config: str, folder: str, name: str):
             ]
             run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + daynight_oscillation_args_for() + test_statistic_args_for() + all_metrics_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
+        elif args.skip_best_cuts:
+            rprint("[cyan][INFO][/cyan] Skipping 01_daynight.py (--skip_best_cuts): using existing best-cut selection.")
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference] + skip_best_sigmas_args_for(),

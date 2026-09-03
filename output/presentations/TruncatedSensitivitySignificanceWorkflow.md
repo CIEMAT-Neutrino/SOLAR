@@ -240,10 +240,10 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 100 | 0.344 | 2.971 | 5.02 |
-| HD Lateral | 60 | 260 | 200 | 0.097 | 2.746 | 2.28 |
-| VD Top | 0 | 0 | 20 | 0.632 | 0.642 | 7.69 |
-| VD Bottom Shielded | 0 | 0 | 20 | 0.703 | 0.704 | 7.69 |
+| HD Central | 0 | 80 | 100 | 0.549 | 5.342 | 5.02 |
+| HD Lateral | 60 | 260 | 200 | 0.171 | 3.754 | 2.28 |
+| VD Top | 0 | 0 | 20 | 1.057 | 1.072 | 7.69 |
+| VD Bottom Shielded | 0 | 0 | 20 | 1.000 | 1.001 | 7.69 |
 
 ---
 
@@ -418,7 +418,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Central Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/truncated/hd_1x2x6_centralAPA/marley/hd_1x2x6_centralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Background_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
 </div>
 
 ---
@@ -426,7 +426,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### HD Lateral Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/truncated/hd_1x2x6_lateralAPA/marley/hd_1x2x6_lateralAPA_marley_Sensitivity_Templates_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
 </div>
 
 ---
@@ -434,7 +434,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Top Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_nominal/marley/vd_1x8x14_3view_30deg_nominal_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
 </div>
 
 ---
@@ -442,7 +442,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ### VD Bottom Shielded Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/truncated/vd_1x8x14_3view_30deg_shielded/marley/vd_1x8x14_3view_30deg_shielded_marley_Sensitivity_Templates_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Background_SolarEnergy_NHits8_AdjCl10_OpHits10.png">
 </div>
 
 ---
@@ -575,7 +575,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 1 | 8 | 4 | 4 | 2 | 63.00 |
+| HD Central | 1 | 8 | 4 | 4 | 2 | 951.44 |
 | HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.75 |
 | VD Top | 8 | 10 | 8 | 4 | 2 | 14.91 |
 | VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |

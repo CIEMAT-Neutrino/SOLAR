@@ -107,6 +107,17 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
+    "--require_true_in_detector",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Require the true vertex to lie inside the DETECTOR_MIN/MAX volume declared "
+        "by the config. Productions that generate in a buffer beyond the active "
+        "volume otherwise leave unreconstructable vertices in the denominator, "
+        "capping the shell efficiencies. Local to this script."
+    ),
+)
+parser.add_argument(
     "--drop_default_recox",
     action=argparse.BooleanOptionalAction,
     default=True,
@@ -174,35 +185,85 @@ for config in configs:
         )
         rprint(output)
 
-        # Clusters whose flash match failed reach this script with RecoX already
-        # overwritten by compute_main_variables: the upstream -1e6 sentinel becomes
-        # +/-DETECTOR_MAX_X, with the sign read off the true SignalParticleX. Those
-        # land at |RecoX| = MAX_X, i.e. inside every outer shell the inverse=False
-        # branch scans, so each failed match is scored as a containment success and
-        # the shell efficiency is inflated by the whole failure rate. The same
-        # comparison also catches unphysical drift overruns.
-        valid_recox = np.ones(len(run["Reco"]["RecoX"]), dtype=bool)
+        # Only the drift coordinate depends on the optical match: RecoX is the cluster
+        # time referred to the matched flash t0, while RecoY/RecoZ are wire positions
+        # and stand independently of it. So this mask gates X and the combined XYZ
+        # scan only -- applying it to a standalone Y or Z would report an X flash
+        # failure as a Y/Z reconstruction failure.
+        valid_x = np.ones(len(run["Reco"]["RecoX"]), dtype=bool)
         if args.drop_default_recox:
-            # Match the two sentinel constants exactly. A wider |RecoX| >= MAX_X test
-            # would also discard clusters that merely overrun the nominal half-width,
-            # which is a large, legitimate population wherever RecoX does not share
-            # the config's X convention.
-            _recox = run["Reco"]["RecoX"]
-            valid_recox = (_recox != info["DETECTOR_MAX_X"]) * (
-                _recox != info["DETECTOR_MIN_X"]
-            )
-            rprint(
-                f"[cyan][INFO][/cyan] Default RecoX rejected: "
-                f"{100 * (1 - np.mean(valid_recox)):.2f}% "
-                f"(exactly {info['DETECTOR_MIN_X']} or {info['DETECTOR_MAX_X']} cm) | "
-                f"for reference, |RecoX| > MAX_X holds for "
-                f"{100 * np.mean(np.absolute(_recox) > info['DETECTOR_MAX_X']):.2f}% "
-                f"and |RecoX| == MAX_X for "
-                f"{100 * np.mean(np.absolute(_recox) == info['DETECTOR_MAX_X']):.2f}%"
+            # MatchedOpFlashPlane names the PDS plane that supplied the match, not its
+            # quality. HD only ever yields plane -1 (no flash) or 0, so the
+            # QUALITY_CUTS.OPFLASH_PLANE == 0 test used by lib/fiducial.py and
+            # signal/01_fiducialize.py costs it nothing. VD spreads matches over planes
+            # 0-4 and planes 1-4 reconstruct X as well as plane 0 does (>94% within
+            # 10 cm), so that same test discards ~22% of sound VD clusters. PE > 0 is
+            # the geometry-independent equivalent: a failed match always carries
+            # plane == -1 and PE == 0, so this excludes exactly the no-flash case.
+            flash_ok = run["Reco"]["MatchedOpFlashPE"] > 0
+
+            # compute_main_variables rewrites the upstream -1e6 RecoX sentinel to
+            # +/-DETECTOR_MAX_X, taking the sign from the TRUE SignalParticleX. That
+            # parks every failed match at |RecoX| = MAX_X, inside every outer shell
+            # the inverse=False branch scans, so it scores as a containment success
+            # and inflates the shell efficiency by the whole failure rate. Compare
+            # against the two constants exactly: a wider |RecoX| >= MAX_X test also
+            # discards clusters that merely overrun the nominal half-width.
+            recox_ok = (run["Reco"]["RecoX"] != info["DETECTOR_MAX_X"]) * (
+                run["Reco"]["RecoX"] != info["DETECTOR_MIN_X"]
             )
 
-        for reference, inverse, coord, energy in product(
-            ["Reco", "Truth"], [True, False], ["X", "Y", "Z", None], lowe_energy_centers
+            valid_x = flash_ok * recox_ok
+            rprint(
+                f"[cyan][INFO][/cyan] X-only flash gate rejects "
+                f"{100 * (1 - np.mean(valid_x)):.2f}% of clusters "
+                f"(no valid flash: {100 * (1 - np.mean(flash_ok)):.2f}%, "
+                f"default RecoX: {100 * (1 - np.mean(recox_ok)):.2f}%). "
+                f"Y and Z are not gated."
+            )
+
+        # A cluster whose flash match failed still lands in the outer shell by chance
+        # at the rate the shell occupies the X range (27.8% of HD at fiducial=100), and
+        # is scored as a containment success there. That accidental term floors the
+        # efficiency at the shell's geometric size no matter how badly the match went.
+        # MatchedOpFlashPur > 0 -- the criterion the flash-matching efficiency curves
+        # themselves use -- selects exactly the population that is not accidental, so
+        # FlashMatch=True rows drop the floor and read the match efficiency directly.
+        flash_matched_ok = run["Reco"]["MatchedOpFlashPur"] > 0
+
+        # Some productions generate vertices in a buffer beyond the active volume the
+        # config declares (the vd _nominal sample overruns Y and Z by ~57 cm and X by
+        # ~45 cm, ~5-8% of truth entries per axis). Those vertices sit outside the
+        # detector, so no cluster can ever be reconstructed at them, yet the shells are
+        # built from the config bounds and still count them in the denominator. For the
+        # Y shell that puts ~36% of the denominator outside the detector and caps the
+        # efficiency near 64% however good the reconstruction is. Requiring the true
+        # vertex to lie inside the declared volume restores a fiducializable denominator.
+        def in_detector(tree):
+            inside = np.ones(len(tree["SignalParticleX"]), dtype=bool)
+            for axis in ["X", "Y", "Z"]:
+                values = tree[f"SignalParticle{axis}"]
+                inside = (
+                    inside
+                    * (values >= info[f"DETECTOR_MIN_{axis}"])
+                    * (values <= info[f"DETECTOR_MAX_{axis}"])
+                )
+            return inside
+
+        true_in_detector = {tree: in_detector(run[tree]) for tree in ["Truth", "Reco"]}
+        if args.require_true_in_detector:
+            rprint(
+                "[cyan][INFO][/cyan] Truth vertices outside the declared volume: "
+                f"Truth {100 * (1 - np.mean(true_in_detector['Truth'])):.2f}%, "
+                f"Reco {100 * (1 - np.mean(true_in_detector['Reco'])):.2f}% (rejected)"
+            )
+
+        for reference, inverse, coord, energy, flash_matched in product(
+            ["Reco", "Truth"],
+            [True, False],
+            ["X", "Y", "Z", None],
+            lowe_energy_centers,
+            [False, True],
         ):
             counts = []
             counts_error = []
@@ -241,16 +302,21 @@ for config in configs:
                     * reco_energy_mask
                 )
 
-                # A default RecoX never counts as a reconstructed vertex. With
-                # reference="Reco" the denominator is drawn from the same tree, so the
-                # cluster leaves both terms and the ratio becomes a containment
-                # efficiency conditional on a successful flash match. With
-                # reference="Truth" the denominator is the truth tree and keeps it, so
-                # the failure stays in the sample and the ratio is the absolute
-                # efficiency including flash-matching loss.
-                this_reco_mask = this_reco_mask * valid_recox
-                if reference == "Reco":
-                    this_true_mask = this_true_mask * valid_recox
+                if args.require_true_in_detector:
+                    this_true_mask = this_true_mask * true_in_detector[reference]
+                    this_reco_mask = this_reco_mask * true_in_detector["Reco"]
+
+                # Gate X and the combined XYZ scan on a usable drift coordinate, and
+                # leave standalone Y/Z alone. With reference="Truth" the denominator
+                # comes from the truth tree and keeps the failures, so the ratio is the
+                # absolute efficiency and X tracks the flash-matching performance. With
+                # reference="Reco" both terms are drawn from the same tree and the
+                # cluster leaves both, giving containment conditional on a good match.
+                if coord in ["X", None]:
+                    this_gate = valid_x * flash_matched_ok if flash_matched else valid_x
+                    this_reco_mask = this_reco_mask * this_gate
+                    if reference == "Reco":
+                        this_true_mask = this_true_mask * this_gate
 
                 counts.append(sum(this_reco_mask))
                 counts_error.append(np.sqrt(sum(this_reco_mask)))
@@ -279,15 +345,18 @@ for config in configs:
                     "EfficiencyError": efficiency_error,
                     "Inverse": inverse,
                     "Reference": reference,
+                    "FlashMatch": flash_matched,
                 }
             )
 
     df_fiducial = pd.DataFrame(fiducial_list)
     df_fiducial = df_fiducial.fillna(np.nan)
+    # Plots keep the ungated rows; FlashMatch=True is carried in the pkl only.
+    df_fiducial_plot = df_fiducial[df_fiducial["FlashMatch"] == False]  # noqa: E712
     for inverse, reference in product([True, False], ["Truth"]):
-        this_fiducial_df = df_fiducial[
-            (df_fiducial["Inverse"] == inverse)
-            * (df_fiducial["Reference"] == reference)
+        this_fiducial_df = df_fiducial_plot[
+            (df_fiducial_plot["Inverse"] == inverse)
+            * (df_fiducial_plot["Reference"] == reference)
         ]
         fig = px.line(
             this_fiducial_df[(this_fiducial_df["Energy"].isna())].explode(
@@ -339,9 +408,9 @@ for config in configs:
         )
 
     for inverse, reference in product([True, False], ["Truth", "Reco"]):
-        this_fiducial_df = df_fiducial[
-            (df_fiducial["Inverse"] == inverse)
-            * (df_fiducial["Reference"] == reference)
+        this_fiducial_df = df_fiducial_plot[
+            (df_fiducial_plot["Inverse"] == inverse)
+            * (df_fiducial_plot["Reference"] == reference)
         ]
         fig = px.line(
             this_fiducial_df[(this_fiducial_df["Energy"].notna())].explode(

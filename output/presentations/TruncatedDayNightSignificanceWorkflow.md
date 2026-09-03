@@ -36,19 +36,17 @@ Config aliases:
 - threshold in daynight/01_daynight.py: default 8.0 MeV
 - optional cuts override: nhits, ophits, adjcls
 - MC threshold (`--mc_threshold`): minimum MC counts required in each essential background (gamma, neutron) per cut; prevents selecting cuts that eliminate backgrounds statistically
-- best-curve reference in sensitivity/05_best_sigmas.py: **Asimov** (two-sample Poisson LLR; fastest-discovery crossing uses `AsimovSigma2`/`AsimovSigma3`)
-- day-fraction (`--day_fraction`): fraction of exposure in daytime; default **0.493** (SURF latitude ~44.3°N, full-year average — not 0.5)
-- day-fraction uncertainty (`--day_fraction_band`): absolute uncertainty on day fraction from run schedule; default 0.01 (1%)
-- earth density band (`--earth_density_band`): fractional asymmetry spread from PREM variations (MSW matter effect); default 0.13 (±13%)
-- oscillation band (`--oscillation_band`): residual uncertainty on θ₁₂, Δm²₂₁ (PDG); combined in quadrature with earth-density band; default 0.05 (±5%)
+- best-curve reference in sensitivity/05_best_sigmas.py: **Asimov** (two-sample Poisson LLR)
+- day-fraction (`--day_fraction`): fraction of exposure in daytime; default 0.5
+- oscillation band (`--oscillation_band`): residual uncertainty on θ₁₂, Δm²₂₁; combined in quadrature with earth-density band
 
 ---
 
 ### Workflow Outputs
 
 - Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
-- Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../../data/analysis/best-sigma-json/daynight/truncated)
-- Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
+- Best cut summaries (JSON): [config/*/best-sigma-json/daynight/{folder}/{config}_highest_DayNight.json](../../config)
+- Local fallback: [config/*/daynight-json/{folder}/{config}_highest_DayNight.json](../../config)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated)
 - Figures: [output/images/analysis/day-night/truncated](../../output/images/analysis/day-night/truncated)
 
@@ -83,68 +81,9 @@ Asymmetry uncertainty is bracketed by scaling the night signal: $S_i^{night,k} =
 ### Day-Night Discovery Statistic Details
 
 - Both Gaussian and Asimov curves are stored per cut; **Asimov is the default** for best-cut selection in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py) and exposure plots.
-- σ2/σ3 crossing exposures tracked independently: `Sigma2`/`Sigma3` (Gaussian crossings), `AsimovSigma2`/`AsimovSigma3` (Asimov crossings); fastest-discovery selection uses Asimov columns.
+- σ2/σ3 crossing exposures: `Sigma2`/`Sigma3` and `AsimovSigma2`/`AsimovSigma3` are both Asimov-based (profiled nuisance); Gaussian significance is stored as a diagnostic only.
 - MC threshold gate: cuts where any essential background (gamma, neutron) has fewer than `--mc_threshold` MC events are skipped; prevents selecting cuts that deplete backgrounds statistically.
-- Smoothing (Gaussian kernel) is applied to signal and background histograms before significance evaluation. **Smoothing is safe for the Gaussian statistic**: the per-bin formula `Z_i = ΔS_i / sqrt(B_i^eff)` does not involve a log-ratio, so near-zero smoothed background gives `Z_i ≈ 0` (not log-amplification). This is in contrast to the HEP profile likelihood, where smoothed background rates must not be used.
-- Raw (unsmoothed) variants are stored alongside smoothed curves for diagnostic comparison (`RawGaussian`, `RawAsimov` columns).
-
----
-
-### Asymmetry Uncertainty Bands
-
-Two independent sources of uncertainty on the predicted day-night asymmetry amplitude are combined in quadrature:
-
-| Source | Parameter | Default | Physical origin |
-|---|---|---:|---|
-| Earth density | `--earth_density_band` | 0.13 (±13%) | PREM profile variations; MSW matter effect spread |
-| Oscillation params | `--oscillation_band` | 0.05 (±5%) | θ₁₂, Δm²₂₁ (PDG uncertainties) |
-
-$$\sigma_\mathrm{tot} = \sqrt{\sigma_\mathrm{earth}^2 + \sigma_\mathrm{osc}^2} \approx 0.139$$
-
-Three asymmetry scales bracket the full predicted range:
-$$k \in \{1+\sigma_\mathrm{tot},\; 1.0,\; 1-\sigma_\mathrm{tot}\} \;\Rightarrow\; S_i^{night,k} = S_i^{day} + k(S_i^{night} - S_i^{day})$$
-
-Upper band = stronger matter effect; lower = weaker. Both bands collapse to the nominal curve when the asymmetry signal is zero.
-
----
-
-### Background Uncertainty Model
-
-When `background_error: true` is set in the workflow config, three uncertainty sources per time period are combined in quadrature before entering `evaluate_significance`:
-
-$$
-\sigma_{night} = \sqrt{n_{bkg}^{night} + (\sigma_B \cdot n_{bkg}^{night})^2 + (f_{day}^\Delta \cdot f \cdot B_{total})^2}
-$$
-
-where $\sigma_B$ = `--background_uncertainty` (default 2%), $f_{day}^\Delta$ = `--day_fraction_band` (default 1%), $f$ = exposure factor.
-
-1. **Poisson statistical**: $\sqrt{n_{bkg}^{period}}$
-2. **Normalization systematic**: $\sigma_B \times n_{bkg}^{period}$
-3. **Day-fraction uncertainty**: $f_{day}^\Delta \times \mathrm{factor} \times B_{total}$ — propagates run-schedule uncertainty on the day/night exposure split
-
-Effective combined uncertainty for the significance formula:
-$$\sigma_{eff} = \sqrt{\left(\frac{\sigma_{night}}{g}\right)^2 + \left(\frac{\sigma_{day}}{f}\right)^2}$$
-
-Stored in `ErrorGaussian` columns. Nominal `Gaussian` columns omit the normalization/day-fraction terms.
-
----
-
-### PKL Output Columns
-
-Per cut (NHits, OpHits, AdjCl) × energy × config/name, `{energy}_DayNight_Results.pkl` stores:
-
-| Column group | Description |
-|---|---|
-| `Gaussian` / `Gaussian±Error` | Smoothed Gaussian significance ± asymmetry band |
-| `RawGaussian` / `RawGaussian±Error` | Unsmoothed Gaussian significance ± asymmetry band |
-| `ErrorGaussian` / `ErrorGaussian±Error` | Gaussian with background uncertainty (Poisson + norm + day-frac) |
-| `RawErrorGaussian` / `RawErrorGaussian±Error` | Raw variant of above |
-| `Asimov` / `Asimov±Error` | Smoothed two-sample Poisson LLR significance ± asymmetry band |
-| `RawAsimov` / `RawAsimov±Error` | Unsmoothed Asimov significance ± asymmetry band |
-| `Sigma2`, `Sigma3` | Exposure (kt·yr) at Gaussian 2σ/3σ crossing |
-| `AsimovSigma2`, `AsimovSigma3` | Exposure (kt·yr) at Asimov 2σ/3σ crossing |
-| `EarthDensityBand`, `OscillationBand`, `TotalAsymmetryBand` | Uncertainty inputs |
-| `DayFraction`, `DayFractionBand`, `BackgroundUncertainty` | Exposure model params |
+- Smoothing is applied per component above threshold; the threshold slice keeps unsmoothed bins below threshold and replaces bins above with smoothed values.
 
 ---
 
@@ -274,10 +213,10 @@ $$
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 20 | 100 | 320 | 0.418 | 3.721 | 2.89 |
-| HD Lateral | 80 | 140 | 200 | 0.091 | 3.293 | 2.88 |
-| VD Top | 60 | 140 | 0 | 0.000 | 0.034 | 5.65 |
-| VD Bottom Shielded | 20 | 120 | 80 | 0.022 | 0.036 | 5.77 |
+| HD Central | 20 | 100 | 320 | 0.431 | 3.856 | 2.89 |
+| HD Lateral | 80 | 140 | 240 | 0.094 | 4.685 | 2.65 |
+| VD Top | 0 | 20 | 60 | 0.032 | 0.059 | 7.17 |
+| VD Bottom Shielded | 20 | 100 | 20 | 0.018 | 0.070 | 6.35 |
 
 ---
 
@@ -287,16 +226,7 @@ $$
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/day-night/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/day-night/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for HD Central
 
 ---
 

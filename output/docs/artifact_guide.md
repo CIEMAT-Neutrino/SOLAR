@@ -136,15 +136,13 @@ def hep_pl_from_exposure(pkl_path):
     return float(row["Significance"].iloc[0][IDX10])
 ```
 
-**Current artifact HEP PL baselines (from OLD local pkl):**
+**Current artifact HEP PL baselines (PNFS max, Sep 2 fresh run):**
 | Config | HEP PL Smoothed |
 |--------|----------------|
 | cAPA   | 7.624          |
-| lAPA   | 3.547          |
-| vdN    | 2.518 ¹        |
-| vdS    | 3.128          |
-
-¹ vdN was 1.686 (stale) and updated to 2.518 (current PNFS) on 2026-08-22.
+| lAPA   | 3.569          |
+| vdN    | 2.886          |
+| vdS    | 3.129          |
 
 ---
 
@@ -200,12 +198,12 @@ def sensitivity_score(pkl_path, cfg):
 
 ### HEP PL Smoothed@10yr — Study Variants
 
-| Variant          | cAPA   | lAPA   | vdN    | vdS    | Notes                    |
-|------------------|--------|--------|--------|--------|--------------------------|
-| default          | 7.624¹ | 3.547  | 2.518  | 3.128  | ¹ from old local pkl     |
-| oscpoint_reactor | 7.624  | 3.547  | 2.885  | 3.128  | Δm²-dependent for vdN   |
-| energy_spk       | 28.628 | 31.394 | 19.440 | 19.503 | Best max across all cuts |
-| energy_maink     | 11.921 | 10.768 | 6.527  | 6.526  | Best max across all cuts |
+| Variant          | cAPA   | lAPA   | vdN    | vdS    | Notes                                         |
+|------------------|--------|--------|--------|--------|-----------------------------------------------|
+| default          | 7.624  | 3.569  | 2.886  | 3.129  | Sep 2 fresh run (max across all cuts)         |
+| oscpoint_reactor | 7.613  | 3.538  | 2.875  | 3.124  | Sep 3 fresh run; reactor slightly worse Δ≈−0.01–0.03σ |
+| energy_spk       | 28.628 | 31.394 | 19.440 | 19.503 | Best max across all cuts                      |
+| energy_maink     | 11.921 | 10.768 | 6.527  | 6.526  | Best max across all cuts                      |
 
 ---
 

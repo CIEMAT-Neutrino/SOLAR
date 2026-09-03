@@ -54,7 +54,7 @@ Used for [src/pipelines/run_sensitivity.py](../../src/pipelines/run_sensitivity.
 ### Workflow Outputs
 
 - Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
-- Best cut summaries (JSON): [data/analysis/hep-json/truncated](../../data/analysis/hep-json/truncated)
+- Best cut summaries (JSON): [config/*/hep-json/{folder}/{config}_highest_HEP.json](../../config)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
 - Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)
 
@@ -189,10 +189,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 0 | 0.303 | 1.226 | 5.85 |
-| HD Lateral | 60 | 80 | 20 | 0.095 | 0.817 | 4.74 |
-| VD Top | 0 | 0 | 40 | 0.551 | 0.575 | 7.54 |
-| VD Bottom Shielded | 0 | 0 | 20 | 0.782 | 0.782 | 7.69 |
+| HD Central | 0 | 80 | 0 | 0.494 | 2.174 | 5.85 |
+| HD Lateral | 60 | 80 | 20 | 0.172 | 1.485 | 4.74 |
+| VD Top | 0 | 0 | 40 | 1.001 | 1.045 | 7.54 |
+| VD Bottom Shielded | 0 | 0 | 20 | 1.413 | 1.413 | 7.69 |
 
 ---
 
