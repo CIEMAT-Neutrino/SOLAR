@@ -41,6 +41,18 @@ parser.add_argument("--background", action=argparse.BooleanOptionalAction, defau
 parser.add_argument("--study_label",     type=str,   default=None, help="Tag appended to output pkl filename to isolate study results.")
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
 parser.add_argument("--charge_threshold", type=float, default=0,   help="Charge threshold Q (ADC). When >0, reads templates from labeled subfolders.")
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto also accepts membrane and endcap matches "
+        "(VD planes 1-4). Forwarded to sensitivity/02_signal_template.py. "
+        "Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 _ctx = study_context(args)
 _study_suffix    = _ctx.study_suffix
@@ -127,6 +139,8 @@ def _generate_templates(cuts):
     ]
     if args.charge_threshold > 0:
         cmd += ["--charge_threshold", str(args.charge_threshold)]
+    if not args.membrane_veto:
+        cmd += ["--no-membrane_veto"]
     if args.study_label:
         cmd += ["--study_label", args.study_label]
     cmd_str = " ".join(quote(str(c)) for c in cmd)

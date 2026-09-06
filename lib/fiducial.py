@@ -106,6 +106,32 @@ def get_fiducialization_config(root: str, analysis_name: Optional[str] = None) -
     return config
 
 
+def accepted_flash_planes(
+    plane: np.ndarray,
+    root: str,
+    membrane_veto: bool = True,
+) -> np.ndarray:
+    """Optical-match planes accepted by the analysis.
+
+    Plane 0 is the cathode (VD) / APA (HD) photon-detector plane. HD only ever
+    reports planes -1 and 0, but VD additionally reports membrane (1, 2) and
+    endcap (3, 4) matches. The default QUALITY_CUTS.OPFLASH_PLANE == 0 therefore
+    acts as a membrane veto: free for HD, but it discards ~22% of VD clusters
+    whose drift coordinate is reconstructed as well as plane 0's (>94% within
+    10 cm, against 96.8% for the cathode).
+
+    membrane_veto=False keeps every real plane instead. A failed match always
+    carries plane == -1 together with PE == 0, so callers pairing this with
+    `MatchedOpFlashPE > 0` still reject unmatched clusters either way.
+    """
+    if membrane_veto:
+        return np.asarray(
+            plane == load_analysis_info(root)["QUALITY_CUTS"]["OPFLASH_PLANE"],
+            dtype=bool,
+        )
+    return np.asarray(plane >= 0, dtype=bool)
+
+
 def build_fiducial_spatial_mask(
     run: dict,
     config: str,

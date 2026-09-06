@@ -72,6 +72,18 @@ parser.add_argument(
     default="nufast",
     help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
 )
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto additionally accepts membrane and endcap "
+        "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
+        "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 config = args.config
 name = args.signal
@@ -200,7 +212,11 @@ for config in configs:
                 _surface_ok = _surface_ok & (_surface_arr < 3)
         else:
             _surface_ok = np.ones(len(_surface_arr), dtype=bool)
-        _quality_mask = _surface_ok & (_op_plane_arr == analysis_info["QUALITY_CUTS"]["OPFLASH_PLANE"]) & (_op_pe_arr > 0)
+        _quality_mask = (
+            _surface_ok
+            & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
+            & (_op_pe_arr > 0)
+        )
 
         # Single-entry cache: weights are innermost in product(), so consecutive
         # iterations with the same (fid_x, fid_y, fid_z) share mask and bin indices.

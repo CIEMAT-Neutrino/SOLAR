@@ -65,6 +65,18 @@ parser.add_argument("--charge_threshold", type=float, default=0,
     help="Charge threshold Q (ADC) forwarded to signal/background template scripts.")
 parser.add_argument("--study_label", type=str, default=None,
     help="Tag forwarded to template scripts to label output subfolders for charge study variants.")
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto also accepts membrane and endcap matches "
+        "(VD planes 1-4). Forwarded to sensitivity/02_signal_template.py. "
+        "Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 
 
@@ -99,6 +111,8 @@ def build_common_args() -> List[str]:
         common.extend(["--adjcls", str(args.adjcls)])
     if args.charge_threshold > 0:
         common.extend(["--charge_threshold", str(args.charge_threshold)])
+    if not args.membrane_veto:
+        common.append("--no-membrane_veto")
     if args.study_label:
         common.extend(["--study_label", args.study_label])
     return common

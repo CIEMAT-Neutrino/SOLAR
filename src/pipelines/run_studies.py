@@ -16,6 +16,7 @@ Study groups
   charge      9.2.4  Charge threshold scan (replaces NHits/AdjCl axes)
   bkg_gamma   9.2.5  Background gamma model (ClusterEnergy as calorimetric proxy)
   bkgmodel    9.2.6  Background model normalization (Nominal/Reduced folders)
+  membrane_veto      Membrane/endcap optical matches (VD planes 1-4) on vs off
 
 Usage
 -----
@@ -69,6 +70,28 @@ class StudyVariant(TypedDict):
 # Study variant definitions
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# One-knob policy (applies to EVERY variant below)
+# ---------------------------------------------------------------------------
+# A study changes exactly one thing and holds the rest of the chain at nominal,
+# so its number is comparable to the default and reproducible run to run. We are
+# measuring what the knob does, not hunting the best achievable result per variant.
+#
+#   skip_best_cuts:   True   -> reuse the nominal cut optimisation (04_best_cuts.py)
+#   skip_best_sigmas: True   -> reuse the nominal smoothing sigmas
+#   fiducialization:  omitted -> reuse the nominal BestFiducials.json
+#                               (set True only when the variant's Fiducial_Scan.pkl
+#                                cannot exist yet, e.g. a new energy estimator)
+#   skip_rebin:       per variant -- False only when the variant changes the
+#                     histograms themselves (new energy estimator, charge cut,
+#                     different dm2, truth fiducialisation, membrane planes).
+#
+# Re-optimising cuts per variant would confound the knob with a re-tuned analysis:
+# a variant could look better purely because its cuts were re-fit, not because the
+# physics improved. Hold the cuts, move one knob, read the difference.
+#
+# NOTE: skip_best_cuts does NOT suppress 01_daynight.py / 01_hep.py -- each variant
+# always computes its own significance grid. See run_sensitivity.py --skip_best_cuts.
 STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # 9.1.1 — histogram metric / smoothing comparison
     # Raw vs Smoothed results are part of the default pipeline (--all_metrics).
@@ -102,14 +125,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
     "energy": [
-        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": False, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True},
-        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": False, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True},
+        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True},
+        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True},
     ],
     # 9.2.2 — fiducialization (folder provides isolation; no study_label needed)
     "fiduc": [
-        {"folder": "Nominal",   "skip_rebin": True, "skip_best_cuts": True},
-        {"folder": "Reduced",   "skip_rebin": True, "skip_best_cuts": True},
-        {"folder": "Truncated", "skip_rebin": True, "skip_best_cuts": True},
+        {"folder": "Nominal",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
+        {"folder": "Reduced",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
+        {"folder": "Truncated", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
     ],
     # 9.2.3 — charge threshold scan
     # AdjCl energy features are recomputed with AdjClCharge > Q before the Rebin pkl is
@@ -117,14 +140,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # SelectedEnergy (= Energy + SelectedAdjClEnergy) is used as the analysis metric:
     # it is a direct calorimetric sum that needs no BDT retraining.
     "charge": [
-        {"label": "charge_Q50",  "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold",  "50"]},
-        {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "100"]},
-        {"label": "charge_Q500", "skip_rebin": False, "skip_best_cuts": False, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "500"]},
+        {"label": "charge_Q50",  "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold",  "50"]},
+        {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "100"]},
+        {"label": "charge_Q500", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "500"]},
     ],
     # 9.2.4 — background model normalization (folder provides isolation)
     "bkgmodel": [
-        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True},
-        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True},
+        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
+        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
     # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates
@@ -135,8 +158,8 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # the discrimination is always computed between solar and reactor dm² templates regardless
     # of which point the signal MC was simulated at (Score(oscpoint_reactor) = Score(default)).
     "oscpoint": [
-        {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "analysis_override": ["DayNight", "HEP"]},
-        {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True,  "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
+        {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
+        {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
     ],
     # 9.2.2 / 9.2.3 — truth x-fiducialisation vs reco flash-matching
     # Runs full fiducialization with SignalParticleX/Y/Z instead of RecoX/Y/Z.
@@ -146,7 +169,8 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {
             "label": "fiduc_truth",
             "skip_rebin": False,
-            "skip_best_cuts": False,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
             "fiducialization": True,
             "extra": ["--truth_fiducial"],
         },
@@ -159,10 +183,42 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {
             "label": "bkg_gamma",
             "skip_rebin": False,
-            "skip_best_cuts": False,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
             "fiducialization": True,
             "energy_override": "ClusterEnergy",
             "ignore_energy_window": True,
+        },
+    ],
+    # 9.2.6 — membrane veto: which optical planes may supply the TPC-PDS match.
+    # QUALITY_CUTS.OPFLASH_PLANE == 0 keeps cathode (VD) / APA (HD) matches only, and
+    # stays the default everywhere. HD reports no other plane, so the veto is free
+    # there; VD also reports Membrane 1/2 and Front/EndCap (planes 1-4), which carry
+    # ~22% of its clusters and reconstruct the drift coordinate essentially as well as
+    # the cathode does (>94% of them within 10 cm of truth, against 96.8% for plane 0).
+    # This variant lifts the veto so the membrane-matched signal and background events
+    # enter the analysis, and measures what they are worth downstream.
+    # Only the "off" arm runs: the "on" arm is the default pipeline, so compare against
+    # the unlabeled default outputs. VD-only in practice -- an HD run reproduces the
+    # default bit for bit and is useful mainly as a null check.
+    #
+    # Everything except the event selection is held at nominal, so the comparison
+    # isolates the membrane events themselves rather than a re-tuned analysis:
+    #   fiducialization omitted (default False) -> reuse the nominal BestFiducials.json
+    #   skip_best_cuts=True                     -> reuse the nominal cut optimisation
+    #   skip_best_sigmas=True                   -> reuse the nominal smoothing sigmas
+    # skip_rebin stays False because the Rebin pkls are the one thing that must change:
+    # they carry the histograms, and admitting the membrane planes changes which signal
+    # and background events fill them. 03_analysis.py runs over every sample, signal and
+    # background alike, and the sensitivity background templates are built from those
+    # same Rebin pkls, so both sides pick the change up.
+    "membrane_veto": [
+        {
+            "label": "membrane_veto_off",
+            "skip_rebin": False,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
+            "extra": ["--no-membrane_veto"],
         },
     ],
 }
@@ -223,10 +279,15 @@ def _matches_variant_filter(variant: StudyVariant) -> bool:
 
 def _all_fiducial_exist(configs: List[str], folders: List[str],
                         names: List[str], energies: List[str]) -> bool:
-    """True only if every (config, folder, name, energy) has a Fiducial_Scan pkl."""
+    """True only if every (config, folder, name, energy) has a Fiducial_Scan pkl.
+
+    save_df writes these as {config}_{name}_{energy}_Fiducial_Scan.pkl; omitting that
+    prefix here made the check never match, so the safety layer below silently
+    re-enabled fiducialization on every study run.
+    """
     return all(
         (_data_root / "FIDUCIAL" / folder.lower() / config / name
-         / f"{energy}_Fiducial_Scan.pkl").exists()
+         / f"{config}_{name}_{energy}_Fiducial_Scan.pkl").exists()
         for config   in configs
         for folder   in folders
         for name     in names
@@ -240,11 +301,14 @@ def _all_rebin_exist(configs: List[str], folders: List[str], names: List[str],
 
     Checks both signal/ and background/ subtrees so the orchestrator does not
     need to know which names map to which directory kind.
+
+    As with the fiducial check, the files carry a {config}_{name}_ prefix; leaving it
+    out made this always report missing and forced the rebin stage back on.
     """
     return all(
         any(
             (_data_root / kind / folder.lower() / analysis.upper()
-             / config / name / f"{energy}_Rebin.pkl").exists()
+             / config / name / f"{config}_{name}_{energy}_Rebin.pkl").exists()
             for kind in ("signal", "background")
         )
         for config   in configs

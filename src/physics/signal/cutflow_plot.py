@@ -81,6 +81,18 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
 
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto additionally accepts membrane and endcap "
+        "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
+        "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 
 os.makedirs(f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}", exist_ok=True)
@@ -257,7 +269,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     op_plane = np.asarray(pickle.load(open(required[6], "rb")), dtype=int)
     op_pe    = np.asarray(pickle.load(open(required[7], "rb")), dtype=float)
 
-    flash_mask = (op_plane == _op_plane_cut) & (op_pe > 0)
+    flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0)
     fid        = geo_fid & flash_mask
     pre_mask   = np.ones(len(reco), dtype=bool)
     nhits_mask = fid & (nhits  >= _nhits)

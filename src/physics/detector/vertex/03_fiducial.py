@@ -17,6 +17,7 @@ def fiducial_mask(
     fiducial: int = 100,
     inverse: bool = False,
     coordinate: Optional[list[str]] = ["X", "Y", "Z"],
+    split: bool = False,
 ):
     if coordinate is None:
         coordinate = ["X", "Y", "Z"]
@@ -80,10 +81,15 @@ def fiducial_mask(
     # true requirements intersect. Combining them per-axis instead would demand that
     # the reco vertex leave the box through the same face as the true vertex.
     true_mask = combine(run[reference], "SignalParticle", n_true)
-    reco_mask = combine(run["Reco"], "Reco", n_reco) * combine(
-        run["Reco"], "SignalParticle", n_reco
-    )
+    reco_pos_mask = combine(run["Reco"], "Reco", n_reco)
+    reco_true_mask = combine(run["Reco"], "SignalParticle", n_reco)
+    reco_mask = reco_pos_mask * reco_true_mask
 
+    if split:
+        # Containment purity needs the reconstructed and true positions tested
+        # separately: its denominator is the reco-selected sample alone, whereas
+        # reco_mask above already requires both to land in the region.
+        return true_mask, reco_mask, reco_pos_mask, reco_true_mask
     return true_mask, reco_mask
 
 
@@ -177,6 +183,7 @@ for config in configs:
     fig = make_subplots(rows=1, cols=1)
     for name in configs[config]:
         fiducial_list = []
+        purity_list = []
         info = json.load(open(f"{root}/config/{config}/{config}_config.json", "r"))
         this_filtered_run, mask, output = compute_filtered_run(
             run,
@@ -228,7 +235,18 @@ for config in configs:
         # efficiency at the shell's geometric size no matter how badly the match went.
         # MatchedOpFlashPur > 0 -- the criterion the flash-matching efficiency curves
         # themselves use -- selects exactly the population that is not accidental, so
-        # FlashMatch=True rows drop the floor and read the match efficiency directly.
+        # the gated rows drop the floor and read the match efficiency directly.
+        #
+        # The FlashMatch column records which rows carry that requirement:
+        #   "None" -> no purity requirement anywhere.
+        #   "X"    -> purity on X and the combined scan only. Y and Z come from wire
+        #             positions and do not depend on the match, so they stay ungated
+        #             and their "X" rows repeat their "None" rows.
+        #   "All"  -> purity on every coordinate, so Y and Z are also conditioned on a
+        #             successfully matched event. Use this for a table that treats all
+        #             three axes alike; "X" mixes a gated X with ungated Y/Z.
+        # These are the strings "None"/"X"/"All", not Python None, so that the column
+        # stays plain text and filters as == "None" rather than needing .isna().
         flash_matched_ok = run["Reco"]["MatchedOpFlashPur"] > 0
 
         # Some productions generate vertices in a buffer beyond the active volume the
@@ -263,16 +281,20 @@ for config in configs:
             [True, False],
             ["X", "Y", "Z", None],
             lowe_energy_centers,
-            [False, True],
+            ["None", "X", "All"],
         ):
             counts = []
             counts_error = []
             efficiency = []
             efficiency_error = []
+            purity, purity_error = [], []
+            in_migration, in_migration_error = [], []
+            reco_selected = []
             for fiducial in np.arange(0, 220, 20):
-                true_mask, reco_mask = fiducial_mask(
+                true_mask, reco_mask, reco_pos_mask, reco_true_mask = fiducial_mask(
                     run, info, reference, fiducial, inverse,
                     [coord] if coord is not None else ["X", "Y", "Z"],
+                    split=True,
                 )
                 if energy is None:
                     true_energy_mask = np.ones(
@@ -312,8 +334,14 @@ for config in configs:
                 # absolute efficiency and X tracks the flash-matching performance. With
                 # reference="Reco" both terms are drawn from the same tree and the
                 # cluster leaves both, giving containment conditional on a good match.
-                if coord in ["X", None]:
-                    this_gate = valid_x * flash_matched_ok if flash_matched else valid_x
+                drift_coord = coord in ["X", None]
+                apply_purity = flash_matched == "All" or (
+                    flash_matched == "X" and drift_coord
+                )
+                if drift_coord or apply_purity:
+                    this_gate = valid_x if drift_coord else np.ones(len(valid_x), bool)
+                    if apply_purity:
+                        this_gate = this_gate * flash_matched_ok
                     this_reco_mask = this_reco_mask * this_gate
                     if reference == "Reco":
                         this_true_mask = this_true_mask * this_gate
@@ -330,6 +358,42 @@ for config in configs:
                     if sum(this_true_mask) > 0
                     else 0
                 )
+
+                # Containment purity of the reconstructed sample. Unlike the
+                # efficiency above, whose denominator is the true population, this
+                # normalises to what the reconstruction actually selects:
+                #   P_FV  = N(true in region & reco in region) / N(reco in region)
+                #   f_in  = N(true outside     & reco in region) / N(reco in region)
+                #         = 1 - P_FV
+                # f_in is the fraction of the reconstructed fiducial sample that
+                # migrated in from outside. Both terms are drawn from the Reco tree,
+                # so this is independent of the Truth/Reco reference split.
+                _sel = reco_pos_mask * (
+                    (run["Reco"]["Geometry"] == info["GEOMETRY"])
+                    * (run["Reco"]["Version"] == info["VERSION"])
+                    * (run["Reco"]["Name"] == name)
+                    * reco_energy_mask
+                )
+                if args.require_true_in_detector:
+                    _sel = _sel * true_in_detector["Reco"]
+                if drift_coord or apply_purity:
+                    _sel = _sel * this_gate
+                _n_sel = sum(_sel)
+                _n_contained = sum(_sel * reco_true_mask)
+                reco_selected.append(_n_sel)
+                if _n_sel > 0:
+                    _p = _n_contained / _n_sel
+                    # Binomial: the numerator is a subset of the denominator, so the
+                    # Poisson form used for the efficiency above would overstate it.
+                    _err = 100 * np.sqrt(max(_p * (1 - _p), 0.0) / _n_sel)
+                    purity.append(100 * _p)
+                    in_migration.append(100 * (1 - _p))
+                else:
+                    _err = 0.0
+                    purity.append(np.nan)
+                    in_migration.append(np.nan)
+                purity_error.append(_err)
+                in_migration_error.append(_err)
 
             fiducial_list.append(
                 {
@@ -349,10 +413,31 @@ for config in configs:
                 }
             )
 
+            # Purity is built entirely from the Reco tree, so it does not vary with
+            # the Truth/Reco reference. Emit it once to keep the pkl unambiguous.
+            if reference == "Reco":
+                purity_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Variable": coord,
+                        "Energy": energy,
+                        "Values": np.arange(0, 220, 20),
+                        "Counts": reco_selected,
+                        "Purity": purity,
+                        "PurityError": purity_error,
+                        "InMigration": in_migration,
+                        "InMigrationError": in_migration_error,
+                        "Inverse": inverse,
+                        "FlashMatch": flash_matched,
+                    }
+                )
+
     df_fiducial = pd.DataFrame(fiducial_list)
     df_fiducial = df_fiducial.fillna(np.nan)
     # Plots keep the ungated rows; FlashMatch=True is carried in the pkl only.
-    df_fiducial_plot = df_fiducial[df_fiducial["FlashMatch"] == False]  # noqa: E712
+    df_fiducial_plot = df_fiducial[df_fiducial["FlashMatch"] == "None"]
     for inverse, reference in product([True, False], ["Truth"]):
         this_fiducial_df = df_fiducial_plot[
             (df_fiducial_plot["Inverse"] == inverse)
@@ -469,12 +554,15 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+    df_purity = pd.DataFrame(purity_list)
+
     for this_df, df_filename, df_type in zip(
-        [df_fiducial],
+        [df_fiducial, df_purity],
         [
             "Fiducial_Efficiency",
+            "Fiducial_Purity",
         ],
-        ["pkl"],
+        ["pkl", "pkl"],
     ):
         save_df(
             this_df,

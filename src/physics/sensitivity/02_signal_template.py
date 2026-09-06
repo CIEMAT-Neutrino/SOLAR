@@ -110,6 +110,18 @@ parser.add_argument("--charge_threshold", type=float, default=0,
 parser.add_argument("--study_label", type=str, default=None,
     help="Tag appended to template subfolder to isolate charge study variants.")
 
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto additionally accepts membrane and endcap "
+        "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
+        "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 _ctx = study_context(args)
 _study_suffix = _ctx.study_suffix
@@ -297,7 +309,9 @@ for config in configs:
             & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.signal.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
-            & (run["Reco"]["MatchedOpFlashPlane"] == analysis_info["QUALITY_CUTS"]["OPFLASH_PLANE"])
+            & accepted_flash_planes(
+                run["Reco"]["MatchedOpFlashPlane"], str(root), args.membrane_veto
+            )
             & (run["Reco"]["MatchedOpFlashPE"] > 0)
             & (run["Reco"]["MatchedOpFlashNHits"] > ophits - 1)
             & (run["Reco"]["Charge"] > args.charge_threshold if args.charge_threshold > 0 else np.ones(len(run["Reco"]["NHits"]), dtype=bool))

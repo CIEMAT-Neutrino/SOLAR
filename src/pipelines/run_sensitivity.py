@@ -528,7 +528,21 @@ parser.add_argument(
     help=(
         "Skip the 04_best_cuts.py step in the Sensitivity pipeline. "
         "Use when running study variants to preserve the nominal best-cut selection. "
-        "Pass --skip_best_cuts to enable."
+        "Pass --skip_best_cuts to enable. "
+        "Affects the cut optimiser ONLY: 01_daynight.py / 01_hep.py always run, so the "
+        "variant still computes its own significance grid under its own label."
+    ),
+)
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto also accepts membrane and endcap matches "
+        "(VD planes 1-4, ~22% of VD clusters; HD produces none, so it is a no-op there). "
+        "Forwarded to the fiducialization, analysis, weighted and signal-template stages. "
+        "Drives the membrane_veto study."
     ),
 )
 parser.add_argument(
@@ -682,6 +696,12 @@ def truth_fiducial_args_for() -> List[str]:
     return ["--truth_fiducial"] if args.truth_fiducial else []
 
 
+def membrane_veto_args_for() -> List[str]:
+    # Only emitted when disabled: the default matches each script's own default,
+    # so nominal runs keep their existing command lines unchanged.
+    return [] if args.membrane_veto else ["--no-membrane_veto"]
+
+
 def fiducialize_oscillation_args_for() -> List[str]:
     # dm2 not forwarded — fiducial volume scan optimises detector geometry only,
     # not oscillation weights; 01_fiducialize.py does not accept --dm2.
@@ -713,16 +733,17 @@ def study_label_args_for() -> List[str]:
 def seed_study_artifacts_from_nominal(analysis: str, config: str, folder: str, name: str) -> None:
     """Copy nominal best-cut / Results pkls to this study's labeled paths.
 
-    --skip_best_cuts skips 01_hep.py / 01_daynight.py, so a labeled study never produces
-    its own Results grid or best-cut map. The downstream plot scripts read those at the
-    labeled path, so seed them from the nominal ones.
+    UNUSED — retained for reference only; do not re-introduce without care.
 
-    Only fills in what is missing: a labeled artifact that a previous computation run
-    already produced is left untouched.
+    This existed because --skip_best_cuts used to gate 01_hep.py / 01_daynight.py, so a
+    labeled study produced no Results grid of its own and the downstream plot scripts had
+    nothing to read at the labeled path. Those two scripts now always run (--skip_best_cuts
+    gates 04_best_cuts.py only, per its documented contract), so every labeled study
+    computes its own grid and there is nothing left to seed.
 
-    NOTE: the seeded Results grid carries the NOMINAL physics. For variants that change
-    the physics (e.g. --dm2), the study then reports nominal numbers under its own label.
-    Run without --skip_best_cuts to compute that variant's own grid.
+    Seeding is actively unsafe here: it writes NOMINAL physics to the study's label, so a
+    variant whose computation fails reports nominal numbers under its own name instead of
+    failing loudly. A missing artifact is the correct signal that a stage did not run.
     """
     if not (args.skip_best_cuts and args.study_label):
         return
@@ -792,7 +813,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     if args.fiducialization:
         for name in available_names:
             sample_args = base_args + ["--signal", name]
-            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for() + truth_fiducial_args_for())
+            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for() + truth_fiducial_args_for() + membrane_veto_args_for())
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/01_fiducialize.py (--no-fiducialization).")
 
@@ -838,6 +859,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + oscillation_args_for()
                 + study_label_args_for()
                 + truth_fiducial_args_for()
+                + membrane_veto_args_for()
                 + ["--export_fiducial"],
             )
     else:
@@ -855,6 +877,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + oscillation_args_for()
                 + study_label_args_for()
                 + truth_fiducial_args_for()
+                + membrane_veto_args_for()
                 + ["--export_fiducial", "--skip_scan", "--no-plot"],
             )
 
@@ -862,7 +885,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
         for name in available_names:
             run_analysis_script(
                 "src/physics/signal/04_weighted.py",
-                base_args_for(config, folder, include_background=False) + ["--signal", name] + oscillation_args_for(),
+                base_args_for(config, folder, include_background=False) + ["--signal", name] + oscillation_args_for() + membrane_veto_args_for(),
             )
 
 
@@ -933,10 +956,12 @@ def run_daynight_stage(config: str, folder: str, name: str):
     reference = args.reference or "Smoothed"
     uncertainty_args = uncertainty_args_for("DAYNIGHT")
 
-    seed_study_artifacts_from_nominal("DayNight", config, folder, name)
-
     if args.computation:
-        if args.significance and not args.skip_best_cuts:
+        # 01_daynight.py always runs when significance is enabled: it computes this
+        # variant's own significance grid. --skip_best_cuts controls only the cut
+        # optimiser (04_best_cuts.py), never the grid — a study that skipped this
+        # would report nominal physics under its own label.
+        if args.significance:
             daynight_args = [
                 "--mc_threshold", str(args.daynight_mc_threshold),
                 "--earth_density_band", str(args.earth_density_band),
@@ -946,8 +971,6 @@ def run_daynight_stage(config: str, folder: str, name: str):
             ]
             run_analysis_script("src/physics/daynight/01_daynight.py", analysis_base_args + common_args + uncertainty_args + daynight_args + daynight_oscillation_args_for() + test_statistic_args_for() + all_metrics_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
-        elif args.skip_best_cuts:
-            rprint("[cyan][INFO][/cyan] Skipping 01_daynight.py (--skip_best_cuts): using existing best-cut selection.")
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference] + skip_best_sigmas_args_for(),
@@ -1095,16 +1118,14 @@ def run_hep_stage(config: str, folder: str, name: str):
             f"for config={config} folder={folder}."
         )
 
-    seed_study_artifacts_from_nominal("HEP", config, folder, name)
-
     if args.computation:
-        if args.significance and not args.skip_best_cuts:
+        # 01_hep.py always runs when significance is enabled — see run_daynight_stage().
+        # --skip_best_cuts gates the cut optimiser only, not this variant's own grid.
+        if args.significance:
             run_analysis_script(
                 "src/physics/hep/01_hep.py",
                 analysis_base_args + common_args + uncertainty_args + ["--mc_threshold", str(resolved_hep_mc_threshold)] + all_metrics_args_for() + charge_threshold_only_args_for() + daynight_oscillation_args_for() + truth_fiducial_args_for(),
     )
-        elif args.skip_best_cuts:
-            rprint("[cyan][INFO][/cyan] Skipping 01_hep.py (--skip_best_cuts): using existing best-cut selection.")
         run_analysis_script(
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "HEP", "--reference", reference] + skip_best_sigmas_args_for(),
@@ -1202,14 +1223,14 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
                 cutopt_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name]
                 run_analysis_script(
                     "src/physics/sensitivity/04_best_cuts.py",
-                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping 04_best_cuts.py (--skip_best_cuts): using existing best-cut selection.")
             # Phase 3 — full signal template grid for the selected best cut
             run_analysis_script(
                 "src/physics/sensitivity/03_template_compute.py",
-                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for(),
+                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for() + membrane_veto_args_for(),
             )
             # Phase 4 — sensitivity analysis with best cut (no re-optimisation)
             for profile_name in profile_names:
@@ -1355,6 +1376,7 @@ for config, folder in product(args.config, args.folder):
                 + analysis_selection_args
                 + energy_args
                 + oscillation_args_for()
+                + membrane_veto_args_for()
                 + ["--best_cuts_only", "--no-plot"],
             )
 

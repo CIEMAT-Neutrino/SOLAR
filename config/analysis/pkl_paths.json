@@ -122,8 +122,11 @@
       "description": "Best (NHits, AdjCl, OpHits) cut combination row that maximises the sensitivity figure-of-merit. Used by all downstream significance scripts to select the optimal cut.",
       "base": "{PATH}/SENSITIVITY/{folder}/{config}/{name}",
       "filename": "{config}_{name}_highest_SENSITIVITY.pkl",
+      "study_variant_filename": "{config}_{name}_highest_SENSITIVITY_{study_label}.pkl",
+      "study_label_note": "Study variants write a sibling with a '_{study_label}' suffix on the stem (e.g. '..._DayNight_Results_unc_bkg4.pkl'). run_studies.py passes --study_label; the energy token also changes when the variant overrides it (SelectedEnergy for charge_*, ClusterEnergy for bkg_gamma, SignalParticleK/MainK for energy_*).",
       "full_path": "{PATH}/SENSITIVITY/{folder}/{config}/{name}/{config}_{name}_highest_SENSITIVITY.pkl",
       "written_by": "src/physics/sensitivity/04_best_cuts.py (save_pkl with path=info['PATH']+'/SENSITIVITY/{folder}', config, name)",
+      "validity_note": "This is the ONLY artifact --skip_best_cuts legitimately suppresses. Under the one-knob policy every variant passes it, so no labeled file is written and downstream stages reuse the nominal highest_SENSITIVITY.pkl \u2014 cuts held fixed across variants by design. An absent '_{study_label}' file is therefore expected, not an error. Sensitivity-only variants (unc_sig0/2/6, nuisance_*) were never affected by the 01_* gating bug.",
       "read_by": [
         "src/physics/sensitivity/01_background_template.py (_load_best_cut_map \u2192 default cut selection)",
         "src/physics/sensitivity/02_signal_template.py (_load_best_cut_map \u2192 default cut selection)",
@@ -319,7 +322,13 @@
         "results": "{config}_{name}_{energy}_DayNight_Results.pkl",
         "significance_bins": "{config}_{name}_{energy}_DayNight_SignificanceBins.pkl"
       },
+      "study_variant_filenames": {
+        "results": "{config}_{name}_{energy}_DayNight_Results_{study_label}.pkl",
+        "significance_bins": "{config}_{name}_{energy}_DayNight_SignificanceBins_{study_label}.pkl"
+      },
+      "study_label_note": "Study variants write a sibling with a '_{study_label}' suffix on the stem (e.g. '..._DayNight_Results_unc_bkg4.pkl'). run_studies.py passes --study_label; the energy token also changes when the variant overrides it (SelectedEnergy for charge_*, ClusterEnergy for bkg_gamma, SignalParticleK/MainK for energy_*).",
       "written_by": "src/physics/daynight/01_daynight.py (save_df)",
+      "validity_note": "One-knob policy (2026-09-06): every study variant computes its OWN grid here. --skip_best_cuts does NOT suppress this file \u2014 it gates 04_best_cuts.py only. Before that fix the flag also gated 01_daynight.py / 01_hep.py, and run_sensitivity.py:seed_study_artifacts_from_nominal() copied the nominal grid onto the study's label, so a labeled file could silently contain NOMINAL physics. Seeding is removed: a labeled file that is absent now means the stage did not run. Any labeled grid dated before 2026-09-06 must be re-derived before use.",
       "read_by": [
         "src/physics/daynight/significance_plot.py (pd.read_pickle \u2192 per-cut spectra)",
         "src/physics/daynight/exposure_plot.py (pd.read_pickle \u2192 exposure curves)",
@@ -340,7 +349,13 @@
         "results": "{config}_{name}_{energy}_HEP_Results.pkl",
         "significance_bins": "{config}_{name}_{energy}_HEP_SignificanceBins.pkl"
       },
+      "study_variant_filenames": {
+        "results": "{config}_{name}_{energy}_HEP_Results_{study_label}.pkl",
+        "significance_bins": "{config}_{name}_{energy}_HEP_SignificanceBins_{study_label}.pkl"
+      },
+      "study_label_note": "Study variants write a sibling with a '_{study_label}' suffix on the stem (e.g. '..._DayNight_Results_unc_bkg4.pkl'). run_studies.py passes --study_label; the energy token also changes when the variant overrides it (SelectedEnergy for charge_*, ClusterEnergy for bkg_gamma, SignalParticleK/MainK for energy_*).",
       "written_by": "src/physics/hep/01_hep.py (save_df)",
+      "validity_note": "One-knob policy (2026-09-06): every study variant computes its OWN grid here. --skip_best_cuts does NOT suppress this file \u2014 it gates 04_best_cuts.py only. Before that fix the flag also gated 01_daynight.py / 01_hep.py, and run_sensitivity.py:seed_study_artifacts_from_nominal() copied the nominal grid onto the study's label, so a labeled file could silently contain NOMINAL physics. Seeding is removed: a labeled file that is absent now means the stage did not run. Any labeled grid dated before 2026-09-06 must be re-derived before use.",
       "read_by": [
         "src/physics/hep/significance_plot.py (pd.read_pickle \u2192 per-cut spectra)",
         "src/physics/hep/exposure_plot.py (pd.read_pickle \u2192 exposure curves)",
@@ -362,7 +377,13 @@
         "best": "{config}_{name}_highest_{analysis}.pkl",
         "spiked": "{config}_{name}_highest_spiked_{analysis}.pkl"
       },
+      "study_variant_filenames": {
+        "best": "{config}_{name}_highest_{analysis}_{study_label}.pkl",
+        "spiked": "{config}_{name}_highest_spiked_{analysis}_{study_label}.pkl"
+      },
+      "study_label_note": "Study variants write a sibling with a '_{study_label}' suffix on the stem (e.g. '..._DayNight_Results_unc_bkg4.pkl'). run_studies.py passes --study_label; the energy token also changes when the variant overrides it (SelectedEnergy for charge_*, ClusterEnergy for bkg_gamma, SignalParticleK/MainK for energy_*).",
       "written_by": "src/physics/sensitivity/05_best_sigmas.py (save_df for each analysis in --analysis list)",
+      "validity_note": "Always runs for every variant. --skip_best_sigmas does not skip this script; it passes --reference_study_label '' so the variant reuses the NOMINAL smoothing sigmas and cut selection instead of re-fitting its own. Under the one-knob policy every variant sets it, so this file reflects nominal cuts applied to the variant's own grid \u2014 which is what makes the delta vs default attributable to the knob alone.",
       "read_by": [
         "src/physics/common/exposure_plot.py (_get_selection_cuts \u2192 best NHits/OpHits/AdjCl selection)",
         "src/physics/common/significance_plot.py (sigma_map_path \u2192 cut selection for significance plots)",
@@ -956,7 +977,7 @@
       "publication_export": false
     },
     "SENSITIVITY_TEMPLATE_EXPORT": {
-      "description": "Publication-ready tidy DataFrame of signal and background sensitivity templates at the best-cut point. One row per component (Signal/Background) × (config, name, energy, folder). Columns: Config, Name, EnergyLabel, Folder, NHits, OpHits, AdjCl, Component, EnergyBins, NadirBins, Counts (2-D array as nested list, shape [n_nadir × n_energy]).",
+      "description": "Publication-ready tidy DataFrame of signal and background sensitivity templates at the best-cut point. One row per component (Signal/Background) \u00d7 (config, name, energy, folder). Columns: Config, Name, EnergyLabel, Folder, NHits, OpHits, AdjCl, Component, EnergyBins, NadirBins, Counts (2-D array as nested list, shape [n_nadir \u00d7 n_energy]).",
       "base": "{root}/output/data/analysis/sensitivity/{config}/{name}/{folder}",
       "filename": "{config}_{name}_{energy}_Sensitivity_Templates.pkl",
       "full_path": "{root}/output/data/analysis/sensitivity/{config}/{name}/{folder}/{config}_{name}_{energy}_Sensitivity_Templates.pkl",
@@ -979,7 +1000,10 @@
       "written_by": "src/physics/signal/cutflow_plot.py (save_df)",
       "read_by": [],
       "in_pnfs": false,
-      "themes": ["signal", "publication"],
+      "themes": [
+        "signal",
+        "publication"
+      ],
       "publication_export": true
     }
   },

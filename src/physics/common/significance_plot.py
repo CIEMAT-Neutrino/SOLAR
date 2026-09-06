@@ -667,6 +667,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
         signal_day_raw = None
         signal_night_raw = None
+        _dn_day_by_spectrum = {}
         positive_count_values = []
         _dn_render = []
 
@@ -742,6 +743,26 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         significance_values = np.pad(
                             sig_source, (0, energy_len - bin_len), mode="constant", constant_values=np.nan,
                         )
+
+                # Night excess = Night - Day counts, per energy bin, at the stored exposure.
+                # Day is processed before Night in dn_component_specs, so its per-spectrum-type
+                # counts are already stashed by the time Night is reached.
+                metric_values = None
+                metric_error_values = None
+                if component_label == "Solar Day":
+                    _dn_day_by_spectrum[spectrum_type] = np.asarray(counts_per_energy, dtype=float)
+                elif component_label == "Solar Night":
+                    _day_counts = _dn_day_by_spectrum.get(spectrum_type)
+                    if _day_counts is not None:
+                        _night_counts = np.asarray(counts_per_energy, dtype=float)
+                        metric_values = _night_counts - _day_counts
+                        # Plain Poisson counting statistics on the actual predicted event
+                        # counts (not the MC-weighted sqrt(sum(weight^2)) CountsError):
+                        # sigma(N-D) = sqrt(N_events + D_events), where N_events/D_events are
+                        # the bin's predicted event counts (density * bin_width). Dividing by
+                        # bin_width converts back to the per-MeV density Metric is stored in.
+                        metric_error_values = np.sqrt(np.maximum(_night_counts + _day_counts, 0.0) / bin_width)
+
                 _counts_list.append({
                     "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "DayNight",
                     "Geometry": info["GEOMETRY"],
@@ -754,6 +775,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
                     "SignificanceUnit": r"\sigma",
                     "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
+                    "Metric": metric_values.tolist() if metric_values is not None else None,
+                    "MetricError": metric_error_values.tolist() if metric_error_values is not None else None,
+                    "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if metric_values is not None else None,
+                    "MetricLabel": "Night − Day excess" if metric_values is not None else None,
                 })
 
             if osc != "Truth":
@@ -1023,6 +1048,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         total_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
         signal_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
         background_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
+        # Unscaled raw counts + error-of-the-sum-in-quadrature accumulators, for the
+        # signal/background excess ratio (Metric) at both Raw and Smoothed spectrum types.
+        signal_raw_counts = np.zeros(_hep_n_bins, dtype=float)
+        background_raw_counts = np.zeros(_hep_n_bins, dtype=float)
+        signal_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
+        background_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
+        signal_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
+        background_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
         radiological_present = False
         positive_count_values = []
 
@@ -1043,8 +1076,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             total_smoothed_counts += cd["smoothed_counts"]
             if component == "hep":
                 signal_smoothed_counts += cd["smoothed_counts"]
+                signal_raw_counts += cd["counts"]
+                signal_raw_err2 += cd["errors"]**2
+                signal_smoothed_err2 += cd["smoothed_errors"]**2
             else:
                 background_smoothed_counts += cd["smoothed_counts"]
+                background_raw_counts += cd["counts"]
+                background_raw_err2 += cd["errors"]**2
+                background_smoothed_err2 += cd["smoothed_errors"]**2
 
             positive_count_values.extend(cd["raw_y"][cd["raw_y"] > 0])
             positive_count_values.extend(cd["smoothed_y"][cd["smoothed_y"] > 0])
@@ -1298,9 +1337,34 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": bm, "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": _hep_sig_unit.get(bm, "1"), "BinWidth": no_rebin_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
 
         tail_slice = slice(no_rebin_start, no_rebin_start + len(no_rebin_energy))
+
+        # Signal/background excess ratio (Metric = S/B), per energy bin, for both spectrum
+        # types. Ratio is scale- and bin-width-invariant (cancels in S/B), so it is computed
+        # directly from the unscaled accumulators without reapplying `scale` or dividing by
+        # `no_rebin_width`. Error propagated assuming independent Poisson-like S and B.
+        def _hep_excess_ratio(sig_tail, sig_err2_tail, bkg_tail, bkg_err2_tail):
+            bkg_safe = np.maximum(bkg_tail, 1e-12)
+            ratio = np.divide(sig_tail, bkg_safe, out=np.zeros_like(sig_tail, dtype=float), where=bkg_safe > 0)
+            sig_safe = np.maximum(sig_tail, 1e-12)
+            rel_var = np.where(sig_tail > 0, sig_err2_tail / sig_safe**2, 0.0) + np.where(bkg_tail > 0, bkg_err2_tail / bkg_safe**2, 0.0)
+            ratio_err = np.abs(ratio) * np.sqrt(rel_var)
+            return ratio, ratio_err
+
+        _hep_metric_raw, _hep_metric_raw_err = _hep_excess_ratio(
+            signal_raw_counts[tail_slice], signal_raw_err2[tail_slice],
+            background_raw_counts[tail_slice], background_raw_err2[tail_slice],
+        )
+        _hep_metric_smoothed, _hep_metric_smoothed_err = _hep_excess_ratio(
+            signal_smoothed_counts[tail_slice], signal_smoothed_err2[tail_slice],
+            background_smoothed_counts[tail_slice], background_smoothed_err2[tail_slice],
+        )
+
         for rd in _hep_render:
             _is_sig = rd["component"] == "hep"
             for spec_type, cnt_arr in [("Raw", rd["counts"]), ("Smoothed", rd["smoothed_counts"])]:
+                _metric_vals, _metric_err_vals = (
+                    (_hep_metric_raw, _hep_metric_raw_err) if spec_type == "Raw" else (_hep_metric_smoothed, _hep_metric_smoothed_err)
+                )
                 _counts_list.append({
                     "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "HEP",
                     "Geometry": info["GEOMETRY"],
@@ -1317,6 +1381,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     ),
                     "SignificanceUnit": r"\sigma \cdot MeV^{-1}" if _is_sig else None,
                     "SignificanceLabel": "Asimov TS density" if _is_sig else None,
+                    "Metric": _metric_vals.tolist() if _is_sig else None,
+                    "MetricError": _metric_err_vals.tolist() if _is_sig else None,
+                    "MetricUnit": "1" if _is_sig else None,
+                    "MetricLabel": "Signal / Background" if _is_sig else None,
                 })
 
         if args.pkl_label == "highest":
@@ -1416,6 +1484,31 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         positive_count_values = []
         _sens_render = []
 
+        # Nadir-dependent signal envelope, per energy bin: Day and Night are the two
+        # arithmetic-mean-over-nadir extremes of the Earth-matter (MSW) oscillation effect,
+        # already computed alongside the DUNE-exposure-weighted "Mean" in the same Rebin pkl.
+        # Metric = Mean signal (same value as the Solar (osc) row's own Counts); MetricError
+        # = half the Day/Night spread, so Metric ± MetricError brackets [min, max] achievable
+        # across nadir at that energy.
+        _sens_day_night_envelope = {}
+        for spec_type, count_key in [("Raw", "counts"), ("Smoothed", "smoothed_counts")]:
+            _bounds = []
+            for _mean_label in ("Day", "Night"):
+                _dn_comp_df = this_plot_df.loc[
+                    (this_plot_df["Component"] == "Solar")
+                    * (this_plot_df["Oscillation"] == "Osc")
+                    * (this_plot_df["Mean"] == _mean_label)
+                ].copy()
+                if _dn_comp_df.empty:
+                    _bounds = None
+                    break
+                _dn_cd = _process_component_df(_dn_comp_df, "Solar", smoothing_config, scale=scale)
+                _bounds.append(scale * _dn_cd[count_key] / bin_widths)
+            if _bounds is not None:
+                _lo = np.minimum(_bounds[0], _bounds[1])
+                _hi = np.maximum(_bounds[0], _bounds[1])
+                _sens_day_night_envelope[spec_type] = (_lo, _hi)
+
         for component, component_label, oscillation, mean_label, legend_group, legend_group_title, color in sens_component_specs:
             comp_df = this_plot_df.loc[
                 (this_plot_df["Component"] == component)
@@ -1444,6 +1537,12 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 ("Raw", cd["counts"], cd["errors"]),
                 ("Smoothed", cd["smoothed_counts"], cd["smoothed_errors"]),
             ]:
+                _metric_vals = _metric_err_vals = None
+                if component == "Solar" and spec_type in _sens_day_night_envelope:
+                    _mean_vals = scale * cnt_arr / bin_widths
+                    _lo, _hi = _sens_day_night_envelope[spec_type]
+                    _metric_vals = _mean_vals
+                    _metric_err_vals = (_hi - _lo) / 2.0
                 _counts_list.append({
                     "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "Sensitivity",
                     "Geometry": info["GEOMETRY"],
@@ -1456,6 +1555,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "Significance": None,
                     "SignificanceUnit": None,
                     "SignificanceLabel": None,
+                    "Metric": _metric_vals.tolist() if _metric_vals is not None else None,
+                    "MetricError": _metric_err_vals.tolist() if _metric_err_vals is not None else None,
+                    "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if _metric_vals is not None else None,
+                    "MetricLabel": "Nadir-averaged signal (± Day/Night envelope)" if _metric_vals is not None else None,
                 })
 
         s = scale * signal_smoothed_counts

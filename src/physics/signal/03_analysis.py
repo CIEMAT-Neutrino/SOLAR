@@ -50,7 +50,9 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
         )
         * (run["Reco"]["NHits"] > this_nhit - 1)
         * (run["Reco"]["AdjClNum"] < this_adjcl)
-        * (run["Reco"]["MatchedOpFlashPlane"] == _OP_PLANE_CUT)
+        * accepted_flash_planes(
+            run["Reco"]["MatchedOpFlashPlane"], str(root), args.membrane_veto
+        )
         * (run["Reco"]["MatchedOpFlashPE"] > 0)
         * (run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1)
     )
@@ -94,7 +96,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
             "NHits": 100 * np.sum(run["Reco"]["NHits"] > this_nhit - 1) / events,
             "AdjClNum": 100 * np.sum(run["Reco"]["AdjClNum"] < this_adjcl) / events,
             "MatchedOpFlashNHits": 100 * np.sum(run["Reco"]["MatchedOpFlashNHits"] > this_ophit - 1) / events,
-            "MatchedOpFlashPlane": 100 * np.sum(run["Reco"]["MatchedOpFlashPlane"] == _OP_PLANE_CUT) / events,
+            "MatchedOpFlashPlane": 100 * np.sum(accepted_flash_planes(run["Reco"]["MatchedOpFlashPlane"], str(root), args.membrane_veto)) / events,
             "MatchedOpFlashPE": 100 * np.sum(run["Reco"]["MatchedOpFlashPE"] > 0) / events,
             "Fiducial": 100 * np.sum(fiducialx & fiducialy & fiducialz) / events,
             "FiducialX": 100 * np.sum(fiducialx) / events,
@@ -156,6 +158,18 @@ parser.add_argument(
     type=float,
     default=None,
     help="Override oscillation Δm²₂₁ (eV²) for signal weights. Default: SOLAR_DM2 from physics.json. Ignored for 'file' backend.",
+)
+
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto additionally accepts membrane and endcap "
+        "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
+        "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
+    ),
 )
 
 args = parser.parse_args()

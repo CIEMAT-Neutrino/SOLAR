@@ -51,6 +51,18 @@ parser.add_argument(
     help="Oscillation weighting backend. 'file' uses pre-computed pkl files; 'prob3'/'nufast' compute on-the-fly.",
 )
 
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
+        "This is the default. --no-membrane_veto additionally accepts membrane and endcap "
+        "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
+        "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
+    ),
+)
+
 args = parser.parse_args()
 config = args.config
 name = args.signal
@@ -253,7 +265,9 @@ for config in configs:
 
         # Quality cuts: TPC-PDS matching — same as 03_analysis.py build_analysis_mask.
         _flash_mask = (
-            (_reco["MatchedOpFlashPlane"] == _OP_PLANE_CUT)
+            accepted_flash_planes(
+                _reco["MatchedOpFlashPlane"], str(root), args.membrane_veto
+            )
             & (_reco["MatchedOpFlashPE"] > 0)
         )
         _fid_mask = _geo_fid & _flash_mask

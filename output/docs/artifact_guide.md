@@ -88,10 +88,10 @@ def best_dn_eg(pkl_path):
 **Current artifact DN baselines:**
 | Config | Default Asimov | Default EG |
 |--------|---------------|------------|
-| cAPA   | 2.412         | 2.176      |
-| lAPA   | 0.915         | 0.447      |
-| vdN    | 0.505         | 0.361      |
-| vdS    | 0.972         | 0.748      |
+| cAPA   | 2.412         | 2.233      |
+| lAPA   | 0.908         | 0.441      |
+| vdN    | 0.500         | 0.357      |
+| vdS    | 1.075         | 0.832      |
 
 ---
 
@@ -190,9 +190,9 @@ def sensitivity_score(pkl_path, cfg):
 
 | Variant         | cAPA  | lAPA  | vdN   | vdS   | Notes                  |
 |-----------------|-------|-------|-------|-------|------------------------|
-| default         | 2.412 | 0.915 | 0.505 | 0.972 |                        |
-| oscpoint_solar  | 2.412 | 0.915 | 0.505 | 0.972 | Δ=0 (same dm²)         |
-| oscpoint_reactor| 1.307 | 0.509 | 0.270 | 0.512 | Δ<0 (reactor dm² confirmed) |
+| default         | 2.412 | 0.908 | 0.500 | 1.075 |                        |
+| oscpoint_solar  | 2.412 | 0.908 | 0.500 | 1.075 | Δ=0 (same dm²)         |
+| oscpoint_reactor| 1.307 | 0.509 | 0.270 | 0.551 | Δ<0 (reactor dm² physics, Sep 3 run) |
 | energy_spk      | 2.395 | 2.236 | 1.190 | 1.214 | SignalParticleK (all ✓)|
 | energy_maink    | 0.328 | 0.752 | 0.746 | 1.216 | MainK (all ✓)          |
 
