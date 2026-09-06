@@ -8,6 +8,7 @@ external/NuFast-Earth/*.o
 external/NuFast-Earth/src/*.o
 external/NuFast-Earth/python/*.o
 external/NuFast-Earth/python/*.so
+.wget*
 
 # Test fixtures (binary, regenerated from PNFS)
 tests/fixtures/*.pkl
@@ -177,6 +178,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+*.tmp*
 .env
 .venv
 env/
