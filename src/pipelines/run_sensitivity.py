@@ -540,6 +540,16 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--fit_background",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Fit background normalization as free parameter (LEGACY MODE). "
+        "Default is False (background fixed, signal amplitude only) for physically correct sensitivity. "
+        "Use --fit_background only for validation against legacy results."
+    ),
+)
+parser.add_argument(
     "--skip_best_cuts",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -759,6 +769,10 @@ def ignore_energy_window_args_for() -> List[str]:
 
 def skip_best_sigmas_args_for() -> List[str]:
     return ["--reference_study_label", ""] if args.skip_best_sigmas else []
+
+
+def fit_background_args_for() -> List[str]:
+    return ["--fit_background"] if args.fit_background else []
 
 
 def study_label_args_for() -> List[str]:
@@ -1273,7 +1287,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for(),
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for() + fit_background_args_for(),
     )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
