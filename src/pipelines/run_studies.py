@@ -79,8 +79,8 @@ parser.add_argument("--verbose",             choices=["quiet", "normal", "verbos
 parser.add_argument("--rewrite",        dest="rewrite",        action=argparse.BooleanOptionalAction, default=True, help="Overwrite existing pkl outputs (default: True)")
 parser.add_argument("--no-computation", dest="no_computation", action="store_true", help="Pass --no-computation to run_sensitivity.py (plots only, skip all computation)")
 parser.add_argument("--no-plot",        dest="no_plot",        action="store_true", help="Pass --no-plot to run_sensitivity.py (skip figure output)")
-parser.add_argument("--no-fit_background", dest="no_fit_background", action="store_true",
-                   help="Pass --no-fit_background to run_sensitivity.py (fix background normalization, only fit signal amplitude)")
+parser.add_argument("--fit_background", dest="fit_background", action="store_true",
+                   help="Pass --fit_background to run_sensitivity.py (LEGACY: fit background normalization as free parameter). Default is --no-fit_background.")
 parser.add_argument("--log_file",       dest="log_file",       default=None,        help="Tee all subprocess output to this file (appended); useful for post-run review")
 
 args = parser.parse_args()
@@ -257,7 +257,10 @@ def _run_variant(group: str, variant: StudyVariant) -> None:
         cmd.append("--ignore_energy_window")
     if skip_best_sigmas:
         cmd.append("--skip_best_sigmas")
-    if args.no_fit_background:
+    # Default to --no-fit_background (corrected fitting) unless --fit_background specified
+    if args.fit_background:
+        cmd.append("--fit_background")
+    else:
         cmd.append("--no-fit_background")
 
     cmd += variant.get("extra", [])

@@ -301,6 +301,34 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "extra": ["--no-membrane_veto"],
         },
     ],
+    # fit_background — Legacy validation: run with background normalization fitting enabled
+    # Default for all other studies is now --no-fit_background (corrected). This group
+    # validates that the legacy behavior still works and can be compared against the corrected.
+    "fit_background": [
+        {
+            "label": "fit_background_legacy",
+            "skip_rebin": True,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
+            "extra": ["--fit_background"],
+        },
+        # Uncertainty scans with legacy background fitting for comparison
+        {
+            "label": "fit_background_unc_sig6",
+            "skip_rebin": True,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
+            "analysis_override": ["Sensitivity"],
+            "extra": ["--fit_background", "--signal_uncertainty", "0.06"],
+        },
+        {
+            "label": "fit_background_unc_bkg6",
+            "skip_rebin": True,
+            "skip_best_cuts": True,
+            "skip_best_sigmas": True,
+            "extra": ["--fit_background", "--background_uncertainty", "0.06"],
+        },
+    ],
 }
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())

@@ -10,18 +10,19 @@ Computes chi² grids for oscillation parameter sensitivity analysis by:
 
 Fitting Behavior:
 -----------------
-By default (--fit_background, legacy), both signal amplitude (A_pred) and background
-normalization (A_bkg) are fitted. This can cause physically incorrect behavior where
-background uncertainty is absorbed into the fit, leading to contours that shrink instead
-of loosen with increased background uncertainty.
+Default behavior (--no-fit_background): Only signal amplitude (A_pred) is fitted, with
+background normalization FIXED at its nominal value. This produces physically meaningful
+sensitivity where contours properly loosen with increased background uncertainty.
 
-For physically meaningful sensitivity, use --no-fit_background to fix background
-normalization and only fit signal amplitude.
+Legacy mode (--fit_background): Both signal amplitude (A_pred) and background normalization
+(A_bkg) are fitted as free parameters. This can cause physically incorrect behavior where
+background uncertainty is absorbed into the fit, leading to contours that shrink instead
+of loosen with increased background uncertainty. Use this mode only for validation.
 
 Usage:
 ------
 python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA --signal marley
-python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA --signal marley --no-fit_background
+python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA --signal marley --fit_background  # legacy mode
 """
 
 import os
@@ -189,11 +190,11 @@ parser.add_argument(
 parser.add_argument(
     "--fit_background",
     action=argparse.BooleanOptionalAction,
-    default=True,
+    default=False,
     help=(
-        "Fit background normalization as a free parameter in the chi² fit. "
-        "Set to --no-fit_background to fix background normalization and only fit signal amplitude. "
-        "Default is True (legacy behavior). For physically meaningful sensitivity, use --no-fit_background."
+        "Fit background normalization as a free parameter in the chi² fit (LEGACY MODE). "
+        "Default is False (background normalization fixed, signal amplitude only). "
+        "Use --fit_background only for validation against legacy results."
     ),
 )
 
@@ -204,10 +205,10 @@ if args.debug:
 # Validate background uncertainty with fit_background combination
 if args.fit_background and args.background_uncertainty > 0.05:
     rprint(
-        "[yellow][WARNING][/yellow] High background uncertainty (σ={:.3f}) with fit_background=True "
-        "may produce physically incorrect results. Background normalization can absorb signal "
-        "mismatches, causing contours to shrink instead of loosen. For proper sensitivity, use: "
-        "--no-fit_background"
+        "[yellow][WARNING][/yellow] High background uncertainty (σ={:.3f}) with --fit_background "
+        "(legacy mode) may produce physically incorrect results. Background normalization can absorb "
+        "signal mismatches, causing contours to shrink instead of loosen. For proper sensitivity, "
+        "remove the --fit_background flag to use the default corrected fitting."
         .format(args.background_uncertainty)
     )
 

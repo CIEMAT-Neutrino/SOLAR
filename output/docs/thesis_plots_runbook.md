@@ -186,11 +186,12 @@ is refused.
 ### Fitting Methodology Notes
 
 **Background Normalization Fitting (--fit_background):**
-- By default (`--fit_background`, legacy behavior), both signal amplitude (`A_pred`) and background normalization (`A_bkg`) are fitted as free parameters in the sensitivity chi² calculation.
-- **Issue:** With `fit_background=True`, increased background uncertainty allows the fitter to adjust background normalization more freely, which can cause the background to **absorb signal mismatches**. This produces physically incorrect results where contours **shrink** (tighten) instead of **loosen** with increased background uncertainty.
-- **Fix:** Use `--no-fit_background` to fix background normalization at its nominal value and only fit signal amplitude. This produces physically meaningful sensitivity.
-- **New study variants:** `unc_bkg4_nobkgfit`, `unc_bkg6_nobkgfit`, `unc_sig6_nobkgfit` demonstrate the corrected behavior.
-- **Validation:** Running with `--fit_background=True` and `σ_bkg > 5%` will emit a warning recommending `--no-fit_background`.
+- **Default (--no-fit_background):** Background normalization is **fixed** at its nominal value; only signal amplitude (`A_pred`) is fitted. This produces physically meaningful sensitivity where contours **properly loosen** with increased background uncertainty.
+- **Legacy mode (--fit_background):** Both signal amplitude (`A_pred`) and background normalization (`A_bkg`) are fitted as free parameters. This can cause the background to **absorb signal mismatches**, producing physically incorrect results where contours **shrink** (tighten) instead of **loosen** with increased background uncertainty.
+- **Study variants with corrected fitting:** `unc_bkg4_nobkgfit`, `unc_bkg6_nobkgfit`, `unc_sig6_nobkgfit` demonstrate the proper behavior.
+- **Legacy validation studies:** The `fit_background` study group (`fit_background_legacy`, `fit_background_unc_sig6`, `fit_background_unc_bkg6`) runs with the legacy behavior for comparison and validation.
+- **Default change:** As of 2026-09-09, `run_studies.py` defaults to `--no-fit_background`. Use `--fit_background` to run the legacy mode.
+- **Validation:** Running `06_significance.py` with `--fit_background=True` and `σ_bkg > 5%` will emit a warning recommending `--no-fit_background`.
 
 **Contour Plotting (Δχ² vs Absolute χ²):**
 - As of 2026-09-09, contours are drawn using **Δχ² = χ² - χ²_min** (proper confidence levels) instead of absolute χ² values.
