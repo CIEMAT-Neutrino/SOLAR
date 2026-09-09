@@ -1,3 +1,29 @@
+"""
+06_significance.py — Sensitivity chi² grid computation
+====================================================
+
+Computes chi² grids for oscillation parameter sensitivity analysis by:
+1. Loading signal templates at each oscillation grid point
+2. For each test point, generating fake data = signal(test_point) + background
+3. Fitting the solar best-fit signal model to this fake data
+4. Recording chi² values for contour plotting
+
+Fitting Behavior:
+-----------------
+By default (--fit_background, legacy), both signal amplitude (A_pred) and background
+normalization (A_bkg) are fitted. This can cause physically incorrect behavior where
+background uncertainty is absorbed into the fit, leading to contours that shrink instead
+of loosen with increased background uncertainty.
+
+For physically meaningful sensitivity, use --no-fit_background to fix background
+normalization and only fit signal amplitude.
+
+Usage:
+------
+python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA --signal marley
+python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA --signal marley --no-fit_background
+"""
+
 import os
 import sys
 import re
@@ -174,6 +200,16 @@ parser.add_argument(
 args = parser.parse_args()
 if args.debug:
     rprint(args)
+
+# Validate background uncertainty with fit_background combination
+if args.fit_background and args.background_uncertainty > 0.05:
+    rprint(
+        "[yellow][WARNING][/yellow] High background uncertainty (σ={:.3f}) with fit_background=True "
+        "may produce physically incorrect results. Background normalization can absorb signal "
+        "mismatches, causing contours to shrink instead of loosen. For proper sensitivity, use: "
+        "--no-fit_background"
+        .format(args.background_uncertainty)
+    )
 
 _ctx = study_context(args)
 _study_suffix    = _ctx.study_suffix

@@ -38,6 +38,7 @@ from typing_extensions import TypedDict, NotRequired
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from lib import root, load_analysis_info
+from lib.study import ALL_GROUPS, STUDY_VARIANTS, StudyVariant
 from rich import print as rprint
 
 _analysis_info = load_analysis_info(str(root))
@@ -47,183 +48,12 @@ _background_components: List[str] = list(
 )
 
 PIPELINE_SCRIPT = "src/pipelines/run_sensitivity.py"
-
-
 # ---------------------------------------------------------------------------
-# Variant schema
+# Variant schema and registry
 # ---------------------------------------------------------------------------
+# StudyVariant / STUDY_VARIANTS / ALL_GROUPS live in lib/study.py so the plot
+# scripts can resolve `--study all` against the same table this orchestrator runs.
 
-class StudyVariant(TypedDict):
-    skip_rebin:           bool                         # reuse existing Rebin DataFrames
-    skip_best_cuts:       bool                         # skip 04_best_cuts.py phase
-    label:                NotRequired[Optional[str]]   # None → folder label used instead
-    folder:               NotRequired[Optional[str]]   # None → use --folder from CLI
-    fiducialization:      NotRequired[bool]            # default False (skip fiducialization)
-    energy_override:      NotRequired[Optional[str]]   # single energy replacing CLI --energy
-    analysis_override:    NotRequired[Optional[List[str]]]  # override --analysis for this variant only
-    ignore_energy_window: NotRequired[bool]            # pass --ignore_energy_window to run_sensitivity.py
-    skip_best_sigmas:     NotRequired[bool]            # pass --skip_best_sigmas (use nominal best cuts)
-    extra:                NotRequired[List[str]]       # verbatim flags appended last
-
-
-# ---------------------------------------------------------------------------
-# Study variant definitions
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# One-knob policy (applies to EVERY variant below)
-# ---------------------------------------------------------------------------
-# A study changes exactly one thing and holds the rest of the chain at nominal,
-# so its number is comparable to the default and reproducible run to run. We are
-# measuring what the knob does, not hunting the best achievable result per variant.
-#
-#   skip_best_cuts:   True   -> reuse the nominal cut optimisation (04_best_cuts.py)
-#   skip_best_sigmas: True   -> reuse the nominal smoothing sigmas
-#   fiducialization:  omitted -> reuse the nominal BestFiducials.json
-#                               (set True only when the variant's Fiducial_Scan.pkl
-#                                cannot exist yet, e.g. a new energy estimator)
-#   skip_rebin:       per variant -- False only when the variant changes the
-#                     histograms themselves (new energy estimator, charge cut,
-#                     different dm2, truth fiducialisation, membrane planes).
-#
-# Re-optimising cuts per variant would confound the knob with a re-tuned analysis:
-# a variant could look better purely because its cuts were re-fit, not because the
-# physics improved. Hold the cuts, move one knob, read the difference.
-#
-# NOTE: skip_best_cuts does NOT suppress 01_daynight.py / 01_hep.py -- each variant
-# always computes its own significance grid. See run_sensitivity.py --skip_best_cuts.
-STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
-    # 9.1.1 — histogram metric / smoothing comparison
-    # Raw vs Smoothed results are part of the default pipeline (--all_metrics).
-    # No separate study runs needed — extract directly from default output pkls.
-    # 9.1.2 — uncertainty impacts
-    "unc": [
-        # Signal uncertainty — HEP only (DayNight uses σ_sig=0 by statistical design)
-        # Scan bracketing the default 30%: tighter (20%) and looser (40%)
-        {"label": "unc_sig20", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.20"]},
-        {"label": "unc_sig40", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.40"]},
-        # Signal uncertainty — Sensitivity only; scan bracketing default unc_sig4
-        {"label": "unc_sig0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.00"]},
-        {"label": "unc_sig2",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.02"]},
-        {"label": "unc_sig6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06"]},
-        # Background uncertainty — DayNight + Sensitivity; effect enters when σ_bkg²·N_bkg > 1.
-        # σ_bkg² · N_bkg > 1  →  N_bkg > 1/σ_bkg²  (6%→278, 4%→625, 2%(default)→2500 events)
-        {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.00"]},
-        {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.04"]},
-        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.06"]},
-    ],
-    # 9.1.2 — nuisance parameter decomposition (Sensitivity only)
-    # Default profile is 'full' (sin²θ₁₃ + energy scale). Variants isolate each nuisance.
-    # DayNight Asimov is σ_bkg-invariant; no sin²θ₁₃/escale enter the LLR.
-    # HEP ProfileLikelihood handles its own nuisances inside the PL fit.
-    # skip_best_sigmas=True: cuts already optimised at 'full' profile; reuse them here.
-    "nuisance": [
-        {"label": "nuisance_nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "nominal"]},
-        {"label": "nuisance_sin13",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "marginalize_sin13"]},
-        {"label": "nuisance_escale",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "energy_scale"]},
-    ],
-    # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
-    # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
-    "energy": [
-        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True},
-        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True},
-    ],
-    # 9.2.2 — fiducialization (folder provides isolation; no study_label needed)
-    "fiduc": [
-        {"folder": "Nominal",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Reduced",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Truncated", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-    ],
-    # 9.2.3 — charge threshold scan
-    # AdjCl energy features are recomputed with AdjClCharge > Q before the Rebin pkl is
-    # written, so the energy axis itself reflects the charge cut — not just event selection.
-    # SelectedEnergy (= Energy + SelectedAdjClEnergy) is used as the analysis metric:
-    # it is a direct calorimetric sum that needs no BDT retraining.
-    "charge": [
-        {"label": "charge_Q50",  "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold",  "50"]},
-        {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "100"]},
-        {"label": "charge_Q500", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "500"]},
-    ],
-    # 9.2.4 — background model normalization (folder provides isolation)
-    "bkgmodel": [
-        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-    ],
-    # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
-    # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates
-    # Rebin pkls with the reactor dm2 point (skip_rebin=False) using a labeled filename to
-    # avoid overwriting the nominal solar-dm2 Rebin.  Background Rebin pkls are dm2-independent
-    # (backgrounds use Truth weights, not oscillation weights) and are reused unchanged.
-    # Sensitivity stage is skipped for both variants: the Score is invariant to Δm²₂₁ because
-    # the discrimination is always computed between solar and reactor dm² templates regardless
-    # of which point the signal MC was simulated at (Score(oscpoint_reactor) = Score(default)).
-    "oscpoint": [
-        {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
-        {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
-    ],
-    # 9.2.2 / 9.2.3 — truth x-fiducialisation vs reco flash-matching
-    # Runs full fiducialization with SignalParticleX/Y/Z instead of RecoX/Y/Z.
-    # Produces BestFiducials_fiduc_truth.json and labeled Rebin pkls.
-    # Background scans always use nominal coordinates (no truth position available).
-    "fiduc_truth": [
-        {
-            "label": "fiduc_truth",
-            "skip_rebin": False,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
-            "fiducialization": True,
-            "extra": ["--truth_fiducial"],
-        },
-    ],
-    # 9.2.5 — background gamma model: ClusterEnergy as direct calorimetric proxy
-    # Uses ClusterEnergy (sum of cluster hit charge × calibration) instead of BDT SolarEnergy.
-    # ClusterEnergy is already computed in the reco workflow; no new simulation needed.
-    # fiducialization=True required — Fiducial_Scan.pkl for ClusterEnergy may not exist.
-    "bkg_gamma": [
-        {
-            "label": "bkg_gamma",
-            "skip_rebin": False,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
-            "fiducialization": True,
-            "energy_override": "ClusterEnergy",
-            "ignore_energy_window": True,
-        },
-    ],
-    # 9.2.6 — membrane veto: which optical planes may supply the TPC-PDS match.
-    # QUALITY_CUTS.OPFLASH_PLANE == 0 keeps cathode (VD) / APA (HD) matches only, and
-    # stays the default everywhere. HD reports no other plane, so the veto is free
-    # there; VD also reports Membrane 1/2 and Front/EndCap (planes 1-4), which carry
-    # ~22% of its clusters and reconstruct the drift coordinate essentially as well as
-    # the cathode does (>94% of them within 10 cm of truth, against 96.8% for plane 0).
-    # This variant lifts the veto so the membrane-matched signal and background events
-    # enter the analysis, and measures what they are worth downstream.
-    # Only the "off" arm runs: the "on" arm is the default pipeline, so compare against
-    # the unlabeled default outputs. VD-only in practice -- an HD run reproduces the
-    # default bit for bit and is useful mainly as a null check.
-    #
-    # Everything except the event selection is held at nominal, so the comparison
-    # isolates the membrane events themselves rather than a re-tuned analysis:
-    #   fiducialization omitted (default False) -> reuse the nominal BestFiducials.json
-    #   skip_best_cuts=True                     -> reuse the nominal cut optimisation
-    #   skip_best_sigmas=True                   -> reuse the nominal smoothing sigmas
-    # skip_rebin stays False because the Rebin pkls are the one thing that must change:
-    # they carry the histograms, and admitting the membrane planes changes which signal
-    # and background events fill them. 03_analysis.py runs over every sample, signal and
-    # background alike, and the sensitivity background templates are built from those
-    # same Rebin pkls, so both sides pick the change up.
-    "membrane_veto": [
-        {
-            "label": "membrane_veto_off",
-            "skip_rebin": False,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
-            "extra": ["--no-membrane_veto"],
-        },
-    ],
-}
-
-ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +79,8 @@ parser.add_argument("--verbose",             choices=["quiet", "normal", "verbos
 parser.add_argument("--rewrite",        dest="rewrite",        action=argparse.BooleanOptionalAction, default=True, help="Overwrite existing pkl outputs (default: True)")
 parser.add_argument("--no-computation", dest="no_computation", action="store_true", help="Pass --no-computation to run_sensitivity.py (plots only, skip all computation)")
 parser.add_argument("--no-plot",        dest="no_plot",        action="store_true", help="Pass --no-plot to run_sensitivity.py (skip figure output)")
+parser.add_argument("--no-fit_background", dest="no_fit_background", action="store_true",
+                   help="Pass --no-fit_background to run_sensitivity.py (fix background normalization, only fit signal amplitude)")
 parser.add_argument("--log_file",       dest="log_file",       default=None,        help="Tee all subprocess output to this file (appended); useful for post-run review")
 
 args = parser.parse_args()
@@ -425,6 +257,8 @@ def _run_variant(group: str, variant: StudyVariant) -> None:
         cmd.append("--ignore_energy_window")
     if skip_best_sigmas:
         cmd.append("--skip_best_sigmas")
+    if args.no_fit_background:
+        cmd.append("--no-fit_background")
 
     cmd += variant.get("extra", [])
 

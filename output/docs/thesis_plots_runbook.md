@@ -1,43 +1,76 @@
 # Thesis Chapter 9 — Plot Commands
 
-*Generated 2026-08-26. Availability re-verified against PNFS 2026-09-06.*
+*Generated 2026-08-26. Availability and validity re-verified against PNFS 2026-09-07.*
 
-> ## ⚠ Do not plot study variants yet — rerun pending
+> ## Status: most variants are usable; a short list is not
 >
-> Two changes landed 2026-09-06 that invalidate most study numbers now on disk. Plotting
-> today produces figures that will not survive review.
+> An earlier revision of this file declared nearly everything invalid. That was too
+> pessimistic and its central piece of evidence was wrong. Corrected below.
 >
-> **1. Pipeline bug.** `--skip_best_cuts` gated `01_daynight.py` and `01_hep.py` as well as
-> `04_best_cuts.py`, contrary to its own help text. Any DayNight/HEP variant carrying that
-> flag never computed its own significance grid, and `seed_study_artifacts_from_nominal()`
-> then copied nominal Results onto the study's label — so it reported **nominal physics
-> under its own name** rather than failing. Both call sites removed; both scripts now always
-> run. Confirmed on disk: `unc_bkg` DayNight Asimov must equal the default (σ_bkg-invariant)
-> but does not — LAPA 0.915 vs 0.908, VDN 0.505 vs 0.500, VDS 0.972 vs 1.075, on grids still
-> dated Aug 19–22.
+> **The pipeline bug had a narrow window.** `--skip_best_cuts` wrongly gated `01_daynight.py`
+> and `01_hep.py` as well as `04_best_cuts.py`, so an affected variant never computed its own
+> significance grid. `git log -S` pins the window exactly: introduced in `9278bd6`
+> (2026-09-02 18:11), removed in `3043c09` (2026-09-06 12:42). **Only artifacts written inside
+> that window are suspect.** Anything older ran on code where both scripts always executed and
+> is physically genuine for its own knob. `seed_study_artifacts_from_nominal()` also skipped
+> when the destination already existed and used `copy2` (preserving mtime); no variant/default
+> mtime collisions survive, so its damage has been overwritten everywhere.
 >
-> **2. One-knob policy.** Every variant now holds cuts and smoothing sigmas at nominal
+> **The "unc_bkg is broken" evidence was a stale-default artifact.** The previous revision read
+> "unc_bkg DayNight Asimov must equal the default but does not — LAPA 0.915 vs 0.908, VDN 0.505
+> vs 0.500, VDS 0.972 vs 1.075". Those right-hand numbers were *old default* values. Verified
+> 2026-09-07 against current defaults, Asimov is **byte-identical** (same MD5) between default
+> and every `unc_bkg` variant on all four configs, and ErrorGaussian moves monotonically with
+> σ_bkg as required:
+>
+> | Config | Asimov[80] (default == all unc_bkg) | EG σ=0% | EG σ=2% (default) | EG σ=4% | EG σ=6% |
+> |---|---|---|---|---|---|
+> | CAPA | 2.41220 | 2.23438 | 2.23305 | 2.22910 | 2.22267 |
+> | LAPA | 0.91489 | 0.46805 | 0.44712 | 0.40854 | 0.37182 |
+> | VDN  | 0.50468 | 0.36527 | 0.36058 | 0.34937 | 0.33548 |
+> | VDS  | 0.97206 | 0.76389 | 0.74784 | 0.70565 | 0.66892 |
+>
+> **The vdS default was the real problem, and it is fixed.** The 2026-09-06 default production
+> ran CAPA → LAPA → VDN to completion and was interrupted partway through VDS, leaving VDS
+> DayNight/HEP dated 09-02 and Sensitivity dated 08-19 — older than their own Rebin inputs.
+> Every VDS delta was being measured against that wrong baseline. Re-run 2026-09-07:
+> DN Asimov[80] 1.07549 → **0.97206** (now matches its variants), HEP maxPL[80] **3.12824**
+> (matches `oscpoint_solar`, as construction requires), Sensitivity Score **0.586294**
+> (√Score 0.7657).
+>
+> **One-knob policy.** Every variant now holds cuts and smoothing sigmas at nominal
 > (`skip_best_cuts=True`, `skip_best_sigmas=True`) and changes exactly one thing. Variants
-> that previously re-optimised their own cuts (`energy`, `charge`, `fiduc_truth`,
-> `bkg_gamma`, `oscpoint_reactor`) produced valid physics but under a re-tuned analysis, so
-> their delta vs default confounds the knob with the re-fit.
->
-> Rerun commands: § Commands tab of the studies artifact, or `run_studies.py` per group.
-> Only `default`, `unc_sig0/2/6` and `nuisance_*` are unaffected — those three are
-> Sensitivity-only, where `--skip_best_cuts` correctly gated `04_best_cuts.py` alone.
+> predating that policy produced valid physics but under a re-tuned analysis, so their delta
+> confounds the knob with the re-fit — that is what `RERUN-B` marks below.
 
 `sync_solar_data.sh` default remote: `gae_out:/pc/choozdsk01/users/manthey/SOLAR`
 Study-variant pkls auto-route to `input/data/studies/` by the sync script.
 Plot scripts fall back `input/data/` → `input/data/studies/` transparently.
 `--study`/`--config`/`--name`/`--folder` are repeatable (one value per flag).
 
+> **The plot scripts below do not live in this repo.** `script_iterable_scan.py`,
+> `script_compare_contour.py` and `script_compare_pareto.py`, and the `input/data/` tree they
+> read, exist only in the downstream analysis checkout. Run `sync_solar_data.sh` first, then
+> these commands there. What this repo produces is the `*_Counts` / `*_Exposure` /
+> `*_Significance` pkls those commands consume.
+
 Datafile stem pattern (`--configs` + `--name` supplied separately):
 - `--datafile {Analysis}_{Type}` → `input/data/{config}_{name}_{Analysis}_{Type}.pkl`
 - `--datafile {Analysis}_{Type}_{study}` → `input/data/studies/{config}_{name}_{...}.pkl`
 
-**Presence legend:** `all 4` / `CAPA` etc. = configs with the pkl on PNFS 2026-09-06 · `—` = absent
-**Validity legend:** `OK` = usable now · `RERUN-A` = wrong numbers (grid never computed) ·
-`RERUN-B` = valid physics, re-tuned cuts, not comparable · `ORPHAN` = no longer in `STUDY_VARIANTS`
+## Status vocabulary
+
+| Status | Meaning |
+|---|---|
+| `READY` | outside the bug window, cuts at nominal, moves as its knob predicts — safe to cite |
+| `RERUN-A` | written inside 09-02 18:11 → 09-06 12:42; grid may never have been computed |
+| `RERUN-B` | valid physics but pre-dates the one-knob policy; cuts re-optimised, not comparable |
+| `BUG` | bit-exact degeneracy against nominal — needs a **code fix**, a re-run alone reproduces it |
+| `MISSING` | no pkl on disk |
+| `ORPHAN` | label no longer in `STUDY_VARIANTS`; cannot be regenerated — purge, do not plot |
+
+Labels come from `lib/study.py`; `all_study_labels(analysis=...)` is the authoritative list and
+filters by `analysis_override`. Do not maintain a copy of that list by hand.
 
 ## Config Shortnames
 
@@ -48,40 +81,121 @@ Datafile stem pattern (`--configs` + `--name` supplied separately):
 | `VDN` | `vd_1x8x14_3view_30deg_nominal` |
 | `VDS` | `vd_1x8x14_3view_30deg_shielded` |
 
-## Availability Matrix (truncated / marley — PNFS, 2026-09-06)
+## Availability Matrix (truncated / marley — PNFS, verified 2026-09-07)
 
-Presence is what is on disk. **Validity is the column that decides whether you may plot it.**
+Presence is what is on disk. **Validity decides whether you may plot it.**
 
 | Study variant | DayNight | HEP | Sensitivity | Validity |
 |---|---|---|---|---|
-| default | all 4 | all 4 | all 4 | **OK** |
-| unc_sig0/2/6 | — | — | all 4 | **OK** (Sensitivity-only) |
-| nuisance_nominal/sin13/escale | — | — | all 4 | **OK** (Sensitivity-only) |
-| unc_bkg0/4/6 | all 4 | all 4 | all 4 | `RERUN-A` grids dated Aug 19–22 |
-| unc_sig20/40 | — | all 4 | — | `RERUN-A` |
-| oscpoint_solar | all 4 | all 4 | all 4 | `RERUN-A` (= default by construction) |
-| fiduc (Nominal/Reduced/Truncated) | all 4 | all 4 | all 4 | `RERUN-A` |
-| bkgmodel (Nominal/Reduced) | all 4 | all 4 | all 4 | `RERUN-A` |
-| membrane_veto_off | VD only | VD only | VD only | `RERUN-A` |
-| oscpoint_reactor | all 4 | all 4 | — *(invariant, by design)* | `RERUN-B` |
-| energy_spk | all 4 | all 4 | CAPA | `RERUN-B` |
-| energy_maink | all 4 | all 4 | — | `RERUN-B` |
-| charge_Q50 | all 4 | all 4 | all 4 | `RERUN-B` |
-| charge_Q100 | all 4 | all 4 | CAPA | `RERUN-B` |
-| charge_Q500 | all 4 | all 4 | all 4 | `RERUN-B` |
-| fiduc_truth | all 4 | all 4 | all 4 | `RERUN-B` |
-| bkg_gamma | all 4 | all 4 | CAPA | `RERUN-B` |
-| metric_raw/smoothed | CAPA | CAPA | CAPA | stale (Aug 05); LAPA/VDN/VDS never run |
-| charge_Q200 | all 4 | all 4 | CAPA | `ORPHAN` — dropped from `STUDY_VARIANTS` |
+| default | all 4 | all 4 | all 4 | **READY** — VDS refreshed 09-07 |
+| oscpoint_solar | all 4 | all 4 | *(n/a)* | **READY** — identical to default **by construction** (`skip_rebin`, nominal Δm²₂₁). A null check, not a defect |
+| oscpoint_reactor | all 4 | all 4 | — *(invariant, by design)* | **READY** (09-06) |
+| unc_bkg0 | all 4 | all 4 | all 4 | **READY** (09-06) |
+| unc_bkg4 | all 4 | CAPA | all 4 | DN **READY**; HEP `RERUN-B` (08-28) |
+| unc_bkg6 | all 4 | CAPA | all 4 | DN **READY**; HEP `RERUN-B` + VDN/VDS values pathological |
+| unc_sig20/40 | — | all 4 | — | **READY** (09-06, post-fix) |
+| unc_sig0/2/6 | — | — | all 4 | **READY** (08-28, pre-window) |
+| charge_Q50 | all 4 | all 4 | CAPA/LAPA/VDN | **READY** (09-06); Sens VDS `RERUN-B` (08-26) |
+| energy_spk | all 4 | all 4 | CAPA | **READY** on CAPA/LAPA/VDN (09-06); VDS `RERUN-B` (09-01); Sens `MISSING` L/VN/VS |
+| bkg_gamma | all 4 | all 4 | — | DN/HEP **READY** CAPA/LAPA/VDN (09-06), VDS `RERUN-B` (08-31); **Sens `MISSING` on all 4, CAPA included** |
+| fiduc_truth | all 4 | all 4 | all 4 | DN/HEP **READY** CAPA/LAPA/VDN; VDS `RERUN-A` (09-04, in-window); **Sens `BUG`** |
+| nuisance_nominal | — | — | all 4 | **READY** (08-31) |
+| nuisance_sin13 | — | — | all 4 | **`BUG`** — bit-identical to `nuisance_nominal` on all 4 |
+| nuisance_escale | — | — | all 4 | **`BUG`** — bit-identical to `default` (full) on all 4 |
+| membrane_veto_off | VD only | VD only | VD only | **`BUG`** — bit-identical to nominal, VDN+VDS, all 3 analyses. `MISSING` on CAPA/LAPA |
+| charge_Q100 | all 4 | all 4 | CAPA* | `RERUN-B` (DN 08-23, HEP 08-29); Sens `MISSING` L/VN/VS, *CAPA pkl stores wrong energy |
+| charge_Q500 | all 4 | all 4 | all 4 | `RERUN-B` (DN 08-25/26, HEP 08-29) |
+| energy_maink | all 4 | all 4 | — | `RERUN-B` (09-01); DN CAPA grid degenerate (191 rows vs 1030); Sens `MISSING` all 4 |
+| fiduc (Nominal/Reduced/Truncated) | all 4 | all 4 | all 4 | Nominal **READY**; **Reduced `RERUN-A`** on LAPA/VDN/VDS (HEP 09-04 in-window) |
+| bkgmodel (Nominal/Reduced) | all 4 | all 4 | all 4 | same trees as `fiduc` — same verdicts |
+| unc_bkg10 · unc_bkg20 · unc_sig8 · charge_Q200 · metric_raw · metric_smoothed | — | — | — | **`ORPHAN`** — dropped from `STUDY_VARIANTS`, `Study` column absent, pending purge |
 
-**`charge_Q200` is orphaned.** The pkls exist (Aug 23) but the variant list now defines
-Q50/Q100/Q500 only, so Q200 cannot be regenerated and will never be policy-compliant. The
-plot commands below use **Q500** instead. Either re-add Q200 to `STUDY_VARIANTS` or drop it
-from the thesis figures — do not mix it with reruns.
+### The four `BUG` entries
 
-**`fiduc_truth` caveat.** VDN reports DN 0.500 / EG 0.357 / HEP 2.886 — identical to VDN
-default on all three. Possibly real, possibly a stage that silently fell back. Verify before
-using; VDS HEP (3.129) matches default too.
+Each is a *bit-exact* match to nominal where the knob must move the answer. `membrane_veto_off`
+was written 09-06 13:58/15:20, **after** the fix, so `01_daynight.py` genuinely ran and returned
+the nominal answer — this is not the `skip_best_cuts` bug. Suspicion falls on the labeled-Rebin
+path: `study.py` sets `template_sfx` when `not membrane_veto`, so DayNight should be reading
+`SolarEnergy_Rebin_membrane_veto_off`; getting nominal numbers means either those labeled Rebin
+pkls were never regenerated or the suffix is not reaching `01_daynight.py`. `fiduc_truth`'s
+Sensitivity leg is bit-identical to default on all 4 while its DayNight and HEP legs *do* move
+(CAPA DN 2.31781 vs 2.41220), so the truth-fiducial selection reaches DN/HEP but not the Score.
+**Re-running any of these without a code fix reproduces the same number.**
+
+### Orphans
+
+`unc_bkg10`, `unc_bkg20`, `unc_sig8`, `charge_Q200`, `metric_raw`, `metric_smoothed` are not in
+`STUDY_VARIANTS`, so they cannot be regenerated and will never be policy-compliant. All of them
+also lack a usable `Study` column, so `--select Study` silently drops them. A purge manifest is
+at `output/logs/orphan_purge_manifest_20260907_023811.txt` (337 files, 2.29 GB, including
+wrong-energy `SignalParticleK_*_unc_*` leftovers and pre-refactor Feb/May formats). Plot
+commands below use **Q500** in place of Q200.
+
+### Sensitivity contours — `Sensitivity_Contours.pkl`
+
+`06_significance.py` writes its Δχ² grids to a **centralised** tree keyed by energy, nuisance
+profile and uncertainty suffix, with **no study label anywhere in the path**:
+
+```
+SENSITIVITY/{cfg}/{name}/{folder}/{Energy}{template_suffix}/results/{profile}/signal_{X}%_and_background_{Y}%/
+```
+
+So the contours never appeared in the per-study output dirs that the plot scripts and
+`sync_solar_data.sh` read, and the older commands here pointed at `Sensitivity_Significance`,
+which carries **no `Label` / `Dm2` / `Values` columns** — those commands could not have worked.
+
+`tools/export_sensitivity_contours.py` resolves each study's source directory from
+`lib/study.py` STUDY_VARIANTS (so the mapping cannot drift) and publishes one tidy pkl per
+study, named to the sync stem convention:
+
+```
+output/data/analysis/sensitivity/{cfg}/{name}/{folder}/{study}/{cfg}_{name}_Sensitivity_Contours.pkl
+```
+
+Columns: `Config Name Analysis EnergyLabel Study Label Variable Dm2 Values Significance
+SignificanceUnit NuisanceProfile SignalUncertainty BackgroundUncertainty NHits AdjCl OpHits
+SourcePath` — i.e. exactly `--select Label Variable Study -y Dm2 -x Values -z Significance`,
+with `Label` ∈ {solar, react} and `Variable` ∈ {sin12, sin13}. Each row holds one full grid
+(Dm2 × Values), and `SourcePath` records which PNFS file it came from.
+
+Re-run it after any Sensitivity rerun, then sync `--datafile Sensitivity_Contours`:
+
+```bash
+python3 tools/export_sensitivity_contours.py                       # all configs, all studies
+python3 tools/export_sensitivity_contours.py --config hd_1x2x6_centralAPA --dry_run
+```
+
+**Coverage as of 2026-09-07** — 54 written: cAPA 15 studies, lAPA/vdN/vdS 13 each.
+Genuinely absent (templates exist, `06_significance.py` never ran, so there is nothing to
+export): `energy_maink` and `bkg_gamma` on all 4 configs, `membrane_veto_off` on all 4,
+`energy_spk` on vdN/vdS, `charge_Q100` on lAPA/vdN/vdS, and `charge_Q0` (not yet run).
+
+The export deliberately falls back **only** unlabeled → labeled when locating a source dir.
+Some historical runs wrote the energy dir labeled and some unlabeled for the same study
+(cAPA `SignalParticleK` vs lAPA `SignalParticleK_energy_spk`). Falling back the other way
+would read the *default* directory and publish default contours under a study label, so it
+is refused.
+
+### Known structural gaps (not staleness)
+
+- `Sensitivity_Exposure.pkl` can never exist — `exposure_plot.py` guards `args.analysis != "Sensitivity"`. Use `Sensitivity_Significance` instead.
+- `DayNight_Significance` / `HEP_Significance` are written to PNFS only, never mirrored locally, so C+E+S completeness is a PNFS-only target.
+- `Oscillogram.pkl` carries no `Study` column by design; per-study copies are indistinguishable duplicates of the default.
+- `charge_Q50` / `charge_Q100` Exposure pkls carry NaN `Study` rows merged in by `upsert_df_rows`; regenerate with `--rewrite`, not upsert.
+
+### Fitting Methodology Notes
+
+**Background Normalization Fitting (--fit_background):**
+- By default (`--fit_background`, legacy behavior), both signal amplitude (`A_pred`) and background normalization (`A_bkg`) are fitted as free parameters in the sensitivity chi² calculation.
+- **Issue:** With `fit_background=True`, increased background uncertainty allows the fitter to adjust background normalization more freely, which can cause the background to **absorb signal mismatches**. This produces physically incorrect results where contours **shrink** (tighten) instead of **loosen** with increased background uncertainty.
+- **Fix:** Use `--no-fit_background` to fix background normalization at its nominal value and only fit signal amplitude. This produces physically meaningful sensitivity.
+- **New study variants:** `unc_bkg4_nobkgfit`, `unc_bkg6_nobkgfit`, `unc_sig6_nobkgfit` demonstrate the corrected behavior.
+- **Validation:** Running with `--fit_background=True` and `σ_bkg > 5%` will emit a warning recommending `--no-fit_background`.
+
+**Contour Plotting (Δχ² vs Absolute χ²):**
+- As of 2026-09-09, contours are drawn using **Δχ² = χ² - χ²_min** (proper confidence levels) instead of absolute χ² values.
+- This ensures contours represent true confidence intervals (Δχ² = 1, 4, 9 for 1, 2, 3σ).
+- The `Chi2Min` field is now included in contour DataFrames for diagnostics.
 
 ---
 
@@ -100,8 +214,7 @@ sync_solar_data.sh \
   --name marley \
   --folder truncated \
   --study default \
-  --study metric_raw --study metric_smoothed \
-  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 --study unc_bkg10 --study unc_bkg20 \
+  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 \
   --study oscpoint_solar --study oscpoint_reactor \
   --study energy_maink --study energy_spk \
   --study charge_Q50 --study charge_Q100 --study charge_Q500 \
@@ -118,8 +231,7 @@ sync_solar_data.sh \
   --name marley \
   --folder truncated \
   --study default \
-  --study metric_raw --study metric_smoothed \
-  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 --study unc_bkg10 --study unc_bkg20 \
+  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 \
   --study unc_sig20 --study unc_sig40 \
   --study oscpoint_solar --study oscpoint_reactor \
   --study charge_Q50 --study charge_Q100 --study charge_Q500 \
@@ -135,9 +247,8 @@ sync_solar_data.sh \
   --name marley \
   --folder truncated \
   --study default \
-  --study metric_raw --study metric_smoothed \
-  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 --study unc_bkg10 --study unc_bkg20 \
-  --study unc_sig0 --study unc_sig2 --study unc_sig6 --study unc_sig8 \
+  --study unc_bkg0 --study unc_bkg4 --study unc_bkg6 \
+  --study unc_sig0 --study unc_sig2 --study unc_sig6 \
   --study oscpoint_solar --study oscpoint_reactor \
   --study energy_spk \
   --study charge_Q50 --study charge_Q100 --study charge_Q500 \
@@ -146,7 +257,8 @@ sync_solar_data.sh \
 # NOTE: sync AFTER the reruns land, not before — otherwise you pull the invalid grids
 # described at the top of this file into input/data/studies/ and plot them.
 # Still genuinely absent on PNFS (nothing to sync until the pipeline runs):
-#   metric_raw / metric_smoothed — LAPA, VDN, VDS (all three analyses)
+#   (metric_raw / metric_smoothed are ORPHANS — Raw vs Smoothed comes from the
+#    default pkl's SpectrumType rows, no separate study run exists or is needed)
 #   Sensitivity energy_maink     — all 4 configs
 #   Sensitivity energy_spk       — LAPA, VDN, VDS
 #   Sensitivity charge_Q100      — LAPA, VDN, VDS
@@ -172,7 +284,9 @@ NAME=marley
 ## §9.1.1 — Choice of Histogram Processing and Metric
 
 *Figures: `fig:study_metric_dn`, `fig:study_metric_hep`, `fig:study_metric_sens`*
-*[OK — all 4 configs for DN; CAPA+VDS confirmed for HEP/Sens]*
+**READY — all 4 configs.** Raw vs Smoothed comes from the `SpectrumType` rows of the
+**default** pkl (`--all_metrics` writes both); the old `metric_raw`/`metric_smoothed`
+study labels are ORPHANS and must not be used.
 
 ```bash
 # fig:study_metric_dn
@@ -180,7 +294,7 @@ python3 scripts/script_iterable_scan.py \
   --datafile DayNight_Exposure \
   --configs $ALL --name $NAME \
   -i Study -y Significance -x Exposure \
-  --select Study -s default metric_raw metric_smoothed \
+  --select SpectrumType -s Raw Smoothed --select Study -s default \
   --labelx 'Exposure (kt$\cdot$yr)' --labely 'Significance ($\sigma$)' \
   --rangex 0 20 --rangey 0 6 --horizontal 3 \
   --output fig_study_metric_dn
@@ -190,14 +304,14 @@ python3 scripts/script_iterable_scan.py \
   --datafile HEP_Exposure \
   --configs $ALL --name $NAME \
   -i Study -y Significance -x Exposure \
-  --select Study -s default metric_raw metric_smoothed \
+  --select SpectrumType -s Raw Smoothed --select Study -s default \
   --labelx 'Exposure (kt$\cdot$yr)' --labely 'Significance ($\sigma$)' \
   --rangex 0 20 --rangey 0 12 --horizontal 3 \
   --output fig_study_metric_hep
 
 # fig:study_metric_sens  (contour: CAPA only — 4-config overlay too cluttered)
 python3 scripts/script_compare_contour.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   --select Label Variable Study -s solar sin12 default \
   -y Dm2 -x Values -z Significance \
@@ -212,7 +326,10 @@ python3 scripts/script_compare_contour.py \
 
 *Figures: `fig:study_uncertainties_dn`, `fig:study_uncertainties_hep`, `fig:study_uncertainties_sens`*
 *Plot: significance at 20 kt·yr vs $\sigma^\mathrm{c}_\mathrm{rel}$ (point scan at fixed exposure)*
-*[OK — all 4 configs for DN; CAPA+VDS confirmed for HEP/Sens]*
+**DayNight READY — all 4 configs** (Asimov invariance and EG monotonicity verified 09-07).
+**HEP: only `unc_bkg0` is READY**; `unc_bkg4`/`unc_bkg6` are `RERUN-B` (08-28) and the
+VDN/VDS values are pathological (VDN maxPL[80] jumps 2.88→7.02). Sensitivity `unc_sig0/2/6`
+READY. Scan is σ_bkg ∈ {0, 2 (default), 4, 6}% — `unc_bkg10/20` are ORPHANS, now removed.
 
 ```bash
 # fig:study_uncertainties_dn
@@ -220,7 +337,7 @@ python3 scripts/script_iterable_scan.py \
   --datafile DayNight_Exposure \
   --configs $ALL --name $NAME \
   -i Study -y Significance -x Exposure \
-  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 unc_bkg10 unc_bkg20 \
+  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 \
   --fixed_x Exposure 20.0 \
   --labelx '$\sigma^c_\mathrm{rel}$ (%)' \
   --labely 'Significance at 20 kt$\cdot$yr ($\sigma$)' \
@@ -231,7 +348,7 @@ python3 scripts/script_iterable_scan.py \
   --datafile HEP_Exposure \
   --configs $ALL --name $NAME \
   -i Study -y Significance -x Exposure \
-  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 unc_bkg10 unc_bkg20 \
+  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 \
   --fixed_x Exposure 20.0 \
   --labelx '$\sigma^c_\mathrm{rel}$ (%)' \
   --labely 'Significance at 20 kt$\cdot$yr ($\sigma$)' \
@@ -239,10 +356,10 @@ python3 scripts/script_iterable_scan.py \
 
 # fig:study_uncertainties_sens  (contour: CAPA only)
 python3 scripts/script_iterable_scan.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   -i Study -y Score -x Exposure \
-  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 unc_bkg10 unc_bkg20 \
+  --select Study -s default unc_bkg0 unc_bkg4 unc_bkg6 \
   --fixed_x Exposure 20.0 \
   --labelx '$\sigma^c_\mathrm{rel}$ (%)' \
   --labely 'Sensitivity Score at 20 kt$\cdot$yr' \
@@ -252,7 +369,10 @@ python3 scripts/script_iterable_scan.py \
 ## §9.1.3 — Impact of Oscillation Parameter Choice
 
 *Figures: `fig:study_oscillation_dn`, `fig:study_oscillation_hep`, `fig:study_oscillation_sens`*
-*[OK — all 4 configs]*
+**READY — all 4 configs** (09-06). `oscpoint_solar` is identical to the default **by
+construction** (`skip_rebin`, nominal Δm²₂₁ = 6e-5) — plot it as the null check, not as a
+separate physics point. Sensitivity `oscpoint_reactor` is absent **by design**: the Score is
+invariant to Δm²₂₁ because discrimination always uses both templates. Do not chase it.
 
 ```bash
 # fig:study_oscillation_dn
@@ -277,7 +397,7 @@ python3 scripts/script_iterable_scan.py \
 
 # fig:study_oscillation_sens  (contour: CAPA only)
 python3 scripts/script_compare_contour.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   --select Label Variable Study -s solar sin12 default \
   -y Dm2 -x Values -z Significance \
@@ -285,16 +405,33 @@ python3 scripts/script_compare_contour.py \
   --background_smoothing_sigma 3 --contour_linestyles dotted dashed solid \
   --point 0.303 6.0e-5 --point_label 'Solar' \
   --point 0.303 7.54e-5 --point_label 'Reactor' \
-  --overlay_datafile Sensitivity_Significance_oscpoint_solar \
-  --overlay_datafile Sensitivity_Significance_oscpoint_reactor \
+  --overlay_datafile Sensitivity_Contours_oscpoint_solar \
+  --overlay_datafile Sensitivity_Contours_oscpoint_reactor \
   --output fig_study_oscillation_sens
 ```
 
 ## §9.2.1 — Impact of Energy Resolution
 
 *Figures: `fig:study_energy_resolution_dn`, `fig:study_energy_resolution_hep`, `fig:study_energy_resolution_sens`*
-*Status: DN + HEP present all 4 configs · Sensitivity CAPA only (spk), maink absent*
-*Validity: `RERUN-B` — ran with re-optimised cuts. Rerun `--study energy` before plotting.*
+**cAPA `energy_maink`: re-run and verified 2026-09-07 — values reproduce exactly.**
+Re-run under the one-knob policy gave DN Asimov[80] **0.32809** (Δ −2.084 vs default 2.41220)
+and HEP maxPL[80] **11.92088** (Δ +4.296), identical to the pre-rerun numbers. So the
+`RERUN-B` concern does not apply here either — but read the next paragraph before using it.
+
+> **The MainK cut grid is structurally sparse, and a re-run does not change that.** Its
+> DayNight grid holds **191 rows against the default's 1030** (HEP: 343 vs 1466), and the
+> re-run reproduced 191 exactly. This was previously suspected to be a truncated/degenerate
+> grid that a re-run would repair; it is not. MainK simply yields far fewer viable cut
+> combinations. The consequence for the thesis figure: `energy_maink`'s "max across cuts" is
+> a maximum over a **5× smaller grid** than the default's, so its Δ is not a like-for-like
+> comparison and the −2.08σ should not be read as a pure energy-estimator effect. Its two
+> `fastest_sigma2/3` JSONs are empty (2 bytes) for the same reason — no cut reaches 2σ.
+
+*Status: DN + HEP present all 4 configs · Sensitivity: `energy_spk` cAPA only, `energy_maink`
+absent on all 4 (templates exist under `MainK_energy_maink/` but `06_significance.py` never
+ran, so there are no contours to export).*
+*Validity: `energy_spk` cAPA/lAPA/vdN **READY**, vdS `RERUN-B`; `energy_maink` cAPA verified,
+lAPA/vdN/vdS still `RERUN-B`.*
 
 ```bash
 # fig:study_energy_resolution_dn  [present all 4 — RERUN-B]
@@ -320,14 +457,14 @@ python3 scripts/script_iterable_scan.py \
 # fig:study_energy_resolution_sens  [BLOCKED — Sensitivity energy_maink absent all configs,
 #   energy_spk CAPA only. Needs 04_best_cuts.py for the energy group.]
 # python3 scripts/script_compare_contour.py \
-#   --datafile Sensitivity_Significance \
+#   --datafile Sensitivity_Contours \
 #   --configs $CAPA --name $NAME \
 #   --select Label Variable Study -s solar sin12 default \
 #   -y Dm2 -x Values -z Significance \
 #   --labelx '$\sin^2\theta_{12}$' --labely '$\Delta m^2_{21}$ (eV$^2$)' \
 #   --background_smoothing_sigma 3 --contour_linestyles dotted dashed solid \
-#   --overlay_datafile Sensitivity_Significance_energy_maink \
-#   --overlay_datafile Sensitivity_Significance_energy_spk \
+#   --overlay_datafile Sensitivity_Contours_energy_maink \
+#   --overlay_datafile Sensitivity_Contours_energy_spk \
 #   --output fig_study_energy_resolution_sens
 ```
 
@@ -366,13 +503,13 @@ python3 scripts/script_iterable_scan.py \
 
 # fig:study_fiducialisation_sens  (contour: CAPA only)
 python3 scripts/script_compare_contour.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   --select Label Variable Study -s solar sin12 default \
   -y Dm2 -x Values -z Significance \
   --labelx '$\sin^2\theta_{12}$' --labely '$\Delta m^2_{21}$ (eV$^2$)' \
   --background_smoothing_sigma 3 --contour_linestyles dotted dashed solid \
-  --overlay_datafile Sensitivity_Significance_fiduc_truth \
+  --overlay_datafile Sensitivity_Contours_fiduc_truth \
   --output fig_study_fiducialisation_sens
 ```
 
@@ -380,7 +517,35 @@ python3 scripts/script_compare_contour.py \
 
 *Figures: `fig:study_charge_threshold_dn`, `fig:study_charge_threshold_hep`, `fig:study_charge_threshold_sens`*
 *Plot: significance at 20 kt·yr vs $N^\mathrm{min}_\mathrm{hits}$ threshold*
-*[OK — all 4 configs]*
+**cAPA: READY and settled 2026-09-07.** All three variants re-run under the one-knob policy
+(cuts and sigmas held at nominal) and all three **reproduced their pre-rerun values exactly** —
+so the `RERUN-B` concern (re-tuned cuts confounding the knob) did not materialise here, and the
+non-monotonic Q behaviour is real physics rather than a fitting artifact.
+
+| Variant | DN Asimov | Δ DN | HEP PL | Δ HEP | Results written |
+|---|---|---|---|---|---|
+| default (no charge cut) | 2.41220 | — | 7.62441 | — | 09-06 18:32 |
+| charge_Q50 | 1.58381 | −0.828 | 6.66128 | −0.963 | 09-06 13:59 |
+| charge_Q100 | 1.36458 | −1.048 | 6.23669 | −1.388 | 09-07 11:28 |
+| charge_Q500 | 1.63178 | −0.780 | 6.46938 | −1.155 | 09-07 12:38 |
+
+Plot pkls regenerated clean 09-07 15:44–15:52 (Counts 10 rows, Exposure DN 10 / HEP 2, single
+`Study` value, zero NaN). Provenance: `run_studies.py --study charge --variant charge_Q100
+charge_Q500 --config hd_1x2x6_centralAPA --folder Truncated --rewrite`, then
+`significance_plot.py` / `exposure_plot.py` per variant with `--charge_threshold`.
+
+**lAPA / vdN / vdS still pending** — same rerun needed. Sensitivity leg: `Q50` cAPA/lAPA/vdN
+only, `Q100` cAPA-only, `Q500` absent everywhere.
+
+> **Two code bugs were fixed to make this work** (2026-09-07). `significance_plot.py` had no
+> `--charge_threshold` flag, so `study_context()` never marked charge runs as template variants
+> and looked for *unlabeled* Rebin pkls; and its three `load_available_background_dataframes()`
+> call sites never passed `study_label`, though the loader has always accepted it. Together
+> these made every charge variant fail with `RuntimeError: Essential background 'gamma' missing`
+> and produce **no Counts pkl at all** — which is why the inventory found charge variants to be
+> Exposure-only. `run_sensitivity.py` also now threads `charge_threshold_only_args_for()` into
+> all four `significance_plot.py` invocations. This affected every template variant
+> (`charge_*`, and any study where `template_suffix` is set).
 
 ```bash
 # fig:study_charge_threshold_dn  [OK — all 4 configs]
@@ -407,7 +572,7 @@ python3 scripts/script_iterable_scan.py \
 
 # fig:study_charge_threshold_sens  (contour: CAPA only)
 python3 scripts/script_iterable_scan.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   -i Study -y Score -x Exposure \
   --select Study -s default charge_Q50 charge_Q100 charge_Q500 \
@@ -449,13 +614,13 @@ python3 scripts/script_iterable_scan.py \
 # The Sensitivity stage errored on 2026-09-04: "No background templates found in
 # .../SENSITIVITY/{cfg}/background/truncated/ClusterEnergy". Build those templates first.
 python3 scripts/script_compare_contour.py \
-  --datafile Sensitivity_Significance \
+  --datafile Sensitivity_Contours \
   --configs $CAPA --name $NAME \
   --select Label Variable Study -s solar sin12 default \
   -y Dm2 -x Values -z Significance \
   --labelx '$\sin^2\theta_{12}$' --labely '$\Delta m^2_{21}$ (eV$^2$)' \
   --background_smoothing_sigma 3 --contour_linestyles dotted dashed solid \
-  --overlay_datafile Sensitivity_Significance_bkg_gamma \
+  --overlay_datafile Sensitivity_Contours_bkg_gamma \
   --output fig_study_improved_bkg_sens
 ```
 
@@ -473,8 +638,7 @@ mark in the matrix. Build it last, after all reruns land. Baselines below predat
 #   --datafile DayNight_Exposure HEP_Exposure Sensitivity_Significance \
 #   --configs $CAPA --name $NAME \
 #   --select Study -s default \
-#              metric_raw metric_smoothed \
-#              unc_bkg0 unc_bkg4 unc_bkg6 \
+# #              unc_bkg0 unc_bkg4 unc_bkg6 \
 #              oscpoint_solar oscpoint_reactor \
 #              energy_spk energy_maink \
 #              charge_Q50 charge_Q100 charge_Q500 \
