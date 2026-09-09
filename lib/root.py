@@ -105,10 +105,15 @@ class Sensitivity_Fitter:
 
     Args:
         obs: observed (false-data) data histogram.
-        solar: solar data histogram.
-        bkg: bkg data histogram.
+        pred: predicted signal histogram.
+        bkg: background data histogram.
         SigmaPred (float): uncertainty on the predicted neutrino flux (default: 0.04).
         SigmaBkg (float): uncertainty on the background flux (default: 0.02).
+        bb_mask (array): boolean mask for bins to include in fit (default: None).
+        fit_background (bool): if True, fit background normalization as free parameter.
+            If False, background is fixed and only signal amplitude is fitted.
+            For physically meaningful sensitivity, use fit_background=False to prevent
+            the background from absorbing signal mismatches (default: True for legacy).
 
     Returns:
         chisq (float): chi-squared value.
@@ -116,13 +121,14 @@ class Sensitivity_Fitter:
         A_bkg (float): best-fit value of the background amplitude.
     """
 
-    def __init__(self, obs, pred, bkg, SigmaPred=0.04, SigmaBkg=0.02, bb_mask=None):
+    def __init__(self, obs, pred, bkg, SigmaPred=0.04, SigmaBkg=0.02, bb_mask=None, fit_background=True):
         self.fObs = obs
         self.fPred = pred
         self.fBkg = bkg
         self.fSigmaPred = SigmaPred
         self.fSigmaBkg = SigmaBkg
         self.fMask = bb_mask  # boolean array: True = include bin in fit
+        self.fit_background = fit_background  # If False, A_bkg is fixed at 0
 
     def ROOTOperator(self, A_pred, A_bkg):
         chisq = 0
@@ -130,7 +136,7 @@ class Sensitivity_Fitter:
             for j in range(1, self.fObs.GetNbinsY() + 1):
                 if self.fMask is not None and not self.fMask[i - 1, j - 1]:
                     continue
-                N_bkg = (1 + A_bkg) * self.fBkg.GetBinContent(i, j)
+                N_bkg = (1 + A_bkg) * self.fBkg.GetBinContent(i, j) if self.fit_background else self.fBkg.GetBinContent(i, j)
                 N_pred = (1 + A_pred) * self.fPred.GetBinContent(i, j)
                 e = N_bkg + N_pred
                 o = self.fObs.GetBinContent(i, j)
@@ -140,11 +146,16 @@ class Sensitivity_Fitter:
                     chisq += 2 * e
                 else:
                     chisq += 2 * (e - o + o * np.log(o / e))
-        chisq += ((A_pred) / self.fSigmaPred) ** 2 + ((A_bkg) / self.fSigmaBkg) ** 2
+        chisq += ((A_pred) / self.fSigmaPred) ** 2
+        if self.fit_background:
+            chisq += ((A_bkg) / self.fSigmaBkg) ** 2
         return chisq
 
     def NumpyOperator(self, A_pred, A_bkg):
-        e = (1 + A_bkg) * self.fBkg + (1 + A_pred) * self.fPred
+        if self.fit_background:
+            e = (1 + A_bkg) * self.fBkg + (1 + A_pred) * self.fPred
+        else:
+            e = self.fBkg + (1 + A_pred) * self.fPred
         o = self.fObs
         chisq = np.zeros_like(o, dtype=float)
 
@@ -161,12 +172,12 @@ class Sensitivity_Fitter:
         )
 
         chisq_sum = float(chisq.sum())
-        if self.fSigmaBkg > 0 and self.fSigmaPred > 0:
-            chisq_sum += ((A_pred) / self.fSigmaPred) ** 2 + ((A_bkg) / self.fSigmaBkg) ** 2
-        elif self.fSigmaBkg > 0 and self.fSigmaPred <= 0:
-            chisq_sum += ((A_bkg) / self.fSigmaBkg) ** 2
-        elif self.fSigmaPred > 0 and self.fSigmaBkg <= 0:
+        # Always add signal pull term
+        if self.fSigmaPred > 0:
             chisq_sum += ((A_pred) / self.fSigmaPred) ** 2
+        # Add background pull term only if fitting background
+        if self.fit_background and self.fSigmaBkg > 0:
+            chisq_sum += ((A_bkg) / self.fSigmaBkg) ** 2
         return chisq_sum
 
     def _profile_a_bkg(self, A_pred):
@@ -182,50 +193,77 @@ class Sensitivity_Fitter:
 
     def Fit(self, initial_A_pred, initial_A_bkg, verbose=0, debug=False, profile_bkg=False):
         if type(self.fObs) == ROOT.TH2F:
-            m = Minuit(self.ROOTOperator, A_pred=initial_A_pred, A_bkg=initial_A_bkg)
-            m.limits["A_pred"] = (
-                initial_A_pred - 10 * self.fSigmaPred,
-                initial_A_pred + 10 * self.fSigmaPred,
-            )
-            m.limits["A_bkg"] = (
-                initial_A_bkg - 10 * self.fSigmaBkg,
-                initial_A_bkg + 10 * self.fSigmaBkg,
-            )
-            m.migrad()
-            return m.fval, m.values["A_pred"], m.values["A_bkg"]
-
-        elif type(self.fObs) == np.ndarray:
-            if profile_bkg:
-                # 1D Minuit: profile A_bkg analytically at each A_pred step
-                def _profiled(A_pred):
-                    _, fval = self._profile_a_bkg(A_pred)
-                    return fval
-
-                m = Minuit(_profiled, A_pred=initial_A_pred)
+            if self.fit_background:
+                m = Minuit(self.ROOTOperator, A_pred=initial_A_pred, A_bkg=initial_A_bkg)
+                m.limits["A_pred"] = (
+                    initial_A_pred - 10 * self.fSigmaPred,
+                    initial_A_pred + 10 * self.fSigmaPred,
+                )
+                m.limits["A_bkg"] = (
+                    initial_A_bkg - 10 * self.fSigmaBkg,
+                    initial_A_bkg + 10 * self.fSigmaBkg,
+                )
+                m.migrad()
+                return m.fval, m.values["A_pred"], m.values["A_bkg"]
+            else:
+                # Fix A_bkg at 0, fit only A_pred
+                def _root_operator_fixed(A_pred):
+                    return self.ROOTOperator(A_pred, 0.0)
+                m = Minuit(_root_operator_fixed, A_pred=initial_A_pred)
                 m.limits["A_pred"] = (
                     initial_A_pred - 10 * self.fSigmaPred,
                     initial_A_pred + 10 * self.fSigmaPred,
                 )
                 m.migrad()
-                A_pred = m.values["A_pred"]
-                A_bkg, _ = self._profile_a_bkg(A_pred)
-                return m.fval, A_pred, A_bkg
+                return m.fval, m.values["A_pred"], 0.0
+
+        elif type(self.fObs) == np.ndarray:
+            if self.fit_background:
+                if profile_bkg:
+                    # 1D Minuit: profile A_bkg analytically at each A_pred step
+                    def _profiled(A_pred):
+                        _, fval = self._profile_a_bkg(A_pred)
+                        return fval
+
+                    m = Minuit(_profiled, A_pred=initial_A_pred)
+                    m.limits["A_pred"] = (
+                        initial_A_pred - 10 * self.fSigmaPred,
+                        initial_A_pred + 10 * self.fSigmaPred,
+                    )
+                    m.migrad()
+                    A_pred = m.values["A_pred"]
+                    A_bkg, _ = self._profile_a_bkg(A_pred)
+                    return m.fval, A_pred, A_bkg
+                else:
+                    # 2D scipy L-BFGS-B: joint optimization, no Minuit
+                    result = minimize(
+                        lambda v: self.NumpyOperator(v[0], v[1]),
+                        x0=[initial_A_pred, initial_A_bkg],
+                        bounds=[
+                            (initial_A_pred - 10 * self.fSigmaPred,
+                             initial_A_pred + 10 * self.fSigmaPred),
+                            (initial_A_bkg - 10 * self.fSigmaBkg,
+                             initial_A_bkg + 10 * self.fSigmaBkg),
+                        ],
+                        method="L-BFGS-B",
+                    )
+                    if not result.success and debug:
+                        rprint(f"[yellow][WARNING][/yellow] L-BFGS-B did not converge: {result.message}")
+                    return result.fun, float(result.x[0]), float(result.x[1])
             else:
-                # 2D scipy L-BFGS-B: joint optimization, no Minuit
+                # Fit only A_pred, keep A_bkg fixed at 0
                 result = minimize(
-                    lambda v: self.NumpyOperator(v[0], v[1]),
-                    x0=[initial_A_pred, initial_A_bkg],
+                    lambda v: self.NumpyOperator(v[0], 0.0),  # A_bkg fixed at 0
+                    x0=[initial_A_pred],
                     bounds=[
                         (initial_A_pred - 10 * self.fSigmaPred,
                          initial_A_pred + 10 * self.fSigmaPred),
-                        (initial_A_bkg - 10 * self.fSigmaBkg,
-                         initial_A_bkg + 10 * self.fSigmaBkg),
                     ],
                     method="L-BFGS-B",
                 )
                 if not result.success and debug:
                     rprint(f"[yellow][WARNING][/yellow] L-BFGS-B did not converge: {result.message}")
-                return result.fun, float(result.x[0]), float(result.x[1])
+                return result.fun, float(result.x[0]), 0.0
 
         else:
             rprint(f"[red][ERROR] Unknown input type[/red]")

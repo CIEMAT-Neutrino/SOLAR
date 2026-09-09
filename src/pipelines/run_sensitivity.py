@@ -32,6 +32,7 @@ Oscillogram (per analysis, runs even with --no-computation, skipped with --no-pl
 
 Post-analysis (all samples):
   P3  best cuts        signal/03_analysis.py --best_cuts_only  saves AnalysisMask at best cuts
+  P4  cutflow          signal/cutflow_plot.py  successive cut spectra + Interacting truth row
 
 Presentations (optional, --no-plot to skip):
   Presentation scripts per analysis (src/tools/presentations/)
@@ -268,6 +269,23 @@ parser.add_argument(
     type=float,
     help="The exposure for the analysis in years. When not set, each script uses its own default (significance_plot.py reads EVALUATION_EXPOSURE_YEARS from config).",
     default=None,
+)
+parser.add_argument(
+    "--secondary_exposure",
+    "--secondary-exposure",
+    type=float,
+    default=10.0,
+    help=(
+        "Also run the complete pipeline at this secondary exposure and isolate its outputs "
+        "under a derived study label (default: 10 years). Pass --no-secondary-exposure to disable."
+    ),
+)
+parser.add_argument(
+    "--no-secondary-exposure",
+    dest="secondary_exposure",
+    action="store_const",
+    const=None,
+    help="Disable the automatic secondary exposure pass.",
 )
 
 parser.add_argument(
@@ -540,7 +558,7 @@ parser.add_argument(
     help=(
         "Accept only cathode/APA optical matches (QUALITY_CUTS.OPFLASH_PLANE, plane 0). "
         "This is the default. --no-membrane_veto also accepts membrane and endcap matches "
-        "(VD planes 1-4, ~22% of VD clusters; HD produces none, so it is a no-op there). "
+        "(VD planes 1-4, ~22%% of VD clusters; HD produces none, so it is a no-op there). "
         "Forwarded to the fiducialization, analysis, weighted and signal-template stages. "
         "Drives the membrane_veto study."
     ),
@@ -584,6 +602,19 @@ if args.truth_fiducial and not args.fiducialization:
 configure_global_logging(verbose=args.verbose)
 analysis_info = load_analysis_info(str(root))
 selected_background_components = get_selected_background_components(args.analysis, analysis_info)
+
+# Warn about nuisance parameter defaults that affect sensitivity results
+_default_nuisance = analysis_info.get("DEFAULT_NUISANCE_PROFILE", "full")
+if _default_nuisance == "full":
+    nuisance_profiles = analysis_info.get("NUISANCE_PROFILES", {})
+    full_profile = nuisance_profiles.get("full", {})
+    if full_profile.get("MARGINALIZE_SIN13", False) or full_profile.get("ENERGY_SCALE_UNCERTAINTY", False):
+        rprint(
+            "[yellow][WARNING][/yellow] Nuisance parameters are ENABLED by default (profile='full'). "
+            "This marginalizes over sin²θ₁₃ and energy scale uncertainty, which can wash out sensitivity. "
+            "To match pre-nuisance results or for sharper sensitivity, use: "
+            "--nuisance_profiles nominal"
+        )
 
 if not args.computation:
     rprint(
@@ -694,6 +725,12 @@ def oscillation_args_for() -> List[str]:
 
 def truth_fiducial_args_for() -> List[str]:
     return ["--truth_fiducial"] if args.truth_fiducial else []
+
+
+def secondary_exposure_args_for() -> List[str]:
+    """Forward the secondary exposure to the scripts that now handle it in-pass."""
+    sec = getattr(args, "secondary_exposure", None)
+    return ["--secondary_exposure", str(sec)] if sec else ["--secondary_exposure", "0"]
 
 
 def membrane_veto_args_for() -> List[str]:
@@ -979,7 +1016,7 @@ def run_daynight_stage(config: str, folder: str, name: str):
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
-        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"] + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"] + ["--day_fraction", str(args.day_fraction)] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
 
 
@@ -1145,7 +1182,7 @@ def run_hep_stage(config: str, folder: str, name: str):
         + uncertainty_args
         + stacked_args_for()
         + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both"]
-        + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -1154,7 +1191,7 @@ def run_hep_stage(config: str, folder: str, name: str):
         + uncertainty_args
         + stacked_args_for()
         + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl-label", "highest_spiked"]
-        + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
     run_analysis_script("src/physics/hep/significance_comparison.py", analysis_base_args + common_args + uncertainty_args)
     run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"] + truth_fiducial_args_for(),
@@ -1236,7 +1273,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for(),
     )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
@@ -1245,7 +1282,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         for profile_name in profile_names:
             run_analysis_script(
                 "src/physics/sensitivity/contour_plot.py",
-                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for(),
+                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for(),
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
@@ -1253,7 +1290,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
     )
         run_analysis_script(
             "src/physics/common/significance_plot.py",
-            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"] + daynight_oscillation_args_for() + truth_fiducial_args_for(),
+            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
     )
 
 
@@ -1295,6 +1332,9 @@ def run_presentations():
                 run_presentation_script(script_name, energy, folder=folder, stop_on_error=False)
 
 
+# run_secondary_exposure() removed 2026-09-08: templates are stored per-year, so
+# 06_significance.py evaluates the secondary exposure in the same pass by rescaling
+# already-loaded templates. Re-running the whole pipeline for it was pure waste.
 _background_component_names: List[str] = list(
     analysis_info.get("BACKGROUND_SAMPLES", {}).get("default", [])
 )
@@ -1380,4 +1420,25 @@ for config, folder in product(args.config, args.folder):
                 + ["--best_cuts_only", "--no-plot"],
             )
 
+    # Pass 4: cutflow — one call per energy with all names and analyses dispatched at once.
+    # Requires best-cuts pkls (written by 05_best_sigmas.py in per-analysis stages above).
+    for energy in args.energy:
+        run_analysis_script(
+            "src/physics/signal/cutflow_plot.py",
+            [
+                "--config",   config,
+                "--signal",   *available_names,
+                "--folder",   folder,
+                "--energy",   energy,
+                "--analysis", *args.analysis,
+                "--rewrite" if args.rewrite else "--no-rewrite",
+                "--debug"   if args.verbose == "verbose" else "--no-debug",
+                "--plot"    if args.plot else "--no-plot",
+            ] + membrane_veto_args_for(),
+        )
+
 run_presentations()
+# NOTE: the old whole-pipeline secondary-exposure pass is gone. Templates are
+# stored per-year, so 06_significance.py evaluates the secondary exposure in the
+# same pass (rescale, no extra I/O) and contour_plot.py exports it as
+# Sensitivity_<N>Y_Contours.pkl. Control it with --secondary_exposure.

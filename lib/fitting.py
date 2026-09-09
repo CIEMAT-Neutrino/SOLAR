@@ -1286,6 +1286,7 @@ def _sensitivity_fit_with_escale(
     sigma_bkg: float,
     sigma_e: float,
     n_sigma_bound: float = 5.0,
+    fit_background: bool = True,
 ) -> tuple:
     """Profile chi² over energy-scale nuisance delta_e with Gaussian pull."""
     from scipy.optimize import minimize_scalar
@@ -1297,6 +1298,7 @@ def _sensitivity_fit_with_escale(
             obs, shifted, bkg,
             SigmaPred=sigma_pred, SigmaBkg=sigma_bkg,
             bb_mask=(bkg > 0),
+            fit_background=fit_background,
         )
         c, _, _ = f.Fit(0.0, 0.0)
         return (float(c) if c is not None else 1e9) + (de / sigma_e) ** 2
@@ -1328,6 +1330,7 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     marginalize_e_scale  : bool — profile over energy scale
     sigma_e_scale        : energy scale uncertainty (fractional)
     e_centers_thld       : energy bin centers above analysis threshold
+    fit_background       : bool — if True, fit background normalization as free parameter
     """
     from lib.root import Sensitivity_Fitter
 
@@ -1341,12 +1344,13 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     use_esc = task["marginalize_e_scale"]
     sig_e   = task["sigma_e_scale"]
     e_ctr   = task["e_centers_thld"]
+    fit_bkg = task.get("fit_background", True)
 
     # Solar chi²
     if use_esc:
-        solar_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred1, bkg, e_ctr, sp, sb, sig_e)
+        solar_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred1, bkg, e_ctr, sp, sb, sig_e, fit_background=fit_bkg)
     else:
-        f = Sensitivity_Fitter(obs, pred1, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0))
+        f = Sensitivity_Fitter(obs, pred1, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0), fit_background=fit_bkg)
         solar_chi2, _, _ = f.Fit(0.0, 0.0)
 
     # Preserve serial semantics: skip reactor if solar fit failed
@@ -1355,9 +1359,9 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
 
     # Reactor chi²
     if use_esc:
-        react_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred2, bkg, e_ctr, sp, sb, sig_e)
+        react_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred2, bkg, e_ctr, sp, sb, sig_e, fit_background=fit_bkg)
     else:
-        f = Sensitivity_Fitter(obs, pred2, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0))
+        f = Sensitivity_Fitter(obs, pred2, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0), fit_background=fit_bkg)
         react_chi2, _, _ = f.Fit(0.0, 0.0)
 
     return params, solar_chi2, react_chi2

@@ -73,6 +73,14 @@ parser.add_argument(
     help="The exposure for the analysis in years.",
     default=30.0,
 )
+parser.add_argument(
+    "--secondary_exposure", "--secondary-exposure",
+    type=float, default=10.0,
+    help=(
+        "Also export the tagged secondary-exposure grids written by 06_significance.py "
+        "(e.g. '_10Y') as a separate Sensitivity_<N>Y_Contours.pkl. 0/negative disables."
+    ),
+)
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
     "--nuisance_profile",
@@ -100,8 +108,8 @@ def _load_best_cut_map(info: dict, args):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
-    for analysis in candidates:
-        for suffix in ([_suffix, ""] if _suffix else [""]):
+    for analysis in candidates if not _suffix else ["SENSITIVITY"]:
+        for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
                 f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
                 f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
@@ -120,6 +128,9 @@ def _load_best_cut_map(info: dict, args):
 
 sensitivity = []
 save_path = f"{root}/output/images/analysis/sensitivity"
+# Tidy contour rows for the external plotting library (one row per grid).
+_contour_rows: dict = {}   # exposure tag -> list of rows
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     analysis_info = load_analysis_info(str(root))
@@ -134,6 +145,10 @@ for config in configs:
         loaded = _load_best_cut_map(info, args)
         if loaded is not None:
             fastest_sigma = loaded
+        elif args.study_label:
+            raise FileNotFoundError(
+                f"Missing best-cut map for study '{args.study_label}'; refusing to plot nominal cuts"
+            )
         else:
             fastest_sigma = {
                 (args.config, args.signal, args.energy): {
@@ -163,6 +178,13 @@ for config in configs:
         else:
             data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
 
+        invalid_marker = f"{data_path}/{name}_{energy}_Sensitivity_INVALID.json"
+        if os.path.exists(invalid_marker):
+            raise ValueError(
+                f"Sensitivity results are marked invalid: {invalid_marker}. "
+                "Regenerate 06_significance.py output before plotting."
+            )
+
         if args.nhits is not None:
             nhits = args.nhits
         else:
@@ -187,23 +209,92 @@ for config in configs:
                 rprint(f"Using optimized ophits {selected['OpHits']}")
             ophits = int(selected["OpHits"])
 
-        solar_sin13_df = pd.read_pickle(
-            f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin13_df.pkl"
-        )
-        solar_sin12_df = pd.read_pickle(
-            f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin12_df.pkl"
-        )
-        react_sin13_df = pd.read_pickle(
-            f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin13_df.pkl"
-        )
-        react_sin12_df = pd.read_pickle(
-            f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin12_df.pkl"
-        )
+        _stem = f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+
+        def _read_grids(tag):
+            return {
+                ("solar", "sin13"): pd.read_pickle(f"{_stem}_solar_sin13_df{tag}.pkl"),
+                ("solar", "sin12"): pd.read_pickle(f"{_stem}_solar_sin12_df{tag}.pkl"),
+                ("react", "sin13"): pd.read_pickle(f"{_stem}_react_sin13_df{tag}.pkl"),
+                ("react", "sin12"): pd.read_pickle(f"{_stem}_react_sin12_df{tag}.pkl"),
+            }
+
+        # Secondary-exposure grids are written by 06_significance.py in the same pass;
+        # export them under their own tag so the external library gets one file per exposure.
+        _tags = [("", float(getattr(args, "exposure", np.nan)))]
+        _sec = getattr(args, "secondary_exposure", None)
+        if _sec and _sec > 0:
+            _sec_tag = f"_{_sec:g}Y"
+            if os.path.exists(f"{_stem}_solar_sin12_df{_sec_tag}.pkl"):
+                _tags.append((_sec_tag, float(_sec)))
+            else:
+                rprint(f"[yellow][WARNING][/yellow] No {_sec_tag} grids in {data_path}; "
+                       "re-run 06_significance.py to produce them.")
+
+        for _tag, _tag_exposure in _tags:
+            _grids = _read_grids(_tag)
+            for (_ref, _par), _grid in _grids.items():
+                _g = _grid.astype(float)
+                _contour_rows.setdefault(_tag, []).append({
+                    "Config": config, "Name": name, "Analysis": "Sensitivity",
+                    "EnergyLabel": energy, "Study": args.study_label or "default",
+                    "Label": _ref, "Variable": _par,
+                    "Dm2": np.asarray(_g.index, dtype=float).tolist(),
+                    "Values": np.asarray(_g.columns, dtype=float).tolist(),
+                    "Significance": np.asarray(_g.to_numpy(dtype=float)).tolist(),
+                    "SignificanceUnit": r"\Delta\chi^2",
+                    "NuisanceProfile": profile_name,
+                    "SignalUncertainty": float(args.signal_uncertainty),
+                    "BackgroundUncertainty": float(args.background_uncertainty) if args.background else 0.0,
+                    "NHits": int(nhits), "AdjCl": int(adjcl), "OpHits": int(ophits),
+                    "Exposure": _tag_exposure,
+                    "SourcePath": data_path,
+                })
+
+        # The figures below are made from the PRIMARY exposure grids.
+        _primary = _read_grids("")
+        solar_sin13_df = _primary[("solar", "sin13")]
+        solar_sin12_df = _primary[("solar", "sin12")]
+        react_sin13_df = _primary[("react", "sin13")]
+        react_sin12_df = _primary[("react", "sin12")]
+
+        for grid_name, grid in {
+            "solar sin13": solar_sin13_df,
+            "solar sin12": solar_sin12_df,
+            "reactor sin13": react_sin13_df,
+            "reactor sin12": react_sin12_df,
+        }.items():
+            values = grid.to_numpy(dtype=float)
+            coverage = np.isfinite(values).sum() / values.size if values.size else 0.0
+            if coverage < 1.0:
+                rprint(
+                    f"[yellow][WARNING][/yellow] {grid_name} union-of-planes coverage is "
+                    f"{coverage:.1%}; connectgaps=True bridges structural gaps"
+                )
+            finite = values[np.isfinite(values)]
+            if values.size == 0 or finite.size == 0:
+                raise ValueError(f"Incomplete {grid_name} sensitivity grid at {data_path}")
 
         # Substitute 0 values for nan in all dfs
         contours = np.arange(0, 4, 1)
         for df, df_name in zip([solar_sin13_df, solar_sin12_df, react_sin13_df, react_sin12_df], ["solar_sin13_df", "solar_sin12_df", "react_sin13_df", "react_sin12_df"]):
+            df[df < 0] = 0.0
             df.replace(0, np.nan, inplace=True)
+
+            # Compute delta chi2 = chi2 - chi2_min for proper confidence level contours
+            # This ensures contours represent Delta chi2 thresholds (1, 4, 9 for 1, 2, 3 sigma)
+            chi2_values = df.values.astype(float)
+            finite_mask = np.isfinite(chi2_values)
+            if np.any(finite_mask):
+                chi2_min = float(np.min(chi2_values[finite_mask]))
+            else:
+                chi2_min = 0.0
+            
+            delta_chi2 = chi2_values - chi2_min
+            # Ensure non-negative (numerical issues can give slightly negative values)
+            delta_chi2 = np.maximum(delta_chi2, 0.0)
+            # Replace nan/inf in delta_chi2 with nan for consistency
+            delta_chi2[~finite_mask] = np.nan
 
             sensitivity.append(
                 {
@@ -214,7 +305,8 @@ for config in configs:
                     "Variable": df_name.split("_")[1],
                     "Dm2": df.index.astype(float).values,
                     "Values": df.columns.astype(float).values,
-                    "Significance": np.sqrt(df.values.astype(float)).tolist(),
+                    "Significance": np.sqrt(delta_chi2).tolist(),
+                    "Chi2Min": chi2_min,
                 }
             )
 
@@ -233,7 +325,7 @@ for config in configs:
                 go.Contour(
                     x=df.columns.astype(float),
                     y=df.index,
-                    z=np.sqrt(df.values.astype(float)),
+                    z=np.sqrt(delta_chi2),
                     connectgaps=True,
                     coloraxis="coloraxis",
                     contours=dict(start=0, end=contours[-1], size=1),
@@ -369,3 +461,37 @@ for config in configs:
         rm=args.rewrite,
         debug=args.debug,
     )
+
+
+# ── Contours DataFrame ─────────────────────────────────────────────────────────
+# Published alongside the figures so the external plotting library can build its own
+# comparisons; same stem convention as Sensitivity_Counts / Sensitivity_Significance.
+if _contour_rows:
+    for _tag, _rows in _contour_rows.items():
+        _contours_df = pd.DataFrame(_rows)
+        _fname = "Sensitivity_Contours" if not _tag else f"Sensitivity{_tag}_Contours"
+        for _cfg, _grp in _contours_df.groupby("Config"):
+            for _nm, _sub in _grp.groupby("Name"):
+                _payload = _sub.reset_index(drop=True)
+                for _dest in [
+                    f"{json.loads(open(f'{root}/config/{_cfg}/{_cfg}_config.json').read())['PATH']}/SENSITIVITY",
+                    f"{root}/output/data/analysis/sensitivity",
+                ]:
+                    # one invocation per nuisance profile -> upsert, else the last profile
+                    # silently erases the others
+                    _merged = upsert_df_rows(
+                        _payload, _dest, config=_cfg, name=_nm,
+                        subfolder=_save_subfolder, filename=_fname, debug=args.debug,
+                    )
+                    # debug=True so the destination path is always echoed — this is a
+                    # published data product, not a debug aid.
+                    save_df(
+                        _merged, _dest, config=_cfg, name=_nm,
+                        subfolder=_save_subfolder, filename=_fname,
+                        rm=True, debug=True,
+                    )
+        rprint(f"[green][OK][/green] {_fname}.pkl written "
+               f"({len(_contours_df)} grids, {_contours_df['Study'].iloc[0]})")
+else:
+    rprint("[yellow][WARNING][/yellow] No contour grids collected — no *_Contours.pkl written. "
+           "Run 06_significance.py first.")

@@ -117,7 +117,16 @@ parser.add_argument(
     default=get_analysis_threshold(str(root), "SENSITIVITY", stage="SIGNIFICANCE", fallback=0.0),
 )
 parser.add_argument(
-    "--exposure", type=float, help="The exposure for the analysis in years. Templates are pre-scaled as exposure_yr × detector_mass_kT × rate; this arg is metadata labeling only.", default=30.0
+    "--exposure", type=float, help="Exposure in years. Templates are stored PER YEAR (detector_mass_kT x rate) and are scaled by this value at load time, so changing it needs no template regeneration.", default=30.0
+)
+parser.add_argument(
+    "--secondary_exposure", "--secondary-exposure",
+    type=float, default=10.0,
+    help=(
+        "Also evaluate at this exposure in the same pass and write a tagged copy of every "
+        "output (e.g. '_10Y'). Templates are per-year, so this is a rescale of the already "
+        "loaded templates -- no extra I/O and no pipeline re-run. 0/negative disables."
+    ),
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -151,6 +160,16 @@ parser.add_argument(
         "Defaults to os.cpu_count(). Use --workers 1 for serial execution (debug/testing)."
     ),
 )
+parser.add_argument(
+    "--fit_background",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Fit background normalization as a free parameter in the chi² fit. "
+        "Set to --no-fit_background to fix background normalization and only fit signal amplitude. "
+        "Default is True (legacy behavior). For physically meaningful sensitivity, use --no-fit_background."
+    ),
+)
 
 args = parser.parse_args()
 if args.debug:
@@ -173,6 +192,42 @@ smoothing_config = dict(smoothing_config)
 smoothing_config["params"] = dict(smoothing_config.get("params", {}))
 smoothing_config["params"]["sigma_y"] = 0.0
 smoothing_info = smoothing_metadata(smoothing_config)
+
+
+
+TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
+_REQUIRED_TEMPLATE_VERSION = 2   # v2 = per-year; v1 templates were pre-scaled by exposure
+
+
+def require_per_year_templates(template_dir: str) -> float:
+    """Refuse pre-scaled (v1) templates: rescaling them would be wrong by the old exposure."""
+    marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
+    if not os.path.exists(marker):
+        raise FileNotFoundError(
+            f"Missing {TEMPLATE_NORMALIZATION_FILE} in {template_dir}.\n"
+            "These templates predate per-year normalization and are already scaled by their "
+            "creation exposure; scaling them again would be wrong by that factor. Regenerate:\n"
+            "  python3 src/physics/sensitivity/01_background_template.py --rewrite ...\n"
+            "  python3 src/physics/sensitivity/02_signal_template.py --rewrite ..."
+        )
+    meta = json.load(open(marker))
+    if int(meta.get("version", 0)) != _REQUIRED_TEMPLATE_VERSION:
+        raise ValueError(
+            f"Template normalization v{meta.get('version')} in {template_dir}, "
+            f"expected v{_REQUIRED_TEMPLATE_VERSION} (per-year). Regenerate the templates."
+        )
+    return float(meta.get("detector_mass_kT", float("nan")))
+
+
+def scale_to_exposure(arr, exposure_yr: float):
+    """Per-year template -> absolute counts, then drop bins below one expected event.
+
+    The '<1 expected event' cut is exposure dependent, which is exactly why it lives here
+    and not in the template writers.
+    """
+    scaled = np.asarray(arr, dtype=float) * float(exposure_yr)
+    scaled[scaled < 1.0] = 0.0
+    return scaled
 
 
 def _background_template_candidates(background_path: str, config: str):
@@ -198,28 +253,9 @@ def resolve_background_template(background_path: str, config: str, nhits: int, a
     target = f"{background_path}/{config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl"
     if os.path.exists(target):
         return target
-
-    candidates = _background_template_candidates(background_path, config)
-    if not candidates:
-        raise FileNotFoundError(
-            f"No sensitivity background templates found in {background_path} for {config}"
-        )
-
-    def score(candidate_path: str):
-        cuts = _parse_background_template(candidate_path)
-        return (
-            abs(cuts.get('NHits', 10**9) - nhits),
-            abs(cuts.get('AdjCl', 10**9) - adjcl),
-            abs(cuts.get('OpHits', 10**9) - ophits),
-        )
-
-    best = min(candidates, key=score)
-    best_cuts = _parse_background_template(best)
-    rprint(
-        f"[yellow][WARNING][/yellow] Missing exact background template NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}; "
-        f"using NHits{best_cuts.get('NHits')} AdjCl{best_cuts.get('AdjCl')} OpHits{best_cuts.get('OpHits')} instead"
+    raise FileNotFoundError(
+        f"Missing exact sensitivity background template {target}; refusing to use another cut"
     )
-    return best
 
 
 
@@ -227,8 +263,8 @@ def _load_best_cut_map(info: dict, args, config: str, name: str):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference_analysis.upper()]))
     tried = []
-    for analysis in candidates:
-        for suffix in ([_suffix, ""] if _suffix else [""]):
+    for analysis in candidates if not _suffix else ["SENSITIVITY"]:
+        for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
                 f"{info['PATH']}/{analysis}/{args.folder.lower()}/{config}/{name}/"
                 f"{config}_{name}_highest_{analysis}{suffix}.pkl"
@@ -276,10 +312,9 @@ def _resolve_cut_entries(paths: dict, info: dict, args, analysis_info: dict, con
     best_map = _load_best_cut_map(info, args, config, name)
     if best_map is not None:
         key = (config, name, args.energy)
-        if key in best_map:
-            selected = best_map[key]
-        else:
-            selected = next(iter(best_map.values()))
+        if key not in best_map:
+            raise KeyError(f"No exact best-cut entry for {key} in the selected study map")
+        selected = best_map[key]
 
         return [
             {
@@ -289,6 +324,12 @@ def _resolve_cut_entries(paths: dict, info: dict, args, analysis_info: dict, con
                 "source": "best-map",
             }
         ]
+
+    if args.study_label:
+        raise FileNotFoundError(
+            f"Missing best-cut map for study '{args.study_label}' and {config}/{name}/{args.energy}; "
+            "refusing to use nominal or default cuts"
+        )
 
     fallback = {
         "NHits": int(args.nhits) if args.nhits is not None else 4,
@@ -307,6 +348,31 @@ def _resolve_cut_entries(paths: dict, info: dict, args, analysis_info: dict, con
             "source": "fallback",
         }
     ]
+
+
+def _compact_and_validate_grid(df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Validate a union-of-planes grid without changing its configured limits."""
+    validated = df.astype(float).copy()
+    values = validated.to_numpy(dtype=float)
+    finite = values[np.isfinite(values)]
+    if validated.empty or finite.size == 0:
+        raise ValueError(
+            f"Incomplete {label} sensitivity grid: shape={validated.shape}, no finite values"
+        )
+    if not np.isfinite(finite).all():
+        raise ValueError(f"Invalid non-finite {label} sensitivity grid values")
+    validated[validated < 0] = 0.0
+    return validated
+
+
+def _mark_invalid(output_dir: str, reason: str, tag: str = "") -> None:
+    marker = f"{output_dir}/{name}_{energy}_Sensitivity_INVALID{tag}.json"
+    os.makedirs(output_dir, exist_ok=True)
+    # PNFS/dCache is write-once — remove before rewriting.
+    if os.path.exists(marker):
+        os.remove(marker)
+    with open(marker, "w") as handle:
+        json.dump({"valid": False, "reason": reason}, handle, indent=2)
 
 
 for config in configs:
@@ -365,36 +431,21 @@ for config in configs:
                     f"[cyan][INFO][/cyan] Evaluating NHits{nhits} AdjCl{adjcl} OpHits{ophits} (source={cut['source']})"
                 )
 
-            react_sin13_df = pd.DataFrame(
-                columns=np.unique(sin13_list), index=np.unique(dm2_list)
-            )
-            react_sin12_df = pd.DataFrame(
-                columns=np.unique(sin12_list), index=np.unique(dm2_list)
-            )
-            solar_sin13_df = pd.DataFrame(
-                columns=np.unique(sin13_list), index=np.unique(dm2_list)
-            )
-            solar_sin12_df = pd.DataFrame(
-                columns=np.unique(sin12_list), index=np.unique(dm2_list)
-            )
-
-            react_df = pd.DataFrame(columns=["dm2", "sin13", "sin12", "chi2"])
-            solar_df = pd.DataFrame(columns=["dm2", "sin13", "sin12", "chi2"])
-
             # Load solar + reactor reference templates at best-fit oscillation point
             # These are FIXED predictions used to test against all grid points
-            pred1_df = np.nan_to_num(
+            require_per_year_templates(paths["signal_path"])
+            pred1_raw = (np.nan_to_num(
                 pd.read_pickle(
                     f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["SOLAR_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
                 ),
                 nan=0.0,
-            )
-            pred2_df = np.nan_to_num(
+            ))
+            pred2_raw = (np.nan_to_num(
                 pd.read_pickle(
                     f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["REACT_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
                 ),
                 nan=0.0,
-            )
+            ))
 
             if args.background:
                 background_template = resolve_background_template(
@@ -404,12 +455,13 @@ for config in configs:
                     adjcl,
                     ophits,
                 )
-                bkg_df = np.nan_to_num(pd.read_pickle(background_template), nan=0.0)
+                require_per_year_templates(paths["background_path"])
+                bkg_raw = np.nan_to_num(pd.read_pickle(background_template), nan=0.0)
             else:
-                bkg_df = 0 * pred1_df
+                bkg_raw = 0 * pred1_raw
 
             _expected_ecols = len(sensitivity_rebin_centers)
-            for _label, _arr in [("pred1", pred1_df), ("pred2", pred2_df), ("bkg", bkg_df)]:
+            for _label, _arr in [("pred1", pred1_raw), ("pred2", pred2_raw), ("bkg", bkg_raw)]:
                 if np.ndim(_arr) >= 2 and _arr.shape[1] != _expected_ecols:
                     raise ValueError(
                         f"Template shape mismatch ({_label}): got {_arr.shape[1]} energy columns, "
@@ -423,7 +475,8 @@ for config in configs:
             n_io = min(n_workers, len(dm2_list), 32)
 
             _signal_path  = paths["signal_path"]
-            _bkg_snapshot = bkg_df  # captured by closure; read-only in threads
+            # NOTE: loaded RAW (per-year, no background) so the same arrays can be
+            # rescaled for every requested exposure without re-reading from disk.
 
             def _load_one(point):
                 dm2_p, sin13_p, sin12_p = point
@@ -432,10 +485,10 @@ for config in configs:
                     f"_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
                     f"_dm2_{dm2_p:.3e}_sin13_{sin13_p:.3e}_sin12_{sin12_p:.3e}.pkl"
                 )
-                return point, np.nan_to_num(pd.read_pickle(pkl), nan=0.0) + _bkg_snapshot
+                return point, np.nan_to_num(pd.read_pickle(pkl), nan=0.0)
 
             points = list(zip(dm2_list, sin13_list, sin12_list))
-            fake_df_dict = {}
+            fake_raw_dict = {}
             rprint(f"[cyan][INFO][/cyan] Loading {len(points)} signal templates "
                    f"({n_io} I/O thread(s))...")
             with ThreadPoolExecutor(max_workers=n_io) as _io_pool:
@@ -444,145 +497,195 @@ for config in configs:
                     total=len(points),
                     description="Loading templates..."
                 ):
-                    fake_df_dict[_pt] = _df
+                    fake_raw_dict[_pt] = _df
 
-            # ── Parallel chi² scan (CPU-bound → ProcessPoolExecutor) ─────────────
-            solar_fit_at_react   = None
-            reactor_fit_at_solar = None
-
-            marginalize_e_scale = analysis_info.get("ENERGY_SCALE_UNCERTAINTY", False)
-            sigma_e_scale       = float(analysis_info.get("ENERGY_SCALE_SIGMA", 0.02))
-            e_centers_thld      = sensitivity_rebin_centers[thld:]
-
-            # Limit BLAS threads per worker to 1 so Python-level parallelism is used
-            os.environ.setdefault("OMP_NUM_THREADS",     "1")
-            os.environ.setdefault("OPENBLAS_NUM_THREADS","1")
-            os.environ.setdefault("MKL_NUM_THREADS",     "1")
-
-            _pred1_slice = pred1_df[:, thld:]
-            _pred2_slice = pred2_df[:, thld:]
-            _bkg_slice   = bkg_df[:, thld:]
-
-            tasks = [
-                {
-                    "params":              params,
-                    "obs":                 fake_df_dict[params][:, thld:],
-                    "pred1":               _pred1_slice,
-                    "pred2":               _pred2_slice,
-                    "bkg":                 _bkg_slice,
-                    "sigma_pred":          args.signal_uncertainty,
-                    "sigma_bkg":           args.background_uncertainty,
-                    "marginalize_e_scale": marginalize_e_scale,
-                    "sigma_e_scale":       sigma_e_scale,
-                    "e_centers_thld":      e_centers_thld,
+            # ── Per-exposure evaluation ─────────────────────────────────────
+            # Templates are stored per-year, so a second exposure is just a rescale:
+            # load once above, then run the chi2 scan per requested exposure.
+            def _run_exposure(exposure_yr, tag):
+                _bkg = scale_to_exposure(bkg_raw, exposure_yr)
+                pred1_df = scale_to_exposure(pred1_raw, exposure_yr)
+                pred2_df = scale_to_exposure(pred2_raw, exposure_yr)
+                fake_df_dict = {
+                    pt: scale_to_exposure(arr, exposure_yr) + _bkg
+                    for pt, arr in fake_raw_dict.items()
                 }
-                for params in fake_df_dict
-            ]
+                bkg_df = _bkg
 
-            rprint(f"[cyan][INFO][/cyan] Chi² scan: {len(tasks)} grid point(s), "
-                   f"{n_workers} worker(s), escale={marginalize_e_scale}")
+                react_sin13_df = pd.DataFrame(
+                    columns=np.unique(sin13_list), index=np.unique(dm2_list)
+                )
+                react_sin12_df = pd.DataFrame(
+                    columns=np.unique(sin12_list), index=np.unique(dm2_list)
+                )
+                solar_sin13_df = pd.DataFrame(
+                    columns=np.unique(sin13_list), index=np.unique(dm2_list)
+                )
+                solar_sin12_df = pd.DataFrame(
+                    columns=np.unique(sin12_list), index=np.unique(dm2_list)
+                )
 
-            if n_workers == 1:
-                results = [_chi2_worker(t) for t in track(tasks, description="Computing data...")]
-            else:
-                with ProcessPoolExecutor(max_workers=n_workers) as _cpu_pool:
-                    results = list(_cpu_pool.map(_chi2_worker, tasks))
+                react_df = pd.DataFrame(columns=["dm2", "sin13", "sin12", "chi2"])
+                solar_df = pd.DataFrame(columns=["dm2", "sin13", "sin12", "chi2"])
 
-            # ── Collect results (serial post-processing, order preserved) ─────────
-            for i, (params, solar_chi2, react_chi2) in track(
-                enumerate(results),
-                total=len(results),
-                description="Collecting results..."
-            ):
-                if args.debug:
-                    rprint(f"\n--- Combination {i}: {params} ---")
 
-                if solar_chi2 is None:
-                    continue
-                chi2_value = float(solar_chi2)
-                if args.debug:
-                    rprint(f"Solar Chi2: {chi2_value:.2f} (smoothing={smoothing_info['SmoothingMethod']})")
+                # ── Parallel chi² scan (CPU-bound → ProcessPoolExecutor) ─────────────
+                solar_fit_at_react   = None
+                reactor_fit_at_solar = None
 
-                if params[2] == analysis_info["SIN12"]:
-                    solar_sin13_df.loc[params[0], params[1]] = chi2_value
-                if params[1] == analysis_info["SIN13"]:
-                    solar_sin12_df.loc[params[0], params[2]] = chi2_value
-                solar_df.loc[i] = [params[0], params[1], params[2], chi2_value]
-                if _same_oscillation(params, react_tuple):
-                    solar_fit_at_react = chi2_value
+                marginalize_e_scale = analysis_info.get("ENERGY_SCALE_UNCERTAINTY", False)
+                sigma_e_scale       = float(analysis_info.get("ENERGY_SCALE_SIGMA", 0.02))
+                e_centers_thld      = sensitivity_rebin_centers[thld:]
 
-                if react_chi2 is None:
-                    continue
-                chi2_value = float(react_chi2)
-                if args.debug:
-                    rprint(f"Reactor Chi2: {chi2_value:.2f}")
-                if params[2] == analysis_info["SIN12"]:
-                    react_sin13_df.loc[params[0], params[1]] = chi2_value
-                if params[1] == analysis_info["SIN13"]:
-                    react_sin12_df.loc[params[0], params[2]] = chi2_value
-                react_df.loc[i] = [params[0], params[1], params[2], chi2_value]
-                if _same_oscillation(params, solar_tuple):
-                    reactor_fit_at_solar = chi2_value
+                # Limit BLAS threads per worker to 1 so Python-level parallelism is used
+                os.environ.setdefault("OMP_NUM_THREADS",     "1")
+                os.environ.setdefault("OPENBLAS_NUM_THREADS","1")
+                os.environ.setdefault("MKL_NUM_THREADS",     "1")
 
-            if analysis_info.get("MARGINALIZE_SIN13", False) and len(solar_df) > 0:
-                sin13_bf    = float(analysis_info["SIN13"])
-                sin13_sigma = float(analysis_info.get("SIN13_SIGMA", 0.00056))
-                if args.debug:
-                    rprint(
-                        f"[cyan][INFO][/cyan] Profiling sin²θ₁₃ over grid "
-                        f"({len(solar_df['sin13'].unique())} values, "
-                        f"bf={sin13_bf:.5f}, σ={sin13_sigma:.5f})"
-                    )
-                for (dm2_v, sin12_v), grp in solar_df.groupby(["dm2", "sin12"]):
-                    pull = ((grp["sin13"].astype(float) - sin13_bf) / sin13_sigma) ** 2
-                    solar_sin12_df.loc[dm2_v, sin12_v] = float(
-                        (grp["chi2"].astype(float) + pull).min()
-                    )
-                for (dm2_v, sin12_v), grp in react_df.groupby(["dm2", "sin12"]):
-                    pull = ((grp["sin13"].astype(float) - sin13_bf) / sin13_sigma) ** 2
-                    react_sin12_df.loc[dm2_v, sin12_v] = float(
-                        (grp["chi2"].astype(float) + pull).min()
-                    )
+                _pred1_slice = pred1_df[:, thld:]
+                _pred2_slice = pred2_df[:, thld:]
+                _bkg_slice   = bkg_df[:, thld:]
 
-            if args.background:
-                path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%'
-            else:
-                path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only'
+                tasks = [
+                    {
+                        "params":              params,
+                        "obs":                 fake_df_dict[params][:, thld:],
+                        "pred1":               _pred1_slice,
+                        "pred2":               _pred2_slice,
+                        "bkg":                 _bkg_slice,
+                        "sigma_pred":          args.signal_uncertainty,
+                        "sigma_bkg":           args.background_uncertainty,
+                        "marginalize_e_scale": marginalize_e_scale,
+                        "sigma_e_scale":       sigma_e_scale,
+                        "e_centers_thld":      e_centers_thld,
+                        "fit_background":      args.fit_background,
+                    }
+                    for params in fake_df_dict
+                ]
 
-            rprint(f"Saving data to {'/'.join(path.split('/')[:-1])}")
+                rprint(f"[cyan][INFO][/cyan] Chi² scan: {len(tasks)} grid point(s), "
+                       f"{n_workers} worker(s), escale={marginalize_e_scale}")
 
-            if not os.path.exists(path):
-                os.makedirs(path)
+                if n_workers == 1:
+                    results = [_chi2_worker(t) for t in track(tasks, description="Computing data...")]
+                else:
+                    with ProcessPoolExecutor(max_workers=n_workers) as _cpu_pool:
+                        results = list(_cpu_pool.map(_chi2_worker, tasks))
 
-            file_names = [
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin12_df.pkl",
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin13_df.pkl",
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin12_df.pkl",
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin13_df.pkl",
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_df.pkl",
-                f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_df.pkl",
-            ]
+                # ── Collect results (serial post-processing, order preserved) ─────────
+                for i, (params, solar_chi2, react_chi2) in track(
+                    enumerate(results),
+                    total=len(results),
+                    description="Collecting results..."
+                ):
+                    if args.debug:
+                        rprint(f"\n--- Combination {i}: {params} ---")
 
-            # Preserve uncomputed metrics by loading old data if new DataFrame is empty
-            _save_dfs = [
-                (solar_sin12_df, file_names[0]),
-                (solar_sin13_df, file_names[1]),
-                (react_sin12_df, file_names[2]),
-                (react_sin13_df, file_names[3]),
-                (solar_df, file_names[4]),
-                (react_df, file_names[5]),
-            ]
-            for df, file_path in _save_dfs:
-                if df.empty or df.isna().all().all():
-                    # DataFrame not computed (empty/all-NaN) — preserve old file
-                    if os.path.exists(file_path):
-                        if args.debug:
-                            rprint(f"[cyan][INFO][/cyan] Preserving uncomputed metric: {os.path.basename(file_path)}")
+                    if solar_chi2 is None:
                         continue
-                # DataFrame has data — overwrite old file
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                df.to_pickle(file_path)
+                    chi2_value = float(solar_chi2)
+                    if args.debug:
+                        rprint(f"Solar Chi2: {chi2_value:.2f} (smoothing={smoothing_info['SmoothingMethod']})")
+
+                    if params[2] == analysis_info["SIN12"]:
+                        solar_sin13_df.loc[params[0], params[1]] = chi2_value
+                    if params[1] == analysis_info["SIN13"]:
+                        solar_sin12_df.loc[params[0], params[2]] = chi2_value
+                    solar_df.loc[i] = [params[0], params[1], params[2], chi2_value]
+                    if _same_oscillation(params, react_tuple):
+                        solar_fit_at_react = chi2_value
+
+                    if react_chi2 is None:
+                        continue
+                    chi2_value = float(react_chi2)
+                    if args.debug:
+                        rprint(f"Reactor Chi2: {chi2_value:.2f}")
+                    if params[2] == analysis_info["SIN12"]:
+                        react_sin13_df.loc[params[0], params[1]] = chi2_value
+                    if params[1] == analysis_info["SIN13"]:
+                        react_sin12_df.loc[params[0], params[2]] = chi2_value
+                    react_df.loc[i] = [params[0], params[1], params[2], chi2_value]
+                    if _same_oscillation(params, solar_tuple):
+                        reactor_fit_at_solar = chi2_value
+
+                if analysis_info.get("MARGINALIZE_SIN13", False) and len(solar_df) > 0:
+                    sin13_bf    = float(analysis_info["SIN13"])
+                    sin13_sigma = float(analysis_info.get("SIN13_SIGMA", 0.00056))
+                    if args.debug:
+                        rprint(
+                            f"[cyan][INFO][/cyan] Profiling sin²θ₁₃ over grid "
+                            f"({len(solar_df['sin13'].unique())} values, "
+                            f"bf={sin13_bf:.5f}, σ={sin13_sigma:.5f})"
+                        )
+                    for (dm2_v, sin12_v), grp in solar_df.groupby(["dm2", "sin12"]):
+                        pull = ((grp["sin13"].astype(float) - sin13_bf) / sin13_sigma) ** 2
+                        solar_sin12_df.loc[dm2_v, sin12_v] = float(
+                            (grp["chi2"].astype(float) + pull).min()
+                        )
+                    for (dm2_v, sin12_v), grp in react_df.groupby(["dm2", "sin12"]):
+                        pull = ((grp["sin13"].astype(float) - sin13_bf) / sin13_sigma) ** 2
+                        react_sin12_df.loc[dm2_v, sin12_v] = float(
+                            (grp["chi2"].astype(float) + pull).min()
+                        )
+
+                if args.background:
+                    path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%'
+                else:
+                    path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only'
+
+                rprint(f"Saving data to {'/'.join(path.split('/')[:-1])}")
+
+                if not os.path.exists(path):
+                    os.makedirs(path)
+
+                file_names = [
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin12_df{tag}.pkl",
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_sin13_df{tag}.pkl",
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin12_df{tag}.pkl",
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_sin13_df{tag}.pkl",
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_solar_df{tag}.pkl",
+                    f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_react_df{tag}.pkl",
+                ]
+
+                try:
+                    solar_sin12_df = _compact_and_validate_grid(solar_sin12_df, "solar sin12")
+                    solar_sin13_df = _compact_and_validate_grid(solar_sin13_df, "solar sin13")
+                    react_sin12_df = _compact_and_validate_grid(react_sin12_df, "reactor sin12")
+                    react_sin13_df = _compact_and_validate_grid(react_sin13_df, "reactor sin13")
+                except ValueError as exc:
+                    _mark_invalid(path, str(exc), tag)
+                    raise
+
+                invalid_marker = f"{path}/{name}_{energy}_Sensitivity_INVALID{tag}.json"
+                if os.path.exists(invalid_marker):
+                    os.remove(invalid_marker)
+
+                _save_dfs = [
+                    (solar_sin12_df, file_names[0]),
+                    (solar_sin13_df, file_names[1]),
+                    (react_sin12_df, file_names[2]),
+                    (react_sin13_df, file_names[3]),
+                    (solar_df, file_names[4]),
+                    (react_df, file_names[5]),
+                ]
+                for df, file_path in _save_dfs:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    df.to_pickle(file_path)
+
+                return solar_fit_at_react, reactor_fit_at_solar
+
+            _exposures = [(args.exposure, "")]
+            if args.secondary_exposure and args.secondary_exposure != args.exposure:
+                _exposures.append((args.secondary_exposure,
+                                   f"_{args.secondary_exposure:g}Y"))
+            solar_fit_at_react = reactor_fit_at_solar = None
+            for _exp, _tag in _exposures:
+                rprint(f"[cyan][INFO][/cyan] Evaluating exposure {_exp:g} yr"
+                       + (f" (secondary -> tag '{_tag}')" if _tag else " (primary)"))
+                _sfar, _rfas = _run_exposure(_exp, _tag)
+                if not _tag:
+                    solar_fit_at_react, reactor_fit_at_solar = _sfar, _rfas
 
             if solar_fit_at_react is not None and reactor_fit_at_solar is not None:
                 cut_quality.append(
