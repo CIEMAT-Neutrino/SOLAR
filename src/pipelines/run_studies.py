@@ -94,12 +94,24 @@ _variant_filter: Optional[set] = set(args.variant) if args.variant else None
 
 
 def _matches_variant_filter(variant: StudyVariant) -> bool:
-    if _variant_filter is None:
-        return True
-    label  = variant.get("label")
-    folder = variant.get("folder")
-    return (label is not None and label in _variant_filter) or \
-           (folder is not None and folder in _variant_filter)
+    if _variant_filter is not None:
+        label  = variant.get("label")
+        folder = variant.get("folder")
+        if not ((label is not None and label in _variant_filter) or \
+                (folder is not None and folder in _variant_filter)):
+            return False
+    
+    # Filter by analysis: skip variants with analysis_override that doesn't match user's --analysis
+    analysis_override = variant.get("analysis_override")
+    if analysis_override is not None:
+        # Check if any of the user's requested analyses are in the variant's override
+        user_analyses = set(a.upper() for a in args.analysis)
+        variant_analyses = set(a.upper() for a in analysis_override)
+        if not user_analyses.intersection(variant_analyses):
+            # Variant requires specific analyses that user didn't request
+            return False
+    
+    return True
 
 
 # ---------------------------------------------------------------------------
