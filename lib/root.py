@@ -132,6 +132,7 @@ class Sensitivity_Fitter:
 
     def ROOTOperator(self, A_pred, A_bkg):
         chisq = 0
+        bkg_total = 0.0
         for i in range(1, self.fObs.GetNbinsX() + 1):
             for j in range(1, self.fObs.GetNbinsY() + 1):
                 if self.fMask is not None and not self.fMask[i - 1, j - 1]:
@@ -146,9 +147,17 @@ class Sensitivity_Fitter:
                     chisq += 2 * e
                 else:
                     chisq += 2 * (e - o + o * np.log(o / e))
+                # Track total background for uncertainty penalty
+                if self.fit_background:
+                    bkg_total += (1 + A_bkg) * self.fBkg.GetBinContent(i, j)
+                else:
+                    bkg_total += self.fBkg.GetBinContent(i, j)
         chisq += ((A_pred) / self.fSigmaPred) ** 2
-        if self.fit_background:
+        if self.fit_background and self.fSigmaBkg > 0:
             chisq += ((A_bkg) / self.fSigmaBkg) ** 2
+        elif not self.fit_background and self.fSigmaBkg > 0:
+            # When NOT fitting background, add penalty based on total background uncertainty
+            chisq += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
         return chisq
 
     def NumpyOperator(self, A_pred, A_bkg):
@@ -175,9 +184,16 @@ class Sensitivity_Fitter:
         # Always add signal pull term
         if self.fSigmaPred > 0:
             chisq_sum += ((A_pred) / self.fSigmaPred) ** 2
-        # Add background pull term only if fitting background
+        # Add background pull term
         if self.fit_background and self.fSigmaBkg > 0:
+            # When fitting background, penalize deviation from nominal
             chisq_sum += ((A_bkg) / self.fSigmaBkg) ** 2
+        elif not self.fit_background and self.fSigmaBkg > 0:
+            # When NOT fitting background, add penalty based on total background uncertainty
+            # This accounts for background uncertainty without allowing it to absorb signal
+            # The penalty is the squared uncertainty on the total background count
+            bkg_total = float(np.sum(self.fBkg))
+            chisq_sum += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
         return chisq_sum
 
     def _profile_a_bkg(self, A_pred):
