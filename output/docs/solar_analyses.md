@@ -625,19 +625,24 @@ The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's 
 - Validation: `require_per_year_templates()` refuses v1 templates with a descriptive error message.
 - Benefit: A single template set serves all exposure values without regeneration.
 
-### 8.4 Day-Night Analysis: Asymmetry Uncertainty Bands with Penalty
+### 8.4 Day-Night Analysis: Asymmetry Uncertainty Bands
 
-The Day-Night Asimov LLR includes a Gaussian constraint on the asymmetry amplitude $\theta_s$:
+The Day-Night analysis evaluates three asymmetry amplitude scenarios to bracket the theoretical uncertainty:
 
-- **Total band:** $\epstot = \sqrt{\varepsilon_{\oplus}^2 + \varepsilon_{\mathrm{osc}}^2}$, where $\varepsilon_{\oplus}$ is the Earth density band (default 0.13) and $\varepsilon_{\mathrm{osc}}$ is the oscillation parameter band (default 0.05).
-- **Scale factors:** $\theta_s \in \{1+\epstot,\,1,\,1-\epstot\}$ (indices 0, 1, 2).
-- **Penalty term:** $q^{\mathrm{pen}}(\theta_s) = \sum_i q_i(\theta_s) - \left(\frac{\theta_s - 1}{\epstot}\right)^2$.
+- **Total band:** $\epstot = \sqrt{\varepsilon_{\oplus}^2 + \varepsilon_{\mathrm{osc}}^2}$, where $\varepsilon_{\oplus}$ is the Earth density band (default 0.13, from PREM-based oscillation probability calculations) and $\varepsilon_{\mathrm{osc}}$ is the oscillation parameter band (default 0.05, from PDG ranges on $\theta_{12}$ and $\Delta m^2_{21}$).
+- **Scale factors:** $\theta_s \in \{1+\epstot,\,1,\,1-\epstot\}$ (indices 0, 1, 2), corresponding to upper, nominal, and lower asymmetry predictions.
 
-At nominal ($\theta_s=1$), the penalty vanishes. At $\theta_s = 1\pm\epstot$, the penalty equals 1, deflating the raw sum by exactly $1\,\sigma^2$ in significance. This correctly encodes prior information: off-nominal band significances are penalised estimates, not free bounds.
+Each scale factor is evaluated independently without penalty terms. The Asimov log-likelihood ratio is computed separately for each scenario:
 
-**Why bands can be asymmetric:** The raw LLR $q_0$ is non-linear in $\theta_s$ (Poisson likelihoods, per-bin normalisation). The gain from $+\sigma$ need not equal the loss from $-\sigma$, so `Gaussian+Error` and `Gaussian-Error` need not be symmetric about `Gaussian`.
+$$q_0(\theta_s) = \sum_{i \ge i_{\mathrm{th}}} 2\left[ n_i^{\mathrm{night}}(\theta_s)\ln\frac{n_i^{\mathrm{night}}(\theta_s)}{h_{0,i}^{\mathrm{night}}} + n_i^{\mathrm{day}}(\theta_s)\ln\frac{n_i^{\mathrm{day}}(\theta_s)}{h_{0,i}^{\mathrm{day}}} \right]$$
 
-**Why upper band can fall below nominal:** If the signal gain from increasing $\theta$ is smaller than the penalty of 1, then $q_0(-\sigma) < q_0(\text{nominal})$. This is physically meaningful: the $+1\sigma$ asymmetry scenario provides no additional discriminating power once the nuisance cost is accounted for.
+where the observed counts under asymmetry scale $\theta_s$ are:
+$$n_i^{\mathrm{night}}(\theta_s) = \Ecal\,g\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}} + \theta_s\,(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}))$$  
+$$n_i^{\mathrm{day}}(\theta_s) = \Ecal\,f\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}})\qquad\qquad\qquad\qquad\qquad\qquad\qquad\qquad\qquad$$
+
+**Note on asymmetric bands:** The LLR $q_0$ is non-linear in $\theta_s$ (Poisson likelihoods, per-bin normalisation). Therefore `Gaussian+Error` (at $\theta_s=1+\epstot$) and `Gaussian-Error` (at $\theta_s=1-\epstot$) need not be symmetric about `Gaussian` (at $\theta_s=1$). This asymmetry is a genuine feature of the Poisson statistics, not an artifact.
+
+**Note on band ordering:** Because the bands are unpenalised, it is possible for the upper band ($\+\epstot$) to produce a lower significance than the nominal when the detector is in a regime where the marginal gain from increased asymmetry is small. This indicates the physical prediction is saturated — additional asymmetry provides no extra discriminating power.
 
 
 ---
