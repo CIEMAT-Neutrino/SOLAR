@@ -8,18 +8,21 @@ Math renders with MathJax/KaTeX (`$...$` inline, `$$...$$` display). Open in Git
 
 | File | Purpose | Updated | Currency |
 |---|---|---|---|
-| [solar_analyses.md](solar_analyses.md) | Mathematical derivations: DayNight, HEP, Sensitivity | 2026-08-25 | Current |
+| [solar_analyses.md](solar_analyses.md) | Mathematical derivations: DayNight, HEP, Sensitivity + **statistical methodology updates** | **2026-09-10** | **Current** |
 | [analysis_error_bands.md](analysis_error_bands.md) | Error band convention + `SignificanceError±` justification | 2026-09-01 | Current |
 | [numerical_results.md](numerical_results.md) | Numerical pipeline outputs — cut thresholds, significance values, background model | 2026-06-15 | Partially stale (VD HEP wrong cuts — see flags section) |
-| [thesis_plots_runbook.md](thesis_plots_runbook.md) | Chapter 9 plot commands, sync commands, availability matrix | 2026-08-26 | Active working doc |
-| [artifact_guide.md](artifact_guide.md) | Significance artifact regeneration guide, HTML structure, update workflow | 2026-08-27 | Active working doc |
+| [thesis_plots_runbook.md](thesis_plots_runbook.md) | Chapter 9 plot commands, sync commands, per-study availability + validity matrix | 2026-09-07 | Current — statuses verified against PNFS |
+| [artifact_guide.md](artifact_guide.md) | Significance artifact regeneration guide, HTML structure, update workflow, per-study status vocabulary | 2026-09-07 | Current — baselines re-verified |
 
 ## Missing / Blocked
 
+*Verified 2026-09-07. `thesis_plots_runbook.md` carries the full per-study matrix.*
+
 | Item | Blocked on |
 |---|---|
-| VD HEP significance values | Re-run `src/physics/hep/exposure_plot.py` with current best-sigma cuts |
-| `fiduc_truth` study results | Pipeline not yet complete |
-| `bkg_gamma` study results | Pipeline not yet complete |
-| HEP energy_maink / energy_spk | `--ignore_energy_window` flag not yet implemented |
-| oscpoint_reactor DayNight | Re-run — Results pkls predate corrected Rebin pkls |
+| `membrane_veto_off`, `nuisance_sin13`, `nuisance_escale`, `fiduc_truth` Sensitivity leg | **Code fix** — each is bit-identical to nominal where its knob must move; a re-run alone reproduces it |
+| Sensitivity `bkg_gamma` (all 4 configs), `energy_maink` (all 4), `energy_spk` (lAPA/vdN/vdS), `charge_Q100` (lAPA/vdN/vdS), `charge_Q500` (all) | Pipeline stage not yet run |
+| `unc_bkg4`/`unc_bkg6` HEP | `RERUN-B` (08-28); vdN/vdS values pathological (vdN maxPL[80] 2.88→7.02) |
+| `charge_Q100`, `charge_Q500`, `energy_maink` | `RERUN-B` — pre-date the one-knob policy |
+| Orphan purge (337 files, 2.29 GB) | Awaiting approval; manifest at `output/logs/orphan_purge_manifest_20260907_023811.txt` |
+| VD HEP values in `numerical_results.md` | Superseded — that file predates the 09-06/09-07 productions |

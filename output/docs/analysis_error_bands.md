@@ -1,7 +1,7 @@
 # Analysis Error Bands — Convention and Justification
 
-*Generated: 2026-09-01. Covers DayNight asymmetry uncertainty bands as stored in
-`DayNight_Results.pkl` and propagated to `DayNight_Exposure.pkl`.*
+*Generated: 2026-09-01. Updated 2026-09-10. Covers DayNight asymmetry uncertainty bands as stored in
+`DayNight_Results.pkl` and propagated to `DayNight_Exposure.pkl`. For Sensitivity analysis error bands and fitting methodology, see [Recent Statistical Methodology Updates](#stat-updates) in `solar_analyses.md`.*
 
 ---
 

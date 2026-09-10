@@ -49,8 +49,9 @@ $$
 5. [Sensitivity Analysis](#sensitivity)
 6. [Comparison Across Analyses](#comparison)
 7. [Summary of Significance Outputs](#summary)
-8. [Workflow Flags and Configuration](#flags)
-9. [References](#references)
+8. [Recent Statistical Methodology Updates](#stat-updates)
+9. [Workflow Flags and Configuration](#flags)
+10. [References](#references)
 
 ---
 
@@ -583,7 +584,67 @@ The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's 
 
 ---
 
-## 8. Workflow Flags and Configuration {#flags}
+## 8. Recent Statistical Methodology Updates {#stat-updates}
+
+### 8.1 Sensitivity Analysis: Fitting Methodology Correction
+
+**Problem:** The original Sensitivity analysis implementation (legacy mode) fitted **both** signal amplitude ($A_{\mathrm{pred}}$) and background normalization ($A_{\mathrm{bkg}}$) as free parameters in the $\chi^2$ minimization. This caused physically incorrect behavior: when background uncertainty increased, the background normalization could absorb signal mismatches, causing sensitivity contours to **shrink** (tighten) instead of **loosen** — the opposite of expected physical behavior.
+
+**Solution:** Introduced the `--fit_background` control flag in `Sensitivity_Fitter` and `06_significance.py`:
+
+- **Corrected mode (new default):** `--no-fit_background` fixes $A_{\mathrm{bkg}} = 0$ (background normalization at nominal). Only $A_{\mathrm{pred}}$ is fitted. This produces physically meaningful sensitivity where contours properly loosen with increased background uncertainty.
+- **Legacy mode:** `--fit_background` enables the old behavior (both parameters free) for validation against historical results.
+
+**Implementation details:**
+- When `fit_background=False`, the background term in the likelihood becomes $e_{ij} = \Tbkg + (1+A_{\mathrm{pred}})\cdot p_{ij}$, and only the signal pull term $(A_{\mathrm{pred}}/\spred)^2$ appears in the $\chi^2$ penalty.
+- When `fit_background=True` (legacy), $e_{ij} = (1+A_{\mathrm{bkg}})\Tbkg + (1+A_{\mathrm{pred}})p_{ij}$, with both pull terms active.
+- The stationarity conditions for the corrected mode reduce to a single parameter optimization (exact for 1D, L-BFGS-B for 2D), avoiding the coupled non-linearity that required full 2D minimization in legacy mode.
+
+**Validation:** Study variants `unc_bkg4_nobkgfit`, `unc_bkg6_nobkgfit`, `unc_sig6_nobkgfit` demonstrate the corrected behavior. The `fit_background` study group provides legacy validation.
+
+### 8.2 Sensitivity Analysis: Delta Chi-Square Contour Plotting
+
+**Problem:** Contours were originally drawn at fixed **absolute** $\chi^2$ thresholds (e.g., 0, 1, 4, 9). When overall $\chi^2$ values increased (e.g., due to higher background uncertainty), points would be excluded from the contour, causing it to shrink artificially.
+
+**Solution:** Contours now use **Delta chi-square** $\Delta\chi^2 = \chi^2 - \chi^2_{\min}$:
+
+- This ensures contours represent proper confidence levels: $\Delta\chi^2 = 1, 4, 9$ for 1, 2, 3$\sigma$ confidence.
+- The `Chi2Min` field is now stored in contour DataFrames for diagnostics.
+- Implementation: `contour_plot.py` computes $\chi^2_{\min}$ as the minimum finite value in each grid, then plots $\sqrt{\Delta\chi^2}$.
+
+**Mathematical justification:** For a $\chi^2$ distribution with $k$ degrees of freedom, the confidence level is determined by the difference from the minimum, not the absolute value. Using absolute thresholds conflates the overall goodness-of-fit with the shape of the likelihood surface.
+
+### 8.3 Template Normalization: Per-Year Storage (v2)
+
+**Problem:** Original templates (v1) were pre-scaled by their creation exposure. Rescaling them for different exposures would compound the scaling, producing incorrect results.
+
+**Solution:** Templates are now stored **per-year** (v2), with normalization metadata in `TEMPLATE_NORMALIZATION.json`:
+
+- Templates represent rates: units of $(\mathrm{yr\cdot kt\cdot MeV})^{-1}$ integrated over bin width.
+- Exposure scaling is applied at load time via `scale_to_exposure(arr, exposure_yr)`, which also zeros bins below 1 expected event.
+- Validation: `require_per_year_templates()` refuses v1 templates with a descriptive error message.
+- Benefit: A single template set serves all exposure values without regeneration.
+
+### 8.4 Day-Night Analysis: Asymmetry Uncertainty Bands with Penalty
+
+The Day-Night Asimov LLR includes a Gaussian constraint on the asymmetry amplitude $\theta_s$:
+
+- **Total band:** $\epstot = \sqrt{\varepsilon_{\oplus}^2 + \varepsilon_{\mathrm{osc}}^2}$, where $\varepsilon_{\oplus}$ is the Earth density band (default 0.13) and $\varepsilon_{\mathrm{osc}}$ is the oscillation parameter band (default 0.05).
+- **Scale factors:** $\theta_s \in \{1+\epstot,\,1,\,1-\epstot\}$ (indices 0, 1, 2).
+- **Penalty term:** $q^{\mathrm{pen}}(\theta_s) = \sum_i q_i(\theta_s) - \left(\frac{\theta_s - 1}{\epstot}\right)^2$.
+
+At nominal ($\theta_s=1$), the penalty vanishes. At $\theta_s = 1\pm\epstot$, the penalty equals 1, deflating the raw sum by exactly $1\,\sigma^2$ in significance. This correctly encodes prior information: off-nominal band significances are penalised estimates, not free bounds.
+
+**Why bands can be asymmetric:** The raw LLR $q_0$ is non-linear in $\theta_s$ (Poisson likelihoods, per-bin normalisation). The gain from $+\sigma$ need not equal the loss from $-\sigma$, so `Gaussian+Error` and `Gaussian-Error` need not be symmetric about `Gaussian`.
+
+**Why upper band can fall below nominal:** If the signal gain from increasing $\theta$ is smaller than the penalty of 1, then $q_0(-\sigma) < q_0(\text{nominal})$. This is physically meaningful: the $+1\sigma$ asymmetry scenario provides no additional discriminating power once the nuisance cost is accounted for.
+
+
+---
+
+
+
+## 9. Workflow Flags and Configuration {#flags}
 
 **Orchestrator flags in `run_sensitivity.py`:**
 
@@ -607,7 +668,7 @@ The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's 
 
 ---
 
-## 9. References {#references}
+## 10. References {#references}
 
 [Cowan 2010] G. Cowan, K. Cranmer, E. Gross, O. Vitells, *Asymptotic formulae for likelihood-based tests of new physics*, Eur. Phys. J. C **71** (2011) 1554. <https://arxiv.org/abs/1007.1727>
 
