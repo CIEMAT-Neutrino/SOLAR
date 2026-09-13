@@ -614,11 +614,6 @@ def compute_true_weights(
 
                 if params["PARTICLE_WEIGHTING"] in ["histogram", "surface"]:
                     alpha_truth = []
-                    areas = json.load(open(f"{root}/config/import/surface_areas.json", "r"))
-                    for geometry, surfaces in areas.items():
-                        for surface, area in surfaces.items():
-                            areas[geometry][surface] = eval(area)
-                    A = areas[info["GEOMETRY"].lower()]
                     exposure = pickle.load(
                         open(
                             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
@@ -632,43 +627,28 @@ def compute_true_weights(
                     )
                     for this_exposure in exposure.values():
                         alpha_truth.append(this_exposure["counts"] / total_counts)
-                    # rprint(f"Alpha truth: {alpha_truth}")
-                    # for surface_label, (surface_value, surface_id) in surfaces[
-                    #     info["GEOMETRY"]
-                    # ].items():
-                    #     if surface_id < 0:
-                    #         continue
-                    #     if surface_id == 0:
-                    #         A.append(
-                    #             (info["PRODUCTION_SIZE_Y"])
-                    #             * (info["PRODUCTION_SIZE_Z"])
-                    #         )
-                    #     elif surface_id in [1, 2]:
-                    #         if info["VERSION"] == "hd_1x2x6_lateralAPA":
-                    #             A.append(
-                    #                 (info["PRODUCTION_SIZE_X"])
-                    #                 / 2
-                    #                 * (info["PRODUCTION_SIZE_Z"])
-                    #             )
-                    #         else:
-                    #             A.append(
-                    #                 (info["PRODUCTION_SIZE_X"])
-                    #                 * (info["PRODUCTION_SIZE_Z"])
-                    #             )
-                    #     elif surface_id in [3, 4]:
-                    #         if info["VERSION"] == "hd_1x2x6_lateralAPA":
-                    #             A.append(
-                    #                 (info["PRODUCTION_SIZE_X"])
-                    #                 / 2
-                    #                 * (info["PRODUCTION_SIZE_Y"])
-                    #             )
-                    #         else:
-                    #             A.append(
-                    #                 (info["PRODUCTION_SIZE_X"])
-                    #                 * (info["PRODUCTION_SIZE_Y"])
-                    #             )
-                    #     else:
-                    #         raise ValueError(f"Invalid surface_id: {surface_id}")
+                    
+                    # Calculate surface areas based on production sizes from config
+                    # The old surface_areas.json used hardcoded values that were:
+                    # - Correct for central's surfaces 0,1,2 but wrong for 3,4
+                    # - Wrong for lateral's surfaces 1,2 but correct for 0,3,4
+                    # Now we calculate directly from PRODUCTION_SIZE values
+                    surfaces_dict = json.load(open(f"{root}/config/import/surface_positions.json"))
+                    A = {}
+                    for surface_label, (surface_value, surface_id) in surfaces_dict[info["GEOMETRY"]].items():
+                        if surface_id < 0:
+                            continue
+                        if surface_id == 0:
+                            # APA/CPA: perpendicular to X, spans Y * Z
+                            A[str(surface_id)] = info["PRODUCTION_SIZE_Y"] * info["PRODUCTION_SIZE_Z"]
+                        elif surface_id in [1, 2]:
+                            # Top/Bottom: perpendicular to Y, spans X * Z
+                            A[str(surface_id)] = info["PRODUCTION_SIZE_X"] * info["PRODUCTION_SIZE_Z"]
+                        elif surface_id in [3, 4]:
+                            # FrontCap/EndCap: perpendicular to Z, spans X * Y
+                            A[str(surface_id)] = info["PRODUCTION_SIZE_X"] * info["PRODUCTION_SIZE_Y"]
+                        else:
+                            raise ValueError(f"Invalid surface_id: {surface_id}")
 
                     if params["PARTICLE_WEIGHTING"] == "histogram":
                         pdf_hist, pdf_bins = pickle.load(

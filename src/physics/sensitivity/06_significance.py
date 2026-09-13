@@ -28,8 +28,10 @@ python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA 
 import os
 import sys
 import re
+import copy
 from glob import glob as glob_files
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from scipy import interpolate
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -43,6 +45,35 @@ from lib.fitting import (
     _sensitivity_fit_with_escale    as _fit_with_escale,
     sensitivity_chi2_worker         as _chi2_worker,
 )
+
+# Import rich progress components for manual progress tracking
+from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, TextColumn
+from rich.console import Console
+
+
+# ── Parallel worker utilities for chi² computation ────────────────────────
+# These are defined at module level so they can be pickled for ProcessPoolExecutor
+
+_WORKER_STATIC_DATA = None
+
+
+def _worker_init_static(static_data):
+    """Worker initializer: stores static data in module-level global for reuse."""
+    global _WORKER_STATIC_DATA
+    _WORKER_STATIC_DATA = static_data
+
+
+def _worker_simple_static(task):
+    """Simplified worker: uses pre-stored static data + task-specific (params, obs)."""
+    from lib.fitting import sensitivity_chi2_worker as _chi2_worker
+    params, obs = task
+    full_task = {
+        **_WORKER_STATIC_DATA,
+        "params": params,
+        "obs": obs
+    }
+    return _chi2_worker(full_task)
+
 
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
@@ -197,10 +228,50 @@ parser.add_argument(
         "Use --fit_background only for validation against legacy results."
     ),
 )
+parser.add_argument(
+    "--legacy_background_penalty",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    dest="use_legacy_background_penalty",
+    help=(
+        "Use legacy constant penalty for background uncertainty instead of profiling. "
+        "Default is False (use profiling, which properly propagates background uncertainty "
+        "to contour shapes). Use --legacy_background_penalty only for comparison with old results."
+    ),
+)
+parser.add_argument(
+    "--draft",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable draft mode: uses a coarse subsample of oscillation grid points (10x fewer) "
+        "to produce contours quickly for validation. Only affects grid generation."
+    ),
+)
+parser.add_argument(
+    "--flyweight",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable flyweight mode: load single unoscillated base templates (in coarse 30-bin sensitivity bins) "
+        "and compute oscillation templates on-the-fly using nufast. Avoids saving/loading ~14k templates."
+    ),
+)
 
 args = parser.parse_args()
 if args.debug:
     rprint(args)
+
+# Validate and configure flyweight mode
+if args.flyweight:
+    # Flyweight mode requires nufast backend for on-the-fly oscillation computation
+    if args.oscillation_backend and args.oscillation_backend != "nufast":
+        rprint(
+            f"[yellow][WARNING][/yellow] --flyweight mode requires --oscillation_backend nufast. "
+            f"Overriding --oscillation_backend={args.oscillation_backend} to nufast."
+        )
+    args.oscillation_backend = "nufast"
+    rprint(f"[cyan][INFO][/cyan] Flyweight mode enabled with oscillation_backend=nufast")
 
 # Validate background uncertainty with fit_background combination
 if args.fit_background and args.background_uncertainty > 0.05:
@@ -295,21 +366,165 @@ def resolve_background_template(background_path: str, config: str, nhits: int, a
     )
 
 
+def validate_template_cut_consistency(info: dict, args, config: str, name: str, energy: str, 
+                                       cut_entry: dict, background_path: str, signal_path: str) -> None:
+    """
+    Validate that signal and background templates use identical cuts.
+    
+    This prevents the critical mismatch where:
+    - Background template is for cut (NHits=A, AdjCl=B, OpHits=C)
+    - Signal template is for cut (NHits=X, AdjCl=Y, OpHits=Z)
+    - A != X, B != Y, or C != Z
+    
+    The cut entry should come from the best-cut map, and both template files
+    should have the same cut triplet in their filenames.
+    """
+    nhits = int(cut_entry["NHits"])
+    adjcl = int(cut_entry["AdjCl"])
+    ophits = int(cut_entry["OpHits"])
+    source = cut_entry.get("source", "unknown")
+    
+    # Only validate if cuts came from best-cut map (most common case)
+    if source == "best-map":
+        # Get the best-cut file to verify
+        best_map = _load_best_cut_map(info, args, config, name)
+        if best_map is not None:
+            key = (config, name, energy)
+            if key in best_map:
+                selected = best_map[key]
+                best_nhits = int(selected["NHits"])
+                best_adjcl = int(selected["AdjCl"])
+                best_ophits = int(selected["OpHits"])
+                
+                # Check that the cut from best-map matches what we're using
+                if (nhits != best_nhits or adjcl != best_adjcl or ophits != best_ophits):
+                    raise ValueError(
+                        f"[CRITICAL] Cut mismatch between best-cut map and current cut! "
+                        f"Best-cut map: NHits{best_nhits} AdjCl{best_adjcl} OpHits{best_ophits} | "
+                        f"Current: NHits{nhits} AdjCl{adjcl} OpHits{ophits}. "
+                        f"This indicates a pipeline ordering issue. "
+                        f"Ensure 04_best_cuts.py runs BEFORE template loading."
+                    )
+        
+        # Verify background template filename matches the cut
+        bg_pattern = f"{background_path}/{config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl"
+        if not os.path.exists(bg_pattern):
+            # List all available background templates for this config
+            all_bg = _background_template_candidates(background_path, config)
+            if all_bg:
+                available_cuts = [_parse_background_template(f) for f in all_bg]
+                raise FileNotFoundError(
+                    f"[CRITICAL] Background template mismatch! "
+                    f"Expected: {bg_pattern} | "
+                    f"Available cuts: {available_cuts} | "
+                    f"Best-cut: NHits{nhits} AdjCl{adjcl} OpHits{ophits}. "
+                    f"The background templates do NOT match the best-cut selection. "
+                    f"Regenerate background templates with --force-all-cuts or start fresh with --rewrite."
+                )
+            else:
+                raise FileNotFoundError(
+                    f"[CRITICAL] No background templates found for {config} in {background_path}. "
+                    f"Run 03_template_compute.py --template background first."
+                )
+        
+        # Verify signal template filename matches the cut
+        # Signal templates have format: {config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_*_sin13_*_sin12_*.pkl
+        signal_pattern = f"{signal_path}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_*.pkl"
+        signal_files = glob_files(signal_pattern)
+        if not signal_files:
+            # List all available signal templates
+            all_signal = glob_files(f"{signal_path}/{config}_{name}_NHits*_AdjCl*_OpHits*.pkl")
+            if all_signal:
+                available_signal_cuts = []
+                for sf in all_signal:
+                    sf_name = os.path.basename(sf)
+                    # Extract cut from signal filename
+                    parts = sf_name.replace('.pkl', '').split('_')
+                    sc = {}
+                    for part in parts:
+                        if part.startswith('NHits'):
+                            sc['NHits'] = int(part.replace('NHits', ''))
+                        elif part.startswith('AdjCl'):
+                            sc['AdjCl'] = int(part.replace('AdjCl', ''))
+                        elif part.startswith('OpHits'):
+                            sc['OpHits'] = int(part.replace('OpHits', ''))
+                    if sc:
+                        available_signal_cuts.append(sc)
+                raise FileNotFoundError(
+                    f"[CRITICAL] Signal template mismatch! "
+                    f"Expected pattern: {signal_pattern} | "
+                    f"Available signal template cuts: {available_signal_cuts} | "
+                    f"Best-cut: NHits{nhits} AdjCl{adjcl} OpHits{ophits}. "
+                    f"The signal templates do NOT match the best-cut selection. "
+                    f"Regenerate signal templates or start fresh with --rewrite."
+                )
+            else:
+                raise FileNotFoundError(
+                    f"[CRITICAL] No signal templates found for {config}/{name} in {signal_path}. "
+                    f"Run 03_template_compute.py --template signal first."
+                )
+        
+        # Additional check: verify ALL signal files for this cut have the same triplet
+        if signal_files:
+            for sf in signal_files:
+                sf_name = os.path.basename(sf)
+                parts = sf_name.replace('.pkl', '').split('_')
+                sc = {}
+                for part in parts:
+                    if part.startswith('NHits'):
+                        sc['NHits'] = int(part.replace('NHits', ''))
+                    elif part.startswith('AdjCl'):
+                        sc['AdjCl'] = int(part.replace('AdjCl', ''))
+                    elif part.startswith('OpHits'):
+                        sc['OpHits'] = int(part.replace('OpHits', ''))
+                
+                if (sc.get('NHits') != nhits or sc.get('AdjCl') != adjcl or sc.get('OpHits') != ophits):
+                    raise ValueError(
+                        f"[CRITICAL] Inconsistent cuts in signal templates! "
+                        f"Expected: NHits{nhits} AdjCl{adjcl} OpHits{ophits} | "
+                        f"Found in {sf_name}: NHits{sc.get('NHits')} AdjCl{sc.get('AdjCl')} OpHits{sc.get('OpHits')}"
+                    )
+    
+    # For manual or fallback cuts, just verify files exist
+    elif source in ["manual", "fallback"]:
+        bg_pattern = f"{background_path}/{config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl"
+        signal_pattern = f"{signal_path}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_*.pkl"
+        
+        if not os.path.exists(bg_pattern):
+            raise FileNotFoundError(f"Background template not found: {bg_pattern}")
+        
+        signal_files = glob_files(signal_pattern)
+        if not signal_files:
+            raise FileNotFoundError(
+                f"Signal templates not found matching: {signal_pattern}"
+            )
+    
+    # Success - cuts are consistent
+    rprint(
+        f"[green][CUT CONSISTENCY][/green] Verified: background and signal templates use identical cuts "
+        f"(NHits{nhits} AdjCl{adjcl} OpHits{ophits}) for {config}/{name}/{energy}"
+    )
+
+
 
 def _load_best_cut_map(info: dict, args, config: str, name: str):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference_analysis.upper()]))
     tried = []
+    
+    # Standard location: {PATH}/SENSITIVITY/{config}/{name}/{folder}/...
     for analysis in candidates if not _suffix else ["SENSITIVITY"]:
         for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
-                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{config}/{name}/"
+                f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/"
                 f"{config}_{name}_highest_{analysis}{suffix}.pkl"
             )
             tried.append(filepath)
+            rprint(f"[cyan][INFO][/cyan] Checking best-cut map at: {filepath}")
             if os.path.exists(filepath):
                 if args.debug:
                     rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                rprint(f"[cyan][INFO][/cyan] Loading best-cut map from: {filepath}")
                 return pickle.load(open(filepath, "rb"))
 
     rprint(
@@ -434,18 +649,75 @@ for config in configs:
         }
 
         cut_entries = _resolve_cut_entries(paths, info, args, analysis_info, config, name)
+        
+        # =====================================================================
+        # CRITICAL: Validate that all cuts have matching signal+background templates
+        # =====================================================================
+        for cut_entry in cut_entries:
+            validate_template_cut_consistency(
+                info, args, config, name, energy,
+                cut_entry, paths["background_path"], paths["signal_path"]
+            )
 
         osc_backend = args.oscillation_backend or analysis_info.get("OSCILLATION_BACKEND", "file")
-        (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
-            dm2=args.dm2,
-            sin13=args.sin13,
-            sin12=args.sin12,
-            path=f"{paths['signal_path']}/",
-            ext="pkl",
-            auto=args.dm2 is None and args.sin13 is None and args.sin12 is None,
-            debug=args.debug,
-            backend=osc_backend,
-        )
+        
+        # Always use preconfigured gridpoints from OSCILLATION_GRID, regardless of backend
+        # The backend only affects how templates are loaded (from file vs computed on-the-fly)
+        from lib.oscillation import make_oscillation_grid
+        
+        # Apply draft mode: reduce grid density by 10x for quick validation
+        if args.draft:
+            rprint(f"[cyan][INFO][/cyan] Draft mode enabled: using coarse oscillation grid (10x fewer points)")
+            # Create a copy of analysis_info with reduced steps for draft mode
+            draft_analysis_info = copy.deepcopy(analysis_info)
+            if "OSCILLATION_GRID" in draft_analysis_info:
+                grid = draft_analysis_info["OSCILLATION_GRID"]
+                # Reduce range steps by 10x (these take precedence over plane/line steps)
+                if "ranges" in grid:
+                    for axis_name, axis_config in grid["ranges"].items():
+                        if "steps" in axis_config:
+                            axis_config["steps"] = max(1, axis_config["steps"] // 10)
+                # Reduce plane steps by 10x
+                if "planes" in grid:
+                    for plane in grid["planes"]:
+                        if "steps" in plane:
+                            if isinstance(plane["steps"], list):
+                                plane["steps"] = [max(1, s // 10) for s in plane["steps"]]
+                            else:
+                                plane["steps"] = max(1, plane["steps"] // 10)
+                # Reduce line steps by 10x
+                if "lines" in grid:
+                    for line in grid["lines"]:
+                        if "steps" in line:
+                            line["steps"] = max(1, line["steps"] // 10)
+            else:
+                draft_analysis_info = analysis_info
+        else:
+            draft_analysis_info = analysis_info
+        
+        if args.dm2 is not None or args.sin13 is not None or args.sin12 is not None:
+            # Specific point override: use get_oscillation_datafiles for backward compatibility
+            # when user explicitly provides oscillation parameters
+            (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
+                dm2=args.dm2,
+                sin13=args.sin13,
+                sin12=args.sin12,
+                path=f"{paths['signal_path']}/",
+                ext="pkl",
+                auto=False,
+                debug=args.debug,
+                backend=osc_backend,
+            )
+        else:
+            # Use preconfigured grid from OSCILLATION_GRID
+            (dm2_list, sin13_list, sin12_list) = make_oscillation_grid(
+                draft_analysis_info,
+                dm2=None,
+                sin13=None,
+                sin12=None,
+            )
+            if args.debug:
+                rprint(f"[cyan][INFO][/cyan] Using preconfigured OSCILLATION_GRID: {len(dm2_list)} grid point(s)")
         cut_quality = []
 
         solar_tuple = (
@@ -459,7 +731,7 @@ for config in configs:
             analysis_info["SIN12"],
         )
 
-        for cut in track(cut_entries, description=f"Processing cuts for {config} {name} {energy}..."):
+        for cut in cut_entries:
             nhits = int(cut["NHits"])
             adjcl = int(cut["AdjCl"])
             ophits = int(cut["OpHits"])
@@ -498,7 +770,25 @@ for config in configs:
                 bkg_raw = 0 * pred1_raw
 
             _expected_ecols = len(sensitivity_rebin_centers)
+            
+            # GUARD: Validate and clean templates
+            MAX_TEMPLATE_VALUE = 1e10
             for _label, _arr in [("pred1", pred1_raw), ("pred2", pred2_raw), ("bkg", bkg_raw)]:
+                # Convert to float and handle NaN
+                _arr = np.asarray(_arr, dtype=float)
+                _arr = np.nan_to_num(_arr, nan=0.0)
+                # Clip negative values and extreme values
+                _arr = np.clip(_arr, 0.0, MAX_TEMPLATE_VALUE)
+                
+                # Update the raw arrays
+                if _label == "pred1":
+                    pred1_raw = _arr
+                elif _label == "pred2":
+                    pred2_raw = _arr
+                elif _label == "bkg":
+                    bkg_raw = _arr
+                
+                # Check shape
                 if np.ndim(_arr) >= 2 and _arr.shape[1] != _expected_ecols:
                     raise ValueError(
                         f"Template shape mismatch ({_label}): got {_arr.shape[1]} energy columns, "
@@ -506,35 +796,151 @@ for config in configs:
                         f"Regenerate with: python3 sensitivity/02_signal_template.py --rewrite / "
                         f"sensitivity/01_background_template.py --rewrite"
                     )
+            
+            # Warn if templates had issues
+            if np.any(pred1_raw >= MAX_TEMPLATE_VALUE) or np.any(pred2_raw >= MAX_TEMPLATE_VALUE) or np.any(bkg_raw >= MAX_TEMPLATE_VALUE):
+                rprint(f"[yellow][WARNING][/yellow] Large template values clipped at NHits{nhits} AdjCl{adjcl} OpHits{ophits}")
 
-            # ── Parallel template loading (I/O-bound → ThreadPoolExecutor) ─────────
+            # ── Prepare signal templates ────────────────────────────────────────
             n_workers = args.workers if args.workers is not None else (os.cpu_count() or 4)
             n_io = min(n_workers, len(dm2_list), 32)
 
             _signal_path  = paths["signal_path"]
-            # NOTE: loaded RAW (per-year, no background) so the same arrays can be
-            # rescaled for every requested exposure without re-reading from disk.
-
-            def _load_one(point):
-                dm2_p, sin13_p, sin12_p = point
-                pkl = (
-                    f"{_signal_path}/{config}_{name}"
-                    f"_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
-                    f"_dm2_{dm2_p:.3e}_sin13_{sin13_p:.3e}_sin12_{sin12_p:.3e}.pkl"
+            
+            # Determine the template loading mode
+            if args.flyweight:
+                # Flyweight mode: load single base template (unoscillated, in coarse bins) 
+                # and compute all oscillation templates on-the-fly
+                from lib.oscillation import _get_oscillation_map_computed
+                from lib.oscillation_backends import get_nadir_pdf_file
+                
+                # Load the base template for this cut (shape: N_reco_coarse x N_true_coarse = 30 x 30)
+                base_template_path = (
+                    f"{_signal_path}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_BASE.pkl"
                 )
-                return point, np.nan_to_num(pd.read_pickle(pkl), nan=0.0)
-
-            points = list(zip(dm2_list, sin13_list, sin12_list))
-            fake_raw_dict = {}
-            rprint(f"[cyan][INFO][/cyan] Loading {len(points)} signal templates "
-                   f"({n_io} I/O thread(s))...")
-            with ThreadPoolExecutor(max_workers=n_io) as _io_pool:
-                for _pt, _df in track(
-                    _io_pool.map(_load_one, points),
-                    total=len(points),
-                    description="Loading templates..."
-                ):
-                    fake_raw_dict[_pt] = _df
+                
+                if not os.path.exists(base_template_path):
+                    raise FileNotFoundError(
+                        f"Flyweight mode: base template not found at {base_template_path}. "
+                        f"Run 02_signal_template.py with --flyweight first to generate base templates."
+                    )
+                
+                require_per_year_templates(paths["signal_path"])
+                base_template = np.nan_to_num(pd.read_pickle(base_template_path), nan=0.0)
+                rprint(f"[cyan][INFO][/cyan] Flyweight mode: loaded base template for NHits{nhits} AdjCl{adjcl} OpHits{ophits}")
+                
+                # Validate base template shape - should be in coarse bins (30 x 30)
+                expected_coarse_bins = len(sensitivity_rebin_centers)
+                if base_template.shape != (expected_coarse_bins, expected_coarse_bins):
+                    raise ValueError(
+                        f"Flyweight base template has unexpected shape {base_template.shape}. "
+                        f"Expected ({expected_coarse_bins}, {expected_coarse_bins}) for coarse sensitivity bins."
+                    )
+                
+                rprint(f"[cyan][INFO][/cyan] Flyweight mode: computing {len(dm2_list)} signal templates on-the-fly "
+                       f"(backend=nufast, {n_io} thread(s))...")
+                
+                def _compute_one_flyweight(point):
+                    """Compute signal template for one oscillation point using flyweight base template."""
+                    dm2_p, sin13_p, sin12_p = point
+                    
+                    # Get P_ee at this point using nufast
+                    osc_map = _get_oscillation_map_computed(
+                        dm2=[dm2_p],
+                        sin13=[sin13_p],
+                        sin12=[sin12_p],
+                        backend="nufast",
+                        output="df",
+                        separate_day_night=False,
+                        debug=False,
+                    )
+                    pee_df = list(osc_map.values())[0]
+                    
+                    # pee_df has shape (N_nadir_fine=180, N_energy_fine=120)
+                    # We need to rebin P_ee to coarse energy bins (30) to match base_template
+                    # P_ee is function of (nadir, true_energy)
+                    
+                    # Get fine and coarse energy edges
+                    fine_energy_edges = np.linspace(
+                        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[0],
+                        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[1],
+                        analysis_info.get("OSC_ENERGY_BINS", 120) + 1
+                    )
+                    fine_energy_centers = 0.5 * (fine_energy_edges[1:] + fine_energy_edges[:-1])
+                    coarse_energy_centers = sensitivity_rebin_centers
+                    
+                    # Rebin P_ee from fine (120) to coarse (30) energy bins
+                    # pee_df.columns are fine energy bins, pee_df.index are nadir bins
+                    pee_values_fine = pee_df.to_numpy(dtype=float)  # shape: (N_nadir_fine, N_energy_fine)
+                    
+                    # For each nadir bin, rebin P_ee to coarse energy bins
+                    pee_values_coarse = np.zeros((len(pee_df.index), len(coarse_energy_centers)))
+                    for i_nadir in range(len(pee_df.index)):
+                        # Interpolate P_ee at this nadir from fine to coarse energy bins
+                        interp_func = interpolate.interp1d(
+                            fine_energy_centers,
+                            pee_values_fine[i_nadir, :],
+                            kind='linear',
+                            bounds_error=False,
+                            fill_value='extrapolate'
+                        )
+                        pee_values_coarse[i_nadir, :] = interp_func(coarse_energy_centers)
+                    
+                    # Now convolve: convolved = P_ee_coarse @ base_template.T
+                    # P_ee_coarse shape: (N_nadir, N_true_coarse=30)
+                    # base_template shape: (N_reco_coarse=30, N_true_coarse=30)
+                    # convolved shape: (N_nadir, N_reco_coarse=30)
+                    convolved = np.dot(pee_values_coarse, base_template.T)
+                    
+                    # The result is already in coarse bins, no rebinning needed!
+                    # Scale by detector_mass (template was saved as detector_mass * h)
+                    # Actually, base_template was already scaled by detector_mass in 02_signal_template.py
+                    # So convolved is already scaled correctly
+                    
+                    return point, convolved
+                
+                rprint(f"[cyan][INFO][/cyan] Flyweight mode: computing {len(dm2_list)} signal templates on-the-fly "
+                       f"(backend=nufast, {n_io} thread(s))...")
+                
+                points = list(zip(dm2_list, sin13_list, sin12_list))
+                fake_raw_dict = {}
+                
+                with ThreadPoolExecutor(max_workers=n_io) as _io_pool:
+                    iterator = _io_pool.map(_compute_one_flyweight, points)
+                    
+                    for _pt, _df in track(
+                        iterator,
+                        total=len(points),
+                        description="Computing flyweight templates..."
+                    ):
+                        fake_raw_dict[_pt] = _df
+                        
+            else:
+                # Standard mode: load pre-computed oscillation templates from disk
+                def _load_one(point):
+                    dm2_p, sin13_p, sin12_p = point
+                    pkl = (
+                        f"{_signal_path}/{config}_{name}"
+                        f"_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+                        f"_dm2_{dm2_p:.3e}_sin13_{sin13_p:.3e}_sin12_{sin12_p:.3e}.pkl"
+                    )
+                    return point, np.nan_to_num(pd.read_pickle(pkl), nan=0.0)
+                
+                rprint(f"[cyan][INFO][/cyan] Loading {len(dm2_list)} signal templates from disk "
+                       f"({n_io} I/O thread(s))...")
+                
+                points = list(zip(dm2_list, sin13_list, sin12_list))
+                fake_raw_dict = {}
+                
+                with ThreadPoolExecutor(max_workers=n_io) as _io_pool:
+                    iterator = _io_pool.map(_load_one, points)
+                    
+                    for _pt, _df in track(
+                        iterator,
+                        total=len(points),
+                        description="Loading templates..."
+                    ):
+                        fake_raw_dict[_pt] = _df
 
             # ── Per-exposure evaluation ─────────────────────────────────────
             # Templates are stored per-year, so a second exposure is just a rescale:
@@ -583,37 +989,82 @@ for config in configs:
                 _pred2_slice = pred2_df[:, thld:]
                 _bkg_slice   = bkg_df[:, thld:]
 
-                tasks = [
-                    {
-                        "params":              params,
-                        "obs":                 fake_df_dict[params][:, thld:],
-                        "pred1":               _pred1_slice,
-                        "pred2":               _pred2_slice,
-                        "bkg":                 _bkg_slice,
-                        "sigma_pred":          args.signal_uncertainty,
-                        "sigma_bkg":           args.background_uncertainty,
-                        "marginalize_e_scale": marginalize_e_scale,
-                        "sigma_e_scale":       sigma_e_scale,
-                        "e_centers_thld":      e_centers_thld,
-                        "fit_background":      args.fit_background,
-                    }
+                # ── Prepare tasks for parallel execution ──────────────────────────
+                # For parallel mode: pre-store static data in workers to avoid re-serializing
+                # pred1, pred2, bkg for every single task (14k+ times)
+                static_data = {
+                    "pred1": _pred1_slice,
+                    "pred2": _pred2_slice,
+                    "bkg": _bkg_slice,
+                    "sigma_pred": args.signal_uncertainty,
+                    "sigma_bkg": args.background_uncertainty,
+                    "marginalize_e_scale": marginalize_e_scale,
+                    "sigma_e_scale": sigma_e_scale,
+                    "e_centers_thld": e_centers_thld,
+                    "fit_background": args.fit_background,
+                    "use_legacy_background_penalty": args.use_legacy_background_penalty,
+                }
+
+                # Simple task tuples: only varying data (params, obs)
+                simple_tasks = [
+                    (params, fake_df_dict[params][:, thld:])
                     for params in fake_df_dict
                 ]
 
-                rprint(f"[cyan][INFO][/cyan] Chi² scan: {len(tasks)} grid point(s), "
+                rprint(f"[cyan][INFO][/cyan] Chi² scan: {len(simple_tasks)} grid point(s), "
                        f"{n_workers} worker(s), escale={marginalize_e_scale}")
 
                 if n_workers == 1:
-                    results = [_chi2_worker(t) for t in track(tasks, description="Computing data...")]
+                    # Serial: no benefit from initializer pattern
+                    results = list(track(
+                        (_chi2_worker({
+                            **static_data,
+                            "params": params,
+                            "obs": obs
+                        }) for params, obs in simple_tasks),
+                        total=len(simple_tasks),
+                        description=f"Computing chi\u00b2 for {len(simple_tasks)} grid points..."
+                    ))
                 else:
-                    with ProcessPoolExecutor(max_workers=n_workers) as _cpu_pool:
-                        results = list(_cpu_pool.map(_chi2_worker, tasks))
-
+                    # Parallel: use module-level worker with initializer to share static data
+                    rprint(f"[cyan][INFO][/cyan] Distributing {len(simple_tasks)} tasks to {n_workers} worker processes...")
+                    
+                    with ProcessPoolExecutor(
+                        max_workers=n_workers,
+                        initializer=_worker_init_static,
+                        initargs=(static_data,)
+                    ) as _cpu_pool:
+                        from concurrent.futures import as_completed
+                        
+                        # Submit all tasks and track completion with a progress bar
+                        futures = {
+                            _cpu_pool.submit(_worker_simple_static, task): i
+                            for i, task in enumerate(simple_tasks)
+                        }
+                        results = [None] * len(simple_tasks)
+                        
+                        with Progress(
+                            SpinnerColumn(),
+                            TextColumn("[progress.description]{task.description}"),
+                            BarColumn(),
+                            TaskProgressColumn(),
+                            TimeRemainingColumn(),
+                            console=Console()
+                        ) as progress:
+                            task_id = progress.add_task(
+                                f"Computing chi\u00b2 for {len(simple_tasks)} grid points",
+                                total=len(simple_tasks)
+                            )
+                            
+                            for future in as_completed(futures):
+                                idx = futures[future]
+                                results[idx] = future.result()
+                                progress.update(task_id, advance=1)
                 # ── Collect results (serial post-processing, order preserved) ─────────
                 for i, (params, solar_chi2, react_chi2) in track(
                     enumerate(results),
                     total=len(results),
-                    description="Collecting results..."
+                    description=f"Processing {len(results)} chi\u00b2 grid points..."
                 ):
                     if args.debug:
                         rprint(f"\n--- Combination {i}: {params} ---")
@@ -750,9 +1201,10 @@ for config in configs:
             }
             save_pkl(
                 best_payload,
-                f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}",
+                f"{info['PATH']}/SENSITIVITY/",
                 config=config,
                 name=name,
+                subfolder=args.folder.lower(),
                 filename=f"highest_SENSITIVITY{_study_suffix}",
                 rm=args.rewrite,
                 debug=args.debug,

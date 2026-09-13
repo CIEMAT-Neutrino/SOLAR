@@ -245,6 +245,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 np.asarray(plot_sigmas["Asimov-Error"].values[0], dtype=float),
                 nan=0.0, posinf=0.0, neginf=0.0,
             )
+            # Asimov +/- Error are absolute alternate-scenario curves. Use
+            # their envelope with the nominal curve as the displayed band.
+            asimov_band_upper = np.maximum.reduce(
+                [smoothed_asimov, asimov_upper, asimov_lower]
+            )
+            asimov_band_lower = np.minimum.reduce(
+                [smoothed_asimov, asimov_upper, asimov_lower]
+            )
 
         # Background normalization uncertainty: ErrorGaussian/ErrorAsimov are always required.
         # Both 01_daynight.py (default background_uncertainty=0.02) and the unc_bkg* study
@@ -315,8 +323,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "ExposureUnit": "year",
                     "Significance": significance,
                     "SignificanceUnit": r"\sigma",
-                    "SignificanceError+": np.subtract(asimov_upper, smoothed_asimov) if spectrum_type == "Smoothed" else None,
-                    "SignificanceError-": np.subtract(smoothed_asimov, asimov_lower) if spectrum_type == "Smoothed" else None,
+                    "SignificanceError+": np.subtract(asimov_band_upper, smoothed_asimov) if spectrum_type == "Smoothed" else None,
+                    "SignificanceError-": np.subtract(smoothed_asimov, asimov_band_lower) if spectrum_type == "Smoothed" else None,
                 })
 
         # Background-uncertainty scenario rows: 3 physics scenarios × 2 metrics (Gaussian + Asimov).
@@ -427,7 +435,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             )
             fig.add_trace(
                 go.Scatter(
-                    x=exposure_values, y=asimov_upper,
+                    x=exposure_values, y=asimov_band_upper,
                     mode="lines", marker=dict(color="rgb(31,119,180)"), line=dict(width=0),
                     showlegend=False,
                 ),
@@ -435,7 +443,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             )
             fig.add_trace(
                 go.Scatter(
-                    x=exposure_values, y=asimov_lower,
+                    x=exposure_values, y=asimov_band_lower,
                     marker=dict(color="rgb(31,119,180)"), line=dict(width=0), mode="lines",
                     fillcolor="rgba(31,119,180,0.2)", fill="tonexty", showlegend=False,
                 ),
@@ -616,17 +624,23 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 debug=args.plot,
             )
 
-        for df, df_name in zip(
-            [pd.DataFrame(day_night_exposure)],
-            ["DayNight_Exposure"],
-        ):
-            save_df(
-                df,
-                data_path,
-                config,
-                name,
-                subfolder=_save_subfolder,
-                filename=df_name,
-                rm=args.rewrite,
-                debug=True,
-            )
+        # day_night_exposure accumulates across the whole product loop; restrict the
+        # write to the config/name being saved so later configs don't inherit rows
+        # belonging to earlier ones. upsert keeps other energies' rows intact.
+        _df = pd.DataFrame(day_night_exposure)
+        _df = _df.loc[(_df["Config"] == config) & (_df["Name"] == name)].reset_index(drop=True)
+        _filename = "DayNight_Exposure"
+        _merged = upsert_df_rows(
+            _df, data_path, config=config, name=name,
+            subfolder=_save_subfolder, filename=_filename, debug=args.debug,
+        )
+        save_df(
+            _merged,
+            data_path,
+            config=config,
+            name=name,
+            subfolder=_save_subfolder,
+            filename=_filename,
+            rm=True,
+            debug=True,
+        )

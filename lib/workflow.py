@@ -196,6 +196,7 @@ def compute_root_workflow(
 
         for i in track(
             range(true_tree.GetEntries()),
+            total=true_tree.GetEntries(),
             description="Getting Truth %s data..." % (name),
         ):
             true_tree.GetEntry(i)
@@ -206,6 +207,7 @@ def compute_root_workflow(
 
         for i in track(
             range(reco_tree.GetEntries()),
+            total=reco_tree.GetEntries(),
             description=f"Getting Reco {name} data...",
         ):
             reco_tree.GetEntry(i)

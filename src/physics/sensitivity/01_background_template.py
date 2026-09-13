@@ -6,9 +6,32 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+
+TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
+TEMPLATE_NORMALIZATION_VERSION = 2   # v2 = per-year (mass x rate); v1 = pre-scaled by exposure
+
+
+def write_template_normalization(template_dir: str, detector_mass_kT: float) -> None:
+    """Stamp a template directory as per-year so consumers can refuse stale v1 templates."""
+    os.makedirs(template_dir, exist_ok=True)
+    _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
+    # PNFS/dCache is write-once: opening an existing file for writing raises
+    # "Operation not permitted". Remove first, exactly as prepare_file_save() does.
+    if os.path.exists(_marker):
+        os.remove(_marker)
+    with open(_marker, "w") as fh:
+        json.dump({
+            "version": TEMPLATE_NORMALIZATION_VERSION,
+            "per_year": True,
+            "units": "detector_mass_kT * rate (counts per year)",
+            "detector_mass_kT": float(detector_mass_kT),
+            "note": "Multiply by exposure_yr at load time (06_significance.py).",
+        }, fh, indent=2)
+
 from lib.root import Sensitivity_Fitter
 from lib.oscillation import get_oscillation_datafiles
 from lib.oscillation_backends import get_nadir_pdf_nufast
+from lib.template_guards import clean_and_validate_template
 
 save_path = f"{root}/output/images/analysis/sensitivity/templates"
 
@@ -97,9 +120,34 @@ parser.add_argument("--study_label", type=str, default=None,
 parser.add_argument("--charge_threshold", type=float, default=0,
     help="Charge threshold Q (ADC) forwarded by run_sensitivity.py. Background Rebins are not charge-labeled; this arg is accepted to avoid argparse errors.")
 
+# NEW: Template type argument to distinguish background vs signal
+parser.add_argument(
+    "--template",
+    type=str,
+    choices=["background", "signal"],
+    default="background",
+    help="Template type: 'background' (must use all cuts) or 'signal' (can use best cut). Default: background.",
+)
+
+# NEW: Force all cuts flag for safety
+parser.add_argument(
+    "--force-all-cuts",
+    action="store_true",
+    default=False,
+    help="Force generation for ALL cuts, ignoring any existing best-cut file. "
+         "RECOMMENDED for background templates to prevent mismatches with signal templates.",
+)
+parser.add_argument(
+    "--flyweight",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Flyweight mode flag (accepted but ignored for background templates).",
+)
+
 args = parser.parse_args()
 _ctx = study_context(args)
 _study_suffix = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
 if args.debug:
     rprint(args)
 # smoothing_config = get_smoothing_config(
@@ -118,16 +166,20 @@ def _load_best_cut_map(info: dict, args):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
-    for analysis in candidates:
-        for suffix in ([_suffix, ""] if _suffix else [""]):
+    
+    # Standard location: {PATH}/SENSITIVITY/{config}/{name}/{folder}/...
+    for analysis in candidates if not _suffix else ["SENSITIVITY"]:
+        for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
-                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/"
                 f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
             )
             tried.append(filepath)
+            rprint(f"[cyan][INFO][/cyan] Checking best-cut map at: {filepath}")
             if os.path.exists(filepath):
                 if args.debug:
                     rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                rprint(f"[cyan][INFO][/cyan] Loading best-cut map from: {filepath}")
                 return pickle.load(open(filepath, "rb"))
 
     rprint(
@@ -135,6 +187,77 @@ def _load_best_cut_map(info: dict, args):
         + "\n".join(tried)
     )
     return None
+
+
+def _load_best_cut_map_safe(info: dict, args, phase: str = "Template Generation"):
+    """
+    Load best-cut map with safety checks to prevent template mismatches.
+    
+    CRITICAL: For BACKGROUND templates, we must ensure we don't prematurely
+    limit to a stale best cut. The pipeline order is:
+      1. Generate background templates (ALL cuts)
+      2. Run 04_best_cuts.py (selects best cut)
+      3. Generate signal templates (best cut only)
+    
+    If background templates use a stale best cut, and 04_best_cuts.py then selects
+    a NEW best cut, signal templates will be for the NEW cut while background
+    templates are for the OLD cut -> MISMATCH in 06_significance.py.
+    """
+    
+    # For BACKGROUND templates: ALWAYS warn about using best-cut file
+    if args.template == "background":
+        fastest_sigma = _load_best_cut_map(info, args)
+        
+        if fastest_sigma is not None and not args.force_all_cuts:
+            rprint(
+                f"[red][CRITICAL WARNING][/red] {phase}: BEST-CUT FILE EXISTS but we are generating "
+                f"BACKGROUND templates. This can lead to a MISMATCH if 04_best_cuts.py selects "
+                f"a different cut later in the pipeline. "
+                f"Background templates should be generated for ALL cuts BEFORE best-cut selection. "
+                f"Recommendation: Use --force-all-cuts to generate for all cuts (safe)."
+            )
+            
+            # Additional check: if study_label is set, we must have the correct best-cut file
+            if args.study_label:
+                rprint(
+                    f"[red][CRITICAL][/red] study_label '{args.study_label}' is set. "
+                    f"If the best-cut file is stale, results will be inconsistent. "
+                    f"Ensure 04_best_cuts.py has already run for this study label."
+                )
+        
+        # If --force-all-cuts is set, or no best-cut file exists, use all cuts
+        if args.force_all_cuts or fastest_sigma is None:
+            return None
+        else:
+            return fastest_sigma
+    
+    # For SIGNAL templates: Using best-cut file is safe (and expected)
+    else:
+        fastest_sigma = _load_best_cut_map(info, args)
+        if fastest_sigma is None and not args.force_all_cuts:
+            rprint(
+                "[yellow][WARNING][/yellow] No best-cut map found for signal templates. "
+                "This may indicate that 04_best_cuts.py has not run yet. "
+                "Signal templates require a best cut to be selected first."
+            )
+        return fastest_sigma
+
+
+def _validate_cut_consistency(cut_entries, phase: str, args):
+    """Warn about potential pipeline ordering issues."""
+    if args.template == "background" and len(cut_entries) == 1:
+        rprint(
+            f"[red][CRITICAL][/red] {phase}: Generating background templates for ONLY ONE cut. "
+            f"This is DANGEROUS if 04_best_cuts.py has not yet run. "
+            f"Background templates must cover ALL cuts for best-cut selection to work correctly. "
+            f"To force all cuts, use --force-all-cuts. "
+            f"Current cut: {cut_entries[0]}"
+        )
+    elif args.template == "background" and len(cut_entries) > 1:
+        rprint(
+            f"[green][INFO][/green] {phase}: Generating background templates for {len(cut_entries)} cuts. "
+            f"This is safe for best-cut selection."
+        )
 
 
 def _project_1d_to_2d(hist_1d, oscillation_df, nadir_pdf=None):
@@ -242,6 +365,24 @@ save_figure(
 )
 
 cut_entries = []
+
+# CRITICAL: Check for pipeline ordering issues
+if args.template == "background":
+    # Check if signal templates already exist (indicates 04_best_cuts.py already ran)
+    signal_template_dir = (
+        f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/"
+        f"{args.energy}{_template_suffix}"
+    )
+    if os.path.exists(signal_template_dir):
+        signal_template_files = [f for f in os.listdir(signal_template_dir) if f.startswith("signal_")]
+        if signal_template_files:
+            rprint(
+                f"[red][CRITICAL][/red] Signal templates already exist in {signal_template_dir}. "
+                f"This suggests 04_best_cuts.py has already run, but you are now generating "
+                f"BACKGROUND templates. This is the WRONG ORDER and will cause a MISMATCH. "
+                f"Background templates must be generated BEFORE 04_best_cuts.py."
+            )
+
 if args.nhits is not None and args.adjcls is not None and args.ophits is not None:
     cut_entries = [
         {
@@ -251,8 +392,10 @@ if args.nhits is not None and args.adjcls is not None and args.ophits is not Non
         }
     ]
 else:
-    fastest_sigma = _load_best_cut_map(info, args)
-    if fastest_sigma is not None:
+    # SAFE LOAD: Use new function with warnings
+    fastest_sigma = _load_best_cut_map_safe(info, args, phase="Background Template Generation")
+    
+    if fastest_sigma is not None and not args.force_all_cuts:
         cut_entries = [
             {
                 "NHits": int(value["NHits"]),
@@ -261,7 +404,27 @@ else:
             }
             for value in fastest_sigma.values()
         ]
+        # CRITICAL: Validate this is safe
+        _validate_cut_consistency(cut_entries, "Background Template Generation", args)
+    elif args.force_all_cuts or fastest_sigma is None:
+        # Fall back to all cuts
+        available = sorted(
+            {
+                (int(row["NHits"]), int(row["AdjCl"]), int(row["OpHits"]))
+                for _, row in plot_df[["NHits", "AdjCl", "OpHits"]].drop_duplicates().iterrows()
+            },
+            key=lambda x: (x[0], x[2], x[1]),
+        )
+        cut_entries = [
+            {"NHits": nh, "AdjCl": ad, "OpHits": op}
+            for nh, ad, op in available
+        ]
+        rprint(
+            f"[cyan][INFO][/cyan] Using all {len(cut_entries)} cut triplets "
+            f"(best-cut file missing or --force-all-cuts set)"
+        )
     else:
+        # Should not reach here
         available = sorted(
             {
                 (int(row["NHits"]), int(row["AdjCl"]), int(row["OpHits"]))
@@ -275,6 +438,11 @@ else:
         ]
         rprint(
             f"[yellow][WARNING][/yellow] Falling back to {len(cut_entries)} cut triplets discovered from background data"
+        )
+
+    if args.study_label and fastest_sigma is None:
+        raise FileNotFoundError(
+            f"Missing best-cut map for study '{args.study_label}'; refusing to discover cuts from nominal background data"
         )
 
 for idx, cut in enumerate(cut_entries):
@@ -407,8 +575,8 @@ for idx, cut in enumerate(cut_entries):
     bkg_hist = _project_1d_to_2d(total, oscillation_df, nadir_pdf=_nadir_pdf_weights)
     smoothed_bkg_hist = _project_1d_to_2d(total_smoothed, oscillation_df, nadir_pdf=_nadir_pdf_weights)
 
-    bkg_hist[args.exposure * detector_mass * bkg_hist < 1] = 0.0
-    smoothed_bkg_hist[args.exposure * detector_mass * smoothed_bkg_hist < 1] = 0.0
+    # The '<1 expected event' mask is exposure dependent and is therefore applied
+    # by 06_significance.py after scaling, not baked into the per-year template.
     residual_bkg_hist = smoothed_bkg_hist - bkg_hist
     
     if args.debug:
@@ -417,16 +585,29 @@ for idx, cut in enumerate(cut_entries):
         rprint(
             f"[cyan][INFO][/cyan] Saving sensitivity background template for {args.config} {args.folder} {energy} with NHits{nhits} AdjCl{adjcl} OpHits{ophits}"
         )
+    
+    # Apply stability guards before saving: clean NaN/Inf, clip negative and extreme values
+    _template_to_save = detector_mass * smoothed_bkg_hist
+    _template_to_save = clean_and_validate_template(
+        _template_to_save,
+        label=f"Background template {args.config} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits}",
+        debug=args.debug,
+    )
         
     save_pkl(
-        args.exposure * detector_mass * smoothed_bkg_hist,
+        _template_to_save,
         f"{info['PATH']}/SENSITIVITY",
         config=args.config,
         name=f"background",
-        subfolder=f"{args.folder.lower()}/{energy}{_study_suffix}",
+        subfolder=f"{args.folder.lower()}/{energy}{_template_suffix}",
         filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
         rm=args.rewrite,
         debug=args.debug,
+    )
+    write_template_normalization(
+        f"{info['PATH']}/SENSITIVITY/{args.config}/background/"
+        f"{args.folder.lower()}/{energy}{_template_suffix}",
+        detector_mass,
     )
 
     fig.add_trace(

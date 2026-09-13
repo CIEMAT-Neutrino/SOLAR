@@ -6,7 +6,30 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+
+TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
+TEMPLATE_NORMALIZATION_VERSION = 2   # v2 = per-year (mass x rate); v1 = pre-scaled by exposure
+
+
+def write_template_normalization(template_dir: str, detector_mass_kT: float) -> None:
+    """Stamp a template directory as per-year so consumers can refuse stale v1 templates."""
+    os.makedirs(template_dir, exist_ok=True)
+    _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
+    # PNFS/dCache is write-once: opening an existing file for writing raises
+    # "Operation not permitted". Remove first, exactly as prepare_file_save() does.
+    if os.path.exists(_marker):
+        os.remove(_marker)
+    with open(_marker, "w") as fh:
+        json.dump({
+            "version": TEMPLATE_NORMALIZATION_VERSION,
+            "per_year": True,
+            "units": "detector_mass_kT * rate (counts per year)",
+            "detector_mass_kT": float(detector_mass_kT),
+            "note": "Multiply by exposure_yr at load time (06_significance.py).",
+        }, fh, indent=2)
+
 from lib.oscillation import get_oscillation_datafiles
+from lib.template_guards import clean_and_validate_template
 
 save_path = f"{root}/output/images/analysis/sensitivity/templates"
 
@@ -121,10 +144,20 @@ parser.add_argument(
         "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
     ),
 )
+parser.add_argument(
+    "--flyweight",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable flyweight mode: save only unoscillated base templates in coarse (30-bin) sensitivity bins "
+        "instead of computing and saving ~14k oscillation templates. Skips Phase 2 (oscillation loop)."
+    ),
+)
 
 args = parser.parse_args()
 _ctx = study_context(args)
 _study_suffix = _ctx.study_suffix
+_template_suffix = _ctx.template_suffix
 
 smoothing_config = get_smoothing_config(
     str(root), analysis_name="SENSITIVITY", dimensions="2d", stage="significance"
@@ -173,16 +206,20 @@ def _load_best_cut_map(info: dict, args):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
-    for analysis in candidates:
-        for suffix in ([_suffix, ""] if _suffix else [""]):
+    
+    # Standard location: {PATH}/SENSITIVITY/{config}/{name}/{folder}/...
+    for analysis in candidates if not _suffix else ["SENSITIVITY"]:
+        for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
-                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/"
                 f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
             )
             tried.append(filepath)
+            rprint(f"[cyan][INFO][/cyan] Checking best-cut map at: {filepath}")
             if os.path.exists(filepath):
                 if args.debug:
                     rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                rprint(f"[cyan][INFO][/cyan] Loading best-cut map from: {filepath}")
                 return pickle.load(open(filepath, "rb"))
 
     rprint(
@@ -190,6 +227,88 @@ def _load_best_cut_map(info: dict, args):
         + "\n".join(tried)
     )
     return None
+
+
+def _validate_signal_cut_consistency(cuts_to_process: list, info: dict, args) -> None:
+    """
+    Validate that signal templates will be generated for the correct cut.
+    
+    For SIGNAL templates, we expect to use the best cut from the best-cut file.
+    This function checks that if we loaded a best-cut file, the cuts we're processing
+    match what's in that file.
+    """
+    # Only validate if we have cuts to process
+    if not cuts_to_process:
+        return
+    
+    # If we have a study_label, we MUST have a best-cut file
+    if args.study_label:
+        loaded = _load_best_cut_map(info, args)
+        if loaded is None:
+            raise FileNotFoundError(
+                f"[CRITICAL] study_label '{args.study_label}' is set but no best-cut map found. "
+                f"Signal templates require a best cut to be selected first. "
+                f"Run 04_best_cuts.py before generating signal templates."
+            )
+        
+        # Check that the cuts we're processing match the best-cut file
+        key = (args.config, args.signal, args.energy)
+        if key in loaded:
+            selected = loaded[key]
+            best_nhits = int(selected["NHits"])
+            best_adjcl = int(selected["AdjCl"])
+            best_ophits = int(selected["OpHits"])
+            
+            for i, cut in enumerate(cuts_to_process):
+                if (int(cut["NHits"]) != best_nhits or 
+                    int(cut["AdjCl"]) != best_adjcl or 
+                    int(cut["OpHits"]) != best_ophits):
+                    raise ValueError(
+                        f"[CRITICAL] Signal template cut mismatch! "
+                        f"Best-cut file: NHits{best_nhits} AdjCl{best_adjcl} OpHits{best_ophits} | "
+                        f"Processing: NHits{cut['NHits']} AdjCl{cut['AdjCl']} OpHits{cut['OpHits']} "
+                        f"(index {i}). "
+                        f"Signal templates must match the best-cut selection."
+                    )
+            
+            rprint(
+                f"[green][CUT CONSISTENCY][/green] Signal templates will use best cut: "
+                f"NHits{best_nhits} AdjCl{best_adjcl} OpHits{best_ophits}"
+            )
+        else:
+            raise KeyError(
+                f"[CRITICAL] No entry for {key} in best-cut map. "
+                f"The best-cut file may be for a different config/name/energy."
+            )
+    else:
+        # No study_label - we may be using default cuts or best-cut file
+        loaded = _load_best_cut_map(info, args)
+        if loaded is not None:
+            # Best-cut file exists - verify our cuts match
+            key = (args.config, args.signal, args.energy)
+            if key in loaded:
+                selected = loaded[key]
+                best_nhits = int(selected["NHits"])
+                best_adjcl = int(selected["AdjCl"])
+                best_ophits = int(selected["OpHits"])
+                
+                for i, cut in enumerate(cuts_to_process):
+                    if (int(cut["NHits"]) != best_nhits or 
+                        int(cut["AdjCl"]) != best_adjcl or 
+                        int(cut["OpHits"]) != best_ophits):
+                        rprint(
+                            f"[red][CRITICAL WARNING][/red] Signal template cut mismatch! "
+                            f"Best-cut file: NHits{best_nhits} AdjCl{best_adjcl} OpHits{best_ophits} | "
+                            f"Processing: NHits{cut['NHits']} AdjCl{cut['AdjCl']} OpHits{cut['OpHits']} "
+                            f"(index {i}). "
+                            f"This may cause a mismatch with background templates. "
+                            f"Use --cuts to specify the correct cut or regenerate with --rewrite."
+                        )
+                
+                rprint(
+                    f"[green][CUT CONSISTENCY][/green] Signal templates will use best cut: "
+                    f"NHits{best_nhits} AdjCl{best_adjcl} OpHits{best_ophits}"
+                )
 
 folder = args.folder
 configs = {args.config: [args.signal]}
@@ -276,12 +395,33 @@ for config in configs:
                 {"NHits": int(v["NHits"]), "AdjCl": int(v["AdjCl"]), "OpHits": int(v["OpHits"])}
                 for v in loaded.values() if v is not None
             ]
+        elif args.study_label:
+            raise FileNotFoundError(
+                f"Missing best-cut map for study '{args.study_label}'; refusing to use default cuts"
+            )
         else:
             cuts_to_process = [{"NHits": 4, "AdjCl": 10, "OpHits": 4}]
             rprint("[yellow][WARNING][/yellow] Falling back to default cuts NHits4 AdjCl10 OpHits4")
+    
+    # =====================================================================
+    # CRITICAL: Validate cut consistency before generating signal templates
+    # =====================================================================
+    _validate_signal_cut_consistency(cuts_to_process, info, args)
 
     # ── Phase 1: pre-compute per-cut histograms ──────────────────────────────────
     cut_data = []  # (nhits, adjcl, ophits, h, fig, title)
+    
+    # Determine which binning to use based on flyweight mode
+    if args.flyweight:
+        # Flyweight mode: use coarse sensitivity bins (30 bins) to avoid rebinning later
+        _bin_edges = sensitivity_rebin
+        _energy_centers_for_plot = sensitivity_rebin_centers
+        rprint(f"[cyan][INFO][/cyan] Flyweight mode: using coarse sensitivity bins ({len(_bin_edges)-1} bins)")
+    else:
+        # Standard mode: use fine energy bins (120 bins)
+        _bin_edges = energy_edges
+        _energy_centers_for_plot = energy_centers
+    
     for cut in cuts_to_process:
         nhits  = int(cut["NHits"])
         adjcl  = int(cut["AdjCl"])
@@ -293,7 +433,7 @@ for config in configs:
             subplot_titles=(
                 "Unweighted Smearing",
                 "Solar Weighted Smearing",
-                f"Oscillated ({'Raw' if not signal_smoothing_active else 'Smoothed'})",
+                f"Oscillated ({'Raw' if not signal_smoothing_active else 'Smoothed'})" if not args.flyweight else "Base Template (Coarse Bins)",
             ),
             shared_xaxes=True,
             shared_yaxes=True,
@@ -329,143 +469,197 @@ for config in configs:
         h, xedges, yedges = np.histogram2d(
             run["Reco"][f"{energy}"][this_filter],
             run["Reco"]["SignalParticleK"][this_filter],
-            bins=(energy_edges, energy_edges),
+            bins=(_bin_edges, _bin_edges),
         )
         if args.debug:
             print(f"# of events (counts): {np.sum(h)}")
         fig.add_trace(
-            go.Heatmap(z=np.log10(h), x=energy_centers, y=energy_centers, colorscale="Turbo", coloraxis="coloraxis"),
+            go.Heatmap(z=np.log10(h), x=_energy_centers_for_plot, y=_energy_centers_for_plot, colorscale="Turbo", coloraxis="coloraxis"),
             row=1, col=1,
         )
         for weight in ["B8", "hep", ""]:
             h, xedges, yedges = np.histogram2d(
                 run["Reco"][f"{energy}"][this_filter],
                 run["Reco"]["SignalParticleK"][this_filter],
-                bins=(energy_edges, energy_edges),
+                bins=(_bin_edges, _bin_edges),
                 weights=run["Reco"][f"SignalParticleWeight{weight.lower()}"][this_filter],
             )
             if args.debug:
                 print(f"# of weighted events (counts) {(weight if weight != '' else 'solar')}: {np.sum(h):.2f}")
 
-        h[args.exposure * detector_mass * h < 1] = np.nan
+        # NOTE: the '<1 expected event' mask is exposure dependent, so it is NOT
+        # applied here — templates are stored per-year and 06_significance.py
+        # applies the mask after scaling to the requested exposure.
+        h = np.where(np.isfinite(h), h, np.nan)
         fig.add_trace(
-            go.Heatmap(z=np.log10(h), x=energy_centers, y=energy_centers, colorscale="Turbo", coloraxis="coloraxis"),
+            go.Heatmap(z=np.log10(h), x=_energy_centers_for_plot, y=_energy_centers_for_plot, colorscale="Turbo", coloraxis="coloraxis"),
             row=1, col=2,
         )
         h = np.nan_to_num(h, nan=0.0)
 
         cut_data.append((nhits, adjcl, ophits, h, fig, title))
-
-    # ── Phase 2: oscillation loop (outer) × cuts loop (inner) ───────────────────
-    for dm2, sin13, sin12 in track(
-        zip(dm2_list, sin13_list, sin12_list),
-        total=len(dm2_list),
-        description="Convolving oscillation files...",
-    ):
-        if args.debug:
-            rprint(f"dm2: {dm2:.3e}, sin13: {sin13:.3e}, sin12: {sin12:.3e}")
-
-        if args.oscillation_backend == "file":
-            oscillation_df = pd.read_pickle(
-                f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
-            )
-        else:
-            from lib.oscillation import get_oscillation_map
-            osc_map = get_oscillation_map(
-                backend=args.oscillation_backend,
-                dm2=[float(dm2)],
-                sin13=[float(sin13)],
-                sin12=[float(sin12)],
-                output="df",
+    
+    # ── Phase 1.5: Flyweight mode - save base templates and skip oscillation loop ────
+    if args.flyweight:
+        rprint(f"[cyan][INFO][/cyan] Flyweight mode: saving {len(cut_data)} base template(s) in coarse bins...")
+        for nhits, adjcl, ophits, h, fig, title in cut_data:
+            # Apply stability guards to base histogram before scaling
+            h_clean = clean_and_validate_template(
+                h,
+                label=f"Signal base template {args.config} {args.signal} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits}",
                 debug=args.debug,
             )
-            oscillation_df = next(iter(osc_map.values()))
-
-        is_solar_bf = (
-            dm2 == analysis_info["SOLAR_DM2"]
-            and sin13 == analysis_info["SIN13"]
-            and sin12 == analysis_info["SIN12"]
-        )
-
-        for nhits, adjcl, ophits, h, fig, title in cut_data:
-            convolved = np.dot(oscillation_df.values, h.T)
-            rebin_x, rebin_y, rebin_z, rebin_z_per_x = rebin_hist2d(
-                energy_centers,
-                np.asarray(list(oscillation_df.index)),
-                convolved,
-                sensitivity_rebin,  # type: ignore[arg-type]
-            )
-
-            if args.debug:
-                rprint(
-                    f"[cyan][INFO][/cyan] Saving signal template NHits{nhits} AdjCl{adjcl} OpHits{ophits} "
-                    f"dm2={dm2:.3e} sin13={sin13:.3e} sin12={sin12:.3e}"
-                )
+            # Save the base template (unoscillated histogram in coarse bins)
+            # This is the solar-weighted histogram (weight="")
             save_pkl(
-                args.exposure * detector_mass * rebin_z,
+                # per-year template: detector_mass_kT x rate
+                detector_mass * h_clean,
                 f"{info['PATH']}/SENSITIVITY",
                 config=args.config,
                 name=args.signal,
-                subfolder=f"{folder.lower()}/{energy}{_study_suffix}",
-                filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
+                subfolder=f"{folder.lower()}/{energy}{_template_suffix}",
+                filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_BASE",
                 rm=args.rewrite,
                 debug=args.debug,
             )
+            write_template_normalization(
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
+                detector_mass,
+            )
+            if args.debug:
+                rprint(f"[cyan][INFO][/cyan] Saved flyweight base template: NHits{nhits} AdjCl{adjcl} OpHits{ophits}")
+        
+        # Skip Phase 2 (oscillation loop) in flyweight mode
+        rprint(f"[cyan][INFO][/cyan] Flyweight mode: skipping Phase 2 (oscillation loop)")
+        # Still need to save figures - jump to Phase 3
+        goto_phase_3 = True
+    else:
+        goto_phase_3 = False
 
-            if is_solar_bf:
+    # ── Phase 2: oscillation loop (outer) × cuts loop (inner) ───────────────────
+    if not goto_phase_3:
+        for dm2, sin13, sin12 in track(
+            zip(dm2_list, sin13_list, sin12_list),
+            total=len(dm2_list),
+            description="Convolving oscillation files...",
+        ):
+            if args.debug:
+                rprint(f"dm2: {dm2:.3e}, sin13: {sin13:.3e}, sin12: {sin12:.3e}")
+
+            if args.oscillation_backend == "file":
+                oscillation_df = pd.read_pickle(
+                    f"{info['PATH']}/data/OSCILLATION/pkl/rebin/osc_probability_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
+                )
+            else:
+                from lib.oscillation import get_oscillation_map
+                osc_map = get_oscillation_map(
+                    backend=args.oscillation_backend,
+                    dm2=[float(dm2)],
+                    sin13=[float(sin13)],
+                    sin12=[float(sin12)],
+                    output="df",
+                    debug=args.debug,
+                )
+                oscillation_df = next(iter(osc_map.values()))
+
+            is_solar_bf = (
+                dm2 == analysis_info["SOLAR_DM2"]
+                and sin13 == analysis_info["SIN13"]
+                and sin12 == analysis_info["SIN12"]
+            )
+
+            for nhits, adjcl, ophits, h, fig, title in cut_data:
+                convolved = np.dot(oscillation_df.values, h.T)
+                rebin_x, rebin_y, rebin_z, rebin_z_per_x = rebin_hist2d(
+                    energy_centers,
+                    np.asarray(list(oscillation_df.index)),
+                    convolved,
+                    sensitivity_rebin,  # type: ignore[arg-type]
+                )
+
                 if args.debug:
-                    rprint(f"# of events (absolute counts at {args.exposure} yr × {detector_mass:.2f} kT): {np.sum(convolved):.2f}")
-
-                _osc_fig = make_subplots(rows=1, cols=1)
-                _osc_fig.add_trace(go.Heatmap(
-                    z=oscillation_df.values,
-                    x=[float(c) for c in oscillation_df.columns],
-                    y=list(oscillation_df.index),
-                    colorscale="Viridis",
-                    colorbar=dict(title="P(νe→νe)"),
-                ), row=1, col=1)
-                _osc_fig = format_coustom_plotly(
-                    _osc_fig,
-                    title=f"Solar Oscillogram {config} (Δm²={dm2:.2e} eV², sin²θ₁₂={sin12:.3f})",
+                    rprint(
+                        f"[cyan][INFO][/cyan] Saving signal template NHits{nhits} AdjCl{adjcl} OpHits{ophits} "
+                        f"dm2={dm2:.3e} sin13={sin13:.3e} sin12={sin12:.3e}"
+                    )
+                # Apply stability guards before saving
+                _template_to_save = clean_and_validate_template(
+                    detector_mass * rebin_z,
+                    label=f"Signal template {args.config} {args.signal} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits} dm2={dm2:.3e}",
+                    debug=args.debug,
                 )
-                _osc_fig.update_xaxes(title="True Neutrino Energy (MeV)")
-                _osc_fig.update_yaxes(title="cos(η) Zenith Angle")
-                save_figure(
-                    _osc_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
-                    filename=f"Oscillogram_{energy}", rm=args.rewrite, debug=args.plot,
+                save_pkl(
+                    # per-year template: detector_mass_kT x rate. 06_significance.py
+                    # multiplies by the requested exposure at load time.
+                    _template_to_save,
+                    f"{info['PATH']}/SENSITIVITY",
+                    config=args.config,
+                    name=args.signal,
+                    subfolder=f"{folder.lower()}/{energy}{_template_suffix}",
+                    filename=f"NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}",
+                    rm=args.rewrite,
+                    debug=args.debug,
                 )
-
-                _signal_1d = args.exposure * detector_mass * np.sum(rebin_z, axis=0)
-                _sig_fig = make_subplots(rows=1, cols=1)
-                _sig_fig.add_trace(go.Scatter(
-                    x=sensitivity_rebin_centers,
-                    y=_signal_1d,
-                    mode="lines",
-                    fill="tozeroy",
-                    line_shape="hvh",
-                    name="Solar ν Signal",
-                ), row=1, col=1)
-                _sig_fig = format_coustom_plotly(
-                    _sig_fig, title=f"1D Signal Spectrum {config} {energy} ({args.exposure} yr × {detector_mass:.2f} kT)",
-                )
-                _sig_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
-                # y shows absolute counts (exposure_yr × detector_mass_kT × rate) — not a rate
-                _sig_fig.update_yaxes(title="Events / MeV")
-                save_figure(
-                    _sig_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
-                    filename=f"Signal1D_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}", rm=args.rewrite, debug=args.plot,
+                write_template_normalization(
+                    f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/"
+                    f"{folder.lower()}/{energy}{_template_suffix}",
+                    detector_mass,
                 )
 
-                fig.add_trace(
-                    go.Heatmap(
-                        z=np.log10(np.where(rebin_z > 0, rebin_z, np.nan)) if not signal_smoothing_active else np.log10(smooth_histogram_with_config(rebin_z, signal_smoothing_config)),
-                        x=sensitivity_rebin,
-                        y=rebin_y,
-                        colorscale="Turbo",
-                        coloraxis="coloraxis",
-                    ),
-                    row=1, col=3,
-                )
+                if is_solar_bf:
+                    if args.debug:
+                        rprint(f"# of events (absolute counts at {args.exposure} yr × {detector_mass:.2f} kT): {np.sum(convolved):.2f}")
+
+                    _osc_fig = make_subplots(rows=1, cols=1)
+                    _osc_fig.add_trace(go.Heatmap(
+                        z=oscillation_df.values,
+                        x=[float(c) for c in oscillation_df.columns],
+                        y=list(oscillation_df.index),
+                        colorscale="Viridis",
+                        colorbar=dict(title="P(νe→νe)"),
+                    ), row=1, col=1)
+                    _osc_fig = format_coustom_plotly(
+                        _osc_fig,
+                        title=f"Solar Oscillogram {config} (Δm²={dm2:.2e} eV², sin²θ₁₂={sin12:.3f})",
+                    )
+                    _osc_fig.update_xaxes(title="True Neutrino Energy (MeV)")
+                    _osc_fig.update_yaxes(title="cos(η) Zenith Angle")
+                    save_figure(
+                        _osc_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
+                        filename=f"Oscillogram_{energy}", rm=args.rewrite, debug=args.plot,
+                    )
+
+                    _signal_1d = args.exposure * detector_mass * np.sum(rebin_z, axis=0)
+                    _sig_fig = make_subplots(rows=1, cols=1)
+                    _sig_fig.add_trace(go.Scatter(
+                        x=sensitivity_rebin_centers,
+                        y=_signal_1d,
+                        mode="lines",
+                        fill="tozeroy",
+                        line_shape="hvh",
+                        name="Solar ν Signal",
+                    ), row=1, col=1)
+                    _sig_fig = format_coustom_plotly(
+                        _sig_fig, title=f"1D Signal Spectrum {config} {energy} ({args.exposure} yr × {detector_mass:.2f} kT)",
+                    )
+                    _sig_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
+                    # y shows absolute counts (exposure_yr × detector_mass_kT × rate) — not a rate
+                    _sig_fig.update_yaxes(title="Events / MeV")
+                    save_figure(
+                        _sig_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
+                        filename=f"Signal1D_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}", rm=args.rewrite, debug=args.plot,
+                    )
+
+                    fig.add_trace(
+                        go.Heatmap(
+                            z=np.log10(np.where(rebin_z > 0, rebin_z, np.nan)) if not signal_smoothing_active else np.log10(smooth_histogram_with_config(rebin_z, signal_smoothing_config)),
+                            x=sensitivity_rebin,
+                            y=rebin_y,
+                            colorscale="Turbo",
+                            coloraxis="coloraxis",
+                        ),
+                        row=1, col=3,
+                    )
 
     # ── Phase 3: format and save per-cut figures ─────────────────────────────────
     for nhits, adjcl, ophits, h, fig, title in cut_data:

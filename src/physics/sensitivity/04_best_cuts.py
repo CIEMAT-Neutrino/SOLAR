@@ -52,6 +52,9 @@ parser.add_argument(
         "Used by the membrane_veto study."
     ),
 )
+parser.add_argument("--nhits",  type=int, default=None, help="Number of hits cut. If provided, adds this cut to the evaluation list.")
+parser.add_argument("--adjcls", type=int, default=None, help="Adjacent clusters cut. If provided, adds this cut to the evaluation list.")
+parser.add_argument("--ophits", type=int, default=None, help="Optical hits cut. If provided, adds this cut to the evaluation list.")
 
 args = parser.parse_args()
 _ctx = study_context(args)
@@ -162,6 +165,18 @@ def _load_template(path: str):
 # ── discover cuts ───────────────────────────────────────────────────────────────
 
 cut_candidates = [c for c in (_parse_cut(f) for f in _background_candidates()) if c is not None]
+
+# Add manually specified cuts from flags if provided
+if args.nhits is not None and args.adjcls is not None and args.ophits is not None:
+    manual_cut = {"NHits": args.nhits, "AdjCl": args.adjcls, "OpHits": args.ophits}
+    # Only add if not already in the list
+    if manual_cut not in cut_candidates:
+        cut_candidates.append(manual_cut)
+        rprint(
+            f"[cyan][INFO][/cyan] Added manual cut candidate: "
+            f"NHits{args.nhits} AdjCl{args.adjcls} OpHits{args.ophits}"
+        )
+
 if not cut_candidates:
     rprint(
         f"[red][ERROR][/red] No background templates found in {background_path}. "
@@ -215,10 +230,20 @@ for cut in cut_candidates:
     else:
         bkg = np.zeros_like(pred_solar)
 
-    # Scale to expected counts
-    pred_solar_scaled = args.exposure * pred_solar
-    pred_react_scaled = args.exposure * pred_react
-    bkg_scaled        = args.exposure * bkg
+    # Scale per-year templates to expected counts, then drop bins below one expected
+    # event. That threshold is not cosmetic: bb_mask=(b_t > 0) below uses it to decide
+    # which bins enter the Barlow-Beeston fit, and a bin with ~0 expected background
+    # contributes an unbounded chi2. It used to be baked into the templates by
+    # 01/02_*_template.py; those now store per-year values, so it is applied here (and
+    # in 06_significance.scale_to_exposure) at the exposure actually being evaluated.
+    def _to_counts(arr):
+        scaled = args.exposure * np.asarray(arr, dtype=float)
+        scaled[scaled < 1.0] = 0.0
+        return scaled
+
+    pred_solar_scaled = _to_counts(pred_solar)
+    pred_react_scaled = _to_counts(pred_react)
+    bkg_scaled        = _to_counts(bkg)
 
     obs_at_react = (pred_react_scaled + bkg_scaled)[:, thld:]
     obs_at_solar = (pred_solar_scaled + bkg_scaled)[:, thld:]
@@ -231,6 +256,8 @@ for cut in cut_candidates:
         SigmaPred=args.signal_uncertainty,
         SigmaBkg=args.background_uncertainty,
         bb_mask=(b_t > 0),
+        fit_background=False,
+        use_legacy_background_penalty=False,
     )
     chi2_solar_at_react, _, _ = fitter_s.Fit(0.0, 0.0)
 
@@ -239,6 +266,8 @@ for cut in cut_candidates:
         SigmaPred=args.signal_uncertainty,
         SigmaBkg=args.background_uncertainty,
         bb_mask=(b_t > 0),
+        fit_background=False,
+        use_legacy_background_penalty=False,
     )
     chi2_react_at_solar, _, _ = fitter_r.Fit(0.0, 0.0)
 
@@ -289,13 +318,18 @@ best_payload = {
 
 save_pkl(
     best_payload,
-    f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}",
+    f"{info['PATH']}/SENSITIVITY/",
     config=args.config,
     name=args.signal,
+    subfolder=args.folder.lower(),
     filename=f"highest_SENSITIVITY{_study_suffix}",
     rm=args.rewrite,
     debug=args.debug,
 )
+
+# Print where the best-cut file was saved
+best_cut_path = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.config}_{args.signal}_highest_SENSITIVITY{_study_suffix}.pkl"
+rprint(f"[cyan][INFO][/cyan] Best-cut file saved to: {best_cut_path}")
 
 json_payload: dict = {}
 for (cfg, nm, en), values in best_payload.items():

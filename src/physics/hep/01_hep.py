@@ -522,6 +522,15 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         sigma3 = 0.0
         sigma2_curve = []
         sigma3_curve = []
+        raw_profile_significances = [[], [], []]
+        pl_sigma2 = 0.0
+        pl_sigma3 = 0.0
+        found_pl_sigma2 = False
+        found_pl_sigma3 = False
+        pl_sigma2_curve = []
+        pl_sigma3_curve = []
+        
+        # Initialize all arrays - they will only be populated when metrics are active
         raw_gaussian_significances = [[], [], []]
         raw_asimov_significances = [[], [], []]
         smoothed_gaussian_significances = [[], [], []]
@@ -533,14 +542,6 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         raw_rebinned_bins = [[], [], []]
         smoothed_rebinned_bins = [[], [], []]
 
-        raw_profile_significances = [[], [], []]
-        pl_sigma2 = 0.0
-        pl_sigma3 = 0.0
-        found_pl_sigma2 = False
-        found_pl_sigma3 = False
-        pl_sigma2_curve = []
-        pl_sigma3_curve = []
-
         raw_signal_rate = np.asarray(hep_signal, dtype=float)
         raw_background_rate = np.asarray(raw_background, dtype=float)
         raw_bkg_error_rate = np.asarray(raw_combined_b_error, dtype=float)
@@ -551,9 +552,6 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         smoothed_signal_rate = np.clip(np.asarray(smoothed_hep, dtype=float), 0.0, None)
         smoothed_background_rate = np.clip(np.asarray(smoothed_background, dtype=float), 0.0, None)
         smoothed_bkg_error_rate = np.asarray(smoothed_combined_b_error, dtype=float)
-
-        prev_raw_starts      = [np.zeros(0, dtype=int) for _ in range(3)]
-        prev_smoothed_starts = [np.zeros(0, dtype=int) for _ in range(3)]
 
         # kdx 0 → upper band, kdx 1 → central (conservative), kdx 2 → lower band.
         # With pl_conservative_sigma=0: [+1, 0, -1] (standard Asimov at nominal signal).
@@ -573,8 +571,13 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # statistic for bins without MC support, regardless of exposure.
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
 
+        prev_raw_starts = [np.zeros(0, dtype=int) for _ in range(3)]
+        prev_smoothed_starts = [np.zeros(0, dtype=int) for _ in range(3)]
+        
         for years in exposure_grid:
             factor = years * detector_mass
+            
+            # Only compute asimov/gaussian metrics when active
             if _compute_asimov_gaussian:
                 for kdx, detection_requirement in enumerate([2.9, 3.0, 3.1]):
                     raw = _hep_significance_step(
@@ -604,19 +607,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     smoothed_gaussian_significances[kdx].append(smoothed["gaussian_rebinned"])
                     smoothed_asimov_significances[kdx].append(smoothed["asimov_rebinned"])
                     smoothed_rebinned_bins[kdx].append(smoothed["n_bins"])
-            else:
-                for kdx in range(3):
-                    raw_gaussian_no_rebin_significances[kdx].append(0.0)
-                    raw_asimov_no_rebin_significances[kdx].append(0.0)
-                    raw_gaussian_significances[kdx].append(0.0)
-                    raw_asimov_significances[kdx].append(0.0)
-                    raw_rebinned_bins[kdx].append(0)
-                    smoothed_gaussian_no_rebin_significances[kdx].append(0.0)
-                    smoothed_asimov_no_rebin_significances[kdx].append(0.0)
-                    smoothed_gaussian_significances[kdx].append(0.0)
-                    smoothed_asimov_significances[kdx].append(0.0)
-                    smoothed_rebinned_bins[kdx].append(0)
-
+            
+            # Only compute PL metrics when active
             if _compute_pl:
                 if _workflow["pl_signal_bands"]:
                     for kdx in range(3):
@@ -637,45 +629,56 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     )
                     for kdx in range(3):
                         raw_profile_significances[kdx].append(_raw_pl_val)
+
+            # Track maximum significance across all active metrics
+            if _compute_asimov_gaussian:
+                if smoothed_asimov_significances[1][-1] > sigmamax:
+                    sigmamax = smoothed_asimov_significances[1][-1]
+
+                if smoothed_asimov_significances[1][-1] > 2 and not found_sigma2:
+                    sigma2 = factor
+                    found_sigma2 = True
+                    if sigma2 < last_sigma2 and args.debug:
+                        rprint(
+                            f"Found smoothed sigma2 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
+                        )
+                    if sigma2 < last_sigma2:
+                        last_sigma2 = sigma2
+
+                if smoothed_asimov_significances[1][-1] > 3 and not found_sigma3:
+                    sigma3 = factor
+                    found_sigma3 = True
+                    if sigma3 < last_sigma3 and args.debug:
+                        rprint(
+                            f"Found smoothed sigma3 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
+                        )
+                    if sigma3 < last_sigma3:
+                        last_sigma3 = sigma3
+                
+                sigma2_curve.append(sigma2)
+                sigma3_curve.append(sigma3)
             else:
-                for kdx in range(3):
-                    raw_profile_significances[kdx].append(0.0)
-
-            if smoothed_asimov_significances[1][-1] > sigmamax:
-                sigmamax = smoothed_asimov_significances[1][-1]
-
-            if smoothed_asimov_significances[1][-1] > 2 and not found_sigma2:
-                sigma2 = factor
-                found_sigma2 = True
-                if sigma2 < last_sigma2 and args.debug:
-                    rprint(
-                        f"Found smoothed sigma2 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
-                    )
-                if sigma2 < last_sigma2:
-                    last_sigma2 = sigma2
-
-            if smoothed_asimov_significances[1][-1] > 3 and not found_sigma3:
-                sigma3 = factor
-                found_sigma3 = True
-                if sigma3 < last_sigma3 and args.debug:
-                    rprint(
-                        f"Found smoothed sigma3 with exposure {factor:.0f} for nhits {nhit} ophits {ophit} and adjcls {adjcl}"
-                    )
-                if sigma3 < last_sigma3:
-                    last_sigma3 = sigma3
-
-            sigma2_curve.append(sigma2)
-            sigma3_curve.append(sigma3)
+                # No asimov/gaussian computation, append current values (stay at 0.0)
+                sigma2_curve.append(sigma2)
+                sigma3_curve.append(sigma3)
 
             if _compute_pl:
+                if raw_profile_significances[1][-1] > sigmamax:
+                    sigmamax = raw_profile_significances[1][-1]
+                
                 if raw_profile_significances[1][-1] > 2 and not found_pl_sigma2:
                     pl_sigma2 = factor
                     found_pl_sigma2 = True
                 if raw_profile_significances[1][-1] > 3 and not found_pl_sigma3:
                     pl_sigma3 = factor
                     found_pl_sigma3 = True
-            pl_sigma2_curve.append(pl_sigma2)
-            pl_sigma3_curve.append(pl_sigma3)
+                
+                pl_sigma2_curve.append(pl_sigma2)
+                pl_sigma3_curve.append(pl_sigma3)
+            else:
+                # No PL computation, append current values (stay at 0.0)
+                pl_sigma2_curve.append(pl_sigma2)
+                pl_sigma3_curve.append(pl_sigma3)
 
         # Per-bin significance spectra — only needed when significance_bins is active.
         _n_energy_bins = len(hep_rebin_centers) - threshold_idx
@@ -733,6 +736,9 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             adaptive_energy_axis_display = hep_rebin_centers[threshold_idx:]
             adaptive_bin_widths_display = np.ones(_n_energy_bins, dtype=float)
 
+        # Initialize raw_profile_pre_isotonic to None; will be set if pl_isotonic is True
+        raw_profile_pre_isotonic = None
+        
         if _compute_pl and _workflow["pl_isotonic"]:
             # Capture pre-isotonic curves for spike detection before overwriting.
             raw_profile_pre_isotonic = [list(arr) for arr in raw_profile_significances]
@@ -999,6 +1005,15 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     )
     if _compute_significance_bins or _compute_asimov_significance_bins:
         significance_bins_df = pd.DataFrame(significance_bins)
+        # Preserve columns from prior runs when recomputing only subset of metrics
+        significance_bins_df = merge_with_existing_df(
+            significance_bins_df,
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+            config, name,
+            filename=f"{energy}_HEP_SignificanceBins{_study_suffix}",
+            key_cols=["Config", "Name", "EnergyLabel", "NHits", "OpHits", "AdjCl", "BinMode", "BinIndex"],
+            debug=args.debug,
+        )
         save_df(
             significance_bins_df,
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",

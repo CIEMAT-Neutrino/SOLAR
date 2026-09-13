@@ -76,6 +76,15 @@ parser.add_argument(
         "Used by the membrane_veto study."
     ),
 )
+parser.add_argument(
+    "--flyweight",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable flyweight mode: save only unoscillated base templates in coarse bins instead of "
+        "~14k oscillation templates. Forwarded to 02_signal_template.py only (signal templates)."
+    ),
+)
 
 args = parser.parse_args()
 
@@ -137,4 +146,5 @@ if args.template in ["background", "all"]:
     run_macro("src/physics/sensitivity/01_background_template.py")
 
 if args.template in ["signal", "all"]:
-    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"])
+    flyweight_args = ["--flyweight"] if args.flyweight else []
+    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"] + flyweight_args)

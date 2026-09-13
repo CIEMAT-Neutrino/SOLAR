@@ -94,8 +94,8 @@ info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json")
 def load_best_cut_map() -> Optional[dict]:
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
-    for analysis in candidates:
-        for suffix in ([_suffix, ""] if _suffix else [""]):
+    for analysis in candidates if not _suffix else ["SENSITIVITY"]:
+        for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
                 f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
                 f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"

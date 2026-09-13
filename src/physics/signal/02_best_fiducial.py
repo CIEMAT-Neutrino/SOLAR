@@ -371,9 +371,10 @@ for config in configs:
         )
         df_list.append(signal_df)
         for bkg_label in get_background_samples(str(root)):
-            # Background scans never use truth coordinates — they have no truth particle position.
-            # Always load the nominal background scan regardless of --truth_fiducial.
-            filepath = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan.pkl"
+            # For --truth_fiducial, load background scans using truth positions (MainX/Y/Z for
+            # radiological, SignalParticleX/Y/Z for particle-gun backgrounds). This maintains
+            # consistency with the signal fiducialization when optimizing fiducial cuts.
+            filepath = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy_label}_Fiducial_Scan{_scan_suffix}.pkl"
             if not os.path.exists(filepath):
                 continue
             bkg_df = pd.read_pickle(filepath)

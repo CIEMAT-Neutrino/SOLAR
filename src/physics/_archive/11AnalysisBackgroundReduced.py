@@ -165,7 +165,7 @@ for config in configs:
                     user_input["colors"][name],
                 ),
             ),
-            total=6 * 10 * 7 * 10,
+            total=6 * 10 * 7 * 10 * len(user_input["weights"][name]),
             description=f"Iterating over cut configurations for reco {energy}...",
         ):
             if this_fiducial == 0:

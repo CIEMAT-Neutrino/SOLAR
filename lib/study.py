@@ -116,6 +116,7 @@ class StudyVariant(TypedDict):
     analysis_override:    NotRequired[Optional[List[str]]]  # override --analysis for this variant only
     ignore_energy_window: NotRequired[bool]            # pass --ignore_energy_window to run_sensitivity.py
     skip_best_sigmas:     NotRequired[bool]            # pass --skip_best_sigmas (use nominal best cuts)
+    skip_templates:       NotRequired[bool]            # pass --skip-templates (reuse existing template pkls)
     extra:                NotRequired[List[str]]       # verbatim flags appended last
 
 
@@ -153,23 +154,23 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "unc": [
         # Signal uncertainty — HEP only (DayNight uses σ_sig=0 by statistical design)
         # Scan bracketing the default 30%: tighter (20%) and looser (40%)
-        {"label": "unc_sig20", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.20"]},
-        {"label": "unc_sig40", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.40"]},
+        {"label": "unc_sig20", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.20"]},
+        {"label": "unc_sig40", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["HEP"],         "extra": ["--signal_uncertainty", "0.40"]},
         # Signal uncertainty — Sensitivity only; scan bracketing default unc_sig4
-        {"label": "unc_sig0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.00"]},
-        {"label": "unc_sig2",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.02"]},
-        {"label": "unc_sig6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06"]},
+        {"label": "unc_sig0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.00"]},
+        {"label": "unc_sig2",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.02"]},
+        {"label": "unc_sig6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06"]},
         # Background uncertainty — DayNight + Sensitivity; effect enters when σ_bkg²·N_bkg > 1.
         # σ_bkg² · N_bkg > 1  →  N_bkg > 1/σ_bkg²  (6%→278, 4%→625, 2%(default)→2500 events)
-        {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.00"]},
-        {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.04"]},
-        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.06"]},
+        {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.00"]},
+        {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.04"]},
+        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.06"]},
         # Background uncertainty with fixed background normalization (physically correct fitting)
         # These variants demonstrate proper behavior: contours loosen with increased σ_bkg
-        {"label": "unc_bkg4_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.04", "--no-fit_background"]},
-        {"label": "unc_bkg6_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--background_uncertainty", "0.06", "--no-fit_background"]},
+        {"label": "unc_bkg4_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.04", "--no-fit_background"]},
+        {"label": "unc_bkg6_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.06", "--no-fit_background"]},
         # Signal uncertainty with fixed background normalization for comparison
-        {"label": "unc_sig6_nobkgfit",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06", "--no-fit_background"]},
+        {"label": "unc_sig6_nobkgfit",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06", "--no-fit_background"]},
     ],
     # 9.1.2 — nuisance parameter decomposition (Sensitivity only)
     # Default profile is 'full' (sin²θ₁₃ + energy scale). Variants isolate each nuisance.
@@ -177,9 +178,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # HEP ProfileLikelihood handles its own nuisances inside the PL fit.
     # skip_best_sigmas=True: cuts already optimised at 'full' profile; reuse them here.
     "nuisance": [
-        {"label": "nuisance_nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "nominal"]},
-        {"label": "nuisance_sin13",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "marginalize_sin13"]},
-        {"label": "nuisance_escale",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "energy_scale"]},
+        {"label": "nuisance_nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "nominal"]},
+        {"label": "nuisance_sin13",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "marginalize_sin13"]},
+        {"label": "nuisance_escale",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "energy_scale"]},
     ],
     # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
@@ -216,8 +217,8 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     ],
     # 9.2.4 — background model normalization (folder provides isolation)
     "bkgmodel": [
-        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
+        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True},
+        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
     # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates
@@ -310,6 +311,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "skip_rebin": True,
             "skip_best_cuts": True,
             "skip_best_sigmas": True,
+            "skip_templates": True,
             "extra": ["--fit_background"],
         },
         # Uncertainty scans with legacy background fitting for comparison
@@ -318,6 +320,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "skip_rebin": True,
             "skip_best_cuts": True,
             "skip_best_sigmas": True,
+            "skip_templates": True,
             "analysis_override": ["Sensitivity"],
             "extra": ["--fit_background", "--signal_uncertainty", "0.06"],
         },
@@ -326,6 +329,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "skip_rebin": True,
             "skip_best_cuts": True,
             "skip_best_sigmas": True,
+            "skip_templates": True,
             "extra": ["--fit_background", "--background_uncertainty", "0.06"],
         },
     ],

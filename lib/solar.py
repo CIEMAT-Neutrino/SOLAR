@@ -97,12 +97,15 @@ def get_pdg_color(pdgs: list[str], debug: bool = False):
 def get_solar_weigths(weights="B16-GS98"):
     """
     Get the solar flux weights.
+    
+    Weights are in units of 10^10 cm^-2 s^-1 (standard convention in solar neutrino physics).
+    Based on BS05(OP) and B16-GS98 standard solar models.
     """
     if weights == "BS05":
         weights_dict = {
-            "pp": 5.991e00,
-            "pep": 1e-10,
-            "b7": 1e-10,
+            "pp": 5.991e00,   # 5.991 x 10^10 cm^-2 s^-1
+            "pep": 1.421e-2,  # 1.421 x 10^8  cm^-2 s^-1 = 0.01421 x 10^10
+            "b7": 4.844e-1,   # 4.844 x 10^9  cm^-2 s^-1 = 0.4844 x 10^10
             "n13": 3.066e-02,
             "o15": 2.331e-02,
             "f17": 5.836e-04,
@@ -113,9 +116,9 @@ def get_solar_weigths(weights="B16-GS98"):
 
     if weights == "B16-GS98":
         weights_dict = {
-            "pp": 5.98e00,
-            "pep": 1.44e-10,
-            "b7": 4.93e-10,
+            "pp": 5.98e00,    # 5.98 x 10^10 cm^-2 s^-1
+            "pep": 1.44e-2,   # 1.44 x 10^8  cm^-2 s^-1 = 0.0144 x 10^10
+            "b7": 4.93e-1,    # 4.93 x 10^9  cm^-2 s^-1 = 0.493 x 10^10
             "n13": 2.78e-02,
             "o15": 2.05e-02,
             "f17": 5.29e-04,
@@ -126,7 +129,7 @@ def get_solar_weigths(weights="B16-GS98"):
 
     else:
         rprint("[red][ERROR] Weights not defined, using B16-GS98![/red]")
-        get_solar_weigths("B16-GS98")
+        return get_solar_weigths("B16-GS98")
 
 
 def get_solar_colors(source):
@@ -194,8 +197,23 @@ def get_solar_spectrum(
     y = np.zeros(len(x))  # Array that will host the interpolated flux values.
 
     for idx, source in enumerate(components):
-        array = read_solar_data(source, path, weigths)
-        if source.split("_")[0] != "pep" and source.split("_")[0] != "b7":
+        base_source = source.split("_")[0]
+        
+        # Handle b7 specially: it has two lines (b7_1 at 0.384 MeV, b7_2 at 0.861 MeV)
+        if base_source == "b7":
+            for jdx in range(1, 3):
+                array = read_solar_data(f"b7_{jdx}", path, weigths)
+                func = interpolate_solar_data(
+                    array[0],
+                    array[1],
+                    source,
+                    interpolation=interpolation,
+                    bounds=bounds,
+                    debug=debug,
+                )
+                y = y + func(x)
+        else:
+            array = read_solar_data(source, path, weigths)
             func = interpolate_solar_data(
                 array[0],
                 array[1],

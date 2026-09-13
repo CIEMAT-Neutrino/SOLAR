@@ -57,9 +57,13 @@ Run examples
 
   # DayNight only, skip plots:
   python3 src/pipelines/run_sensitivity.py --analysis DayNight --no-plot
+
+  # Sensitivity draft mode (coarse grid for fast validation):
+  python3 src/pipelines/run_sensitivity.py --analysis Sensitivity --draft
 """
 
 import os
+import glob
 import shutil
 import sys
 import time
@@ -69,6 +73,66 @@ from typing import List, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
+
+
+def warn_template_mismatch_risk(config: str, folder: str, name: str, analysis_type: str = "Sensitivity"):
+    """
+    Warn about potential template mismatch risks in the Sensitivity pipeline.
+    
+    The critical issue: If background templates are generated AFTER the best-cut file
+    exists, they may only cover the OLD best cut. Then when 04_best_cuts.py runs,
+    it may select a NEW best cut, and signal templates will be generated for that
+    new cut. This results in 06_significance.py using MISMATCHED templates.
+    """
+    analysis_info_local = load_analysis_info(str(root))
+    path = analysis_info_local.get("PATH", "")
+    
+    # Check for existing best-cut files
+    best_cut_pattern = (
+        f"{path}/SENSITIVITY/{config}/{name}/{folder.lower()}/"
+        f"{config}_{name}_highest_SENSITIVITY*"
+    )
+    best_cut_files = glob.glob(best_cut_pattern)
+    
+    # Check for existing background templates
+    bg_template_pattern = (
+        f"{path}/SENSITIVITY/{config}/background/{folder.lower()}/"
+        f"*/NHits*_AdjCl*_OpHits*.pkl"
+    )
+    bg_template_files = glob.glob(bg_template_pattern)
+    
+    # Check for existing signal templates
+    signal_template_pattern = (
+        f"{path}/SENSITIVITY/{config}/{name}/{folder.lower()}/"
+        f"*/signal_*.pkl"
+    )
+    signal_template_files = glob.glob(signal_template_pattern)
+    
+    # Warn if best-cut file exists but background templates don't (incomplete state)
+    if best_cut_files and not bg_template_files:
+        rprint(
+            f"[red][CRITICAL][/red] Inconsistent state detected for {config}/{name}/{folder}: "
+            f"Best-cut file exists ({len(best_cut_files)} file(s)) but NO background templates found. "
+            f"This may cause 04_best_cuts.py to fail or produce incorrect results."
+        )
+    
+    # Warn if both best-cut and background templates exist (potential stale state)
+    if best_cut_files and bg_template_files:
+        rprint(
+            f"[red][CRITICAL WARNING][/red] Potential stale state for {config}/{name}/{folder}: "
+            f"Both best-cut file ({len(best_cut_files)} file(s)) AND background templates ({len(bg_template_files)} file(s)) exist. "
+            f"If background templates were generated AFTER the best-cut file, they may only cover "
+            f"the OLD best cut. When 04_best_cuts.py runs, it may select a DIFFERENT cut, causing "
+            f"signal templates to be generated for the NEW cut -> MISMATCH in 06_significance.py."
+        )
+    
+    # Warn if signal templates exist but no best-cut file (incomplete state)
+    if signal_template_files and not best_cut_files:
+        rprint(
+            f"[red][CRITICAL][/red] Inconsistent state detected for {config}/{name}/{folder}: "
+            f"Signal templates exist ({len(signal_template_files)} file(s)) but NO best-cut file found. "
+            f"Signal templates require a best cut to be selected first."
+        )
 
 
 ENERGY_CHOICES = [
@@ -584,6 +648,37 @@ parser.add_argument(
         "the nominal fiducial outputs. Requires --fiducialization (enabled automatically)."
     ),
 )
+parser.add_argument(
+    "--skip-templates",
+    action="store_true",
+    default=False,
+    help=(
+        "Skip template computation (Phases 1 & 3 in Sensitivity pipeline: background and signal templates). "
+        "Use existing template pkl files. Only valid when the study does not change template contents "
+        "(e.g., uncertainty scans, background model normalization). Requires existing templates to be present."
+    ),
+)
+parser.add_argument(
+    "--flyweight",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable flyweight mode for Sensitivity analysis: saves only a single unoscillated base template "
+        "per cut instead of ~14k oscillation templates. Oscillation templates are computed on-the-fly "
+        "using nufast during 06_significance.py. Base templates are saved in coarse (30-bin) sensitivity bins "
+        "to avoid rebinning overhead. Use --flyweight to enable, --no-flyweight (default) for pre-computed templates."
+    ),
+)
+parser.add_argument(
+    "--draft",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable draft mode for Sensitivity analysis: uses a coarse subsample of oscillation grid points "
+        "to produce contours quickly for validation. Reduces grid density by ~10x (steps divided by 10). "
+        "Only affects --analysis Sensitivity. Use --draft to enable, --no-draft (default) for full grid."
+    ),
+)
 
 args = parser.parse_args()
 
@@ -609,6 +704,28 @@ if args.truth_fiducial and not args.fiducialization:
     rprint("[cyan][INFO][/cyan] --truth_fiducial requires fiducialization stage — enabling automatically.")
     args.fiducialization = True
 
+# =========================================================================
+# CRITICAL: Global warning for dangerous flag combinations
+# =========================================================================
+if args.computation and not args.rewrite and "Sensitivity" in args.analysis:
+    if not args.skip_templates or not args.skip_best_cuts:
+        rprint(
+            "[red][CRITICAL WARNING][/red] GLOBAL FLAG CONFLICT DETECTED:"
+            "\n  --computation is enabled (will generate new outputs)"
+            "\n  --no-rewrite is set (will NOT overwrite existing files)"
+            "\n  --analysis includes Sensitivity"
+            "\n\n"
+            "This combination is DANGEROUS because:"
+            "\n  • New best-cut selection may produce a DIFFERENT cut than existing files"
+            "• Existing background templates may be for the OLD best cut"
+            "• New signal templates will be for the NEW best cut"
+            "• Result: 06_significance.py will use MISMATCHED templates"
+            "\n\n"
+            "RECOMMENDATION: Either:"
+            "\n  1. Use --rewrite to regenerate ALL files consistently, OR"
+            "\n  2. Use --skip-templates AND --skip_best_cuts to reuse existing files"
+        )
+
 configure_global_logging(verbose=args.verbose)
 analysis_info = load_analysis_info(str(root))
 selected_background_components = get_selected_background_components(args.analysis, analysis_info)
@@ -633,6 +750,10 @@ if not args.computation:
 elif not args.significance:
     rprint(
         "[cyan][INFO][/cyan] Significance disabled (--no-significance): skipping DayNight/HEP/Sensitivity computation."
+    )
+if args.draft:
+    rprint(
+        "[cyan][INFO][/cyan] Draft mode enabled: Sensitivity analysis will use coarse oscillation grid for fast validation."
     )
 
 
@@ -747,6 +868,14 @@ def membrane_veto_args_for() -> List[str]:
     # Only emitted when disabled: the default matches each script's own default,
     # so nominal runs keep their existing command lines unchanged.
     return [] if args.membrane_veto else ["--no-membrane_veto"]
+
+
+def draft_args_for() -> List[str]:
+    return ["--draft"] if args.draft else []
+
+
+def flyweight_args_for() -> List[str]:
+    return ["--flyweight"] if args.flyweight else []
 
 
 def fiducialize_oscillation_args_for() -> List[str]:
@@ -1241,6 +1370,59 @@ def run_hep_stage(config: str, folder: str, name: str):
 
 
 def run_sensitivity_stage(config: str, folder: str, name: str):
+    # =========================================================================
+    # CRITICAL: Warn about potential template mismatch scenarios
+    # =========================================================================
+    if args.computation and not args.skip_templates and not args.skip_best_cuts:
+        if not args.rewrite:
+            rprint(
+                "[red][CRITICAL WARNING][/red] Sensitivity pipeline: --no-rewrite is set but templates and best cuts will be generated. "
+                "This can cause MISMATCHES if:"
+                "  1. Existing background templates are for a DIFFERENT best cut than will be selected now."
+                "  2. 04_best_cuts.py selects a new best cut, but old background templates are reused."
+                "  3. Signal templates are generated for the NEW best cut, but background templates are for the OLD cut."
+                "\n"
+                "RECOMMENDATION: Use --rewrite when running full computation to ensure consistency."
+            )
+        
+        # Check if best-cut file already exists (potential stale state)
+        best_cut_pattern = (
+            f"{analysis_info.get('PATH', '')}/SENSITIVITY/{config}/{name}/{folder.lower()}/"
+            f"{config}_{name}_highest_SENSITIVITY*"
+        )
+        best_cut_files = glob.glob(best_cut_pattern)
+        if best_cut_files:
+            rprint(
+                f"[red][CRITICAL WARNING][/red] Existing best-cut file(s) found: {best_cut_files}"
+                "\n"
+                "This means 04_best_cuts.py has likely run before. If you are now regenerating "
+                "templates, ensure the pipeline runs in the correct order:"
+                "  1. 03_template_compute.py --template background (ALL cuts)"
+                "  2. 04_best_cuts.py (selects best cut)"
+                "  3. 03_template_compute.py --template signal (best cut only)"
+                "\n"
+                "If background templates were generated AFTER the best-cut file was created, "
+                "they may only cover the OLD best cut, leading to a MISMATCH with new signal templates."
+            )
+    
+    # Warn about dangerous flag combinations
+    if args.computation and args.significance:
+        if not args.skip_templates and args.skip_best_cuts:
+            rprint(
+                "[yellow][WARNING][/yellow] Sensitivity pipeline: Generating templates but skipping best-cut selection. "
+                "This is ONLY safe if the existing best-cut file matches the templates being generated."
+            )
+        
+        if args.skip_templates and not args.skip_best_cuts:
+            rprint(
+                "[yellow][WARNING][/yellow] Sensitivity pipeline: Skipping templates but running best-cut selection. "
+                "This may fail if 04_best_cuts.py requires template data."
+            )
+    
+    # Check for pre-existing state that could cause mismatches
+    if args.computation and not args.skip_templates:
+        warn_template_mismatch_risk(config, folder, name, "Sensitivity")
+    
     run_smoothing_optimization(config, folder, name, "Sensitivity")
     plot_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for()
     template_base_args = base_args_for(config, folder, include_background=False) + ["--signal", name] + study_label_args_for() + charge_threshold_only_args_for()
@@ -1265,29 +1447,35 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         energy_args = common_analysis_args_for([energy])
         if args.computation and args.significance:
             # Phase 1 — background templates (all cuts)
-            run_analysis_script(
-                "src/physics/sensitivity/03_template_compute.py",
-                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for(),
-            )
+            if not args.skip_templates:
+                run_analysis_script(
+                    "src/physics/sensitivity/03_template_compute.py",
+                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for(),
+                )
+            else:
+                rprint("[cyan][INFO][/cyan] Skipping background template computation (--skip-templates).")
             # Phase 2 — cut optimisation: score all background-candidate cuts, write highest_SENSITIVITY{_study_suffix}.pkl
             if not args.skip_best_cuts:
                 cutopt_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name]
                 run_analysis_script(
                     "src/physics/sensitivity/04_best_cuts.py",
                     cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
-    )
+                )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping 04_best_cuts.py (--skip_best_cuts): using existing best-cut selection.")
             # Phase 3 — full signal template grid for the selected best cut
-            run_analysis_script(
-                "src/physics/sensitivity/03_template_compute.py",
-                template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for() + membrane_veto_args_for(),
-            )
+            if not args.skip_templates:
+                run_analysis_script(
+                    "src/physics/sensitivity/03_template_compute.py",
+                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for() + membrane_veto_args_for() + flyweight_args_for(),
+                )
+            else:
+                rprint("[cyan][INFO][/cyan] Skipping signal template computation (--skip-templates).")
             # Phase 4 — sensitivity analysis with best cut (no re-optimisation)
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for() + fit_background_args_for(),
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for() + fit_background_args_for() + draft_args_for() + flyweight_args_for(),
     )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
@@ -1296,7 +1484,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         for profile_name in profile_names:
             run_analysis_script(
                 "src/physics/sensitivity/contour_plot.py",
-                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for(),
+                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for() + draft_args_for(),
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
@@ -1400,6 +1588,27 @@ for config, folder in product(args.config, args.folder):
         )
         continue
 
+    # =========================================================================
+    # CRITICAL: Warn about pipeline ordering for Sensitivity analysis
+    # =========================================================================
+    if "Sensitivity" in args.analysis and args.computation:
+        rprint(
+            f"[cyan][PIPELINE ORDER REMINDER][/cyan] For Sensitivity analysis on {config}/{folder}:"
+            f"\n  PHASE 1: 03_template_compute.py --template background (ALL cuts)"
+            f"\n  PHASE 2: 04_best_cuts.py (selects best cut from all cuts)"
+            f"\n  PHASE 3: 03_template_compute.py --template signal (best cut ONLY)"
+            f"\n  PHASE 4: 06_significance.py (uses templates for SAME cut)"
+            f"\n\n"
+            f"  ⚠️  MISMATCH RISK: If Phase 1 runs AFTER best-cut file exists, it may only"
+            f"      generate templates for the OLD best cut. Then if Phase 2 selects a"
+            f"      NEW best cut, Phase 3 will generate signal templates for that NEW cut,"
+            f"      causing Phase 4 to use MISMATCHED templates (background: OLD, signal: NEW)."
+            f"\n"
+            f"  ✅ SAFE: Use --rewrite to regenerate all files with consistent cuts."
+            f"\n"
+            f"  ✅ SAFE: For background templates, use --force-all-cuts (in 03_template_compute.py)."
+        )
+    
     rprint(f"Processing config={config} folder={folder} analyses={','.join(args.analysis)}")
     run_shared_prerequisites(config, folder, available_names)
 

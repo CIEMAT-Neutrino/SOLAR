@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -15,12 +16,13 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument(
     "--config",
+    nargs="+",
     type=str,
     help="The configuration to load",
-    default="hd_1x2x6_centralAPA",
+    default=["hd_1x2x6_centralAPA"],
 )
 parser.add_argument(
-    "--signal", type=str, help="The name of the configuration", default="marley"
+    "--signal", nargs="+", type=str, help="The name of the configuration", default=["marley"]
 )
 parser.add_argument(
     "--folder",
@@ -31,8 +33,9 @@ parser.add_argument(
 )
 parser.add_argument(
     "--analysis",
+    nargs="+",
     type=str,
-    default="Sensitivity",
+    default=["Sensitivity"],
     help="Analysis type for PNFS best-cuts resolution (Weighted_Distributions_Fiducial only).",
 )
 parser.add_argument("--nhits",  type=int, default=None, help="NHits cut override (else from PNFS)")
@@ -64,6 +67,36 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+# Self-dispatch: run once per (config, signal, analysis) — signal determines ROOT loading
+# and compute_reco_workflow params, so it must be in the dispatch key (unlike cutflow_plot.py).
+if len(args.config) > 1 or len(args.signal) > 1 or len(args.analysis) > 1:
+    from itertools import product as _product
+    for _cfg, _sig, _ana in _product(args.config, args.signal, args.analysis):
+        _cmd = [
+            sys.executable, __file__,
+            "--config",              _cfg,
+            "--signal",              _sig,
+            "--analysis",            _ana,
+            "--folder",              args.folder,
+            "--energy",              args.energy,
+            "--mc_filter_threshold", str(args.mc_filter_threshold),
+            "--oscillation_backend", args.oscillation_backend,
+            "--rewrite"       if args.rewrite       else "--no-rewrite",
+            "--debug"         if args.debug         else "--no-debug",
+            "--membrane_veto" if args.membrane_veto else "--no-membrane_veto",
+        ]
+        if args.nhits  is not None: _cmd += ["--nhits",  str(args.nhits)]
+        if args.ophits is not None: _cmd += ["--ophits", str(args.ophits)]
+        if args.adjcls is not None: _cmd += ["--adjcls", str(args.adjcls)]
+        rprint(f"\n[green][CMD][/green] 04_weighted.py --config {_cfg} --signal {_sig} --analysis {_ana}")
+        subprocess.run(_cmd, check=False)
+    sys.exit(0)
+
+args.config   = args.config[0]
+args.signal   = args.signal[0]
+args.analysis = args.analysis[0]
+
 config = args.config
 name = args.signal
 configs = {config: [name]}
@@ -290,7 +323,7 @@ for config in configs:
                 _weights_list,
                 _surfaces,
             ),
-            total=(3 if "marley" in args.signal else 1),
+            total=len(_weights_list) * len(_surfaces),
             description=f"Processing {name} - {config}",
         ):
             if surface is None:
@@ -308,6 +341,13 @@ for config in configs:
                         "Name": name,
                         "Folder": args.folder,
                         "Component": weight_labels,
+                        # These are the truth-normalised (unoscillated) weights:
+                        # SignalParticleWeight*, not SignalParticleWeight*Osc{Mean,Day,Night}.
+                        # "Solar" here is therefore ~1/<P_ee> (~3x) larger than the "Solar"
+                        # component in the Cutflow / Counts pkls, which is OscMean. Flagged
+                        # explicitly so the two are never compared as if they were the same
+                        # quantity. No Day/Night split exists at this stage.
+                        "Oscillation": "Truth",
                         "Weight": weight,
                         "Type": "signal" if "marley" in name else "background",
                         "Surface": surface,
@@ -367,6 +407,8 @@ for config in configs:
                     "Name":        name,
                     "Folder":      args.folder,
                     "Component":   weight_labels,
+                    # Truth-normalised (unoscillated) weights — see note in nhits_list above.
+                    "Oscillation": "Truth",
                     "Weight":      weight,
                     "Type":        "signal" if "marley" in name else "background",
                     "Stage":       stage_name,

@@ -253,16 +253,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin12_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin12)/Reactor Contour (sin12) contour pair found for HD Central
 
 ---
 
@@ -317,16 +308,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_solar_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/full/hd_1x2x6_centralAPA_marley_react_sin13_df_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin13)/Reactor Contour (sin13) contour pair found for HD Central
 
 ---
 
@@ -381,9 +363,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ### HD Central
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
+No significance plot found for HD Central.
 
 ---
 
@@ -451,33 +431,9 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ---
 
-### HD Central: Mixing Angle Projections
+### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_sin13_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### HD Central: Mass Splitting Projections
-
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_hd_1x2x6_centralAPA_marley_Truncated_SolarEnergy_NHits1_AdjCl4_OpHits8_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
+No 1D projections found.
 
 ---
 
@@ -575,10 +531,10 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 1 | 8 | 4 | 4 | 2 | 951.44 |
+| HD Central | - | - | - | - | - | - |
 | HD Lateral | 3 | 10 | 2 | 4 | 2 | 28.75 |
-| VD Top | 8 | 10 | 8 | 4 | 2 | 14.91 |
-| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | 74.48 |
+| VD Top | 8 | 10 | 8 | 4 | 2 | - |
+| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | - |
 
 ---
 
@@ -718,7 +674,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 ## Coverage and Notes
 
 - Configs with selected sin12 solar contour plots:
-- truncated: 4
+- truncated: 3
 - Cut table values are parsed from selected result filenames when available.
 - Re-run script to refresh this folder after each workflow run:
 - /usr/bin/python3 scripts/generate_sensitivity_presentation.py --folder truncated

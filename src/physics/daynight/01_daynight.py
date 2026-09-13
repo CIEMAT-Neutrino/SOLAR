@@ -38,9 +38,12 @@ parser.add_argument(
 parser.add_argument(
     "--day_fraction",
     type=float,
-    default=0.493,
+    default=float(load_analysis_info(str(root)).get("DAY_FRACTION", 0.493)),
     help=(
-        "Fraction of total exposure attributed to daytime. Default 0.493 (SURF latitude ~44.3°N, averaged over a full year)."
+        "Fraction of total exposure attributed to daytime. Defaults to DAY_FRACTION in "
+        "physics.json (0.493 — SURF latitude ~44.3°N, averaged over a full year). The same "
+        "key scales the Solar Day / Solar Night components in significance_plot.py and "
+        "cutflow_plot.py, so all three stay consistent."
     ),
 )
 parser.add_argument(
@@ -135,11 +138,10 @@ explicit_debug_flag = "--debug" in sys.argv and "--no-debug" not in sys.argv
 #   earth_density_band : MSW matter effect from Earth density profile variations (PREM)
 #   oscillation_band   : residual uncertainty from theta12 and dm221 (PDG values)
 #
-# The asymmetry amplitude θ is treated as a profiled nuisance: θ ~ N(1, total_band).
-# For each scenario scale θ_s ∈ {1+band, 1, 1-band}, the Asimov LLR is penalised by
-# the Gaussian constraint term ((θ_s − 1) / total_band)², so off-nominal bands are
-# correctly deflated rather than reported as raw unpenalised q0 values.
-# At θ_s = 1 (nominal) the penalty is zero and q0 is unchanged.
+# The three asymmetry_scales bracket the full predicted range:
+#   upper  (1 + total_band): stronger matter effect / larger oscillation parameters
+#   nominal (1.0)           : best-fit prediction
+#   lower  (1 - total_band): weaker matter effect / smaller oscillation parameters
 total_asymmetry_band = float(np.sqrt(args.earth_density_band**2 + args.oscillation_band**2))
 asymmetry_scales = [1.0 + total_asymmetry_band, 1.0, 1.0 - total_asymmetry_band]
 
@@ -358,8 +360,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             factor = years * detector_mass
 
             # Smoothed effective background — always needed (main Gaussian metric).
-            smoothed_night_counts = factor * (night_fraction * smoothed_background + smoothed_signal_night)
-            smoothed_day_counts   = factor * (day_fraction   * smoothed_background + smoothed_signal_day)
+            smoothed_night_counts = factor * night_fraction * (smoothed_background + smoothed_signal_night)
+            smoothed_day_counts   = factor * day_fraction   * (smoothed_background + smoothed_signal_day)
             smoothed_background_effective = (
                 smoothed_night_counts / night_fraction ** 2
                 + smoothed_day_counts  / day_fraction  ** 2
@@ -368,8 +370,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             # Raw effective background — only needed for raw variants, error bands, or raw Asimov.
             _need_raw_eff = _compute_raw or _compute_error_bands
             if _need_raw_eff:
-                raw_night_counts = factor * (night_fraction * raw_background + raw_signal_night)
-                raw_day_counts   = factor * (day_fraction  * raw_background + raw_signal_day)
+                raw_night_counts = factor * night_fraction * (raw_background + raw_signal_night)
+                raw_day_counts   = factor * day_fraction   * (raw_background + raw_signal_day)
                 raw_background_effective = (
                     raw_night_counts / night_fraction ** 2
                     + raw_day_counts  / day_fraction  ** 2
@@ -427,7 +429,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     raw_signal = factor * asymmetry_scale * (raw_signal_night - raw_signal_day)
                     raw_signal = np.where(raw_background_effective == 0, 0, raw_signal)
 
+                # ── Optional: raw Gaussian + raw error bands ──────────────────
                 if _compute_error_bands:
+                    raw_signal = factor * asymmetry_scale * (raw_signal_night - raw_signal_day)
+                    raw_signal = np.where(raw_background_effective == 0, 0, raw_signal)
+                    
                     raw_gaussian_error = evaluate_significance(
                         raw_signal, raw_background_effective,
                         background_uncertainty=raw_bkg_uncertainty_eff, type="gaussian",
@@ -436,10 +442,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     raw_gaussian_error_significances[kdx].append(
                         float(np.sqrt(np.sum(np.power(raw_gaussian_error, 2))))
                     )
-                else:
-                    raw_gaussian_error_significances[kdx].append(0.0)
-
                 if _compute_raw:
+                    if not _compute_error_bands:
+                        raw_signal = factor * asymmetry_scale * (raw_signal_night - raw_signal_day)
+                        raw_signal = np.where(raw_background_effective == 0, 0, raw_signal)
+                    
                     raw_gaussian = evaluate_significance(
                         raw_signal, raw_background_effective, type="gaussian",
                     )
@@ -447,8 +454,6 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     raw_gaussian_significances[kdx].append(
                         float(np.sqrt(np.sum(np.power(raw_gaussian, 2))))
                     )
-                else:
-                    raw_gaussian_significances[kdx].append(0.0)
 
                 # ── Main: smoothed Gaussian (always) ──────────────────────────
                 smoothed_signal = factor * asymmetry_scale * (
@@ -465,8 +470,6 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     smoothed_gaussian_error_significances[kdx].append(
                         float(np.sqrt(np.sum(np.power(smoothed_gaussian_error, 2))))
                     )
-                else:
-                    smoothed_gaussian_error_significances[kdx].append(0.0)
 
                 smoothed_gaussian = evaluate_significance(
                     smoothed_signal, smoothed_background_effective, type="gaussian",
@@ -480,8 +483,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 # H0 (no asymmetry): h0_n = g*(n_n+n_d), h0_d = f*(n_n+n_d)
                 if _compute_asimov:
                     raw_signal_night_k = raw_signal_day + asymmetry_scale * (raw_signal_night - raw_signal_day)
-                    raw_n_night_k = factor * (night_fraction * raw_background + raw_signal_night_k)
-                    raw_n_day_k   = factor * (day_fraction   * raw_background + raw_signal_day)
+                    raw_n_night_k = factor * night_fraction * (raw_background + raw_signal_night_k)
+                    raw_n_day_k   = factor * day_fraction   * (raw_background + raw_signal_day)
                     raw_total_k   = raw_n_night_k + raw_n_day_k
                     _raw_mask = (raw_n_night_k > 0) & (raw_n_day_k > 0) & (raw_total_k > 0)
                     raw_llr = np.zeros_like(raw_n_night_k)
@@ -490,19 +493,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         + raw_n_day_k[_raw_mask] * np.log(raw_n_day_k[_raw_mask]   / (day_fraction   * raw_total_k[_raw_mask]))
                     )
                     raw_llr = np.nan_to_num(raw_llr, nan=0.0, posinf=0.0, neginf=0.0)
-                    # Gaussian constraint penalty on θ: ((θ_s − 1) / σ_band)²
-                    # Zero for nominal (kdx=1, asymmetry_scale=1.0); deflates ±band q0 by 1.
-                    _theta_penalty = (
-                        ((asymmetry_scale - 1.0) / total_asymmetry_band) ** 2
-                        if total_asymmetry_band > 0.0 else 0.0
-                    )
-                    raw_asimov_significances[kdx].append(
-                        float(np.sqrt(max(float(np.sum(raw_llr)) - _theta_penalty, 0.0)))
-                    )
+                    raw_asimov_significances[kdx].append(float(np.sqrt(max(float(np.sum(raw_llr)), 0.0))))
 
                     smoothed_signal_night_k = smoothed_signal_day + asymmetry_scale * (smoothed_signal_night - smoothed_signal_day)
-                    smoothed_n_night_k = factor * (night_fraction * smoothed_background + smoothed_signal_night_k)
-                    smoothed_n_day_k   = factor * (day_fraction   * smoothed_background + smoothed_signal_day)
+                    smoothed_n_night_k = factor * night_fraction * (smoothed_background + smoothed_signal_night_k)
+                    smoothed_n_day_k   = factor * day_fraction   * (smoothed_background + smoothed_signal_day)
                     smoothed_total_k   = smoothed_n_night_k + smoothed_n_day_k
                     _sm_mask = (smoothed_n_night_k > 0) & (smoothed_n_day_k > 0) & (smoothed_total_k > 0)
                     smoothed_llr = np.zeros_like(smoothed_n_night_k)
@@ -511,12 +506,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         + smoothed_n_day_k[_sm_mask] * np.log(smoothed_n_day_k[_sm_mask]   / (day_fraction   * smoothed_total_k[_sm_mask]))
                     )
                     smoothed_llr = np.nan_to_num(smoothed_llr, nan=0.0, posinf=0.0, neginf=0.0)
-                    smoothed_asimov_significances[kdx].append(
-                        float(np.sqrt(max(float(np.sum(smoothed_llr)) - _theta_penalty, 0.0)))
-                    )
-                else:
-                    raw_asimov_significances[kdx].append(0.0)
-                    smoothed_asimov_significances[kdx].append(0.0)
+                    smoothed_asimov_significances[kdx].append(float(np.sqrt(max(float(np.sum(smoothed_llr)), 0.0))))
 
             # Primary metric for cut optimisation: profiled Asimov LLR (nominal, smoothed).
             # Gaussian retained as diagnostic but no longer drives the scan.
@@ -723,6 +713,16 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     )
     if _compute_significance_bins:
         significance_bins_df = pd.DataFrame(significance_bins)
+        # Preserve columns from prior runs when recomputing only subset of metrics
+        significance_bins_df = merge_with_existing_df(
+            significance_bins_df,
+            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+            config=config,
+            name=name,
+            filename=f"{energy}_DayNight_SignificanceBins{_study_suffix}",
+            key_cols=["Config", "Name", "EnergyLabel", "NHits", "OpHits", "AdjCl", "BinIndex"],
+            debug=args.debug,
+        )
         save_df(
             significance_bins_df,
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",

@@ -519,7 +519,7 @@ def root2npy(root_info, user_input, trim: bool = False, debug=False):
                 rprint("----------------------")
                 rprint("Dumping file:" + str(path + name))
 
-            for branch in track(root_info[tree], description=f"Processing {tree}..."):
+            for branch in track(root_info[tree], total=len(root_info[tree]), description=f"Processing {tree}..."):
                 if branch in done_root_info[tree.split(";")[0]]:
                     if debug:
                         rprint(

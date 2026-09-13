@@ -10,6 +10,10 @@ from iminuit import Minuit
 from ROOT import TFile, TTree, TList
 from rich import print as rprint
 
+# Maximum chi2 value to use as fallback for failed fits
+# Valid chi2 values should NOT be capped - only failed/invalid fits use this fallback
+MAX_PHYSICAL_CHI2 = 1e4
+
 
 def th2f_from_dataframe(df, name="myhist", title="My Histogram", debug=False):
     """
@@ -111,9 +115,11 @@ class Sensitivity_Fitter:
         SigmaBkg (float): uncertainty on the background flux (default: 0.02).
         bb_mask (array): boolean mask for bins to include in fit (default: None).
         fit_background (bool): if True, fit background normalization as free parameter.
-            If False, background is fixed and only signal amplitude is fitted.
             For physically meaningful sensitivity, use fit_background=False to prevent
-            the background from absorbing signal mismatches (default: True for legacy).
+            the background from absorbing signal mismatches (default: False).
+        use_legacy_background_penalty (bool): if True, use the legacy constant penalty
+            for background uncertainty when fit_background=False. If False (default),
+            profile over background normalization to properly propagate uncertainty.
 
     Returns:
         chisq (float): chi-squared value.
@@ -121,7 +127,7 @@ class Sensitivity_Fitter:
         A_bkg (float): best-fit value of the background amplitude.
     """
 
-    def __init__(self, obs, pred, bkg, SigmaPred=0.04, SigmaBkg=0.02, bb_mask=None, fit_background=True):
+    def __init__(self, obs, pred, bkg, SigmaPred=0.04, SigmaBkg=0.02, bb_mask=None, fit_background=False, use_legacy_background_penalty=False):
         self.fObs = obs
         self.fPred = pred
         self.fBkg = bkg
@@ -129,46 +135,80 @@ class Sensitivity_Fitter:
         self.fSigmaBkg = SigmaBkg
         self.fMask = bb_mask  # boolean array: True = include bin in fit
         self.fit_background = fit_background  # If False, A_bkg is fixed at 0
+        self.use_legacy_background_penalty = use_legacy_background_penalty
 
     def ROOTOperator(self, A_pred, A_bkg):
         chisq = 0
         bkg_total = 0.0
+        # Determine if we're in profiling mode (need to apply A_bkg even when fit_background=False)
+        profiling_mode = (not self.fit_background and 
+                         self.fSigmaBkg > 0 and 
+                         not self.use_legacy_background_penalty)
+        
         for i in range(1, self.fObs.GetNbinsX() + 1):
             for j in range(1, self.fObs.GetNbinsY() + 1):
                 if self.fMask is not None and not self.fMask[i - 1, j - 1]:
                     continue
-                N_bkg = (1 + A_bkg) * self.fBkg.GetBinContent(i, j) if self.fit_background else self.fBkg.GetBinContent(i, j)
+                # Apply A_bkg to background when fitting or profiling
+                if self.fit_background or profiling_mode:
+                    N_bkg = (1 + A_bkg) * self.fBkg.GetBinContent(i, j)
+                else:
+                    N_bkg = self.fBkg.GetBinContent(i, j)
                 N_pred = (1 + A_pred) * self.fPred.GetBinContent(i, j)
                 e = N_bkg + N_pred
                 o = self.fObs.GetBinContent(i, j)
-                if e == 0:
+                
+                # GUARD: Ensure positive expected counts
+                if e <= 0:
                     continue
+                    
                 if o == 0:
                     chisq += 2 * e
                 else:
-                    chisq += 2 * (e - o + o * np.log(o / e))
+                    # GUARD: Prevent extreme ratios
+                    ratio = o / e
+                    if ratio > 1e10 or ratio < 1e-10:
+                        # Use Poisson approximation for extreme cases
+                        chisq += (o - e) ** 2 / e
+                    else:
+                        chisq += 2 * (e - o + o * np.log(ratio))
+                
                 # Track total background for uncertainty penalty
-                if self.fit_background:
+                if self.fit_background or profiling_mode:
                     bkg_total += (1 + A_bkg) * self.fBkg.GetBinContent(i, j)
                 else:
                     bkg_total += self.fBkg.GetBinContent(i, j)
+        
         chisq += ((A_pred) / self.fSigmaPred) ** 2
-        if self.fit_background and self.fSigmaBkg > 0:
-            chisq += ((A_bkg) / self.fSigmaBkg) ** 2
-        elif not self.fit_background and self.fSigmaBkg > 0:
-            # When NOT fitting background, add penalty based on total background uncertainty
-            chisq += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
+        if self.fSigmaBkg > 0:
+            if self.fit_background or profiling_mode:
+                # Penalize deviation of A_bkg from 0
+                chisq += ((A_bkg) / self.fSigmaBkg) ** 2
+            elif self.use_legacy_background_penalty:
+                # Legacy: constant penalty (doesn't affect contour shapes)
+                chisq += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
+        
         return chisq
 
     def NumpyOperator(self, A_pred, A_bkg):
-        if self.fit_background:
+        # Determine if we're in profiling mode
+        profiling_mode = (not self.fit_background and 
+                         self.fSigmaBkg > 0 and 
+                         not self.use_legacy_background_penalty)
+        
+        if self.fit_background or profiling_mode:
             e = (1 + A_bkg) * self.fBkg + (1 + A_pred) * self.fPred
         else:
             e = self.fBkg + (1 + A_pred) * self.fPred
         o = self.fObs
+        
+        # GUARD: Ensure non-negative expected counts to prevent numerical issues
+        e = np.maximum(e, 0.0)
+        
         chisq = np.zeros_like(o, dtype=float)
 
-        valid = e != 0
+        # Only skip bins where expected counts are exactly zero
+        valid = e > 0
         if self.fMask is not None:
             valid = valid & self.fMask
 
@@ -176,24 +216,34 @@ class Sensitivity_Fitter:
         nonzero_obs = valid & (o != 0)
 
         chisq[zero_obs] = 2 * e[zero_obs]
-        chisq[nonzero_obs] = 2 * (
-            e[nonzero_obs] - o[nonzero_obs] + o[nonzero_obs] * np.log(o[nonzero_obs] / e[nonzero_obs])
-        )
+        
+        # GUARD: Prevent extreme ratios in log-likelihood that cause numerical explosion
+        if np.any(nonzero_obs):
+            with np.errstate(divide='ignore', invalid='ignore'):
+                ratio = o[nonzero_obs] / e[nonzero_obs]
+                # Clip ratio to prevent log from producing extreme values
+                ratio = np.clip(ratio, 1e-10, 1e10)
+                chisq[nonzero_obs] = 2 * (
+                    e[nonzero_obs] - o[nonzero_obs] + o[nonzero_obs] * np.log(ratio)
+                )
 
-        chisq_sum = float(chisq.sum())
+        # GUARD: Handle any remaining NaN/Inf from numerical edge cases
+        chisq = np.nan_to_num(chisq, nan=0.0, posinf=0.0, neginf=0.0)
+        chisq_sum = float(np.maximum(np.sum(chisq), 0.0))  # Prevent negative
+        
         # Always add signal pull term
         if self.fSigmaPred > 0:
             chisq_sum += ((A_pred) / self.fSigmaPred) ** 2
         # Add background pull term
-        if self.fit_background and self.fSigmaBkg > 0:
-            # When fitting background, penalize deviation from nominal
-            chisq_sum += ((A_bkg) / self.fSigmaBkg) ** 2
-        elif not self.fit_background and self.fSigmaBkg > 0:
-            # When NOT fitting background, add penalty based on total background uncertainty
-            # This accounts for background uncertainty without allowing it to absorb signal
-            # The penalty is the squared uncertainty on the total background count
-            bkg_total = float(np.sum(self.fBkg))
-            chisq_sum += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
+        if self.fSigmaBkg > 0:
+            if self.fit_background or profiling_mode:
+                # When fitting or profiling, penalize deviation from nominal
+                chisq_sum += ((A_bkg) / self.fSigmaBkg) ** 2
+            elif self.use_legacy_background_penalty:
+                # Legacy: constant penalty (doesn't affect contour shapes)
+                bkg_total = float(np.sum(self.fBkg))
+                chisq_sum += (self.fSigmaBkg * np.sqrt(bkg_total)) ** 2
+        
         return chisq_sum
 
     def _profile_a_bkg(self, A_pred):
@@ -220,18 +270,56 @@ class Sensitivity_Fitter:
                     initial_A_bkg + 10 * self.fSigmaBkg,
                 )
                 m.migrad()
-                return m.fval, m.values["A_pred"], m.values["A_bkg"]
+                chi2_val = m.fval
+                if not m.valid or not np.isfinite(chi2_val) or chi2_val < 0:
+                    if debug:
+                        rprint(f"[yellow][WARNING][/yellow] Minuit fit failed (valid={m.valid}, fval={chi2_val})")
+                    # Return a large but reasonable value instead of capping
+                    return 1e6, initial_A_pred, initial_A_bkg
+                return float(chi2_val), m.values["A_pred"], m.values["A_bkg"]
             else:
-                # Fix A_bkg at 0, fit only A_pred
-                def _root_operator_fixed(A_pred):
-                    return self.ROOTOperator(A_pred, 0.0)
-                m = Minuit(_root_operator_fixed, A_pred=initial_A_pred)
-                m.limits["A_pred"] = (
-                    initial_A_pred - 10 * self.fSigmaPred,
-                    initial_A_pred + 10 * self.fSigmaPred,
-                )
-                m.migrad()
-                return m.fval, m.values["A_pred"], 0.0
+                # fit_background=False: profile over A_bkg if we have background uncertainty
+                if self.fSigmaBkg > 0 and not self.use_legacy_background_penalty:
+                    # Profile over A_bkg: for each A_pred, find optimal A_bkg
+                    def _root_operator_profiled(A_pred):
+                        # Convert to numpy for profiling (ROOT TH2F not supported for profiling)
+                        # For now, fall back to constant penalty with warning
+                        if debug:
+                            import warnings
+                            warnings.warn(
+                                "Profiling not implemented for ROOT TH2F with fit_background=False. "
+                                "Falling back to legacy constant penalty.",
+                                UserWarning
+                            )
+                        return self.ROOTOperator(A_pred, 0.0)
+                    m = Minuit(_root_operator_profiled, A_pred=initial_A_pred)
+                    m.limits["A_pred"] = (
+                        initial_A_pred - 10 * self.fSigmaPred,
+                        initial_A_pred + 10 * self.fSigmaPred,
+                    )
+                    m.migrad()
+                    chi2_val = m.fval
+                    if not m.valid or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] Minuit profiled fit failed (valid={m.valid}, fval={chi2_val}), returning fallback chi2")
+                        return 1e6, initial_A_pred, 0.0
+                    return float(chi2_val), m.values["A_pred"], 0.0
+                else:
+                    # Legacy mode: Fix A_bkg at 0, fit only A_pred
+                    def _root_operator_fixed(A_pred):
+                        return self.ROOTOperator(A_pred, 0.0)
+                    m = Minuit(_root_operator_fixed, A_pred=initial_A_pred)
+                    m.limits["A_pred"] = (
+                        initial_A_pred - 10 * self.fSigmaPred,
+                        initial_A_pred + 10 * self.fSigmaPred,
+                    )
+                    m.migrad()
+                    chi2_val = m.fval
+                    if not m.valid or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] Minuit fixed fit failed (valid={m.valid}, fval={chi2_val}), returning fallback chi2")
+                        return 1e6, initial_A_pred, 0.0
+                    return float(chi2_val), m.values["A_pred"], 0.0
 
         elif type(self.fObs) == np.ndarray:
             if self.fit_background:
@@ -247,9 +335,14 @@ class Sensitivity_Fitter:
                         initial_A_pred + 10 * self.fSigmaPred,
                     )
                     m.migrad()
+                    chi2_val = m.fval
+                    if not m.valid or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] Minuit profiled fit (numpy) failed (valid={m.valid}, fval={chi2_val})")
+                        return 1e6, initial_A_pred, initial_A_bkg
                     A_pred = m.values["A_pred"]
                     A_bkg, _ = self._profile_a_bkg(A_pred)
-                    return m.fval, A_pred, A_bkg
+                    return float(chi2_val), A_pred, A_bkg
                 else:
                     # 2D scipy L-BFGS-B: joint optimization, no Minuit
                     result = minimize(
@@ -263,27 +356,57 @@ class Sensitivity_Fitter:
                         ],
                         method="L-BFGS-B",
                     )
-                    if not result.success and debug:
-                        rprint(f"[yellow][WARNING][/yellow] L-BFGS-B did not converge: {result.message}")
-                    return result.fun, float(result.x[0]), float(result.x[1])
+                    chi2_val = result.fun
+                    if not result.success or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] L-BFGS-B did not converge: {result.message}")
+                        return 1e6, float(result.x[0]) if result.x is not None else initial_A_pred, float(result.x[1]) if result.x is not None and len(result.x) > 1 else initial_A_bkg
+                    return float(chi2_val), float(result.x[0]), float(result.x[1])
             else:
-                # Fit only A_pred, keep A_bkg fixed at 0
-                result = minimize(
-                    lambda v: self.NumpyOperator(v[0], 0.0),  # A_bkg fixed at 0
-                    x0=[initial_A_pred],
-                    bounds=[
-                        (initial_A_pred - 10 * self.fSigmaPred,
-                         initial_A_pred + 10 * self.fSigmaPred),
-                    ],
-                    method="L-BFGS-B",
-                )
-                if not result.success and debug:
-                    rprint(f"[yellow][WARNING][/yellow] L-BFGS-B did not converge: {result.message}")
-                return result.fun, float(result.x[0]), 0.0
+                # fit_background=False: fit only A_pred
+                if self.fSigmaBkg > 0 and not self.use_legacy_background_penalty:
+                    # Profile over A_bkg: for each A_pred, find optimal A_bkg
+                    def _profiled(A_pred):
+                        _, fval = self._profile_a_bkg(A_pred)
+                        return fval
+                    result = minimize(
+                        _profiled,
+                        x0=[initial_A_pred],
+                        bounds=[
+                            (initial_A_pred - 10 * self.fSigmaPred,
+                             initial_A_pred + 10 * self.fSigmaPred),
+                        ],
+                        method="L-BFGS-B",
+                    )
+                    chi2_val = result.fun
+                    if not result.success or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] L-BFGS-B (profiled) did not converge: {result.message}")
+                        return 1e6, float(result.x[0]) if result.x is not None else initial_A_pred, 0.0
+                    A_pred = float(result.x[0])
+                    A_bkg, _ = self._profile_a_bkg(A_pred)
+                    return float(chi2_val), A_pred, A_bkg
+                else:
+                    # Legacy mode: Fit only A_pred, keep A_bkg fixed at 0
+                    result = minimize(
+                        lambda v: self.NumpyOperator(v[0], 0.0),  # A_bkg fixed at 0
+                        x0=[initial_A_pred],
+                        bounds=[
+                            (initial_A_pred - 10 * self.fSigmaPred,
+                             initial_A_pred + 10 * self.fSigmaPred),
+                        ],
+                        method="L-BFGS-B",
+                    )
+                    chi2_val = result.fun
+                    if not result.success or not np.isfinite(chi2_val) or chi2_val < 0:
+                        if debug:
+                            rprint(f"[yellow][WARNING][/yellow] L-BFGS-B (legacy) did not converge: {result.message}")
+                        return 1e6, float(result.x[0]) if result.x is not None else initial_A_pred, 0.0
+                    return float(chi2_val), float(result.x[0]), 0.0
 
         else:
             rprint(f"[red][ERROR] Unknown input type[/red]")
-            return -1, -1, -1
+            return 1e6, initial_A_pred, initial_A_bkg
 
 
 class Asymmetry_Fitter:

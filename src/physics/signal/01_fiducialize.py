@@ -239,10 +239,12 @@ for config in configs:
                     user_input["colors"][sample_key],
                 ),
             ),
-            total=(3 if "marley" in args.signal else 1)
-            * len(np.arange(0.00, detector_x / 4, 20))
-            * len(np.arange(0.00, detector_y / 4, 20))
-            * len(np.arange(0.00, detector_z / 4, 20)),
+            total=(
+                len(np.arange(0.00, detector_x / 4, 20))
+                * len(np.arange(0.00, detector_y / 4, 20))
+                * len(np.arange(0.00, detector_z / 4, 20))
+                * len(user_input["weights"][sample_key])
+            ),
             description=f"Iterating over cut configurations for {energy}...",
         ):
             fid_key = (this_fiducial_x, this_fiducial_y, this_fiducial_z)

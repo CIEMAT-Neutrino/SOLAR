@@ -195,7 +195,7 @@ if args.backend == "file":
     rprint(f"Processing {len(to_process)} ROOT file(s) → pkl/rebin/")
 
     for dm2, sin13, sin12 in track(
-        sorted(to_process), description="Rebinning ROOT → pkl"
+        sorted(to_process), total=len(to_process), description="Rebinning ROOT → pkl"
     ):
         dm2_f   = float("%.3e" % dm2)
         sin13_f = sin13

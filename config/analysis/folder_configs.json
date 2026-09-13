@@ -17,15 +17,15 @@
       }
     },
     "Reduced": {
-      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. Statistical reduction factor applied per component above reduction_threshold_mev.",
+      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. Statistical reduction factor applied per component above reduction_threshold_mev. Represents shielding matching vd_1x8x14_3view_30deg_shielded: ~98% neutron reduction (all energies) and ~85% gamma reduction above 3.5 MeV.",
       "z_endcap_rejection": "surface",
       "apply_reduction": true,
       "path_key": "reduced",
       "reduction_threshold_mev": 3.5,
       "reduction_factors": {
         "marley": 1,
-        "gamma": 10,
-        "neutron": 1,
+        "gamma": 6.667,
+        "neutron": 50,
         "alpha": 1,
         "radiological": 1
       }

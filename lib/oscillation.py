@@ -175,7 +175,18 @@ def make_oscillation_grid(analysis_info: dict, dm2=None, sin13=None, sin12=None)
     ranges = grid_cfg.get("ranges", _default_ranges)
 
     def _make_axis(name: str, steps: int) -> list:
+        """Axis values for one parameter.
+
+        When ranges[name]["steps"] is set it wins over the per-plane/per-line `steps`,
+        so every plane and line samples the SAME array. That matters: the contour
+        outputs are pivoted onto the *union* of all values seen for an axis, so if
+        planes and lines use different step counts the union is larger than any single
+        plane and each plane fills only a sparse sub-block of the matrix (45x45 values
+        scattered over a 95x94 grid = 25.8% filled). Sharing the axis makes the pivot
+        axes identical to the plane axes, i.e. 100% filled, at no extra cost.
+        """
         r = ranges.get(name, _default_ranges.get(name, {}))
+        steps = int(r.get("steps", steps))
         mn    = float(r.get("min", _axis_pins[name][0]))
         mx    = float(r.get("max", _axis_pins[name][-1]))
         scale = r.get("scale", "linear")

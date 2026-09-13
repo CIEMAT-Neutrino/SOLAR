@@ -447,6 +447,19 @@ parser.add_argument(
     help="Overlay metric shown in HEP intuitive lower panel",
 )
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument(
+    "--day_fraction",
+    type=float,
+    default=float(load_analysis_info(str(root)).get("DAY_FRACTION", 0.493)),
+    help=(
+        "Fraction of total exposure attributed to daytime. Default 0.493 (SURF latitude ~44.3°N, "
+        "averaged over a full year). Used to weight the DayNight night-excess statistical error, "
+        "since the stored Day/Night spectra are each normalised to the FULL exposure."
+    ),
+)
+parser.add_argument("--study", nargs="+", type=str, default=None, help="Study labels to iterate over in sequence; supersedes --study_label. 'all' expands to every label in lib/study.py STUDY_VARIANTS applicable to --analysis (nominal run included); 'default' names the unlabeled nominal run.")
+parser.add_argument("--charge_threshold", type=float, default=0,
+                    help="Charge threshold Q (ADC). When >0, study_context marks this a template variant so the labeled signal AND background Rebin pkls are read.")
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
 parser.add_argument(
     "--dm2",
@@ -456,10 +469,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-_ctx = study_context(args)
-_study_suffix   = _ctx.study_suffix
-_save_subfolder = _ctx.save_subfolder
-_study_name     = args.study_label or "default"
+_study_labels_to_run = resolve_study_labels(args.study, args.study_label, analysis=args.analysis)
 
 # ── post-parse defaults ────────────────────────────────────────────────────────
 
@@ -533,282 +543,378 @@ if args.analysis == "HEP":
     local_proxy_label = "Local Discovery"
     saved_variable = "AsimovProxy" if _ref == "ProfileLikelihood" else reference_for_bins
 
-# ── accumulators ───────────────────────────────────────────────────────────────
 
-_counts_list = []
-_significance_list = []
+for _sl in _study_labels_to_run:
+    args.study_label = _sl
+    _ctx = study_context(args)
+    _study_suffix   = _ctx.study_suffix
+    _save_subfolder = _ctx.save_subfolder
+    _study_name     = _sl or "default"
 
-# ── main loop ──────────────────────────────────────────────────────────────────
+    # ── accumulators ───────────────────────────────────────────────────────────────
 
-for config, name, energy in product(args.config, args.signal, args.energy):
-    info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    detector_mass = get_full_detector_mass(config, info)
+    _counts_list = []
+    _significance_list = []
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # DayNight
-    # ══════════════════════════════════════════════════════════════════════════
-    if args.analysis == "DayNight":
-        _dn_path = (
-            f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.signal[0]}"
-            f"/{config}_{args.signal[0]}_highest_DayNight{_study_suffix}.pkl"
-        )
-        if not os.path.exists(_dn_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing DayNight best-cut map: {_dn_path}. Skipping config {config}.")
-            continue
-        sigma = pickle.load(open(_dn_path, "rb"))
-        _dn_results_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results{_study_suffix}.pkl"
-        )
-        if not os.path.exists(_dn_results_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing DayNight Results pkl for {config} {name} {energy}. Skipping.")
-            continue
-        sigmas_df = pd.read_pickle(_dn_results_path)
-        significance_bins_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins{_study_suffix}.pkl"
-        )
-        if not os.path.exists(significance_bins_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}.")
-            continue
-        significance_bins_df = pd.read_pickle(significance_bins_path)
-        if significance_bins_df.empty or "Config" not in significance_bins_df.columns:
-            rprint(f"[yellow][WARNING][/yellow] Empty or invalid SignificanceBins pkl for {config} {name} {energy}. Regenerate with the DayNight significance pipeline.")
-            continue
+    # ── main loop ──────────────────────────────────────────────────────────────────
 
-        _rebin_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
-            f"/DAYNIGHT/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
-        )
-        if not os.path.exists(_rebin_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing Rebin pkl for {config} {name} {energy}. Skipping.")
-            continue
-        plot_df = pd.read_pickle(_rebin_path)
-        background_samples = []
-        for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
-            plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
-            background_samples.append(bkg)
+    for config, name, energy in product(args.config, args.signal, args.energy):
+        info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+        detector_mass = get_full_detector_mass(config, info)
 
-        try:
-            ref_plot = sigma[(config, name, energy)]
-        except KeyError:
-            rprint(f"[yellow][WARNING] Not found highest for {config} {name} {energy}[/yellow]")
-            continue
-
-        nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
-        adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
-        ophits_value = args.ophits if args.ophits is not None else int(ref_plot["OpHits"])
-
-        this_plot_df = plot_df.loc[
-            (plot_df["NHits"] == nhits_value)
-            * (plot_df["OpHits"] == ophits_value)
-            * (plot_df["AdjCl"] == adjcl_value)
-        ].copy()
-        if this_plot_df.empty:
-            continue
-
-        plot_sigmas = sigmas_df.loc[
-            (sigmas_df["Config"] == config)
-            * (sigmas_df["Name"] == name)
-            * (sigmas_df["NHits"] == nhits_value)
-            * (sigmas_df["OpHits"] == ophits_value)
-            * (sigmas_df["AdjCl"] == adjcl_value)
-        ].copy()
-        if plot_sigmas.empty:
-            rprint(
-                f"[yellow][WARNING][/yellow] Missing precomputed significance payload for "
-                f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+        # ══════════════════════════════════════════════════════════════════════════
+        # DayNight
+        # ══════════════════════════════════════════════════════════════════════════
+        if args.analysis == "DayNight":
+            _dn_path = (
+                f"{info['PATH']}/DAYNIGHT/{args.folder.lower()}/{config}/{args.signal[0]}"
+                f"/{config}_{args.signal[0]}_highest_DayNight{_study_suffix}.pkl"
             )
-            continue
-
-        energy_axis = np.asarray(this_plot_df["Energy"].values[0], dtype=float)
-        threshold_idx = 0
-        if args.threshold is not None:
-            above = np.where(energy_axis > args.threshold)[0]
-            if above.size:
-                threshold_idx = int(above[0])
-        bin_width = float(np.median(np.diff(energy_axis))) if len(energy_axis) > 1 else 1.0
-
-        selected_bins = significance_bins_df.loc[
-            (significance_bins_df["Config"] == config)
-            * (significance_bins_df["Name"] == name)
-            * (significance_bins_df["EnergyLabel"] == energy)
-            * (significance_bins_df["NHits"] == int(nhits_value))
-            * (significance_bins_df["OpHits"] == int(ophits_value))
-            * (significance_bins_df["AdjCl"] == int(adjcl_value))
-        ].copy()
-        if selected_bins.empty:
-            rprint(
-                f"[yellow][WARNING][/yellow] Missing per-bin significance payload for "
-                f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+            if not os.path.exists(_dn_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing DayNight best-cut map: {_dn_path}. Skipping config {config}.")
+                continue
+            sigma = pickle.load(open(_dn_path, "rb"))
+            _dn_results_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
+                f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results{_study_suffix}.pkl"
             )
-            continue
-
-        selected_bins = selected_bins.sort_values("BinIndex")
-        stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
-        raw_significance = np.nan_to_num(
-            np.asarray(selected_bins["RawGaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
-        )
-        smoothed_significance = np.nan_to_num(
-            np.asarray(selected_bins["Gaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
-        )
-
-        _has_asimov_bins = "RawAsimov" in selected_bins.columns and "Asimov" in selected_bins.columns
-        if _has_asimov_bins:
-            raw_asimov_sig = np.nan_to_num(
-                np.asarray(selected_bins["RawAsimov"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
+            if not os.path.exists(_dn_results_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing DayNight Results pkl for {config} {name} {energy}. Skipping.")
+                continue
+            sigmas_df = pd.read_pickle(_dn_results_path)
+            significance_bins_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
+                f"/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins{_study_suffix}.pkl"
             )
-            smoothed_asimov_sig = np.nan_to_num(
-                np.asarray(selected_bins["Asimov"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
-            )
-        else:
-            raw_asimov_sig = None
-            smoothed_asimov_sig = None
-
-        signal_day_raw = None
-        signal_night_raw = None
-        _dn_day_by_spectrum = {}
-        positive_count_values = []
-        _dn_render = []
-
-        dn_component_specs = [
-            ("Solar", "Solar Day", "Osc", "Day", 0, "Signal", compare[1]),
-            ("Solar", "Solar Night", "Osc", "Night", 0, "Signal", compare[0]),
-        ]
-        for bkg in background_samples:
-            style = get_background_style(str(root), bkg)
-            dn_component_specs.append(
-                (bkg, style.get("label", bkg).title(), "Truth", "Mean", 1, "Background", style.get("color", "grey"))
-            )
-
-        for component, component_label, osc, mean, legend_group, legend_group_title, color in dn_component_specs:
-            comp_df = this_plot_df.loc[
-                (this_plot_df["Component"] == component)
-                * (this_plot_df["Oscillation"] == osc)
-                * (this_plot_df["Mean"] == mean)
-            ].copy()
-            if comp_df.empty:
+            if not os.path.exists(significance_bins_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}.")
+                continue
+            significance_bins_df = pd.read_pickle(significance_bins_path)
+            if significance_bins_df.empty or "Config" not in significance_bins_df.columns:
+                rprint(f"[yellow][WARNING][/yellow] Empty or invalid SignificanceBins pkl for {config} {name} {energy}. Regenerate with the DayNight significance pipeline.")
                 continue
 
-            counts = np.asarray(comp_df["Counts"].values[0], dtype=float)
-            errors = np.asarray(comp_df["Error"].values[0], dtype=float)
-            mc_counts = (
-                np.asarray(comp_df["MCCounts"].values[0], dtype=float)
-                if "MCCounts" in comp_df.columns else None
+            _rebin_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
+                f"/DAYNIGHT/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
             )
-            component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
-            raw_counts_per_energy = np.nan_to_num(
-                detector_mass * args.exposure * np.asarray(comp_df["Counts/Energy"].values[0], dtype=float),
-                nan=0.0, posinf=0.0, neginf=0.0,
-            )
-            smoothed_counts = smooth_threshold_slice(counts, threshold_idx, component_smoothing_config)
-            smoothed_errors = errors.copy()
-            smoothed_errors[threshold_idx:] = smooth_histogram_errors(
-                errors[threshold_idx:], component_smoothing_config,
-                counts=counts[threshold_idx:],
-                mc_counts=mc_counts[threshold_idx:] if mc_counts is not None else None,
-            )
-            smoothed_counts_per_energy = np.nan_to_num(
-                detector_mass * args.exposure * smoothed_counts / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
-            )
-            smoothed_errors_per_energy = np.nan_to_num(
-                detector_mass * args.exposure * smoothed_errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
-            )
-            positive_count_values.extend(raw_counts_per_energy[raw_counts_per_energy > 0])
-            positive_count_values.extend(smoothed_counts_per_energy[smoothed_counts_per_energy > 0])
+            if not os.path.exists(_rebin_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing Rebin pkl for {config} {name} {energy}. Skipping.")
+                continue
+            plot_df = pd.read_pickle(_rebin_path)
+            background_samples = []
+            for bkg, filepath in load_available_background_dataframes(
+                str(root), "DAYNIGHT", args.folder, config, energy,
+                study_label=(args.study_label if _ctx.template_suffix else None),
+            ):
+                plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
+                background_samples.append(bkg)
 
-            _dn_render.append({
-                "component_label": component_label, "legend_group": legend_group,
-                "legend_group_title": legend_group_title, "color": color, "opacity": 0.45,
-                "raw_y": raw_counts_per_energy,
-                "smoothed_y": smoothed_counts_per_energy,
-                "err_y": smoothed_errors_per_energy,
-            })
+            try:
+                ref_plot = sigma[(config, name, energy)]
+            except KeyError:
+                rprint(f"[yellow][WARNING] Not found highest for {config} {name} {energy}[/yellow]")
+                continue
 
-            raw_errors_per_energy = np.nan_to_num(
-                detector_mass * args.exposure * errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
+            nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
+            adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
+            ophits_value = args.ophits if args.ophits is not None else int(ref_plot["OpHits"])
+
+            this_plot_df = plot_df.loc[
+                (plot_df["NHits"] == nhits_value)
+                * (plot_df["OpHits"] == ophits_value)
+                * (plot_df["AdjCl"] == adjcl_value)
+            ].copy()
+            if this_plot_df.empty:
+                continue
+
+            plot_sigmas = sigmas_df.loc[
+                (sigmas_df["Config"] == config)
+                * (sigmas_df["Name"] == name)
+                * (sigmas_df["NHits"] == nhits_value)
+                * (sigmas_df["OpHits"] == ophits_value)
+                * (sigmas_df["AdjCl"] == adjcl_value)
+            ].copy()
+            if plot_sigmas.empty:
+                rprint(
+                    f"[yellow][WARNING][/yellow] Missing precomputed significance payload for "
+                    f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+                )
+                continue
+
+            energy_axis = np.asarray(this_plot_df["Energy"].values[0], dtype=float)
+            threshold_idx = 0
+            if args.threshold is not None:
+                above = np.where(energy_axis > args.threshold)[0]
+                if above.size:
+                    threshold_idx = int(above[0])
+            bin_width = float(np.median(np.diff(energy_axis))) if len(energy_axis) > 1 else 1.0
+
+            selected_bins = significance_bins_df.loc[
+                (significance_bins_df["Config"] == config)
+                * (significance_bins_df["Name"] == name)
+                * (significance_bins_df["EnergyLabel"] == energy)
+                * (significance_bins_df["NHits"] == int(nhits_value))
+                * (significance_bins_df["OpHits"] == int(ophits_value))
+                * (significance_bins_df["AdjCl"] == int(adjcl_value))
+            ].copy()
+            if selected_bins.empty:
+                rprint(
+                    f"[yellow][WARNING][/yellow] Missing per-bin significance payload for "
+                    f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+                )
+                continue
+
+            selected_bins = selected_bins.sort_values("BinIndex")
+            stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
+            raw_significance = np.nan_to_num(
+                np.asarray(selected_bins["RawGaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
             )
-            for counts_per_energy, errors_per_energy, spectrum_type in [
-                (raw_counts_per_energy, raw_errors_per_energy, "Raw"),
-                (smoothed_counts_per_energy, smoothed_errors_per_energy, "Smoothed"),
-            ]:
-                significance_values = None
-                if component_label == "Solar Day":
-                    sig_source = smoothed_significance if spectrum_type == "Smoothed" else raw_significance
-                    energy_len = len(energy_axis)
-                    bin_len = len(sig_source)
-                    if bin_len >= energy_len:
-                        significance_values = sig_source[:energy_len]
-                    else:
-                        significance_values = np.pad(
-                            sig_source, (0, energy_len - bin_len), mode="constant", constant_values=np.nan,
-                        )
+            smoothed_significance = np.nan_to_num(
+                np.asarray(selected_bins["Gaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
+            )
 
-                # Night excess = Night - Day counts, per energy bin, at the stored exposure.
-                # Day is processed before Night in dn_component_specs, so its per-spectrum-type
-                # counts are already stashed by the time Night is reached.
-                metric_values = None
-                metric_error_values = None
-                if component_label == "Solar Day":
-                    _dn_day_by_spectrum[spectrum_type] = np.asarray(counts_per_energy, dtype=float)
-                elif component_label == "Solar Night":
-                    _day_counts = _dn_day_by_spectrum.get(spectrum_type)
-                    if _day_counts is not None:
-                        _night_counts = np.asarray(counts_per_energy, dtype=float)
-                        metric_values = _night_counts - _day_counts
-                        # Plain Poisson counting statistics on the actual predicted event
-                        # counts (not the MC-weighted sqrt(sum(weight^2)) CountsError):
-                        # sigma(N-D) = sqrt(N_events + D_events), where N_events/D_events are
-                        # the bin's predicted event counts (density * bin_width). Dividing by
-                        # bin_width converts back to the per-MeV density Metric is stored in.
-                        metric_error_values = np.sqrt(np.maximum(_night_counts + _day_counts, 0.0) / bin_width)
+            _has_asimov_bins = "RawAsimov" in selected_bins.columns and "Asimov" in selected_bins.columns
+            if _has_asimov_bins:
+                raw_asimov_sig = np.nan_to_num(
+                    np.asarray(selected_bins["RawAsimov"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
+                )
+                smoothed_asimov_sig = np.nan_to_num(
+                    np.asarray(selected_bins["Asimov"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
+                )
+            else:
+                raw_asimov_sig = None
+                smoothed_asimov_sig = None
 
-                _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "DayNight",
-                    "Geometry": info["GEOMETRY"],
-                    "Component": component_label, "SpectrumType": spectrum_type,
-                    "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure, "ExposureUnit": "year",
-                    "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-                    "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
-                    "CountsError": np.asarray(errors_per_energy).tolist(),
-                    "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
-                    "SignificanceUnit": r"\sigma",
-                    "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
-                    "Metric": metric_values.tolist() if metric_values is not None else None,
-                    "MetricError": metric_error_values.tolist() if metric_error_values is not None else None,
-                    "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if metric_values is not None else None,
-                    "MetricLabel": "Night − Day excess" if metric_values is not None else None,
+            signal_day_raw = None
+            signal_night_raw = None
+            _dn_day_by_spectrum = {}
+            _dn_night_by_spectrum = {}
+            _dn_bkg_by_spectrum = {}
+            positive_count_values = []
+            _dn_render = []
+
+            # Fraction of the total exposure each component actually occupies. Solar
+            # (nadir-averaged) and the backgrounds run for the full exposure; the day and
+            # night slices split it. Must match daynight/01_daynight.py --day_fraction,
+            # which reads the same DAY_FRACTION key.
+            _DN_EXPOSURE_FRACTION = {
+                "Solar Day":   args.day_fraction,
+                "Solar Night": 1.0 - args.day_fraction,
+            }
+
+            dn_component_specs = [
+                ("Solar", "Solar Day", "Osc", "Day", 0, "Signal", compare[1]),
+                ("Solar", "Solar Night", "Osc", "Night", 0, "Signal", compare[0]),
+            ]
+            for bkg in background_samples:
+                style = get_background_style(str(root), bkg)
+                dn_component_specs.append(
+                    (bkg, style.get("label", bkg).title(), "Truth", "Mean", 1, "Background", style.get("color", "grey"))
+                )
+
+            for component, component_label, osc, mean, legend_group, legend_group_title, color in dn_component_specs:
+                comp_df = this_plot_df.loc[
+                    (this_plot_df["Component"] == component)
+                    * (this_plot_df["Oscillation"] == osc)
+                    * (this_plot_df["Mean"] == mean)
+                ].copy()
+                if comp_df.empty:
+                    continue
+
+                # Solar Day / Solar Night arrive as *conditional* rates: each is the rate the
+                # detector would see if it were day (or night) for the whole exposure, because
+                # lib/weights.py normalises every nadir slice by its own weight sum. These
+                # products report events observed in `--exposure` detector-years, so each slice
+                # must be scaled by the fraction of that exposure it actually occupies. After
+                # scaling, Solar Day + Solar Night == Solar, and each is roughly half of it.
+                # mc_counts is left alone — it is an unweighted MC event count, not a rate.
+                _exposure_fraction = _DN_EXPOSURE_FRACTION.get(component_label, 1.0)
+
+                counts = np.asarray(comp_df["Counts"].values[0], dtype=float) * _exposure_fraction
+                errors = np.asarray(comp_df["Error"].values[0], dtype=float) * _exposure_fraction
+                mc_counts = (
+                    np.asarray(comp_df["MCCounts"].values[0], dtype=float)
+                    if "MCCounts" in comp_df.columns else None
+                )
+                component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
+                raw_counts_per_energy = np.nan_to_num(
+                    detector_mass * args.exposure * _exposure_fraction
+                    * np.asarray(comp_df["Counts/Energy"].values[0], dtype=float),
+                    nan=0.0, posinf=0.0, neginf=0.0,
+                )
+                smoothed_counts = smooth_threshold_slice(counts, threshold_idx, component_smoothing_config)
+                smoothed_errors = errors.copy()
+                smoothed_errors[threshold_idx:] = smooth_histogram_errors(
+                    errors[threshold_idx:], component_smoothing_config,
+                    counts=counts[threshold_idx:],
+                    mc_counts=mc_counts[threshold_idx:] if mc_counts is not None else None,
+                )
+                smoothed_counts_per_energy = np.nan_to_num(
+                    detector_mass * args.exposure * smoothed_counts / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
+                )
+                smoothed_errors_per_energy = np.nan_to_num(
+                    detector_mass * args.exposure * smoothed_errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
+                )
+                positive_count_values.extend(raw_counts_per_energy[raw_counts_per_energy > 0])
+                positive_count_values.extend(smoothed_counts_per_energy[smoothed_counts_per_energy > 0])
+
+                _dn_render.append({
+                    "component_label": component_label, "legend_group": legend_group,
+                    "legend_group_title": legend_group_title, "color": color, "opacity": 0.45,
+                    "raw_y": raw_counts_per_energy,
+                    "smoothed_y": smoothed_counts_per_energy,
+                    "err_y": smoothed_errors_per_energy,
                 })
 
-            if osc != "Truth":
-                if mean == "Day":
-                    signal_day_raw = counts
-                else:
-                    signal_night_raw = counts
+                raw_errors_per_energy = np.nan_to_num(
+                    detector_mass * args.exposure * errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
+                )
+                for counts_per_energy, errors_per_energy, spectrum_type in [
+                    (raw_counts_per_energy, raw_errors_per_energy, "Raw"),
+                    (smoothed_counts_per_energy, smoothed_errors_per_energy, "Smoothed"),
+                ]:
+                    significance_values = None
+                    if component_label == "Solar Day":
+                        sig_source = smoothed_significance if spectrum_type == "Smoothed" else raw_significance
+                        energy_len = len(energy_axis)
+                        bin_len = len(sig_source)
+                        if bin_len >= energy_len:
+                            significance_values = sig_source[:energy_len]
+                        else:
+                            significance_values = np.pad(
+                                sig_source, (0, energy_len - bin_len), mode="constant", constant_values=np.nan,
+                            )
 
-        if signal_day_raw is None or signal_night_raw is None:
-            continue
+                    # Stash the pieces of the night-excess metric per spectrum type. The metric
+                    # is attached to the summary "Solar" component appended after this loop,
+                    # once the background components have also been accumulated.
+                    metric_values = None
+                    metric_error_values = None
+                    if component_label == "Solar Day":
+                        _dn_day_by_spectrum[spectrum_type] = np.asarray(counts_per_energy, dtype=float)
+                    elif component_label == "Solar Night":
+                        _dn_night_by_spectrum[spectrum_type] = np.asarray(counts_per_energy, dtype=float)
+                    elif legend_group_title == "Background":
+                        _dn_bkg_by_spectrum[spectrum_type] = (
+                            _dn_bkg_by_spectrum.get(spectrum_type, 0.0)
+                            + np.asarray(counts_per_energy, dtype=float)
+                        )
 
-        for label, significance, dash in [
-            ("Gaussian", raw_significance, "dot"),
-            ("Gaussian", smoothed_significance, "solid"),
-        ]:
-            _significance_list.append({
-                "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "DayNight",
-                "Variable": label, "SpectrumType": "Raw" if dash == "dot" else "Smoothed",
-                "BinMode": "PerBin",
-                "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                "Exposure": args.exposure, "ExposureUnit": "year",
-                "Energy": stored_energy_axis.tolist(), "EnergyUnit": "MeV",
-                "Significance": np.asarray(significance).tolist(), "SignificanceUnit": r"\sigma",
-                "BinWidth": None, "BinWidthUnit": None,
-            })
+                    _counts_list.append({
+                        "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "DayNight",
+                        "Geometry": info["GEOMETRY"],
+                        "Component": component_label, "SpectrumType": spectrum_type,
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": args.exposure, "ExposureUnit": "year",
+                        "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                        "Counts": np.asarray(counts_per_energy).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
+                        "CountsError": np.asarray(errors_per_energy).tolist(),
+                        "Significance": np.asarray(significance_values).tolist() if significance_values is not None else None,
+                        "SignificanceUnit": r"\sigma",
+                        "SignificanceLabel": f"Gaussian {spectrum_type}" if component_label == "Solar Day" else None,
+                        "Metric": metric_values.tolist() if metric_values is not None else None,
+                        "MetricError": metric_error_values.tolist() if metric_error_values is not None else None,
+                        "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if metric_values is not None else None,
+                        "MetricLabel": "Night − Day excess" if metric_values is not None else None,
+                    })
 
-        if _has_asimov_bins:
+                if osc != "Truth":
+                    if mean == "Day":
+                        signal_day_raw = counts
+                    else:
+                        signal_night_raw = counts
+
+            if signal_day_raw is None or signal_night_raw is None:
+                continue
+
+            # Summary "Solar" component: the combined solar signal carrying the night-excess
+            # metric. Day and Night are each normalised to the FULL exposure (the Rebin pkl
+            # satisfies Mean == (Day + Night) / 2 exactly), so the physical combined signal is
+            # their average, not their sum — summing would double-count. Taken from the
+            # Osc/Mean row so CountsError is that row's own sqrt(sum(w^2)) MC-weighted error,
+            # consistent with every other component: Day and Night are the same MC events
+            # reweighted, so propagating their errors as if independent would be wrong.
+            # Data-only: not added to _dn_render, so the figures are unchanged.
+            _solar_mean_df = this_plot_df.loc[
+                (this_plot_df["Component"] == "Solar")
+                * (this_plot_df["Oscillation"] == "Osc")
+                * (this_plot_df["Mean"] == "Mean")
+            ].copy()
+            if not _solar_mean_df.empty:
+                _sm_counts = np.asarray(_solar_mean_df["Counts"].values[0], dtype=float)
+                _sm_errors = np.asarray(_solar_mean_df["Error"].values[0], dtype=float)
+                _sm_mc = (
+                    np.asarray(_solar_mean_df["MCCounts"].values[0], dtype=float)
+                    if "MCCounts" in _solar_mean_df.columns else None
+                )
+                _sm_cfg = get_component_smoothing_config(smoothing_config, "Solar")
+                _sm_smoothed_counts = smooth_threshold_slice(_sm_counts, threshold_idx, _sm_cfg)
+                _sm_smoothed_errors = _sm_errors.copy()
+                _sm_smoothed_errors[threshold_idx:] = smooth_histogram_errors(
+                    _sm_errors[threshold_idx:], _sm_cfg,
+                    counts=_sm_counts[threshold_idx:],
+                    mc_counts=_sm_mc[threshold_idx:] if _sm_mc is not None else None,
+                )
+                _sm_scale = detector_mass * args.exposure
+                _sm_by_spectrum = {
+                    "Raw": (
+                        np.nan_to_num(_sm_scale * np.asarray(_solar_mean_df["Counts/Energy"].values[0], dtype=float), nan=0.0, posinf=0.0, neginf=0.0),
+                        np.nan_to_num(_sm_scale * _sm_errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0),
+                    ),
+                    "Smoothed": (
+                        np.nan_to_num(_sm_scale * _sm_smoothed_counts / bin_width, nan=0.0, posinf=0.0, neginf=0.0),
+                        np.nan_to_num(_sm_scale * _sm_smoothed_errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0),
+                    ),
+                }
+                for _spec_type in ("Raw", "Smoothed"):
+                    _day_c = _dn_day_by_spectrum.get(_spec_type)
+                    _night_c = _dn_night_by_spectrum.get(_spec_type)
+                    if _day_c is None or _night_c is None:
+                        continue
+                    _solar_c, _solar_err = _sm_by_spectrum[_spec_type]
+                    _bkg_c = _dn_bkg_by_spectrum.get(_spec_type, np.zeros_like(_solar_c))
+                    # Plain Poisson counting statistics on the predicted event counts.
+                    #
+                    # _day_c and _night_c have already been scaled by their exposure
+                    # fractions upstream, so they are the events actually collected in each
+                    # period (Day + Night == Solar). The excess and its error are therefore
+                    # both in observed events — no 1/f re-inflation, which would double-count
+                    # the scaling now applied to the counts themselves.
+                    #
+                    # The background rate is the same day and night, so a full-exposure
+                    # background B contributes f*B during the day and (1-f)*B at night. It
+                    # cancels in the excess but still fluctuates in each period:
+                    #     Var(N_obs - D_obs) = (D_obs + f*B) + (N_obs + (1-f)*B)
+                    # Counts are densities, so divide by bin_width to reach event counts.
+                    _f_day = float(np.clip(args.day_fraction, 1e-6, 1.0 - 1e-6))
+                    _excess = _night_c - _day_c
+                    _excess_var = (
+                        np.maximum(_day_c + _f_day * _bkg_c, 0.0)
+                        + np.maximum(_night_c + (1.0 - _f_day) * _bkg_c, 0.0)
+                    )
+                    _excess_err = np.sqrt(_excess_var / bin_width)
+                    _counts_list.append({
+                        "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "DayNight",
+                        "Geometry": info["GEOMETRY"],
+                        "Component": "Solar", "SpectrumType": _spec_type,
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": args.exposure, "ExposureUnit": "year",
+                        "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                        "Counts": _solar_c.tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
+                        "CountsError": _solar_err.tolist(),
+                        "Significance": None,
+                        "SignificanceUnit": None,
+                        "SignificanceLabel": None,
+                        "Metric": _excess.tolist(),
+                        "MetricError": _excess_err.tolist(),
+                        "MetricUnit": f"events / MeV / {args.exposure:.0f} yr",
+                        "MetricLabel": "Night − Day excess",
+                    })
+
             for label, significance, dash in [
-                ("Asimov", raw_asimov_sig, "dot"),
-                ("Asimov", smoothed_asimov_sig, "solid"),
+                ("Gaussian", raw_significance, "dot"),
+                ("Gaussian", smoothed_significance, "solid"),
             ]:
                 _significance_list.append({
                     "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "DayNight",
@@ -821,939 +927,1018 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                     "BinWidth": None, "BinWidthUnit": None,
                 })
 
-        figure_name = f"{energy}_DayNight_Significance"
-        if args.nhits is not None or args.ophits is not None or args.adjcls is not None:
-            figure_name += f"_NHits{nhits_value:.0f}_OpHits{ophits_value:.0f}_AdjCl{adjcl_value:.0f}"
-        if args.exposure is not None:
-            figure_name += f"_Exposure_{args.exposure:.0f}"
-
-        def _dn_lower(fig):
-            for label, significance, dash, showlegend in [
-                ("Gaussian", raw_significance, "dot", False),
-                ("Gaussian", smoothed_significance, "solid", True),
-            ]:
-                add_significance_series_trace(
-                    fig, x=stored_energy_axis, y=significance, name_prefix=label,
-                    row=2, col=1, color="black", width=3 if dash == "solid" else 2, dash=dash,
-                    legend="legend2", legendgroup="Significance", legendgrouptitle="Significance",
-                    showlegend=showlegend, append_total=True, total_digits=1,
-                )
-                if args.show_bin_labels and dash == "solid":
-                    add_significance_bin_labels(
-                        fig, x=stored_energy_axis, y=significance, row=2, col=1,
-                        text_prefix="", digits=args.bin_label_digits, label_stride=args.bin_label_stride,
-                        show_zero=False, color="black", font_size=10, textposition="top center",
-                        y_offset_fraction=args.bin_label_y_offset_fraction,
-                    )
             if _has_asimov_bins:
+                for label, significance, dash in [
+                    ("Asimov", raw_asimov_sig, "dot"),
+                    ("Asimov", smoothed_asimov_sig, "solid"),
+                ]:
+                    _significance_list.append({
+                        "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "DayNight",
+                        "Variable": label, "SpectrumType": "Raw" if dash == "dot" else "Smoothed",
+                        "BinMode": "PerBin",
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": args.exposure, "ExposureUnit": "year",
+                        "Energy": stored_energy_axis.tolist(), "EnergyUnit": "MeV",
+                        "Significance": np.asarray(significance).tolist(), "SignificanceUnit": r"\sigma",
+                        "BinWidth": None, "BinWidthUnit": None,
+                    })
+
+            figure_name = f"{energy}_DayNight_Significance"
+            if args.nhits is not None or args.ophits is not None or args.adjcls is not None:
+                figure_name += f"_NHits{nhits_value:.0f}_OpHits{ophits_value:.0f}_AdjCl{adjcl_value:.0f}"
+            if args.exposure is not None:
+                figure_name += f"_Exposure_{args.exposure:.0f}"
+
+            def _dn_lower(fig):
                 for label, significance, dash, showlegend in [
-                    ("Asimov", raw_asimov_sig, "dot", False),
-                    ("Asimov", smoothed_asimov_sig, "solid", True),
+                    ("Gaussian", raw_significance, "dot", False),
+                    ("Gaussian", smoothed_significance, "solid", True),
                 ]:
                     add_significance_series_trace(
                         fig, x=stored_energy_axis, y=significance, name_prefix=label,
-                        row=2, col=1, color="rgb(31,119,180)", width=3 if dash == "solid" else 2, dash=dash,
+                        row=2, col=1, color="black", width=3 if dash == "solid" else 2, dash=dash,
                         legend="legend2", legendgroup="Significance", legendgrouptitle="Significance",
                         showlegend=showlegend, append_total=True, total_digits=1,
                     )
-            add_histogram_style_legend_traces(fig, row=1, col=1, legend="legend")
-            _sig_max = max(float(np.max(raw_significance)), float(np.max(smoothed_significance)), 1.0)
-            if _has_asimov_bins:
-                _sig_max = max(_sig_max, float(np.max(raw_asimov_sig)), float(np.max(smoothed_asimov_sig)))
-            return _sig_max
+                    if args.show_bin_labels and dash == "solid":
+                        add_significance_bin_labels(
+                            fig, x=stored_energy_axis, y=significance, row=2, col=1,
+                            text_prefix="", digits=args.bin_label_digits, label_stride=args.bin_label_stride,
+                            show_zero=False, color="black", font_size=10, textposition="top center",
+                            y_offset_fraction=args.bin_label_y_offset_fraction,
+                        )
+                if _has_asimov_bins:
+                    for label, significance, dash, showlegend in [
+                        ("Asimov", raw_asimov_sig, "dot", False),
+                        ("Asimov", smoothed_asimov_sig, "solid", True),
+                    ]:
+                        add_significance_series_trace(
+                            fig, x=stored_energy_axis, y=significance, name_prefix=label,
+                            row=2, col=1, color="rgb(31,119,180)", width=3 if dash == "solid" else 2, dash=dash,
+                            legend="legend2", legendgroup="Significance", legendgrouptitle="Significance",
+                            showlegend=showlegend, append_total=True, total_digits=1,
+                        )
+                add_histogram_style_legend_traces(fig, row=1, col=1, legend="legend")
+                _sig_max = max(float(np.max(raw_significance)), float(np.max(smoothed_significance)), 1.0)
+                if _has_asimov_bins:
+                    _sig_max = max(_sig_max, float(np.max(raw_asimov_sig)), float(np.max(smoothed_asimov_sig)))
+                return _sig_max
 
-        _render_and_save(
-            render_list=_dn_render, energy_axis=energy_axis, add_lower_fn=_dn_lower,
-            subplot_title=f"{energy}, min#Hits {nhits_value:.0f}, min#OpHits {ophits_value:.0f}, max#AdjCl {adjcl_value:.0f}",
-            fig_title=f"Day-Night Asymmetry - {args.folder} - {config}",
-            upper_y_title=f"Counts ({args.exposure:.0f} year·MeV)⁻¹",
-            lower_y_title="Significance (σ)",
-            x_range=[6.75, 26], figure_name=figure_name,
-            positive_count_values=positive_count_values,
-            log_default_range=[-2, np.log10(detector_mass * args.exposure * 1e4)],
-            save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
-            rewrite=args.rewrite, debug_plot=args.plot,
-            stacked_range=[False, True] if args.stacked else [False],
-            zoom=args.zoom, threshold=args.threshold,
-            upper_y_extra={"tickformat": ".0e", "dtick": 1},
-            lower_y_extra={"tickformat": ".0f", "dtick": 1},
-            lower_y_default_range=[0, 6],
-            legend_layout={"legend2": dict(x=0.79, y=0.14, font=dict(size=12))},
-            x_title="Reconstructed Neutrino Energy (MeV)",
-        )
-        for df, df_name in zip(
-            [pd.DataFrame(_counts_list), pd.DataFrame(_significance_list)],
-            ["DayNight_Counts", "DayNight_Significance"],
-        ):
-            df["Study"] = _study_name
-            _merged = upsert_df_rows(df, data_path, config, name, subfolder=_save_subfolder, filename=df_name, debug=args.debug)
-            save_df(
-                _merged, data_path, config, name,
-                subfolder=_save_subfolder, filename=df_name,
-                rm=True, debug=True if df_name == "DayNight_Counts" else args.debug,
+            _render_and_save(
+                render_list=_dn_render, energy_axis=energy_axis, add_lower_fn=_dn_lower,
+                subplot_title=f"{energy}, min#Hits {nhits_value:.0f}, min#OpHits {ophits_value:.0f}, max#AdjCl {adjcl_value:.0f}",
+                fig_title=f"Day-Night Asymmetry - {args.folder} - {config}",
+                upper_y_title=f"Counts ({args.exposure:.0f} year·MeV)⁻¹",
+                lower_y_title="Significance (σ)",
+                x_range=[6.75, 26], figure_name=figure_name,
+                positive_count_values=positive_count_values,
+                log_default_range=[-2, np.log10(detector_mass * args.exposure * 1e4)],
+                save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
+                rewrite=args.rewrite, debug_plot=args.plot,
+                stacked_range=[False, True] if args.stacked else [False],
+                zoom=args.zoom, threshold=args.threshold,
+                upper_y_extra={"tickformat": ".0e", "dtick": 1},
+                lower_y_extra={"tickformat": ".0f", "dtick": 1},
+                lower_y_default_range=[0, 6],
+                legend_layout={"legend2": dict(x=0.79, y=0.14, font=dict(size=12))},
+                x_title="Reconstructed Neutrino Energy (MeV)",
             )
-            if df_name == "DayNight_Counts":
+            for df, df_name in zip(
+                [pd.DataFrame(_counts_list), pd.DataFrame(_significance_list)],
+                ["DayNight_Counts", "DayNight_Significance"],
+            ):
+                df["Study"] = _study_name
+                _merged = upsert_df_rows(df, data_path, config, name, subfolder=_save_subfolder, filename=df_name, debug=args.debug)
+                save_df(
+                    _merged, data_path, config, name,
+                    subfolder=_save_subfolder, filename=df_name,
+                    rm=True, debug=True if df_name == "DayNight_Counts" else args.debug,
+                )
+                # Mirror both Counts and Significance to the local tree, matching Sensitivity.
                 _merged_local = upsert_df_rows(df, local_data_path, config, name, subfolder=_save_subfolder, filename=df_name)
                 save_df(
                     _merged_local, local_data_path, config, name,
                     subfolder=_save_subfolder, filename=df_name,
-                    rm=True, debug=True,
+                    rm=True, debug=True if df_name == "DayNight_Counts" else args.debug,
                 )
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # HEP
-    # ══════════════════════════════════════════════════════════════════════════
-    elif args.analysis == "HEP":
-        sigma_map_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{args.pkl_label}_HEP{_study_suffix}.pkl"
-        )
-        if not os.path.exists(sigma_map_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for {config} {name}: {sigma_map_path}")
-            continue
-
-        sigma_map = pd.read_pickle(sigma_map_path)
-        try:
-            ref_plot = sigma_map[(config, name, energy)]
-        except KeyError:
-            rprint(f"[yellow][WARNING][/yellow] Missing best-cut entry for {config} {name} {energy}.")
-            continue
-
-        nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
-        ophits_value = args.ophits if args.ophits is not None else int(ref_plot["OpHits"])
-        adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
-
-        significance_bins_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins{_study_suffix}.pkl"
-        )
-        _sig_bins_available = os.path.exists(significance_bins_path)
-        if not _sig_bins_available:
-            rprint(
-                f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}. "
-                "Plotting without significance overlay (run with asimov_significance_bins: true to enable)."
+        # ══════════════════════════════════════════════════════════════════════════
+        # HEP
+        # ══════════════════════════════════════════════════════════════════════════
+        elif args.analysis == "HEP":
+            sigma_map_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
+                f"/{config}/{name}/{config}_{name}_{args.pkl_label}_HEP{_study_suffix}.pkl"
             )
-            _fallback_energy = hep_rebin_centers[hep_rebin_centers >= args.threshold]
-            no_rebin_energy = _fallback_energy
-            no_rebin_width = np.ones(len(_fallback_energy), dtype=float)
-            raw_no_rebin_significance = np.zeros(len(_fallback_energy), dtype=float)
-            smoothed_no_rebin_significance = np.zeros(len(_fallback_energy), dtype=float)
-            adaptive_energy = np.zeros(0, dtype=float)
-            adaptive_width = np.zeros(0, dtype=float)
-            raw_adaptive_significance = np.zeros(0, dtype=float)
-            smoothed_adaptive_significance = np.zeros(0, dtype=float)
-        else:
-            significance_bins_df = pd.read_pickle(significance_bins_path)
-            required_bin_columns = [
-                "Config", "Name", "EnergyLabel", "NHits", "OpHits", "AdjCl",
-                "BinMode", "BinIndex", "RecoEnergy", "BinWidth",
-                f"Raw{reference_for_bins}", f"{reference_for_bins}",
-            ]
-            missing_bin_columns = [c for c in required_bin_columns if c not in significance_bins_df.columns]
-            if significance_bins_df.empty or missing_bin_columns:
-                rprint(
-                    f"[yellow][WARNING][/yellow] Invalid per-bin significance payload for {config} {name} {energy}: "
-                    f"missing columns {missing_bin_columns}. Skipping."
-                )
+            if not os.path.exists(sigma_map_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for {config} {name}: {sigma_map_path}")
                 continue
 
-            selected_no_rebin = significance_bins_df.loc[
-                (significance_bins_df["Config"] == config)
-                * (significance_bins_df["Name"] == name)
-                * (significance_bins_df["EnergyLabel"] == energy)
-                * (significance_bins_df["NHits"] == int(nhits_value))
-                * (significance_bins_df["OpHits"] == int(ophits_value))
-                * (significance_bins_df["AdjCl"] == int(adjcl_value))
-                * (significance_bins_df["BinMode"] == "NoRebin")
-            ].copy()
-            selected_adaptive = significance_bins_df.loc[
-                (significance_bins_df["Config"] == config)
-                * (significance_bins_df["Name"] == name)
-                * (significance_bins_df["EnergyLabel"] == energy)
-                * (significance_bins_df["NHits"] == int(nhits_value))
-                * (significance_bins_df["OpHits"] == int(ophits_value))
-                * (significance_bins_df["AdjCl"] == int(adjcl_value))
-                * (significance_bins_df["BinMode"] == "AdaptiveRebin")
-            ].copy()
-            if selected_no_rebin.empty:
-                rprint(
-                    f"[yellow][WARNING][/yellow] Missing no-rebin significance bins for "
-                    f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
-                )
+            sigma_map = pd.read_pickle(sigma_map_path)
+            try:
+                ref_plot = sigma_map[(config, name, energy)]
+            except KeyError:
+                rprint(f"[yellow][WARNING][/yellow] Missing best-cut entry for {config} {name} {energy}.")
                 continue
 
-            selected_no_rebin = selected_no_rebin.sort_values("BinIndex")
-            selected_adaptive = selected_adaptive.sort_values("BinIndex")
+            nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
+            ophits_value = args.ophits if args.ophits is not None else int(ref_plot["OpHits"])
+            adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
 
-        if _sig_bins_available:
-            no_rebin_energy = _safe_array(selected_no_rebin["RecoEnergy"].values)
-            no_rebin_width = _safe_array(selected_no_rebin["BinWidth"].values)
-            raw_no_rebin_significance = _safe_array(selected_no_rebin[f"Raw{reference_for_bins}"].values)
-            smoothed_no_rebin_significance = _safe_array(selected_no_rebin[f"{reference_for_bins}"].values)
-
-            adaptive_energy = _safe_array(selected_adaptive["RecoEnergy"].values)
-            adaptive_width = _safe_array(selected_adaptive["BinWidth"].values)
-            raw_adaptive_significance = _safe_array(selected_adaptive[f"Raw{reference_for_bins}"].values)
-            smoothed_adaptive_significance = _safe_array(selected_adaptive[f"{reference_for_bins}"].values)
-
-        plot_df = pd.read_pickle(
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
-            f"/HEP/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
-        )
-        _hep_background_samples = []
-        for _bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy):
-            plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
-            _hep_background_samples.append(_bkg)
-
-        this_plot_df = plot_df.loc[
-            (plot_df["NHits"] == int(nhits_value))
-            * (plot_df["OpHits"] == int(ophits_value))
-            * (plot_df["AdjCl"] == int(adjcl_value))
-        ].copy()
-        if this_plot_df.empty:
-            rprint(f"[yellow][WARNING][/yellow] Missing histogram payload for {config} {name} {energy}.")
-            continue
-        _present_components = set(this_plot_df["Component"].unique())
-        for _expected in _hep_background_samples:
-            if _expected not in _present_components:
-                raise RuntimeError(
-                    f"Background '{_expected}' absent from HEP plot_df at cuts "
-                    f"NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value} "
-                    f"for {config} {name} {energy}. "
-                    "Rebin pkl cut grid does not cover the selected cuts — regenerate backgrounds."
-                )
-
-        hep_component_specs = [
-            ("hep", "HEP", "Osc", "Mean", "signal", "Signal", "rgb(204,80,62)"),
-        ]
-        for bkg, oscillation, color in [
-            ("gamma", "Truth", get_background_style(str(root), "gamma").get("color", "black")),
-            ("neutron", "Truth", get_background_style(str(root), "neutron").get("color", "rgb(15,133,84)")),
-            ("radiological", "Truth", get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)")),
-            ("8B", "Osc", "rgb(225,124,5)"),
-        ]:
-            style = get_background_style(str(root), bkg)
-            hep_component_specs.append(
-                (bkg, style.get("label", bkg), oscillation, "Mean", "background", "Background", color)
+            significance_bins_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
+                f"/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins{_study_suffix}.pkl"
             )
-
-        scale = detector_mass * args.exposure
-        panel_modes = ["rigorous", "intuitive"] if args.bottom_panel_mode == "both" else [args.bottom_panel_mode]
-
-        _hep_energy_axis = hep_rebin_centers
-        _hep_n_bins = len(_hep_energy_axis)
-
-        _hep_render = []
-        total_raw_counts = np.zeros(_hep_n_bins, dtype=float)
-        total_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
-        signal_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
-        background_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
-        # Unscaled raw counts + error-of-the-sum-in-quadrature accumulators, for the
-        # signal/background excess ratio (Metric) at both Raw and Smoothed spectrum types.
-        signal_raw_counts = np.zeros(_hep_n_bins, dtype=float)
-        background_raw_counts = np.zeros(_hep_n_bins, dtype=float)
-        signal_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
-        background_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
-        signal_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
-        background_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
-        radiological_present = False
-        positive_count_values = []
-
-        for component, component_label, oscillation, mean_label, legend_group, legend_group_title, color in hep_component_specs:
-            comp_df = this_plot_df.loc[
-                (this_plot_df["Component"] == component)
-                * (this_plot_df["Oscillation"] == oscillation)
-                * (this_plot_df["Mean"] == mean_label)
-            ].copy()
-            if comp_df.empty:
-                continue
-
-            if component == "radiological":
-                radiological_present = True
-
-            cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)
-            total_raw_counts += cd["counts"]
-            total_smoothed_counts += cd["smoothed_counts"]
-            if component == "hep":
-                signal_smoothed_counts += cd["smoothed_counts"]
-                signal_raw_counts += cd["counts"]
-                signal_raw_err2 += cd["errors"]**2
-                signal_smoothed_err2 += cd["smoothed_errors"]**2
+            _sig_bins_available = os.path.exists(significance_bins_path)
+            if not _sig_bins_available:
+                rprint(
+                    f"[yellow][WARNING][/yellow] Missing per-bin significance payload for {config} {name} {energy}. "
+                    "Plotting without significance overlay (run with asimov_significance_bins: true to enable)."
+                )
+                _fallback_energy = hep_rebin_centers[hep_rebin_centers >= args.threshold]
+                no_rebin_energy = _fallback_energy
+                no_rebin_width = np.ones(len(_fallback_energy), dtype=float)
+                raw_no_rebin_significance = np.zeros(len(_fallback_energy), dtype=float)
+                smoothed_no_rebin_significance = np.zeros(len(_fallback_energy), dtype=float)
+                adaptive_energy = np.zeros(0, dtype=float)
+                adaptive_width = np.zeros(0, dtype=float)
+                raw_adaptive_significance = np.zeros(0, dtype=float)
+                smoothed_adaptive_significance = np.zeros(0, dtype=float)
             else:
-                background_smoothed_counts += cd["smoothed_counts"]
-                background_raw_counts += cd["counts"]
-                background_raw_err2 += cd["errors"]**2
-                background_smoothed_err2 += cd["smoothed_errors"]**2
+                significance_bins_df = pd.read_pickle(significance_bins_path)
+                required_bin_columns = [
+                    "Config", "Name", "EnergyLabel", "NHits", "OpHits", "AdjCl",
+                    "BinMode", "BinIndex", "RecoEnergy", "BinWidth",
+                    f"Raw{reference_for_bins}", f"{reference_for_bins}",
+                ]
+                missing_bin_columns = [c for c in required_bin_columns if c not in significance_bins_df.columns]
+                if significance_bins_df.empty or missing_bin_columns:
+                    rprint(
+                        f"[yellow][WARNING][/yellow] Invalid per-bin significance payload for {config} {name} {energy}: "
+                        f"missing columns {missing_bin_columns}. Skipping."
+                    )
+                    continue
 
-            positive_count_values.extend(cd["raw_y"][cd["raw_y"] > 0])
-            positive_count_values.extend(cd["smoothed_y"][cd["smoothed_y"] > 0])
+                selected_no_rebin = significance_bins_df.loc[
+                    (significance_bins_df["Config"] == config)
+                    * (significance_bins_df["Name"] == name)
+                    * (significance_bins_df["EnergyLabel"] == energy)
+                    * (significance_bins_df["NHits"] == int(nhits_value))
+                    * (significance_bins_df["OpHits"] == int(ophits_value))
+                    * (significance_bins_df["AdjCl"] == int(adjcl_value))
+                    * (significance_bins_df["BinMode"] == "NoRebin")
+                ].copy()
+                selected_adaptive = significance_bins_df.loc[
+                    (significance_bins_df["Config"] == config)
+                    * (significance_bins_df["Name"] == name)
+                    * (significance_bins_df["EnergyLabel"] == energy)
+                    * (significance_bins_df["NHits"] == int(nhits_value))
+                    * (significance_bins_df["OpHits"] == int(ophits_value))
+                    * (significance_bins_df["AdjCl"] == int(adjcl_value))
+                    * (significance_bins_df["BinMode"] == "AdaptiveRebin")
+                ].copy()
+                if selected_no_rebin.empty:
+                    rprint(
+                        f"[yellow][WARNING][/yellow] Missing no-rebin significance bins for "
+                        f"{config} {name} {energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}."
+                    )
+                    continue
 
-            _hep_render.append({
-                "component": component, "component_label": component_label,
-                "legend_group": legend_group, "legend_group_title": legend_group_title,
-                "color": color,
-                "counts": cd["counts"], "smoothed_counts": cd["smoothed_counts"],
-                "raw_y": cd["raw_y"], "smoothed_y": cd["smoothed_y"], "err_y": cd["err_y"],
-            })
+                selected_no_rebin = selected_no_rebin.sort_values("BinIndex")
+                selected_adaptive = selected_adaptive.sort_values("BinIndex")
 
-        no_rebin_start = 0
-        if no_rebin_energy.size > 0:
-            no_rebin_start = int(np.argmin(np.abs(_hep_energy_axis - no_rebin_energy[0])))
-        signal_tail_counts = signal_smoothed_counts[no_rebin_start:no_rebin_start + len(no_rebin_energy)]
-        background_tail_counts = background_smoothed_counts[no_rebin_start:no_rebin_start + len(no_rebin_energy)]
+            if _sig_bins_available:
+                no_rebin_energy = _safe_array(selected_no_rebin["RecoEnergy"].values)
+                no_rebin_width = _safe_array(selected_no_rebin["BinWidth"].values)
+                raw_no_rebin_significance = _safe_array(selected_no_rebin[f"Raw{reference_for_bins}"].values)
+                smoothed_no_rebin_significance = _safe_array(selected_no_rebin[f"{reference_for_bins}"].values)
 
-        grouped_background_counts = (
-            _group_tail_values(no_rebin_energy, scale * background_tail_counts, adaptive_energy, adaptive_width)
-            if adaptive_energy.size > 0 else np.zeros(0, dtype=float)
-        )
-        grouped_signal_counts = (
-            _group_tail_values(no_rebin_energy, scale * signal_tail_counts, adaptive_energy, adaptive_width)
-            if adaptive_energy.size > 0 else np.zeros(0, dtype=float)
-        )
+                adaptive_energy = _safe_array(selected_adaptive["RecoEnergy"].values)
+                adaptive_width = _safe_array(selected_adaptive["BinWidth"].values)
+                raw_adaptive_significance = _safe_array(selected_adaptive[f"Raw{reference_for_bins}"].values)
+                smoothed_adaptive_significance = _safe_array(selected_adaptive[f"{reference_for_bins}"].values)
 
-        no_rebin_signal_counts = scale * signal_tail_counts
-        no_rebin_background_counts = scale * background_tail_counts
-        no_rebin_b_safe = np.maximum(no_rebin_background_counts, 1e-12)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            no_rebin_asimov = 2.0 * (
-                (no_rebin_signal_counts + no_rebin_b_safe)
-                * np.log1p(np.divide(no_rebin_signal_counts, no_rebin_b_safe))
-                - no_rebin_signal_counts
+            plot_df = pd.read_pickle(
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
+                f"/HEP/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
             )
-        no_rebin_asimov = np.nan_to_num(no_rebin_asimov, nan=0.0, posinf=0.0, neginf=0.0)
-        no_rebin_asimov_density = np.divide(
-            no_rebin_asimov, no_rebin_width, out=np.zeros_like(no_rebin_asimov), where=no_rebin_width > 0,
-        )
-        no_rebin_fisher_density = np.divide(
-            np.divide(
-                no_rebin_signal_counts * no_rebin_signal_counts, no_rebin_b_safe,
-                out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_b_safe > 0,
-            ),
-            no_rebin_width, out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_width > 0,
-        )
-        no_rebin_snr_density = np.divide(
-            np.divide(
-                no_rebin_signal_counts, np.sqrt(no_rebin_b_safe),
-                out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_b_safe > 0,
-            ),
-            no_rebin_width, out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_width > 0,
-        )
-        no_rebin_purity = np.divide(
-            no_rebin_signal_counts, no_rebin_signal_counts + no_rebin_background_counts,
-            out=np.zeros_like(no_rebin_signal_counts, dtype=float),
-            where=(no_rebin_signal_counts + no_rebin_background_counts) > 0,
-        )
+            _hep_background_samples = []
+            for _bkg, filepath in load_available_background_dataframes(
+                str(root), "HEP", args.folder, config, energy,
+                study_label=(args.study_label if _ctx.template_suffix else None),
+            ):
+                plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
+                _hep_background_samples.append(_bkg)
 
-        raw_local_density = _density(raw_no_rebin_significance, no_rebin_width)
-        smooth_local_density = _density(smoothed_no_rebin_significance, no_rebin_width)
+            this_plot_df = plot_df.loc[
+                (plot_df["NHits"] == int(nhits_value))
+                * (plot_df["OpHits"] == int(ophits_value))
+                * (plot_df["AdjCl"] == int(adjcl_value))
+            ].copy()
+            if this_plot_df.empty:
+                rprint(f"[yellow][WARNING][/yellow] Missing histogram payload for {config} {name} {energy}.")
+                continue
+            _present_components = set(this_plot_df["Component"].unique())
+            for _expected in _hep_background_samples:
+                if _expected not in _present_components:
+                    raise RuntimeError(
+                        f"Background '{_expected}' absent from HEP plot_df at cuts "
+                        f"NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value} "
+                        f"for {config} {name} {energy}. "
+                        "Rebin pkl cut grid does not cover the selected cuts — regenerate backgrounds."
+                    )
 
-        def _hep_pre_lower(fig):
-            if not radiological_present:
-                fig.add_trace(
-                    go.Scatter(
-                        x=[None], y=[None], mode="lines",
-                        name="radiological (not present after cuts)",
-                        line=dict(color=get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)"), width=3, dash="dash"),
-                        legend="legend", legendgroup="background",
-                        legendgrouptitle=dict(text="Background"), showlegend=True,
-                    ),
-                    row=1, col=1,
+            hep_component_specs = [
+                ("hep", "HEP", "Osc", "Mean", "signal", "Signal", "rgb(204,80,62)"),
+            ]
+            for bkg, oscillation, color in [
+                ("gamma", "Truth", get_background_style(str(root), "gamma").get("color", "black")),
+                ("neutron", "Truth", get_background_style(str(root), "neutron").get("color", "rgb(15,133,84)")),
+                ("radiological", "Truth", get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)")),
+                ("8B", "Osc", "rgb(225,124,5)"),
+            ]:
+                style = get_background_style(str(root), bkg)
+                hep_component_specs.append(
+                    (bkg, style.get("label", bkg), oscillation, "Mean", "background", "Background", color)
                 )
 
-        for mode in panel_modes:
-            def _hep_lower(fig, mode=mode):
-                lmax = 0.0
-                if mode == "rigorous" and adaptive_energy.size > 0:
-                    _add_rebinned_overlay(
-                        fig, adaptive_energy, adaptive_width,
-                        grouped_background_counts, grouped_signal_counts, signal_label="HEP Rebin",
+            scale = detector_mass * args.exposure
+            panel_modes = ["rigorous", "intuitive"] if args.bottom_panel_mode == "both" else [args.bottom_panel_mode]
+
+            _hep_energy_axis = hep_rebin_centers
+            _hep_n_bins = len(_hep_energy_axis)
+
+            _hep_render = []
+            total_raw_counts = np.zeros(_hep_n_bins, dtype=float)
+            total_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
+            signal_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
+            background_smoothed_counts = np.zeros(_hep_n_bins, dtype=float)
+            # Unscaled raw counts + error-of-the-sum-in-quadrature accumulators, for the
+            # signal/background excess ratio (Metric) at both Raw and Smoothed spectrum types.
+            signal_raw_counts = np.zeros(_hep_n_bins, dtype=float)
+            background_raw_counts = np.zeros(_hep_n_bins, dtype=float)
+            signal_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
+            background_raw_err2 = np.zeros(_hep_n_bins, dtype=float)
+            signal_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
+            background_smoothed_err2 = np.zeros(_hep_n_bins, dtype=float)
+            radiological_present = False
+            positive_count_values = []
+
+            for component, component_label, oscillation, mean_label, legend_group, legend_group_title, color in hep_component_specs:
+                comp_df = this_plot_df.loc[
+                    (this_plot_df["Component"] == component)
+                    * (this_plot_df["Oscillation"] == oscillation)
+                    * (this_plot_df["Mean"] == mean_label)
+                ].copy()
+                if comp_df.empty:
+                    continue
+
+                if component == "radiological":
+                    radiological_present = True
+
+                cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)
+                total_raw_counts += cd["counts"]
+                total_smoothed_counts += cd["smoothed_counts"]
+                if component == "hep":
+                    signal_smoothed_counts += cd["smoothed_counts"]
+                    signal_raw_counts += cd["counts"]
+                    signal_raw_err2 += cd["errors"]**2
+                    signal_smoothed_err2 += cd["smoothed_errors"]**2
+                else:
+                    background_smoothed_counts += cd["smoothed_counts"]
+                    background_raw_counts += cd["counts"]
+                    background_raw_err2 += cd["errors"]**2
+                    background_smoothed_err2 += cd["smoothed_errors"]**2
+
+                positive_count_values.extend(cd["raw_y"][cd["raw_y"] > 0])
+                positive_count_values.extend(cd["smoothed_y"][cd["smoothed_y"] > 0])
+
+                _hep_render.append({
+                    "component": component, "component_label": component_label,
+                    "legend_group": legend_group, "legend_group_title": legend_group_title,
+                    "color": color,
+                    "counts": cd["counts"], "smoothed_counts": cd["smoothed_counts"],
+                    "raw_y": cd["raw_y"], "smoothed_y": cd["smoothed_y"], "err_y": cd["err_y"],
+                })
+
+            no_rebin_start = 0
+            if no_rebin_energy.size > 0:
+                no_rebin_start = int(np.argmin(np.abs(_hep_energy_axis - no_rebin_energy[0])))
+            signal_tail_counts = signal_smoothed_counts[no_rebin_start:no_rebin_start + len(no_rebin_energy)]
+            background_tail_counts = background_smoothed_counts[no_rebin_start:no_rebin_start + len(no_rebin_energy)]
+
+            grouped_background_counts = (
+                _group_tail_values(no_rebin_energy, scale * background_tail_counts, adaptive_energy, adaptive_width)
+                if adaptive_energy.size > 0 else np.zeros(0, dtype=float)
+            )
+            grouped_signal_counts = (
+                _group_tail_values(no_rebin_energy, scale * signal_tail_counts, adaptive_energy, adaptive_width)
+                if adaptive_energy.size > 0 else np.zeros(0, dtype=float)
+            )
+
+            no_rebin_signal_counts = scale * signal_tail_counts
+            no_rebin_background_counts = scale * background_tail_counts
+            no_rebin_b_safe = np.maximum(no_rebin_background_counts, 1e-12)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                no_rebin_asimov = 2.0 * (
+                    (no_rebin_signal_counts + no_rebin_b_safe)
+                    * np.log1p(np.divide(no_rebin_signal_counts, no_rebin_b_safe))
+                    - no_rebin_signal_counts
+                )
+            no_rebin_asimov = np.nan_to_num(no_rebin_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+            no_rebin_asimov_density = np.divide(
+                no_rebin_asimov, no_rebin_width, out=np.zeros_like(no_rebin_asimov), where=no_rebin_width > 0,
+            )
+            no_rebin_fisher_density = np.divide(
+                np.divide(
+                    no_rebin_signal_counts * no_rebin_signal_counts, no_rebin_b_safe,
+                    out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_b_safe > 0,
+                ),
+                no_rebin_width, out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_width > 0,
+            )
+            no_rebin_snr_density = np.divide(
+                np.divide(
+                    no_rebin_signal_counts, np.sqrt(no_rebin_b_safe),
+                    out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_b_safe > 0,
+                ),
+                no_rebin_width, out=np.zeros_like(no_rebin_signal_counts, dtype=float), where=no_rebin_width > 0,
+            )
+            no_rebin_purity = np.divide(
+                no_rebin_signal_counts, no_rebin_signal_counts + no_rebin_background_counts,
+                out=np.zeros_like(no_rebin_signal_counts, dtype=float),
+                where=(no_rebin_signal_counts + no_rebin_background_counts) > 0,
+            )
+
+            raw_local_density = _density(raw_no_rebin_significance, no_rebin_width)
+            smooth_local_density = _density(smoothed_no_rebin_significance, no_rebin_width)
+
+            def _hep_pre_lower(fig):
+                if not radiological_present:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[None], y=[None], mode="lines",
+                            name="radiological (not present after cuts)",
+                            line=dict(color=get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)"), width=3, dash="dash"),
+                            legend="legend", legendgroup="background",
+                            legendgrouptitle=dict(text="Background"), showlegend=True,
+                        ),
+                        row=1, col=1,
                     )
-                if mode == "rigorous":
-                    if adaptive_energy.size == 0:
-                        fig.add_annotation(
-                            x=0.5, y=0.15, xref="paper", yref="paper",
-                            text="Adaptive-rebin payload not available for this selection.", showarrow=False,
+
+            for mode in panel_modes:
+                def _hep_lower(fig, mode=mode):
+                    lmax = 0.0
+                    if mode == "rigorous" and adaptive_energy.size > 0:
+                        _add_rebinned_overlay(
+                            fig, adaptive_energy, adaptive_width,
+                            grouped_background_counts, grouped_signal_counts, signal_label="HEP Rebin",
                         )
+                    if mode == "rigorous":
+                        if adaptive_energy.size == 0:
+                            fig.add_annotation(
+                                x=0.5, y=0.15, xref="paper", yref="paper",
+                                text="Adaptive-rebin payload not available for this selection.", showarrow=False,
+                            )
+                        else:
+                            fig.add_trace(
+                                go.Bar(
+                                    x=adaptive_energy, y=smoothed_adaptive_significance, width=adaptive_width,
+                                    name="Smoothed", marker_color="rgba(31,119,180,0.45)",
+                                    marker_line=dict(color="rgb(31,119,180)", width=1.5),
+                                    legend="legend2", legendgroup="proxy",
+                                    legendgrouptitle=dict(text="Local Proxy"), showlegend=True,
+                                ),
+                                row=2, col=1,
+                            )
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=adaptive_energy, y=raw_adaptive_significance, mode="lines", name="Raw",
+                                    line=dict(color="black", width=2, dash="dot", shape="hvh"),
+                                    error_x=dict(type="data", array=0.5 * adaptive_width, visible=True),
+                                    legend="legend2", legendgroup="proxy", showlegend=True,
+                                ),
+                                row=2, col=1,
+                            )
+                            adaptive_purity = np.divide(
+                                grouped_signal_counts, grouped_signal_counts + grouped_background_counts,
+                                out=np.zeros_like(grouped_signal_counts, dtype=float),
+                                where=(grouped_signal_counts + grouped_background_counts) > 0,
+                            )
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=adaptive_energy, y=adaptive_purity, mode="lines", name="Signal purity",
+                                    line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
+                                    legend="legend3", legendgroup="purity_overlay",
+                                    legendgrouptitle=dict(text="Signal Purity"), showlegend=True,
+                                ),
+                                row=2, col=1, secondary_y=True,
+                            )
+                            lmax = max(float(np.max(smoothed_adaptive_significance)), float(np.max(raw_adaptive_significance)))
                     else:
+                        if _sig_bins_available:
+                            intuitive_density = _density(smoothed_no_rebin_significance, no_rebin_width)
+                            intuitive_raw_density = _density(raw_no_rebin_significance, no_rebin_width)
+                            lmax = max(float(np.max(intuitive_density)), float(np.max(intuitive_raw_density)))
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=no_rebin_energy, y=intuitive_raw_density, mode="lines", name="Raw",
+                                    line=dict(color="black", width=2, dash="dot"), line_shape="hvh",
+                                    legend="legend2", legendgroup="proxy",
+                                    legendgrouptitle=dict(text="Local Proxy"), showlegend=True,
+                                ),
+                                row=2, col=1,
+                            )
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=no_rebin_energy, y=intuitive_density, mode="lines", name="Smoothed",
+                                    line=dict(color="rgb(31,119,180)", width=3, dash="solid"), line_shape="hvh",
+                                    legend="legend2", legendgroup="proxy", showlegend=True,
+                                ),
+                                row=2, col=1,
+                            )
+                        else:
+                            fig.add_annotation(
+                                x=0.5, y=0.85, xref="paper", yref="paper",
+                                text="Smoothed significance not available (run with asimov_significance_bins: true).",
+                                showarrow=False, font=dict(size=11),
+                            )
+                        if args.local_metric == "AsimovTS":
+                            plotted_vals, legend_name = no_rebin_asimov_density, "Asimov TS density"
+                        elif args.local_metric == "Fisher":
+                            plotted_vals, legend_name = no_rebin_fisher_density, "Fisher info density"
+                        elif args.local_metric == "SNR":
+                            plotted_vals, legend_name = no_rebin_snr_density, "SNR density"
+                        else:
+                            plotted_vals, legend_name = no_rebin_purity, "Signal purity"
+                        lmax = max(lmax, float(np.max(plotted_vals)))
                         fig.add_trace(
                             go.Bar(
-                                x=adaptive_energy, y=smoothed_adaptive_significance, width=adaptive_width,
-                                name="Smoothed", marker_color="rgba(31,119,180,0.45)",
-                                marker_line=dict(color="rgb(31,119,180)", width=1.5),
-                                legend="legend2", legendgroup="proxy",
-                                legendgrouptitle=dict(text="Local Proxy"), showlegend=True,
-                            ),
-                            row=2, col=1,
-                        )
-                        fig.add_trace(
-                            go.Scatter(
-                                x=adaptive_energy, y=raw_adaptive_significance, mode="lines", name="Raw",
-                                line=dict(color="black", width=2, dash="dot", shape="hvh"),
-                                error_x=dict(type="data", array=0.5 * adaptive_width, visible=True),
+                                x=no_rebin_energy, y=plotted_vals, width=no_rebin_width, name=legend_name,
+                                marker_color="rgba(31,119,180,0.22)", marker_line=dict(color="rgb(31,119,180)", width=1),
                                 legend="legend2", legendgroup="proxy", showlegend=True,
                             ),
                             row=2, col=1,
                         )
-                        adaptive_purity = np.divide(
-                            grouped_signal_counts, grouped_signal_counts + grouped_background_counts,
-                            out=np.zeros_like(grouped_signal_counts, dtype=float),
-                            where=(grouped_signal_counts + grouped_background_counts) > 0,
-                        )
                         fig.add_trace(
                             go.Scatter(
-                                x=adaptive_energy, y=adaptive_purity, mode="lines", name="Signal purity",
+                                x=no_rebin_energy, y=no_rebin_purity, mode="lines", name="Signal purity",
                                 line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
                                 legend="legend3", legendgroup="purity_overlay",
                                 legendgrouptitle=dict(text="Signal Purity"), showlegend=True,
                             ),
                             row=2, col=1, secondary_y=True,
                         )
-                        lmax = max(float(np.max(smoothed_adaptive_significance)), float(np.max(raw_adaptive_significance)))
-                else:
-                    if _sig_bins_available:
-                        intuitive_density = _density(smoothed_no_rebin_significance, no_rebin_width)
-                        intuitive_raw_density = _density(raw_no_rebin_significance, no_rebin_width)
-                        lmax = max(float(np.max(intuitive_density)), float(np.max(intuitive_raw_density)))
-                        fig.add_trace(
-                            go.Scatter(
-                                x=no_rebin_energy, y=intuitive_raw_density, mode="lines", name="Raw",
-                                line=dict(color="black", width=2, dash="dot"), line_shape="hvh",
-                                legend="legend2", legendgroup="proxy",
-                                legendgrouptitle=dict(text="Local Proxy"), showlegend=True,
-                            ),
-                            row=2, col=1,
-                        )
-                        fig.add_trace(
-                            go.Scatter(
-                                x=no_rebin_energy, y=intuitive_density, mode="lines", name="Smoothed",
-                                line=dict(color="rgb(31,119,180)", width=3, dash="solid"), line_shape="hvh",
-                                legend="legend2", legendgroup="proxy", showlegend=True,
-                            ),
-                            row=2, col=1,
-                        )
-                    else:
-                        fig.add_annotation(
-                            x=0.5, y=0.85, xref="paper", yref="paper",
-                            text="Smoothed significance not available (run with asimov_significance_bins: true).",
-                            showarrow=False, font=dict(size=11),
-                        )
-                    if args.local_metric == "AsimovTS":
-                        plotted_vals, legend_name = no_rebin_asimov_density, "Asimov TS density"
-                    elif args.local_metric == "Fisher":
-                        plotted_vals, legend_name = no_rebin_fisher_density, "Fisher info density"
-                    elif args.local_metric == "SNR":
-                        plotted_vals, legend_name = no_rebin_snr_density, "SNR density"
-                    else:
-                        plotted_vals, legend_name = no_rebin_purity, "Signal purity"
-                    lmax = max(lmax, float(np.max(plotted_vals)))
-                    fig.add_trace(
-                        go.Bar(
-                            x=no_rebin_energy, y=plotted_vals, width=no_rebin_width, name=legend_name,
-                            marker_color="rgba(31,119,180,0.22)", marker_line=dict(color="rgb(31,119,180)", width=1),
-                            legend="legend2", legendgroup="proxy", showlegend=True,
-                        ),
-                        row=2, col=1,
-                    )
-                    fig.add_trace(
-                        go.Scatter(
-                            x=no_rebin_energy, y=no_rebin_purity, mode="lines", name="Signal purity",
-                            line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
-                            legend="legend3", legendgroup="purity_overlay",
-                            legendgrouptitle=dict(text="Signal Purity"), showlegend=True,
-                        ),
-                        row=2, col=1, secondary_y=True,
-                    )
-                return lmax
+                    return lmax
 
-            _suffix = "BottomRigorous" if mode == "rigorous" else "BottomIntuitive"
-            _hep_figure_name = f"{energy}_HEP_Significance_{args.reference}_Exposure_{args.exposure:.0f}_{_suffix}"
-            if args.pkl_label != "highest":
-                _hep_figure_name += f"_{args.pkl_label}"
+                _suffix = "BottomRigorous" if mode == "rigorous" else "BottomIntuitive"
+                _hep_figure_name = f"{energy}_HEP_Significance_{args.reference}_Exposure_{args.exposure:.0f}_{_suffix}"
+                if args.pkl_label != "highest":
+                    _hep_figure_name += f"_{args.pkl_label}"
+
+                _render_and_save(
+                    render_list=_hep_render, energy_axis=_hep_energy_axis, add_lower_fn=_hep_lower,
+                    subplot_title=f"{energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}",
+                    fig_title=f"HEP Significance - {args.folder} - {config}",
+                    upper_y_title="Counts",
+                    lower_y_title=reference_label if mode == "rigorous" else local_proxy_label,
+                    x_range=[8, 30], figure_name=_hep_figure_name,
+                    positive_count_values=positive_count_values, log_default_range=[-2, 10],
+                    save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
+                    rewrite=args.rewrite, debug_plot=args.plot,
+                    stacked_range=[False, True] if args.stacked else [False],
+                    zoom=args.zoom, threshold=args.threshold,
+                    secondary_y=True, pre_lower_fn=_hep_pre_lower,
+                )
+
+            # HEP data output — outside panel_modes loop
+            _hep_sig_base = {
+                "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "HEP",
+                "Variable": saved_variable,
+                "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                "Exposure": args.exposure,
+            }
+            if _sig_bins_available:
+                for spec_type, sig_vals, bw in [
+                    ("Raw", raw_no_rebin_significance.tolist(), None),
+                    ("Smoothed", smoothed_no_rebin_significance.tolist(), None),
+                ]:
+                    _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "NoRebin", "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": r"\sigma", "BinWidth": bw, "BinWidthUnit": None, "ExposureUnit": "year"})
+            if adaptive_energy.size > 0:
+                for spec_type, sig_vals in [("Raw", raw_adaptive_significance), ("Smoothed", smoothed_adaptive_significance)]:
+                    _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "AdaptiveRebin", "Energy": adaptive_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals.tolist(), "SignificanceUnit": r"\sigma", "BinWidth": adaptive_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
+
+                s = scale * signal_tail_counts
+                b = scale * background_tail_counts
+                b_safe = np.maximum(b, 1e-12)
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    q_asimov = 2.0 * ((s + b_safe) * np.log1p(np.divide(s, b_safe)) - s)
+                q_asimov = np.nan_to_num(q_asimov, nan=0.0, posinf=0.0, neginf=0.0)
+                fisher = np.divide(s * s, b_safe, out=np.zeros_like(s, dtype=float), where=b_safe > 0)
+                snr = np.divide(s, np.sqrt(b_safe), out=np.zeros_like(s, dtype=float), where=b_safe > 0)
+                purity_arr = np.divide(s, (s + b_safe), out=np.zeros_like(s, dtype=float), where=(s + b_safe) > 0)
+
+                if args.local_metric == "AsimovTS":
+                    to_save = np.divide(q_asimov, no_rebin_width, out=np.zeros_like(q_asimov), where=no_rebin_width > 0).tolist()
+                    binmode_name = "AsimovTS"
+                elif args.local_metric == "Fisher":
+                    to_save = np.divide(fisher, no_rebin_width, out=np.zeros_like(fisher), where=no_rebin_width > 0).tolist()
+                    binmode_name = "Fisher"
+                elif args.local_metric == "SNR":
+                    to_save = np.divide(snr, no_rebin_width, out=np.zeros_like(snr), where=no_rebin_width > 0).tolist()
+                    binmode_name = "SNR"
+                else:
+                    to_save = purity_arr.tolist()
+                    binmode_name = "Purity"
+
+                _hep_sig_unit = {
+                    "LocalDensity": r"\sigma \cdot MeV^{-1}",
+                    "AsimovTS": r"MeV^{-1}", "Fisher": r"MeV^{-1}", "SNR": r"MeV^{-1}", "Purity": "1",
+                }
+                for spec_type, sig_vals, bm in [
+                    ("Raw", raw_local_density.tolist(), "LocalDensity"),
+                    ("Smoothed", smooth_local_density.tolist(), "LocalDensity"),
+                    ("Smoothed", to_save, binmode_name),
+                ]:
+                    _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": bm, "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": _hep_sig_unit.get(bm, "1"), "BinWidth": no_rebin_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
+
+            tail_slice = slice(no_rebin_start, no_rebin_start + len(no_rebin_energy))
+
+            # Signal/background excess ratio (Metric = S/B), per energy bin, for both spectrum
+            # types. Ratio is scale- and bin-width-invariant (cancels in S/B), so it is computed
+            # directly from the unscaled accumulators without reapplying `scale` or dividing by
+            # `no_rebin_width`. Error propagated assuming independent Poisson-like S and B.
+            def _hep_excess_ratio(sig_tail, sig_err2_tail, bkg_tail, bkg_err2_tail):
+                bkg_safe = np.maximum(bkg_tail, 1e-12)
+                ratio = np.divide(sig_tail, bkg_safe, out=np.zeros_like(sig_tail, dtype=float), where=bkg_safe > 0)
+                sig_safe = np.maximum(sig_tail, 1e-12)
+                rel_var = np.where(sig_tail > 0, sig_err2_tail / sig_safe**2, 0.0) + np.where(bkg_tail > 0, bkg_err2_tail / bkg_safe**2, 0.0)
+                ratio_err = np.abs(ratio) * np.sqrt(rel_var)
+                return ratio, ratio_err
+
+            _hep_metric_raw, _hep_metric_raw_err = _hep_excess_ratio(
+                signal_raw_counts[tail_slice], signal_raw_err2[tail_slice],
+                background_raw_counts[tail_slice], background_raw_err2[tail_slice],
+            )
+            _hep_metric_smoothed, _hep_metric_smoothed_err = _hep_excess_ratio(
+                signal_smoothed_counts[tail_slice], signal_smoothed_err2[tail_slice],
+                background_smoothed_counts[tail_slice], background_smoothed_err2[tail_slice],
+            )
+
+            for rd in _hep_render:
+                _is_sig = rd["component"] == "hep"
+                for spec_type, cnt_arr in [("Raw", rd["counts"]), ("Smoothed", rd["smoothed_counts"])]:
+                    _metric_vals, _metric_err_vals = (
+                        (_hep_metric_raw, _hep_metric_raw_err) if spec_type == "Raw" else (_hep_metric_smoothed, _hep_metric_smoothed_err)
+                    )
+                    _counts_list.append({
+                        "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "HEP",
+                        "Geometry": info["GEOMETRY"],
+                        "Component": rd["component"], "SpectrumType": spec_type,
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": args.exposure, "ExposureUnit": "year",
+                        "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV",
+                        "Counts": (scale * cnt_arr[tail_slice] / no_rebin_width).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
+                        "CountsError": None,
+                        "Significance": (
+                            raw_local_density.tolist() if (_is_sig and spec_type == "Raw")
+                            else smooth_local_density.tolist() if (_is_sig and spec_type == "Smoothed")
+                            else None
+                        ),
+                        "SignificanceUnit": r"\sigma \cdot MeV^{-1}" if _is_sig else None,
+                        "SignificanceLabel": "Asimov TS density" if _is_sig else None,
+                        "Metric": _metric_vals.tolist() if _is_sig else None,
+                        "MetricError": _metric_err_vals.tolist() if _is_sig else None,
+                        "MetricUnit": "1" if _is_sig else None,
+                        "MetricLabel": "Signal / Background" if _is_sig else None,
+                    })
+
+            if args.pkl_label == "highest":
+                # _counts_list / _significance_list accumulate across the whole product
+                # loop, so each write must be restricted to the config/name currently
+                # being saved — otherwise every config's rows land in args.config[0]'s
+                # file and the other configs never get one.
+                def _rows_for_current(records):
+                    _d = pd.DataFrame(records)
+                    if _d.empty or "Config" not in _d.columns:
+                        return _d
+                    return _d.loc[
+                        (_d["Config"] == config) & (_d["Name"] == name)
+                    ].reset_index(drop=True)
+
+                _hep_counts_df = _rows_for_current(_counts_list)
+                if not _hep_counts_df.empty:
+                    _hep_counts_df["Study"] = _study_name
+                    for _path in [data_path, local_data_path]:
+                        _merged_hc = upsert_df_rows(
+                            _hep_counts_df, _path, config=config, name=name,
+                            subfolder=_save_subfolder, filename="HEP_Counts", debug=args.debug,
+                        )
+                        save_df(
+                            _merged_hc, _path, config=config, name=name,
+                            subfolder=_save_subfolder, filename="HEP_Counts",
+                            rm=True, debug=True,
+                        )
+
+                _hep_sig_df = _rows_for_current(_significance_list)
+                if not _hep_sig_df.empty:
+                    _hep_sig_df["Study"] = _study_name
+                    _merged_hs = upsert_df_rows(
+                        _hep_sig_df, data_path, config=config, name=name,
+                        subfolder=_save_subfolder, filename="HEP_Significance", debug=args.debug,
+                    )
+                    save_df(
+                        _merged_hs, data_path, config=config, name=name,
+                        subfolder=_save_subfolder, filename="HEP_Significance",
+                        rm=True, debug=args.debug,
+                    )
+                    # Mirror to the local tree, matching Counts and the Sensitivity block.
+                    _merged_hs_local = upsert_df_rows(
+                        _hep_sig_df, local_data_path, config=config, name=name,
+                        subfolder=_save_subfolder, filename="HEP_Significance",
+                    )
+                    save_df(
+                        _merged_hs_local, local_data_path, config=config, name=name,
+                        subfolder=_save_subfolder, filename="HEP_Significance",
+                        rm=True, debug=args.debug,
+                    )
+
+        # ══════════════════════════════════════════════════════════════════════════
+        # Sensitivity
+        # ══════════════════════════════════════════════════════════════════════════
+        elif args.analysis == "Sensitivity":
+            best_cut_path = (
+                f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}"
+                f"/{config}_{name}_highest_SENSITIVITY{_study_suffix}.pkl"
+            )
+            
+            # Initialize cut values with user-provided values or defaults
+            nhits_value = args.nhits
+            adjcl_value = args.adjcls
+            ophits_value = args.ophits
+            
+            # Try to load best cuts file if it exists
+            if os.path.exists(best_cut_path):
+                best_cut_map = pickle.load(open(best_cut_path, "rb"))
+                try:
+                    ref_plot = best_cut_map[(config, name, energy)]
+                    # Use best cuts from file if user didn't override
+                    if nhits_value is None:
+                        nhits_value = int(ref_plot["NHits"])
+                    if adjcl_value is None:
+                        adjcl_value = int(ref_plot["AdjCl"])
+                    if ophits_value is None:
+                        ophits_value = int(ref_plot["OpHits"])
+                except KeyError:
+                    rprint(f"[yellow][WARNING][/yellow] Missing best-cut entry for Sensitivity {config} {name} {energy}.")
+                    # Fall back to defaults if key not found
+                    if nhits_value is None:
+                        nhits_value = 4  # nominal default
+                    if adjcl_value is None:
+                        adjcl_value = 0  # nominal default
+                    if ophits_value is None:
+                        ophits_value = 0  # nominal default
+            else:
+                rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for Sensitivity {config} {name}: {best_cut_path}")
+                # Use defaults if file doesn't exist
+                if nhits_value is None:
+                    nhits_value = 4  # nominal default
+                if adjcl_value is None:
+                    adjcl_value = 0  # nominal default
+                if ophits_value is None:
+                    ophits_value = 0  # nominal default
+
+            rebin_path = (
+                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
+                f"/SENSITIVITY/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
+            )
+            if not os.path.exists(rebin_path):
+                rprint(f"[yellow][WARNING][/yellow] Missing Rebin pkl for Sensitivity {config} {name} {energy}: {rebin_path}")
+                continue
+
+            plot_df = pd.read_pickle(rebin_path)
+            background_samples = []
+            for bkg, filepath in load_available_background_dataframes(
+                str(root), "SENSITIVITY", args.folder, config, energy,
+                study_label=(args.study_label if _ctx.template_suffix else None),
+            ):
+                plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
+                background_samples.append(bkg)
+
+            this_plot_df = plot_df.loc[
+                (plot_df["NHits"] == nhits_value)
+                * (plot_df["OpHits"] == ophits_value)
+                * (plot_df["AdjCl"] == adjcl_value)
+            ].copy()
+            if this_plot_df.empty:
+                rprint(f"[yellow][WARNING][/yellow] Missing histogram payload for Sensitivity {config} {name} {energy}.")
+                continue
+
+            energy_axis = np.asarray(this_plot_df["Energy"].values[0], dtype=float)
+            if energy_axis.size > 1:
+                half = 0.5 * (energy_axis[1] - energy_axis[0])
+                edges = np.concatenate([
+                    [energy_axis[0] - half],
+                    0.5 * (energy_axis[:-1] + energy_axis[1:]),
+                    [energy_axis[-1] + half],
+                ])
+                bin_widths = np.diff(edges)
+            else:
+                bin_widths = np.ones(max(energy_axis.size, 1))
+
+            scale = detector_mass * args.exposure
+
+            sens_component_specs = [
+                ("Solar", "Solar (osc)", "Osc", "Mean", "signal", "Signal", compare[1]),
+            ]
+            for bkg in background_samples:
+                style = get_background_style(str(root), bkg)
+                sens_component_specs.append(
+                    (bkg, style.get("label", bkg).title(), "Truth", "Mean", "background", "Background", style.get("color", "grey"))
+                )
+
+            signal_smoothed_counts = np.zeros(energy_axis.size, dtype=float)
+            background_smoothed_counts = np.zeros(energy_axis.size, dtype=float)
+            positive_count_values = []
+            _sens_render = []
+
+            # Nadir-dependent signal envelope, per energy bin: Day and Night are the two
+            # arithmetic-mean-over-nadir extremes of the Earth-matter (MSW) oscillation effect,
+            # already computed alongside the DUNE-exposure-weighted "Mean" in the same Rebin pkl.
+            # Metric = Mean signal (same value as the Solar (osc) row's own Counts); MetricError
+            # = half the Day/Night spread, so Metric ± MetricError brackets [min, max] achievable
+            # across nadir at that energy.
+            _sens_day_night_envelope = {}
+            for spec_type, count_key in [("Raw", "counts"), ("Smoothed", "smoothed_counts")]:
+                _bounds = []
+                for _mean_label in ("Day", "Night"):
+                    _dn_comp_df = this_plot_df.loc[
+                        (this_plot_df["Component"] == "Solar")
+                        * (this_plot_df["Oscillation"] == "Osc")
+                        * (this_plot_df["Mean"] == _mean_label)
+                    ].copy()
+                    if _dn_comp_df.empty:
+                        _bounds = None
+                        break
+                    _dn_cd = _process_component_df(_dn_comp_df, "Solar", smoothing_config, scale=scale)
+                    _bounds.append(scale * _dn_cd[count_key] / bin_widths)
+                if _bounds is not None:
+                    _lo = np.minimum(_bounds[0], _bounds[1])
+                    _hi = np.maximum(_bounds[0], _bounds[1])
+                    _sens_day_night_envelope[spec_type] = (_lo, _hi)
+
+            for component, component_label, oscillation, mean_label, legend_group, legend_group_title, color in sens_component_specs:
+                comp_df = this_plot_df.loc[
+                    (this_plot_df["Component"] == component)
+                    * (this_plot_df["Oscillation"] == oscillation)
+                    * (this_plot_df["Mean"] == mean_label)
+                ].copy()
+                if comp_df.empty:
+                    continue
+
+                cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)
+                positive_count_values.extend(cd["raw_y"][cd["raw_y"] > 0])
+                positive_count_values.extend(cd["smoothed_y"][cd["smoothed_y"] > 0])
+
+                if component == "Solar":
+                    signal_smoothed_counts += cd["smoothed_counts"]
+                else:
+                    background_smoothed_counts += cd["smoothed_counts"]
+
+                _sens_render.append({
+                    "component_label": component_label, "legend_group": legend_group,
+                    "legend_group_title": legend_group_title, "color": color,
+                    "raw_y": cd["raw_y"], "smoothed_y": cd["smoothed_y"], "err_y": cd["err_y"],
+                })
+
+                for spec_type, cnt_arr, err_arr in [
+                    ("Raw", cd["counts"], cd["errors"]),
+                    ("Smoothed", cd["smoothed_counts"], cd["smoothed_errors"]),
+                ]:
+                    _metric_vals = _metric_err_vals = None
+                    if component == "Solar" and spec_type in _sens_day_night_envelope:
+                        _mean_vals = scale * cnt_arr / bin_widths
+                        _lo, _hi = _sens_day_night_envelope[spec_type]
+                        _metric_vals = _mean_vals
+                        _metric_err_vals = (_hi - _lo) / 2.0
+                    _counts_list.append({
+                        "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "Sensitivity",
+                        "Geometry": info["GEOMETRY"],
+                        "Component": component_label, "SpectrumType": spec_type,
+                        "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                        "Exposure": args.exposure, "ExposureUnit": "year",
+                        "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                        "Counts": (scale * cnt_arr / bin_widths).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
+                        "CountsError": (scale * err_arr / bin_widths).tolist(),
+                        "Significance": None,
+                        "SignificanceUnit": None,
+                        "SignificanceLabel": None,
+                        "Metric": _metric_vals.tolist() if _metric_vals is not None else None,
+                        "MetricError": _metric_err_vals.tolist() if _metric_err_vals is not None else None,
+                        "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if _metric_vals is not None else None,
+                        "MetricLabel": "Nadir-averaged signal (± Day/Night envelope)" if _metric_vals is not None else None,
+                    })
+
+            s = scale * signal_smoothed_counts
+            b = scale * background_smoothed_counts
+            b_safe = np.maximum(b, 1e-12)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                asimov_ts = 2.0 * ((s + b_safe) * np.log1p(np.divide(s, b_safe)) - s)
+            asimov_ts = np.nan_to_num(asimov_ts, nan=0.0, posinf=0.0, neginf=0.0)
+            asimov_density = np.divide(asimov_ts, bin_widths, out=np.zeros_like(asimov_ts), where=bin_widths > 0)
+            purity_vals = np.divide(s, s + b, out=np.zeros_like(s, dtype=float), where=(s + b) > 0)
+            lower_panel_max = float(np.max(asimov_density)) if asimov_density.size > 0 else 1.0
+
+            # Mirror the Asimov TS density onto the signal rows, matching DayNight/HEP which
+            # carry their per-bin significance in the Counts pkl alongside Sensitivity_Significance.
+            for _row in _counts_list:
+                if _row.get("Analysis") == "Sensitivity" and _row.get("Component") == "Solar (osc)" and _row.get("EnergyLabel") == energy:
+                    _row["Significance"] = asimov_density.tolist()
+                    _row["SignificanceUnit"] = r"MeV^{-1}"
+                    _row["SignificanceLabel"] = "Asimov TS density"
+
+            figure_name = f"{energy}_Sensitivity_Significance_Exposure_{args.exposure:.0f}"
+            if args.nhits is not None or args.ophits is not None or args.adjcls is not None:
+                figure_name += f"_NHits{nhits_value}_OpHits{ophits_value}_AdjCl{adjcl_value}"
+
+            def _sens_lower(fig):
+                fig.add_trace(
+                    go.Bar(
+                        x=energy_axis, y=asimov_density, width=bin_widths, name="Asimov TS density",
+                        marker_color="rgba(31,119,180,0.35)", marker_line=dict(color="rgb(31,119,180)", width=1),
+                        legend="legend2", legendgroup="proxy", legendgrouptitle=dict(text="Local Discovery Power"),
+                        showlegend=True,
+                    ),
+                    row=2, col=1,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=energy_axis, y=purity_vals, mode="lines", name="Signal purity",
+                        line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
+                        legend="legend3", legendgroup="purity_overlay",
+                        legendgrouptitle=dict(text="Signal Purity"), showlegend=True,
+                    ),
+                    row=2, col=1, secondary_y=True,
+                )
+                return lower_panel_max
 
             _render_and_save(
-                render_list=_hep_render, energy_axis=_hep_energy_axis, add_lower_fn=_hep_lower,
+                render_list=_sens_render, energy_axis=energy_axis, add_lower_fn=_sens_lower,
                 subplot_title=f"{energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}",
-                fig_title=f"HEP Significance - {args.folder} - {config}",
-                upper_y_title="Counts",
-                lower_y_title=reference_label if mode == "rigorous" else local_proxy_label,
-                x_range=[8, 30], figure_name=_hep_figure_name,
+                fig_title=f"Sensitivity Significance - {args.folder} - {config}",
+                upper_y_title="Counts", lower_y_title="Asimov TS density",
+                x_range=None, figure_name=figure_name,
                 positive_count_values=positive_count_values, log_default_range=[-2, 10],
                 save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
                 rewrite=args.rewrite, debug_plot=args.plot,
                 stacked_range=[False, True] if args.stacked else [False],
                 zoom=args.zoom, threshold=args.threshold,
-                secondary_y=True, pre_lower_fn=_hep_pre_lower,
+                secondary_y=True,
+                legend_layout=dict(
+                    legend=dict(font=dict(size=12), x=0.75, y=0.99, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
+                    legend2=dict(font=dict(size=12), x=0.01, y=0.30, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
+                    legend3=dict(font=dict(size=12), x=0.75, y=0.26, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
+                ),
             )
 
-        # HEP data output — outside panel_modes loop
-        _hep_sig_base = {
-            "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "HEP",
-            "Variable": saved_variable,
-            "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-            "Exposure": args.exposure,
-        }
-        if _sig_bins_available:
-            for spec_type, sig_vals, bw in [
-                ("Raw", raw_no_rebin_significance.tolist(), None),
-                ("Smoothed", smoothed_no_rebin_significance.tolist(), None),
-            ]:
-                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "NoRebin", "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": r"\sigma", "BinWidth": bw, "BinWidthUnit": None, "ExposureUnit": "year"})
-        if adaptive_energy.size > 0:
-            for spec_type, sig_vals in [("Raw", raw_adaptive_significance), ("Smoothed", smoothed_adaptive_significance)]:
-                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": "AdaptiveRebin", "Energy": adaptive_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals.tolist(), "SignificanceUnit": r"\sigma", "BinWidth": adaptive_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
-
-            s = scale * signal_tail_counts
-            b = scale * background_tail_counts
-            b_safe = np.maximum(b, 1e-12)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                q_asimov = 2.0 * ((s + b_safe) * np.log1p(np.divide(s, b_safe)) - s)
-            q_asimov = np.nan_to_num(q_asimov, nan=0.0, posinf=0.0, neginf=0.0)
-            fisher = np.divide(s * s, b_safe, out=np.zeros_like(s, dtype=float), where=b_safe > 0)
-            snr = np.divide(s, np.sqrt(b_safe), out=np.zeros_like(s, dtype=float), where=b_safe > 0)
-            purity_arr = np.divide(s, (s + b_safe), out=np.zeros_like(s, dtype=float), where=(s + b_safe) > 0)
-
-            if args.local_metric == "AsimovTS":
-                to_save = np.divide(q_asimov, no_rebin_width, out=np.zeros_like(q_asimov), where=no_rebin_width > 0).tolist()
-                binmode_name = "AsimovTS"
-            elif args.local_metric == "Fisher":
-                to_save = np.divide(fisher, no_rebin_width, out=np.zeros_like(fisher), where=no_rebin_width > 0).tolist()
-                binmode_name = "Fisher"
-            elif args.local_metric == "SNR":
-                to_save = np.divide(snr, no_rebin_width, out=np.zeros_like(snr), where=no_rebin_width > 0).tolist()
-                binmode_name = "SNR"
-            else:
-                to_save = purity_arr.tolist()
-                binmode_name = "Purity"
-
-            _hep_sig_unit = {
-                "LocalDensity": r"\sigma \cdot MeV^{-1}",
-                "AsimovTS": r"MeV^{-1}", "Fisher": r"MeV^{-1}", "SNR": r"MeV^{-1}", "Purity": "1",
-            }
-            for spec_type, sig_vals, bm in [
-                ("Raw", raw_local_density.tolist(), "LocalDensity"),
-                ("Smoothed", smooth_local_density.tolist(), "LocalDensity"),
-                ("Smoothed", to_save, binmode_name),
-            ]:
-                _significance_list.append({**_hep_sig_base, "SpectrumType": spec_type, "BinMode": bm, "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV", "Significance": sig_vals, "SignificanceUnit": _hep_sig_unit.get(bm, "1"), "BinWidth": no_rebin_width.tolist(), "BinWidthUnit": "MeV", "ExposureUnit": "year"})
-
-        tail_slice = slice(no_rebin_start, no_rebin_start + len(no_rebin_energy))
-
-        # Signal/background excess ratio (Metric = S/B), per energy bin, for both spectrum
-        # types. Ratio is scale- and bin-width-invariant (cancels in S/B), so it is computed
-        # directly from the unscaled accumulators without reapplying `scale` or dividing by
-        # `no_rebin_width`. Error propagated assuming independent Poisson-like S and B.
-        def _hep_excess_ratio(sig_tail, sig_err2_tail, bkg_tail, bkg_err2_tail):
-            bkg_safe = np.maximum(bkg_tail, 1e-12)
-            ratio = np.divide(sig_tail, bkg_safe, out=np.zeros_like(sig_tail, dtype=float), where=bkg_safe > 0)
-            sig_safe = np.maximum(sig_tail, 1e-12)
-            rel_var = np.where(sig_tail > 0, sig_err2_tail / sig_safe**2, 0.0) + np.where(bkg_tail > 0, bkg_err2_tail / bkg_safe**2, 0.0)
-            ratio_err = np.abs(ratio) * np.sqrt(rel_var)
-            return ratio, ratio_err
-
-        _hep_metric_raw, _hep_metric_raw_err = _hep_excess_ratio(
-            signal_raw_counts[tail_slice], signal_raw_err2[tail_slice],
-            background_raw_counts[tail_slice], background_raw_err2[tail_slice],
-        )
-        _hep_metric_smoothed, _hep_metric_smoothed_err = _hep_excess_ratio(
-            signal_smoothed_counts[tail_slice], signal_smoothed_err2[tail_slice],
-            background_smoothed_counts[tail_slice], background_smoothed_err2[tail_slice],
-        )
-
-        for rd in _hep_render:
-            _is_sig = rd["component"] == "hep"
-            for spec_type, cnt_arr in [("Raw", rd["counts"]), ("Smoothed", rd["smoothed_counts"])]:
-                _metric_vals, _metric_err_vals = (
-                    (_hep_metric_raw, _hep_metric_raw_err) if spec_type == "Raw" else (_hep_metric_smoothed, _hep_metric_smoothed_err)
-                )
-                _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "HEP",
-                    "Geometry": info["GEOMETRY"],
-                    "Component": rd["component"], "SpectrumType": spec_type,
-                    "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure, "ExposureUnit": "year",
-                    "Energy": no_rebin_energy.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr[tail_slice] / no_rebin_width).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
-                    "CountsError": None,
-                    "Significance": (
-                        raw_local_density.tolist() if (_is_sig and spec_type == "Raw")
-                        else smooth_local_density.tolist() if (_is_sig and spec_type == "Smoothed")
-                        else None
-                    ),
-                    "SignificanceUnit": r"\sigma \cdot MeV^{-1}" if _is_sig else None,
-                    "SignificanceLabel": "Asimov TS density" if _is_sig else None,
-                    "Metric": _metric_vals.tolist() if _is_sig else None,
-                    "MetricError": _metric_err_vals.tolist() if _is_sig else None,
-                    "MetricUnit": "1" if _is_sig else None,
-                    "MetricLabel": "Signal / Background" if _is_sig else None,
-                })
-
-        if args.pkl_label == "highest":
-            _hep_counts_df = pd.DataFrame(_counts_list)
-            _hep_counts_df["Study"] = _study_name
-            _merged_hc = upsert_df_rows(_hep_counts_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Counts", debug=args.debug)
-            save_df(
-                _merged_hc, data_path, config=args.config[0], name=args.signal[0],
-                subfolder=_save_subfolder, filename="HEP_Counts",
-                rm=True, debug=True,
-            )
-            _merged_hc_local = upsert_df_rows(_hep_counts_df, local_data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Counts")
-            save_df(
-                _merged_hc_local, local_data_path, config=args.config[0], name=args.signal[0],
-                subfolder=_save_subfolder, filename="HEP_Counts",
-                rm=True, debug=True,
-            )
-            _hep_sig_df = pd.DataFrame(_significance_list)
-            _hep_sig_df["Study"] = _study_name
-            _merged_hs = upsert_df_rows(_hep_sig_df, data_path, config=args.config[0], name=args.signal[0], subfolder=_save_subfolder, filename="HEP_Significance", debug=args.debug)
-            save_df(
-                _merged_hs, data_path, config=args.config[0], name=args.signal[0],
-                subfolder=_save_subfolder, filename="HEP_Significance",
-                rm=True, debug=args.debug,
-            )
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # Sensitivity
-    # ══════════════════════════════════════════════════════════════════════════
-    elif args.analysis == "Sensitivity":
-        best_cut_path = (
-            f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}"
-            f"/{config}/{name}/{config}_{name}_highest_SENSITIVITY{_study_suffix}.pkl"
-        )
-        if not os.path.exists(best_cut_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing best-cut map for Sensitivity {config} {name}: {best_cut_path}")
-            continue
-        best_cut_map = pickle.load(open(best_cut_path, "rb"))
-        try:
-            ref_plot = best_cut_map[(config, name, energy)]
-        except KeyError:
-            rprint(f"[yellow][WARNING][/yellow] Missing best-cut entry for Sensitivity {config} {name} {energy}.")
-            continue
-
-        nhits_value = args.nhits if args.nhits is not None else int(ref_plot["NHits"])
-        adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
-        ophits_value = args.ophits if args.ophits is not None else int(ref_plot["OpHits"])
-
-        rebin_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/signal/{args.folder.lower()}"
-            f"/SENSITIVITY/{config}/{name}/{config}_{name}_{_ctx.rebin_label(energy)}.pkl"
-        )
-        if not os.path.exists(rebin_path):
-            rprint(f"[yellow][WARNING][/yellow] Missing Rebin pkl for Sensitivity {config} {name} {energy}: {rebin_path}")
-            continue
-
-        plot_df = pd.read_pickle(rebin_path)
-        background_samples = []
-        for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, config, energy):
-            plot_df = pd.concat([plot_df, pd.read_pickle(filepath)], ignore_index=True)
-            background_samples.append(bkg)
-
-        this_plot_df = plot_df.loc[
-            (plot_df["NHits"] == nhits_value)
-            * (plot_df["OpHits"] == ophits_value)
-            * (plot_df["AdjCl"] == adjcl_value)
-        ].copy()
-        if this_plot_df.empty:
-            rprint(f"[yellow][WARNING][/yellow] Missing histogram payload for Sensitivity {config} {name} {energy}.")
-            continue
-
-        energy_axis = np.asarray(this_plot_df["Energy"].values[0], dtype=float)
-        if energy_axis.size > 1:
-            half = 0.5 * (energy_axis[1] - energy_axis[0])
-            edges = np.concatenate([
-                [energy_axis[0] - half],
-                0.5 * (energy_axis[:-1] + energy_axis[1:]),
-                [energy_axis[-1] + half],
-            ])
-            bin_widths = np.diff(edges)
-        else:
-            bin_widths = np.ones(max(energy_axis.size, 1))
-
-        scale = detector_mass * args.exposure
-
-        sens_component_specs = [
-            ("Solar", "Solar (osc)", "Osc", "Mean", "signal", "Signal", compare[1]),
-        ]
-        for bkg in background_samples:
-            style = get_background_style(str(root), bkg)
-            sens_component_specs.append(
-                (bkg, style.get("label", bkg).title(), "Truth", "Mean", "background", "Background", style.get("color", "grey"))
-            )
-
-        signal_smoothed_counts = np.zeros(energy_axis.size, dtype=float)
-        background_smoothed_counts = np.zeros(energy_axis.size, dtype=float)
-        positive_count_values = []
-        _sens_render = []
-
-        # Nadir-dependent signal envelope, per energy bin: Day and Night are the two
-        # arithmetic-mean-over-nadir extremes of the Earth-matter (MSW) oscillation effect,
-        # already computed alongside the DUNE-exposure-weighted "Mean" in the same Rebin pkl.
-        # Metric = Mean signal (same value as the Solar (osc) row's own Counts); MetricError
-        # = half the Day/Night spread, so Metric ± MetricError brackets [min, max] achievable
-        # across nadir at that energy.
-        _sens_day_night_envelope = {}
-        for spec_type, count_key in [("Raw", "counts"), ("Smoothed", "smoothed_counts")]:
-            _bounds = []
-            for _mean_label in ("Day", "Night"):
-                _dn_comp_df = this_plot_df.loc[
-                    (this_plot_df["Component"] == "Solar")
-                    * (this_plot_df["Oscillation"] == "Osc")
-                    * (this_plot_df["Mean"] == _mean_label)
-                ].copy()
-                if _dn_comp_df.empty:
-                    _bounds = None
-                    break
-                _dn_cd = _process_component_df(_dn_comp_df, "Solar", smoothing_config, scale=scale)
-                _bounds.append(scale * _dn_cd[count_key] / bin_widths)
-            if _bounds is not None:
-                _lo = np.minimum(_bounds[0], _bounds[1])
-                _hi = np.maximum(_bounds[0], _bounds[1])
-                _sens_day_night_envelope[spec_type] = (_lo, _hi)
-
-        for component, component_label, oscillation, mean_label, legend_group, legend_group_title, color in sens_component_specs:
-            comp_df = this_plot_df.loc[
-                (this_plot_df["Component"] == component)
-                * (this_plot_df["Oscillation"] == oscillation)
-                * (this_plot_df["Mean"] == mean_label)
-            ].copy()
-            if comp_df.empty:
-                continue
-
-            cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)
-            positive_count_values.extend(cd["raw_y"][cd["raw_y"] > 0])
-            positive_count_values.extend(cd["smoothed_y"][cd["smoothed_y"] > 0])
-
-            if component == "Solar":
-                signal_smoothed_counts += cd["smoothed_counts"]
-            else:
-                background_smoothed_counts += cd["smoothed_counts"]
-
-            _sens_render.append({
-                "component_label": component_label, "legend_group": legend_group,
-                "legend_group_title": legend_group_title, "color": color,
-                "raw_y": cd["raw_y"], "smoothed_y": cd["smoothed_y"], "err_y": cd["err_y"],
+            _significance_list.append({
+                "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "Sensitivity",
+                "Variable": "AsimovTS", "SpectrumType": "Smoothed", "BinMode": "PerBin",
+                "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
+                "Exposure": args.exposure, "ExposureUnit": "year",
+                "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
+                "Significance": asimov_density.tolist(), "SignificanceUnit": r"MeV^{-1}",
+                "BinWidth": bin_widths.tolist(), "BinWidthUnit": "MeV",
             })
 
-            for spec_type, cnt_arr, err_arr in [
-                ("Raw", cd["counts"], cd["errors"]),
-                ("Smoothed", cd["smoothed_counts"], cd["smoothed_errors"]),
-            ]:
-                _metric_vals = _metric_err_vals = None
-                if component == "Solar" and spec_type in _sens_day_night_envelope:
-                    _mean_vals = scale * cnt_arr / bin_widths
-                    _lo, _hi = _sens_day_night_envelope[spec_type]
-                    _metric_vals = _mean_vals
-                    _metric_err_vals = (_hi - _lo) / 2.0
-                _counts_list.append({
-                    "Config": config, "Name": name, "EnergyLabel": energy, "Variable": energy, "Analysis": "Sensitivity",
-                    "Geometry": info["GEOMETRY"],
-                    "Component": component_label, "SpectrumType": spec_type,
-                    "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-                    "Exposure": args.exposure, "ExposureUnit": "year",
-                    "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-                    "Counts": (scale * cnt_arr / bin_widths).tolist(), "CountsUnit": f"events / MeV / {args.exposure:.0f} yr",
-                    "CountsError": (scale * err_arr / bin_widths).tolist(),
-                    "Significance": None,
-                    "SignificanceUnit": None,
-                    "SignificanceLabel": None,
-                    "Metric": _metric_vals.tolist() if _metric_vals is not None else None,
-                    "MetricError": _metric_err_vals.tolist() if _metric_err_vals is not None else None,
-                    "MetricUnit": f"events / MeV / {args.exposure:.0f} yr" if _metric_vals is not None else None,
-                    "MetricLabel": "Nadir-averaged signal (± Day/Night envelope)" if _metric_vals is not None else None,
-                })
-
-        s = scale * signal_smoothed_counts
-        b = scale * background_smoothed_counts
-        b_safe = np.maximum(b, 1e-12)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            asimov_ts = 2.0 * ((s + b_safe) * np.log1p(np.divide(s, b_safe)) - s)
-        asimov_ts = np.nan_to_num(asimov_ts, nan=0.0, posinf=0.0, neginf=0.0)
-        asimov_density = np.divide(asimov_ts, bin_widths, out=np.zeros_like(asimov_ts), where=bin_widths > 0)
-        purity_vals = np.divide(s, s + b, out=np.zeros_like(s, dtype=float), where=(s + b) > 0)
-        lower_panel_max = float(np.max(asimov_density)) if asimov_density.size > 0 else 1.0
-
-        figure_name = f"{energy}_Sensitivity_Significance_Exposure_{args.exposure:.0f}"
-        if args.nhits is not None or args.ophits is not None or args.adjcls is not None:
-            figure_name += f"_NHits{nhits_value}_OpHits{ophits_value}_AdjCl{adjcl_value}"
-
-        def _sens_lower(fig):
-            fig.add_trace(
-                go.Bar(
-                    x=energy_axis, y=asimov_density, width=bin_widths, name="Asimov TS density",
-                    marker_color="rgba(31,119,180,0.35)", marker_line=dict(color="rgb(31,119,180)", width=1),
-                    legend="legend2", legendgroup="proxy", legendgrouptitle=dict(text="Local Discovery Power"),
-                    showlegend=True,
-                ),
-                row=2, col=1,
+            _sens_counts_df = pd.DataFrame(_counts_list)
+            _sens_counts_df["Study"] = _study_name
+            _merged_sc = upsert_df_rows(_sens_counts_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts", debug=args.debug)
+            save_df(
+                _merged_sc, data_path, config=config, name=name,
+                subfolder=_save_subfolder, filename="Sensitivity_Counts",
+                rm=True, debug=True,
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=energy_axis, y=purity_vals, mode="lines", name="Signal purity",
-                    line=dict(color="rgb(230,159,0)", width=2, dash="dash"),
-                    legend="legend3", legendgroup="purity_overlay",
-                    legendgrouptitle=dict(text="Signal Purity"), showlegend=True,
-                ),
-                row=2, col=1, secondary_y=True,
+            _merged_sc_local = upsert_df_rows(_sens_counts_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts")
+            save_df(
+                _merged_sc_local, local_data_path, config=config, name=name,
+                subfolder=_save_subfolder, filename="Sensitivity_Counts",
+                rm=True, debug=True,
             )
-            return lower_panel_max
+            _sens_sig_df = pd.DataFrame(_significance_list)
+            _sens_sig_df["Study"] = _study_name
+            _merged_ss = upsert_df_rows(_sens_sig_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance", debug=args.debug)
+            save_df(
+                _merged_ss, data_path, config=config, name=name,
+                subfolder=_save_subfolder, filename="Sensitivity_Significance",
+                rm=True, debug=args.debug,
+            )
+            _merged_ss_local = upsert_df_rows(_sens_sig_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance")
+            save_df(
+                _merged_ss_local, local_data_path, config=config, name=name,
+                subfolder=_save_subfolder, filename="Sensitivity_Significance",
+                rm=True, debug=True,
+            )
 
-        _render_and_save(
-            render_list=_sens_render, energy_axis=energy_axis, add_lower_fn=_sens_lower,
-            subplot_title=f"{energy} NHits={nhits_value} OpHits={ophits_value} AdjCl={adjcl_value}",
-            fig_title=f"Sensitivity Significance - {args.folder} - {config}",
-            upper_y_title="Counts", lower_y_title="Asimov TS density",
-            x_range=None, figure_name=figure_name,
-            positive_count_values=positive_count_values, log_default_range=[-2, 10],
-            save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
-            rewrite=args.rewrite, debug_plot=args.plot,
-            stacked_range=[False, True] if args.stacked else [False],
-            zoom=args.zoom, threshold=args.threshold,
-            secondary_y=True,
-            legend_layout=dict(
-                legend=dict(font=dict(size=12), x=0.75, y=0.99, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
-                legend2=dict(font=dict(size=12), x=0.01, y=0.30, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
-                legend3=dict(font=dict(size=12), x=0.75, y=0.26, xanchor="left", yanchor="top", bgcolor="rgba(255,255,255,0.7)"),
-            ),
-        )
+        # ══════════════════════════════════════════════════════════════════════════
+        # Fiducial
+        # ══════════════════════════════════════════════════════════════════════════
+        elif args.analysis == "Fiducial":
+            fid_data_root = f"{root}/config/analysis/fiducial/{args.folder.lower()}"
+            best_fiducials_path = f"{fid_data_root}/BestFiducials.json"
+            best_fiducials = json.loads(open(best_fiducials_path).read()) if os.path.exists(best_fiducials_path) else {}
 
-        _significance_list.append({
-            "Config": config, "Name": name, "EnergyLabel": energy, "Analysis": "Sensitivity",
-            "Variable": "AsimovTS", "SpectrumType": "Smoothed", "BinMode": "PerBin",
-            "NHits": int(nhits_value), "OpHits": int(ophits_value), "AdjCl": int(adjcl_value),
-            "Exposure": args.exposure, "ExposureUnit": "year",
-            "Energy": energy_axis.tolist(), "EnergyUnit": "MeV",
-            "Significance": asimov_density.tolist(), "SignificanceUnit": r"MeV^{-1}",
-            "BinWidth": bin_widths.tolist(), "BinWidthUnit": "MeV",
-        })
-
-        _sens_counts_df = pd.DataFrame(_counts_list)
-        _sens_counts_df["Study"] = _study_name
-        _merged_sc = upsert_df_rows(_sens_counts_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts", debug=args.debug)
-        save_df(
-            _merged_sc, data_path, config=config, name=name,
-            subfolder=_save_subfolder, filename="Sensitivity_Counts",
-            rm=True, debug=True,
-        )
-        _merged_sc_local = upsert_df_rows(_sens_counts_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Counts")
-        save_df(
-            _merged_sc_local, local_data_path, config=config, name=name,
-            subfolder=_save_subfolder, filename="Sensitivity_Counts",
-            rm=True, debug=True,
-        )
-        _sens_sig_df = pd.DataFrame(_significance_list)
-        _sens_sig_df["Study"] = _study_name
-        _merged_ss = upsert_df_rows(_sens_sig_df, data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance", debug=args.debug)
-        save_df(
-            _merged_ss, data_path, config=config, name=name,
-            subfolder=_save_subfolder, filename="Sensitivity_Significance",
-            rm=True, debug=args.debug,
-        )
-        _merged_ss_local = upsert_df_rows(_sens_sig_df, local_data_path, config=config, name=name, subfolder=_save_subfolder, filename="Sensitivity_Significance")
-        save_df(
-            _merged_ss_local, local_data_path, config=config, name=name,
-            subfolder=_save_subfolder, filename="Sensitivity_Significance",
-            rm=True, debug=True,
-        )
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # Fiducial
-    # ══════════════════════════════════════════════════════════════════════════
-    elif args.analysis == "Fiducial":
-        fid_data_root = f"{root}/config/analysis/fiducial/{args.folder.lower()}"
-        best_fiducials_path = f"{fid_data_root}/BestFiducials.json"
-        best_fiducials = json.loads(open(best_fiducials_path).read()) if os.path.exists(best_fiducials_path) else {}
-
-        signal_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_Fiducial_Scan.pkl"
-        if not os.path.exists(signal_pkl):
-            rprint(f"[yellow][WARNING][/yellow] Missing fiducial scan pkl: {signal_pkl}")
-            continue
-        df_list = [pd.read_pickle(signal_pkl)]
-        needed_bkg = set()
-        for an in args.fiducial_analyses:
-            needed_bkg.update(get_fiducialization_config(str(root), an.upper()).get("background_components", []))
-        for bkg_label in sorted(needed_bkg):
-            bkg_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
-            if os.path.exists(bkg_pkl):
-                df_list.append(pd.read_pickle(bkg_pkl))
-        raw_df = pd.concat(df_list, ignore_index=True)
-        plot_df = explode(raw_df, ["Counts", "Error+", "Error-", "Energy", "MCCounts"], debug=args.debug).copy()
-        for col in ["Counts", "Error+", "Error-", "MCCounts"]:
-            plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce").fillna(0.0)
-        plot_df["Energy"] = pd.to_numeric(plot_df["Energy"], errors="coerce")
-
-        for analysis_name in args.fiducial_analyses:
-            analysis_key = analysis_name.upper()
-            analysis_config = get_fiducialization_config(str(root), analysis_key)
-            sc_fid = get_smoothing_config(str(root), analysis_name=analysis_key, dimensions="1d", stage="fiducial")
-            signal_components = {str(c).lower() for c in analysis_config.get("signal_components", [])}
-
-            merged_df, significance_df = _select_best_fiducial(plot_df, analysis_config, sc_fid, args.exposure)
-            if significance_df.empty:
-                rprint(f"[yellow][WARNING][/yellow] No fiducial significance points for {analysis_name} {energy}.")
+            signal_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{name}/{config}_{name}_{energy}_Fiducial_Scan.pkl"
+            if not os.path.exists(signal_pkl):
+                rprint(f"[yellow][WARNING][/yellow] Missing fiducial scan pkl: {signal_pkl}")
                 continue
+            df_list = [pd.read_pickle(signal_pkl)]
+            needed_bkg = set()
+            for an in args.fiducial_analyses:
+                needed_bkg.update(get_fiducialization_config(str(root), an.upper()).get("background_components", []))
+            for bkg_label in sorted(needed_bkg):
+                bkg_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
+                if os.path.exists(bkg_pkl):
+                    df_list.append(pd.read_pickle(bkg_pkl))
+            raw_df = pd.concat(df_list, ignore_index=True)
+            plot_df = explode(raw_df, ["Counts", "Error+", "Error-", "Energy", "MCCounts"], debug=args.debug).copy()
+            for col in ["Counts", "Error+", "Error-", "MCCounts"]:
+                plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce").fillna(0.0)
+            plot_df["Energy"] = pd.to_numeric(plot_df["Energy"], errors="coerce")
 
-            best_entry = best_fiducials.get(config, {}).get(analysis_key, {}).get(energy, {})
-            if best_entry:
-                best_x, best_y, best_z = int(best_entry.get("FiducialX", 0)), int(best_entry.get("FiducialY", 0)), int(best_entry.get("FiducialZ", 0))
-            else:
-                max_row = significance_df.loc[significance_df["SmoothedSignificance"].idxmax()]
-                best_x, best_y, best_z = int(max_row["FiducializedX"]), int(max_row["FiducializedY"]), int(max_row["FiducializedZ"])
+            for analysis_name in args.fiducial_analyses:
+                analysis_key = analysis_name.upper()
+                analysis_config = get_fiducialization_config(str(root), analysis_key)
+                sc_fid = get_smoothing_config(str(root), analysis_name=analysis_key, dimensions="1d", stage="fiducial")
+                signal_components = {str(c).lower() for c in analysis_config.get("signal_components", [])}
 
-            if not args.plot:
-                continue
-
-            for fiducialx, fiducialy, fiducialz, fiducial_label in [(best_x, best_y, best_z, "Best"), (0, 0, 0, "No")]:
-                this_plot = plot_df[
-                    (plot_df["Component"].astype(str).str.lower() != "solar")
-                    & (plot_df["FiducializedX"] == fiducialx)
-                    & (plot_df["FiducializedY"] == fiducialy)
-                    & (plot_df["FiducializedZ"] == fiducialz)
-                ].copy()
-                if this_plot.empty:
+                merged_df, significance_df = _select_best_fiducial(plot_df, analysis_config, sc_fid, args.exposure)
+                if significance_df.empty:
+                    rprint(f"[yellow][WARNING][/yellow] No fiducial significance points for {analysis_name} {energy}.")
                     continue
 
-                render_list, energy_axis = _build_fiducial_render_list(this_plot, signal_components, sc_fid, args.exposure)
-                positive_count_values = [v for rd in render_list for arr in [rd["raw_y"], rd["smoothed_y"]] for v in arr[arr > 0]]
-                payload = _get_fiducial_payload(merged_df, fiducialx, fiducialy, fiducialz, analysis_config, sc_fid, args.exposure)
+                best_entry = best_fiducials.get(config, {}).get(analysis_key, {}).get(energy, {})
+                if best_entry:
+                    best_x, best_y, best_z = int(best_entry.get("FiducialX", 0)), int(best_entry.get("FiducialY", 0)), int(best_entry.get("FiducialZ", 0))
+                else:
+                    max_row = significance_df.loc[significance_df["SmoothedSignificance"].idxmax()]
+                    best_x, best_y, best_z = int(max_row["FiducializedX"]), int(max_row["FiducializedY"]), int(max_row["FiducializedZ"])
 
-                def _fid_lower(fig, _payload=payload, _ac=analysis_config):
-                    max_sig = 1.0
-                    if _payload is not None:
-                        max_sig = max(max_sig, float(np.max(_payload["RawSignificance"])), float(np.max(_payload["SmoothedSignificance"])))
-                        for label, sig, dash in [("Raw", _payload["RawSignificance"], "dot"), ("Smooth", _payload["SmoothedSignificance"], "solid")]:
-                            total = _payload["RawTotal"] if label == "Raw" else _payload["SmoothedTotal"]
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=_payload["Energy"], y=sig, mode="lines+markers", line_shape="hvh",
-                                    legend="legend2", legendgroup="significance",
-                                    legendgrouptitle=dict(text="Significance", font=dict(size=16)),
-                                    name=f"{label} {total:.1f} (σ)",
-                                    line=dict(color="rgb(66,66,66)", dash=dash),
-                                    marker=dict(size=6, color="rgb(66,66,66)"),
-                                ),
-                                row=2, col=1,
-                            )
-                    emin, emax = _ac.get("energy_min"), _ac.get("energy_max")
-                    if emin is not None:
-                        fig.add_vline(emin, line=dict(color="grey", dash="dash"))
-                    if emax is not None:
-                        fig.add_vline(emax, line=dict(color="grey", dash="dash"))
-                    return max_sig
+                if not args.plot:
+                    continue
 
-                _render_and_save(
-                    render_list=render_list, energy_axis=energy_axis, add_lower_fn=_fid_lower,
-                    add_upper_fn=lambda fig, st, _rl=render_list: _add_fiducial_upper(fig, _rl, st),
-                    subplot_title=f"{analysis_name} {energy} — X={fiducialx}cm Y={fiducialy}cm Z={fiducialz}cm",
-                    fig_title=f"{analysis_name} {energy}",
-                    upper_y_title="Counts / (kT·year·MeV)",
-                    lower_y_title="Significance (σ)",
-                    x_range=[-2, 32], figure_name=f"{energy}_{analysis_key}_{fiducial_label}Fiducial_Significance",
-                    positive_count_values=positive_count_values, log_default_range=[-2, 10],
-                    save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
-                    rewrite=args.rewrite, debug_plot=args.plot,
-                    stacked_range=[args.stacked],
-                    zoom=args.zoom, threshold=None,
-                    upper_y_extra={"tickformat": ".0e"},
-                    lower_y_extra={"tickformat": ".1f"},
-                    lower_y_default_range=[0, 6],
-                    legend_layout={"legend2": dict(y=0.1, x=0.74, font=dict(size=12), bgcolor="rgba(255,255,255,0.7)")},
-                )
+                for fiducialx, fiducialy, fiducialz, fiducial_label in [(best_x, best_y, best_z, "Best"), (0, 0, 0, "No")]:
+                    this_plot = plot_df[
+                        (plot_df["Component"].astype(str).str.lower() != "solar")
+                        & (plot_df["FiducializedX"] == fiducialx)
+                        & (plot_df["FiducializedY"] == fiducialy)
+                        & (plot_df["FiducializedZ"] == fiducialz)
+                    ].copy()
+                    if this_plot.empty:
+                        continue
+
+                    render_list, energy_axis = _build_fiducial_render_list(this_plot, signal_components, sc_fid, args.exposure)
+                    positive_count_values = [v for rd in render_list for arr in [rd["raw_y"], rd["smoothed_y"]] for v in arr[arr > 0]]
+                    payload = _get_fiducial_payload(merged_df, fiducialx, fiducialy, fiducialz, analysis_config, sc_fid, args.exposure)
+
+                    def _fid_lower(fig, _payload=payload, _ac=analysis_config):
+                        max_sig = 1.0
+                        if _payload is not None:
+                            max_sig = max(max_sig, float(np.max(_payload["RawSignificance"])), float(np.max(_payload["SmoothedSignificance"])))
+                            for label, sig, dash in [("Raw", _payload["RawSignificance"], "dot"), ("Smooth", _payload["SmoothedSignificance"], "solid")]:
+                                total = _payload["RawTotal"] if label == "Raw" else _payload["SmoothedTotal"]
+                                fig.add_trace(
+                                    go.Scatter(
+                                        x=_payload["Energy"], y=sig, mode="lines+markers", line_shape="hvh",
+                                        legend="legend2", legendgroup="significance",
+                                        legendgrouptitle=dict(text="Significance", font=dict(size=16)),
+                                        name=f"{label} {total:.1f} (σ)",
+                                        line=dict(color="rgb(66,66,66)", dash=dash),
+                                        marker=dict(size=6, color="rgb(66,66,66)"),
+                                    ),
+                                    row=2, col=1,
+                                )
+                        emin, emax = _ac.get("energy_min"), _ac.get("energy_max")
+                        if emin is not None:
+                            fig.add_vline(emin, line=dict(color="grey", dash="dash"))
+                        if emax is not None:
+                            fig.add_vline(emax, line=dict(color="grey", dash="dash"))
+                        return max_sig
+
+                    _render_and_save(
+                        render_list=render_list, energy_axis=energy_axis, add_lower_fn=_fid_lower,
+                        add_upper_fn=lambda fig, st, _rl=render_list: _add_fiducial_upper(fig, _rl, st),
+                        subplot_title=f"{analysis_name} {energy} — X={fiducialx}cm Y={fiducialy}cm Z={fiducialz}cm",
+                        fig_title=f"{analysis_name} {energy}",
+                        upper_y_title="Counts / (kT·year·MeV)",
+                        lower_y_title="Significance (σ)",
+                        x_range=[-2, 32], figure_name=f"{energy}_{analysis_key}_{fiducial_label}Fiducial_Significance",
+                        positive_count_values=positive_count_values, log_default_range=[-2, 10],
+                        save_path=save_path, config=config, save_name=name, folder=_save_subfolder,
+                        rewrite=args.rewrite, debug_plot=args.plot,
+                        stacked_range=[args.stacked],
+                        zoom=args.zoom, threshold=None,
+                        upper_y_extra={"tickformat": ".0e"},
+                        lower_y_extra={"tickformat": ".1f"},
+                        lower_y_default_range=[0, 6],
+                        legend_layout={"legend2": dict(y=0.1, x=0.74, font=dict(size=12), bgcolor="rgba(255,255,255,0.7)")},
+                    )

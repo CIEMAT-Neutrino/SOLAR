@@ -1287,6 +1287,7 @@ def _sensitivity_fit_with_escale(
     sigma_e: float,
     n_sigma_bound: float = 5.0,
     fit_background: bool = True,
+    use_legacy_background_penalty: bool = False,
 ) -> tuple:
     """Profile chi² over energy-scale nuisance delta_e with Gaussian pull."""
     from scipy.optimize import minimize_scalar
@@ -1299,16 +1300,24 @@ def _sensitivity_fit_with_escale(
             SigmaPred=sigma_pred, SigmaBkg=sigma_bkg,
             bb_mask=(bkg > 0),
             fit_background=fit_background,
+            use_legacy_background_penalty=use_legacy_background_penalty,
         )
-        c, _, _ = f.Fit(0.0, 0.0)
-        return (float(c) if c is not None else 1e9) + (de / sigma_e) ** 2
+        c, _, _ = f.Fit(0.0, 0.0, debug=False)
+        # Guard against None and invalid values
+        if c is None or not np.isfinite(c) or c < 0:
+            c = 1e6  # Large but not capped
+        return float(c) + (de / sigma_e) ** 2
 
     result = minimize_scalar(
         _objective,
         bounds=(-n_sigma_bound * sigma_e, n_sigma_bound * sigma_e),
         method="bounded",
     )
-    return result.fun, None, None
+    chi2_val = result.fun
+    # Guard against invalid results
+    if not np.isfinite(chi2_val) or chi2_val < 0:
+        chi2_val = 1e6
+    return float(chi2_val), None, None
 
 
 def sensitivity_chi2_worker(task: dict) -> tuple:
@@ -1331,6 +1340,8 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     sigma_e_scale        : energy scale uncertainty (fractional)
     e_centers_thld       : energy bin centers above analysis threshold
     fit_background       : bool — if True, fit background normalization as free parameter
+    use_legacy_background_penalty: bool — if True, use constant penalty for background uncertainty
+                                         (legacy mode). If False (default), profile over background.
     """
     from lib.root import Sensitivity_Fitter
 
@@ -1345,23 +1356,54 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     sig_e   = task["sigma_e_scale"]
     e_ctr   = task["e_centers_thld"]
     fit_bkg = task.get("fit_background", True)
+    use_legacy = task.get("use_legacy_background_penalty", False)
 
     # Solar chi²
     if use_esc:
-        solar_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred1, bkg, e_ctr, sp, sb, sig_e, fit_background=fit_bkg)
+        solar_chi2, _, _ = _sensitivity_fit_with_escale(
+            obs, pred1, bkg, e_ctr, sp, sb, sig_e, 
+            fit_background=fit_bkg, 
+            use_legacy_background_penalty=use_legacy
+        )
     else:
-        f = Sensitivity_Fitter(obs, pred1, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0), fit_background=fit_bkg)
-        solar_chi2, _, _ = f.Fit(0.0, 0.0)
-
+        f = Sensitivity_Fitter(
+            obs, pred1, bkg, 
+            SigmaPred=sp, SigmaBkg=sb, 
+            bb_mask=(bkg > 0), 
+            fit_background=fit_bkg,
+            use_legacy_background_penalty=use_legacy
+        )
+        solar_chi2, _, _ = f.Fit(0.0, 0.0, debug=False)
+    
+    # Validate solar_chi2 - only guard against invalid values, not cap valid ones
+    if solar_chi2 is not None:
+        if not np.isfinite(solar_chi2) or solar_chi2 < 0:
+            solar_chi2 = 1e6  # Replace invalid with large value
+    
     # Preserve serial semantics: skip reactor if solar fit failed
     if solar_chi2 is None:
         return params, None, None
 
     # Reactor chi²
     if use_esc:
-        react_chi2, _, _ = _sensitivity_fit_with_escale(obs, pred2, bkg, e_ctr, sp, sb, sig_e, fit_background=fit_bkg)
+        react_chi2, _, _ = _sensitivity_fit_with_escale(
+            obs, pred2, bkg, e_ctr, sp, sb, sig_e,
+            fit_background=fit_bkg,
+            use_legacy_background_penalty=use_legacy
+        )
     else:
-        f = Sensitivity_Fitter(obs, pred2, bkg, SigmaPred=sp, SigmaBkg=sb, bb_mask=(bkg > 0), fit_background=fit_bkg)
-        react_chi2, _, _ = f.Fit(0.0, 0.0)
+        f = Sensitivity_Fitter(
+            obs, pred2, bkg,
+            SigmaPred=sp, SigmaBkg=sb,
+            bb_mask=(bkg > 0),
+            fit_background=fit_bkg,
+            use_legacy_background_penalty=use_legacy
+        )
+        react_chi2, _, _ = f.Fit(0.0, 0.0, debug=False)
+    
+    # Validate react_chi2 - only guard against invalid values
+    if react_chi2 is not None:
+        if not np.isfinite(react_chi2) or react_chi2 < 0:
+            react_chi2 = 1e6  # Replace invalid with large value
 
     return params, solar_chi2, react_chi2

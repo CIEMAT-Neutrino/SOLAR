@@ -1,6 +1,41 @@
 # SOLAR Studies Artifact — Regeneration Guide
 
-This guide teaches how to reproduce, update, or patch the **SOLAR Significance Studies** artifact from scratch. Everything here has been verified empirically.
+This guide teaches how to reproduce, update, or patch the **SOLAR Significance Studies** artifact from scratch.
+
+> ## Per-study status — read this before updating any row
+>
+> *Verified against PNFS 2026-09-07.* Use this vocabulary in the artifact so every row states
+> its own trustworthiness. `output/docs/thesis_plots_runbook.md` carries the same table.
+>
+> | Status | Badge | Meaning |
+> |---|---|---|
+> | `READY` | `badge-ok` | outside the bug window, cuts at nominal, moves as its knob predicts — safe to cite |
+> | `RERUN-A` | `badge-warn` | written inside 2026-09-02 18:11 → 09-06 12:42; grid may never have been computed |
+> | `RERUN-B` | `badge-warn` | valid physics, but cuts were re-optimised pre-one-knob-policy — not comparable to default |
+> | `BUG` | `badge-anomaly` | bit-exact match to nominal where the knob must move — needs a **code fix**; a re-run alone reproduces it |
+> | `MISSING` | `badge-info` | no pkl on disk |
+> | `ORPHAN` | `badge-anomaly` | label not in `STUDY_VARIANTS`; cannot be regenerated — remove the row |
+>
+> **The bug window is narrow.** `--skip_best_cuts` wrongly gated `01_daynight.py`/`01_hep.py`
+> from `9278bd6` (2026-09-02 18:11) to `3043c09` (2026-09-06 12:42). Only artifacts written
+> inside it are suspect; older ones are physically genuine for their own knob.
+>
+> **`unc_bkg` is fine.** An earlier claim that its DayNight Asimov disagreed with the default
+> was a stale-default artifact. Verified 09-07: Asimov is byte-identical (same MD5) between
+> default and every `unc_bkg` variant on all 4 configs, and ErrorGaussian moves monotonically
+> with σ_bkg. Report `unc_bkg` DayNight as `READY`.
+>
+> **`oscpoint_solar` == default is correct**, not a defect (`skip_rebin`, nominal Δm²₂₁).
+> Never flag it as an anomaly.
+>
+> **Four rows are `BUG`** — bit-exact to nominal, code fix required before any re-run means
+> anything: `membrane_veto_off` (VDN+VDS, all 3 analyses), `nuisance_sin13`
+> (== `nuisance_nominal`), `nuisance_escale` (== default), and the `fiduc_truth`
+> **Sensitivity leg** (its DayNight/HEP legs do move correctly).
+>
+> **Labels are defined in `lib/study.py`.** Call `all_study_labels(analysis=...)` for the
+> authoritative list — it filters by `analysis_override`. Do not hand-maintain a copy; the
+> lists formerly restated in this file had drifted.
 
 ## Artifact URL
 
@@ -62,7 +97,8 @@ Verify: `float(np.asarray(df.iloc[0]['Exposure'])[80])` → 10.04 for any Result
 {cfg}_marley_MainK_DayNight_Results_{label}.pkl        # energy_maink
 ```
 
-**Labels:** `oscpoint_solar`, `oscpoint_reactor`, `unc_bkg0`, `unc_bkg4`, `unc_bkg6`, `energy_spk`, `energy_maink`, `charge_Q50`, `charge_Q100`, `charge_Q200`
+**Labels:** from `lib/study.py` — `all_study_labels(analysis="DayNight")`. Do not hand-copy.
+`charge_Q200` appears in older trees but is an **ORPHAN** (dropped from `STUDY_VARIANTS`); use `charge_Q500`.
 
 **Structure:** pandas DataFrame, ~1030 rows (all cut combos: NHits × OpHits × AdjCl).
 
@@ -85,13 +121,19 @@ def best_dn_eg(pkl_path):
     return df["ErrorGaussian"].apply(lambda v: float(np.asarray(v)[IDX10])).max()
 ```
 
-**Current artifact DN baselines:**
-| Config | Default Asimov | Default EG |
-|--------|---------------|------------|
-| cAPA   | 2.412         | 2.233      |
-| lAPA   | 0.908         | 0.441      |
-| vdN    | 0.500         | 0.357      |
-| vdS    | 1.075         | 0.832      |
+**Current artifact DN baselines** *(re-verified 2026-09-07; lAPA/vdN/vdS all changed —
+the previous values were read from stale defaults)*:
+
+| Config | Default Asimov | Default EG | Note |
+|--------|---------------|------------|------|
+| cAPA   | 2.41220       | 2.23305    | unchanged |
+| lAPA   | 0.91489       | 0.44712    | was 0.908 / 0.441 |
+| vdN    | 0.50468       | 0.36058    | was 0.500 / 0.357 |
+| vdS    | 0.97206       | 0.74784    | was 1.075 / 0.832 — default re-run 09-07 |
+
+vdS is the important one: its 09-02 default was written by an **interrupted** production run and
+was contradicted by its own `unc_bkg` variants (which must share its Asimov). Re-run 2026-09-07;
+default and variants now agree at 0.97206.
 
 ---
 
@@ -136,13 +178,19 @@ def hep_pl_from_exposure(pkl_path):
     return float(row["Significance"].iloc[0][IDX10])
 ```
 
-**Current artifact HEP PL baselines (PNFS max, Sep 2 fresh run):**
-| Config | HEP PL Smoothed |
-|--------|----------------|
-| cAPA   | 7.624          |
-| lAPA   | 3.569          |
-| vdN    | 2.886          |
-| vdS    | 3.129          |
+**Current artifact HEP PL baselines** *(re-verified 2026-09-07)*:
+
+| Config | HEP PL Smoothed | Note |
+|--------|----------------|------|
+| cAPA   | 7.624          | unchanged |
+| lAPA   | 3.547          | was 3.569 |
+| vdN    | 2.885          | was 2.886 |
+| vdS    | 3.12824        | was 3.129 (stale); now matches `oscpoint_solar` exactly, as construction requires |
+
+**Caution when re-deriving these by hand:** `01_hep.py` takes `--signal_uncertainty` and
+falls back to its own default if you omit it. The pipeline passes `0.3`. Invoking the script
+bare produces a materially different number (vdS gives 2.457 instead of 3.128). Always copy the
+full argument list out of the run log — never just the script name.
 
 ---
 
@@ -156,7 +204,8 @@ def hep_pl_from_exposure(pkl_path):
 {cfg}_marley_highest_SENSITIVITY_{label}.pkl  # study variant
 ```
 
-**Labels available (confirmed):** `unc_sig0`, `unc_sig2`, `unc_sig6`, `unc_sig8`, `unc_bkg0`, `unc_bkg4`, `unc_bkg6`, `unc_bkg10`, `unc_bkg20`, `energy_spk` (cAPA only), `charge_Q50/100/200`
+**Labels available:** from `lib/study.py` — `all_study_labels(analysis="Sensitivity")`.
+`unc_sig8`, `unc_bkg10`, `unc_bkg20`, `charge_Q200` exist in older trees but are **ORPHANS** — do not add rows for them.
 
 **Note:** `Sensitivity_Results_{label}.pkl` also exists in some cases — this is produced by `05_best_sigmas.py --analysis Sensitivity`, which IS NOT called in `run_sensitivity_stage()`. The `highest_SENSITIVITY_{label}.pkl` is written by `06_significance.py` and is the correct source.
 
@@ -184,7 +233,12 @@ def sensitivity_score(pkl_path, cfg):
 
 ---
 
-## Confirmed Values (2026-08-22)
+## Confirmed Values
+
+> **Superseded in part.** The DayNight and HEP tables below were taken 2026-08-22 against
+> defaults that have since been re-run. lAPA, vdN and vdS default values all moved — see the
+> corrected baseline tables above. The *variant* numbers here remain useful as a before/after
+> reference for verifying that a re-run changed what it should, but **do not cite them**.
 
 ### DayNight Asimov@10yr — Study Variants
 
@@ -388,6 +442,7 @@ run_sensitivity_stage() per energy:
 | 2026-08-21 | Issues 5/6/7: removed Asimov from bkg-unc tables; PL Smoothed→N/A; footnotes |
 | 2026-08-21 | Removed unc_bkg10/20 rows from Study Variant + Sensitivity Uncertainty tables |
 | 2026-08-22 | oscpoint_reactor DN confirmed (real non-zero values); energy_maink rows added; vdN HEP baseline 1.686→2.518; energy_spk HEP values added |
+| 2026-09-07 | vdS default re-run (interrupted 09-06 production); DN 1.075→0.97206, HEP 3.129→3.12824, Sens Score 0.586294. Status vocabulary added. `unc_bkg` cleared as READY — the earlier "Asimov disagrees" claim was a stale-default artifact. Four rows reclassified `BUG`. Label lists replaced by `all_study_labels()`. |
 
 ---
 
@@ -502,24 +557,33 @@ Verified 2026-09-02: all 4 configs match exactly (confirmed by comparing `highes
 | vdN    | 0.100  | 0.101    | 0.098    | 0.316  |
 | vdS    | 0.586  | 0.591    | 0.581    | 0.766  |
 
-### Variant availability
-| Variant        | cAPA | lAPA | vdN  | vdS  |
-|----------------|------|------|------|------|
-| default        | ✓    | ✓    | ✓    | ✓    |
-| unc_sig0/2/6/8 | ✓    | ✓    | ✓    | ✓    |
-| unc_bkg0/4/6   | ✓    | ✓    | ✓    | ✓    |
-| fiduc_truth    | ✓    | ⏳   | ⏳   | ⏳   |
-| charge_Q50/Q500| ✓    | ✓    | ✓    | ✓    |
-| oscpoint_solar | ✓    | ✓    | ✓    | ✓    |
-| oscpoint_reactor| =default  | =default  | =default  | =default  |
-| energy_spk     | ⏳   | ⏳   | ⏳   | ⏳   |
-| energy_maink   | ⏳   | ⏳   | ⏳   | ⏳   |
-| metric_raw     | ✓    | ⏳   | ⏳   | ⏳   |
-| metric_smoothed| ✓    | ⏳   | ⏳   | ⏳   |
-| bkg_gamma      | ⏳   | N/A  | N/A  | N/A  |
+### Variant availability *(Sensitivity leg, verified 2026-09-07)*
 
-⏳ = JSON file missing, 04_best_cuts.py not yet run for this variant. Value = ⏳ in table.
-oscpoint_reactor = use default values directly (no separate pkl written or needed).
+| Variant | cAPA | lAPA | vdN | vdS | Status |
+|----------------|------|------|------|------|---|
+| default | ✓ | ✓ | ✓ | ✓ | `READY` (vdS re-run 09-07) |
+| unc_sig0/2/6 | ✓ | ✓ | ✓ | ✓ | `READY` (08-28, pre-window) |
+| unc_bkg0 | ✓ | ✓ | ✓ | ✓ | `READY` |
+| unc_bkg4/6 | ✓ | ✓ | ✓ | ✓ | `RERUN-B` |
+| oscpoint_solar | ✓ | ✓ | ✓ | ✓ | `READY` — equals default **by construction** |
+| oscpoint_reactor | =default | =default | =default | =default | `READY` — Score invariant to Δm²₂₁; no pkl written or needed |
+| nuisance_nominal | ✓ | ✓ | ✓ | ✓ | `READY` |
+| nuisance_sin13 | ✓ | ✓ | ✓ | ✓ | **`BUG`** — bit-identical to `nuisance_nominal` |
+| nuisance_escale | ✓ | ✓ | ✓ | ✓ | **`BUG`** — bit-identical to default |
+| fiduc_truth | ✓ | ✓ | ✓ | ✓ | **`BUG`** — Score bit-identical to default (DN/HEP legs *do* move) |
+| charge_Q50 | ✓ | ✓ | ✓ | ⏳ | `READY` on 3; vdS `RERUN-B` (08-26) |
+| charge_Q100 | ⚠ | — | — | — | cAPA pkl stores **wrong energy** (`SolarEnergy`, needs `SelectedEnergy`) — purge |
+| charge_Q500 | — | — | — | — | `MISSING` everywhere under `sensitivity/` |
+| energy_spk | ✓ | — | — | — | `READY` cAPA; `MISSING` elsewhere |
+| energy_maink | — | — | — | — | `MISSING` all 4 |
+| bkg_gamma | — | — | — | — | `MISSING` **all 4, cAPA included** |
+| membrane_veto_off | — | — | ✓ | ✓ | **`BUG`** on VD; `MISSING` on HD |
+
+⏳ = present but stale · ⚠ = present but actively wrong · — = absent.
+
+Corrections against the previous revision of this table: Sensitivity `charge_Q50` is **not** ✓ on
+all 4 (vdS stale), `charge_Q500` does **not** exist under `sensitivity/` for any config, and
+`bkg_gamma` is missing on **cAPA too** — not just lAPA/vdN/vdS.
 
 ---
 
@@ -532,8 +596,9 @@ oscpoint_reactor = use default values directly (no separate pkl written or neede
 | 2026-08-21 | Removed unc_bkg10/20 rows                                            |
 | 2026-08-22 | oscpoint_reactor DN confirmed; energy_maink rows; vdN HEP 1.686→2.518|
 | 2026-08-26 | Batch 2: sort unc rows ascending; split cAPA variant sections; move Sensitivity scan; rename Background Rejection; charge footnotes |
+| 2026-09-07 | vdS default re-run; baselines corrected (lAPA/vdN/vdS DN+HEP); status vocabulary + BUG class introduced; Sensitivity availability table rebuilt from disk |
 | 2026-08-27 | Batch 3: Optimal Cuts → Bkg.Model+Energy columns; Energy Estimator → SolarEnergy last + Score cols; Oscillation Point → χ²(sol↔react) cols; BkgUnc EG table → unified 5-col structure; Fiducial Model → Score cols + DN explanation; BkgModel Variants → remove default row + Score cols; Analysis Metric → Sensitivity rows; Background Assumptions rename + Truncated to 2nd row |
 
 ---
 
-*Last updated: 2026-08-27.*
+*Last updated: 2026-09-07.*

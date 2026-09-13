@@ -120,12 +120,12 @@
     },
     "SENSITIVITY_BEST_CUTS": {
       "description": "Best (NHits, AdjCl, OpHits) cut combination row that maximises the sensitivity figure-of-merit. Used by all downstream significance scripts to select the optimal cut.",
-      "base": "{PATH}/SENSITIVITY/{folder}/{config}/{name}",
+      "base": "{PATH}/SENSITIVITY/{config}/{name}/{folder}",
       "filename": "{config}_{name}_highest_SENSITIVITY.pkl",
       "study_variant_filename": "{config}_{name}_highest_SENSITIVITY_{study_label}.pkl",
       "study_label_note": "Study variants write a sibling with a '_{study_label}' suffix on the stem (e.g. '..._DayNight_Results_unc_bkg4.pkl'). run_studies.py passes --study_label; the energy token also changes when the variant overrides it (SelectedEnergy for charge_*, ClusterEnergy for bkg_gamma, SignalParticleK/MainK for energy_*).",
-      "full_path": "{PATH}/SENSITIVITY/{folder}/{config}/{name}/{config}_{name}_highest_SENSITIVITY.pkl",
-      "written_by": "src/physics/sensitivity/04_best_cuts.py (save_pkl with path=info['PATH']+'/SENSITIVITY/{folder}', config, name)",
+      "full_path": "{PATH}/SENSITIVITY/{config}/{name}/{folder}/{config}_{name}_highest_SENSITIVITY.pkl",
+      "written_by": "src/physics/sensitivity/04_best_cuts.py (save_pkl with path=info['PATH']+'/SENSITIVITY/{config}/{name}/{folder}', config=None, name=None, subfolder=None)",
       "validity_note": "This is the ONLY artifact --skip_best_cuts legitimately suppresses. Under the one-knob policy every variant passes it, so no labeled file is written and downstream stages reuse the nominal highest_SENSITIVITY.pkl \u2014 cuts held fixed across variants by design. An absent '_{study_label}' file is therefore expected, not an error. Sensitivity-only variants (unc_sig0/2/6, nuisance_*) were never affected by the 01_* gating bug.",
       "read_by": [
         "src/physics/sensitivity/01_background_template.py (_load_best_cut_map \u2192 default cut selection)",

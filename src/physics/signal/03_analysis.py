@@ -406,7 +406,7 @@ for config in configs:
 
         _scan_total = (
             len(_nhits_scan) * len(_ophits_scan) * len(_adjcls_scan)
-            * (3 if "marley" in name else 1)
+            * len(user_input["weights"][name])
         )
 
         for _cut_idx, (this_nhit, this_ophit, this_adjcl, (weight, weight_labels, color)) in enumerate(track(
@@ -495,6 +495,16 @@ for config in configs:
                 _true_bidx  = cached["true_bin_idx"][cached["true_bin_valid"]]
                 _reco_bvalid = cached["reco_bin_valid"]
                 _true_bvalid = cached["true_bin_valid"]
+                
+                # Check if energy-dependent reduction should be applied for background gammas
+                _apply_energy_reduction = (
+                    folder_applies_reduction(str(root), args.folder)
+                    and params.get("PARTICLE_TYPE") == "background"
+                )
+                if _apply_energy_reduction:
+                    _threshold = get_folder_reduction_threshold(str(root), args.folder)
+                    _true_energies_masked = run["Reco"]["SignalParticleK"][mask]
+                
                 for osc, mean, mean_label in zip(
                     ["Truth", "Osc", "Osc", "Osc"] if "marley" in name else ["Truth"],
                     ["Mean", "Day", "Night", "Mean"] if "marley" in name else ["Mean"],
@@ -502,17 +512,38 @@ for config in configs:
                 ):
                     selected_weights = run["Reco"][f"{weight}{mean_label}"][mask]
                     _sel_w = selected_weights[_reco_bvalid]
+                    
+                    # Apply energy-dependent reduction for background gammas
+                    if _apply_energy_reduction:
+                        _factor = get_component_reduction_factor(str(root), args.folder, name)
+                        if "gamma" in name.lower() and _threshold > 0:
+                            # For gammas: apply reduction only above threshold
+                            _true_energies_sel = _true_energies_masked[_reco_bvalid]
+                            _sel_w = _sel_w.copy()
+                            _sel_w[_true_energies_sel >= _threshold] /= _factor
+                        else:
+                            # For neutrons and other components: apply uniformly
+                            _sel_w = _sel_w / _factor
+                    
                     h = np.bincount(_reco_bidx, weights=_sel_w, minlength=_n_bins).astype(float)
                     w2 = np.bincount(_reco_bidx, weights=_sel_w**2, minlength=_n_bins)
+                    
+                    # For h_true, apply the same energy-dependent reduction logic
+                    _sel_w_true = selected_weights[_true_bvalid]
+                    if _apply_energy_reduction:
+                        _factor = get_component_reduction_factor(str(root), args.folder, name)
+                        if "gamma" in name.lower() and _threshold > 0:
+                            _true_energies_true = _true_energies_masked[_true_bvalid]
+                            _sel_w_true = _sel_w_true.copy()
+                            _sel_w_true[_true_energies_true >= _threshold] /= _factor
+                        else:
+                            _sel_w_true = _sel_w_true / _factor
+                    
                     h_true = np.bincount(
-                        _true_bidx, weights=selected_weights[_true_bvalid], minlength=_n_bins
+                        _true_bidx, weights=_sel_w_true, minlength=_n_bins
                     ).astype(float)
                     h  *= cached["mc_filter"]
                     w2 *= cached["mc_filter"]
-                    if folder_applies_reduction(str(root), args.folder):
-                        _factor = get_component_reduction_factor(str(root), args.folder, name)
-                        h  = h  / _factor
-                        w2 = w2 / _factor**2
                     h_error = np.sqrt(w2)
 
                     plot_lists[analysis].append({

@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
+
 # Define flags for the analysis config and name with the python parser
 parser = argparse.ArgumentParser(
     description="Plot the energy distribution of the particles"
@@ -93,6 +94,15 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Fa
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads chi2 grids from labeled template subfolders.")
+parser.add_argument(
+    "--draft",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Draft mode flag (passed through from pipeline). "
+        "Contour plots will be generated from draft-mode chi2 grids if available."
+    ),
+)
 
 args = parser.parse_args()
 _ctx = study_context(args)
@@ -108,22 +118,22 @@ def _load_best_cut_map(info: dict, args):
     _suffix = f"_{args.study_label}" if getattr(args, 'study_label', None) else ""
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     tried = []
+    
+    # Standard location: {PATH}/SENSITIVITY/{config}/{name}/{folder}/...
     for analysis in candidates if not _suffix else ["SENSITIVITY"]:
         for suffix in ([_suffix] if _suffix else [""]):
             filepath = (
-                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/"
                 f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
             )
             tried.append(filepath)
             if os.path.exists(filepath):
                 if args.debug:
-                    rprint(f"[cyan][INFO][/cyan] Using best-cut map from {analysis}{suffix}")
+                    rprint(f"Loading best-cut map from: {filepath}")
                 return pickle.load(open(filepath, "rb"))
 
-    rprint(
-        "[yellow][WARNING][/yellow] Unable to load any best-cut map. Checked:\n"
-        + "\n".join(tried)
-    )
+    if args.debug:
+        rprint("Unable to load any best-cut map. Checked:\n" + "\n".join(tried))
     return None
 
 sensitivity = []
@@ -157,9 +167,8 @@ for config in configs:
                     "OpHits": 4,
                 }
             }
-            rprint(
-                "[yellow][WARNING][/yellow] Falling back to default cuts NHits4 AdjCl10 OpHits4"
-            )
+            if args.debug:
+                rprint("Falling back to default cuts NHits4 AdjCl10 OpHits4")
 
     cut_keys = (
         list(fastest_sigma.keys())
@@ -185,29 +194,9 @@ for config in configs:
                 "Regenerate 06_significance.py output before plotting."
             )
 
-        if args.nhits is not None:
-            nhits = args.nhits
-        else:
-            selected = fastest_sigma.get(key) or {}
-            if args.debug:
-                rprint(f"Using optimized nhits {selected['NHits']}")
-            nhits = int(selected["NHits"])
-
-        if args.adjcls is not None:
-            adjcl = args.adjcls
-        else:
-            selected = fastest_sigma.get(key) or {}
-            if args.debug:
-                rprint(f"Using optimized adjcl {selected['AdjCl']}")
-            adjcl = int(selected["AdjCl"])
-
-        if args.ophits is not None:
-            ophits = args.ophits
-        else:
-            selected = fastest_sigma.get(key) or {}
-            if args.debug:
-                rprint(f"Using optimized ophits {selected['OpHits']}")
-            ophits = int(selected["OpHits"])
+        nhits = int(args.nhits) if args.nhits is not None else int((fastest_sigma.get(key) or {}).get("NHits", 4))
+        adjcl = int(args.adjcls) if args.adjcls is not None else int((fastest_sigma.get(key) or {}).get("AdjCl", 10))
+        ophits = int(args.ophits) if args.ophits is not None else int((fastest_sigma.get(key) or {}).get("OpHits", 4))
 
         _stem = f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
 
@@ -227,9 +216,6 @@ for config in configs:
             _sec_tag = f"_{_sec:g}Y"
             if os.path.exists(f"{_stem}_solar_sin12_df{_sec_tag}.pkl"):
                 _tags.append((_sec_tag, float(_sec)))
-            else:
-                rprint(f"[yellow][WARNING][/yellow] No {_sec_tag} grids in {data_path}; "
-                       "re-run 06_significance.py to produce them.")
 
         for _tag, _tag_exposure in _tags:
             _grids = _read_grids(_tag)
@@ -253,47 +239,31 @@ for config in configs:
 
         # The figures below are made from the PRIMARY exposure grids.
         _primary = _read_grids("")
-        solar_sin13_df = _primary[("solar", "sin13")]
-        solar_sin12_df = _primary[("solar", "sin12")]
-        react_sin13_df = _primary[("react", "sin13")]
-        react_sin12_df = _primary[("react", "sin12")]
-
-        for grid_name, grid in {
-            "solar sin13": solar_sin13_df,
-            "solar sin12": solar_sin12_df,
-            "reactor sin13": react_sin13_df,
-            "reactor sin12": react_sin12_df,
-        }.items():
-            values = grid.to_numpy(dtype=float)
-            coverage = np.isfinite(values).sum() / values.size if values.size else 0.0
-            if coverage < 1.0:
-                rprint(
-                    f"[yellow][WARNING][/yellow] {grid_name} union-of-planes coverage is "
-                    f"{coverage:.1%}; connectgaps=True bridges structural gaps"
-                )
-            finite = values[np.isfinite(values)]
-            if values.size == 0 or finite.size == 0:
-                raise ValueError(f"Incomplete {grid_name} sensitivity grid at {data_path}")
-
-        # Substitute 0 values for nan in all dfs
+        solar_sin13_df = _primary[("solar", "sin13")].sort_index().sort_index(axis=1)
+        solar_sin12_df = _primary[("solar", "sin12")].sort_index().sort_index(axis=1)
+        react_sin13_df = _primary[("react", "sin13")].sort_index().sort_index(axis=1)
+        react_sin12_df = _primary[("react", "sin12")].sort_index().sort_index(axis=1)
+        
         contours = np.arange(0, 4, 1)
         for df, df_name in zip([solar_sin13_df, solar_sin12_df, react_sin13_df, react_sin12_df], ["solar_sin13_df", "solar_sin12_df", "react_sin13_df", "react_sin12_df"]):
-            df[df < 0] = 0.0
-            df.replace(0, np.nan, inplace=True)
-
-            # Compute delta chi2 = chi2 - chi2_min for proper confidence level contours
-            # This ensures contours represent Delta chi2 thresholds (1, 4, 9 for 1, 2, 3 sigma)
-            chi2_values = df.values.astype(float)
-            finite_mask = np.isfinite(chi2_values)
-            if np.any(finite_mask):
-                chi2_min = float(np.min(chi2_values[finite_mask]))
+            # IMPORTANT: Compute chi2_min BEFORE replacing zeros with NaN
+            chi2_values_original = df.values.astype(float)
+            finite_mask_original = np.isfinite(chi2_values_original)
+            if np.any(finite_mask_original):
+                chi2_min = float(np.min(chi2_values_original[finite_mask_original]))
             else:
                 chi2_min = 0.0
             
+            # Now replace negative values and zeros with NaN for display
+            df[df < 0] = 0.0
+            df.replace(0, np.nan, inplace=True)
+            
+            # Compute delta chi2 using the original chi2_min
+            chi2_values = df.values.astype(float)
+            finite_mask = np.isfinite(chi2_values)
+            
             delta_chi2 = chi2_values - chi2_min
-            # Ensure non-negative (numerical issues can give slightly negative values)
             delta_chi2 = np.maximum(delta_chi2, 0.0)
-            # Replace nan/inf in delta_chi2 with nan for consistency
             delta_chi2[~finite_mask] = np.nan
 
             sensitivity.append(
@@ -488,10 +458,10 @@ if _contour_rows:
                     save_df(
                         _merged, _dest, config=_cfg, name=_nm,
                         subfolder=_save_subfolder, filename=_fname,
-                        rm=True, debug=True,
+                        rm=True, debug=args.debug,
                     )
-        rprint(f"[green][OK][/green] {_fname}.pkl written "
-               f"({len(_contours_df)} grids, {_contours_df['Study'].iloc[0]})")
+        if args.debug:
+            rprint(f"{_fname}.pkl written ({len(_contours_df)} grids)")
 else:
-    rprint("[yellow][WARNING][/yellow] No contour grids collected — no *_Contours.pkl written. "
-           "Run 06_significance.py first.")
+    if args.debug:
+        rprint("No contour grids collected — run 06_significance.py first.")

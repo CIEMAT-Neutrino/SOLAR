@@ -309,14 +309,39 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             significance_plus = _safe_array(this_plot_sigmas[significance + "+Error"].values[0])
             significance_minus = _safe_array(this_plot_sigmas[significance + "-Error"].values[0])
 
+            # 01_hep.py stores a scalar instead of an exposure curve for cuts where the
+            # curve was never evaluated. Emitting those yields a length-1 Significance
+            # against a length-100 Exposure, corrupting the pkl for any consumer that
+            # explodes the two columns together.
+            # Raw and Smoothed judged separately: PL routinely has a valid Smoothed curve
+            # alongside a degenerate RawProfileLikelihood, and rejecting both would drop
+            # the one metric present for every cut.
+            _n_exp = exposure_values.shape[0]
+            def _is_curve(a):
+                return np.ndim(a) > 0 and np.shape(a)[0] == _n_exp
+
+            _smoothed_ok = (_is_curve(smoothed_significance) and _is_curve(significance_plus)
+                            and _is_curve(significance_minus))
+            _raw_ok = _is_curve(raw_significance)
+            if not (_smoothed_ok or _raw_ok):
+                rprint(
+                    f"[yellow][WARNING][/yellow] {config} {name} {energy} "
+                    f"NHits={ref_plot['NHits']:.0f} OpHits={ref_plot['OpHits']:.0f} AdjCl={ref_plot['AdjCl']:.0f}: "
+                    f"{significance} has no exposure curve (expected length {_n_exp}) "
+                    "— skipping. Re-run hep/01_hep.py for this cut."
+                )
+                continue
+
             # Enforce monotonicity on PL curves at load time so plot and pkl are consistent.
             if significance == "ProfileLikelihood":
-                smoothed_significance = _monotone_for_export(smoothed_significance)
-                raw_significance      = _monotone_for_export(raw_significance)
+                if _smoothed_ok:
+                    smoothed_significance = _monotone_for_export(smoothed_significance)
+                if _raw_ok:
+                    raw_significance = _monotone_for_export(raw_significance)
 
-            for spectrum_type, this_significance in zip(
-                ["Smoothed", "Raw"],
-                [smoothed_significance, raw_significance]
+            for spectrum_type, this_significance in (
+                ([("Smoothed", smoothed_significance)] if _smoothed_ok else [])
+                + ([("Raw", raw_significance)] if _raw_ok else [])
             ):
                 if significance.startswith("PreIsotonic"):
                     continue
@@ -465,7 +490,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         )
 
         if args.pkl_label == "highest":
+            # hep_exposure accumulates across the whole product loop; restrict the
+            # write to the config/name being saved so later configs don't inherit
+            # rows belonging to earlier ones.
             _df = pd.DataFrame(hep_exposure)
+            _df = _df.loc[(_df["Config"] == config) & (_df["Name"] == name)].reset_index(drop=True)
             _df["Study"] = _study_name
             _filename = "HEP_Exposure"
             for _path in [data_path, local_data_path]:
