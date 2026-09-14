@@ -57,8 +57,8 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis",
-    default=30,
+    help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['DAYNIGHT'] in config/analysis/config.json.",
+    default=get_analysis_exposure(str(root), "DayNight"),
 )
 parser.add_argument(
     "--energy",

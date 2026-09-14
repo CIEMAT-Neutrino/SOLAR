@@ -62,7 +62,8 @@ parser.add_argument(
     type=str,
     default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "DAYNIGHT"),
+                    help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['DAYNIGHT'] in config/analysis/config.json.")
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
@@ -126,7 +127,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="DayNight")
 _study_suffix = _ctx.study_suffix
 if args.debug:
     rprint(args)

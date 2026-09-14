@@ -29,8 +29,29 @@ from typing import List, Optional
 
 from typing_extensions import NotRequired, TypedDict
 
+from src.utils import get_project_root
 
-_DEFAULT_EXPOSURE = 30.0  # canonical reference exposure in years
+
+# An analysis has TWO reference exposures, both analysis dependent and both defined in
+# config/analysis/config.json (see lib/defaults.py): the exposure it is run to
+# (ANALYSIS_EXPOSURES, 30 yr) and the livetime its numbers are quoted at
+# (EVALUATION_EXPOSURE_YEARS, 20 yr for DayNight/HEP, 30 yr for Sensitivity).
+# Scripts fill --exposure from one or the other -- 01_daynight.py and the template
+# stages from the first, significance_plot.py and the cutflow from the second -- so a
+# variant is only a template variant when the exposure matches NEITHER. Comparing
+# against a single reference makes has_rebin_variant spuriously True for every study
+# run by the other half of the pipeline -- e.g. unc_bkg/charge_Q0/bkg_gamma_*, which
+# must never get a labeled Rebin, or the Sensitivity templates, which would then be
+# read from an {energy}_<label>/ subfolder nothing ever wrote.
+def _reference_exposures_for(analysis: Optional[object]) -> tuple:
+    """The exposures in years that count as 'default' for this analysis."""
+    from .defaults import get_analysis_exposure, get_evaluation_exposure
+
+    root_str = str(get_project_root())
+    return (
+        float(get_analysis_exposure(root_str, analysis, stage="PRIMARY", fallback=30.0)),
+        float(get_evaluation_exposure(root_str, analysis, fallback=20.0)),
+    )
 
 
 @dataclass(frozen=True)
@@ -38,6 +59,11 @@ class StudyContext:
     study_suffix: str     # "_<label>" or ""
     template_suffix: str  # = study_suffix when variant changes template contents, else ""
     save_subfolder: str   # "<folder>/<label>" or "<folder>/default"
+    # "_<label>" for truth-fiducial variants, else "". Suffix of the event-level exports of
+    # 03_analysis.py (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts): those
+    # variants share energy and folder with the nominal run, so unlabeled exports would
+    # replace the nominal reco-fiducial masks with truth-position ones.
+    ref_suffix: str = ""
 
     def rebin_label(self, energy: str) -> str:
         """Rebin pkl filename stem, labeled when template_suffix is set (charge/dm2/exposure variants)."""
@@ -46,19 +72,25 @@ class StudyContext:
         return f"{energy}_Rebin"
 
 
-def study_context(args, folder: Optional[str] = None) -> StudyContext:
+def study_context(args, folder: Optional[str] = None, analysis: Optional[str] = None) -> StudyContext:
     """
     Build a StudyContext from parsed CLI args.
 
     Parameters
     ----------
-    args   : argparse.Namespace — must expose study_label; optionally charge_threshold.
-    folder : explicit folder string; falls back to args.folder when None.
+    args     : argparse.Namespace — must expose study_label; optionally charge_threshold.
+    folder   : explicit folder string; falls back to args.folder when None.
+    analysis : analysis this script belongs to ("DayNight"/"HEP"/"Sensitivity"); falls back
+               to args.analysis. It selects the reference exposures the variant check compares
+               against, so single-analysis scripts that have no --analysis flag must pass it
+               explicitly — otherwise a script's own analysis default reads as a non-default
+               exposure and every study gets a spurious labeled template.
     """
     label            = getattr(args, "study_label",     None) or ""
     charge_threshold = getattr(args, "charge_threshold", 0)   or 0
     dm2_override     = getattr(args, "dm2",              None)
     exposure         = getattr(args, "exposure",         None)
+    analysis         = analysis or getattr(args, "analysis", None)
     truth_fiducial   = bool(getattr(args, "truth_fiducial", False))
     membrane_veto    = bool(getattr(args, "membrane_veto", True))
     folder_str       = (folder or getattr(args, "folder", "")).lower()
@@ -79,7 +111,7 @@ def study_context(args, folder: Optional[str] = None) -> StudyContext:
     has_rebin_variant = (
         (charge_threshold > 0)
         or (dm2_override is not None)
-        or (exposure is not None and exposure != _DEFAULT_EXPOSURE)
+        or (exposure is not None and exposure not in _reference_exposures_for(analysis))
         or truth_fiducial
         or not membrane_veto
     )
@@ -90,7 +122,19 @@ def study_context(args, folder: Optional[str] = None) -> StudyContext:
         study_suffix=study_sfx,
         template_suffix=template_sfx,
         save_subfolder=subfolder,
+        ref_suffix=study_sfx if truth_fiducial else "",
     )
+
+
+def study_variant_extra(label: Optional[str]) -> List[str]:
+    """The verbatim "extra" flags of the STUDY_VARIANTS entry with this label ([] if none)."""
+    if not label:
+        return []
+    for variants in STUDY_VARIANTS.values():
+        for variant in variants:
+            if variant.get("label") == label:
+                return list(variant.get("extra", []))
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -165,12 +209,6 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.00"]},
         {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.04"]},
         {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.06"]},
-        # Background uncertainty with fixed background normalization (physically correct fitting)
-        # These variants demonstrate proper behavior: contours loosen with increased σ_bkg
-        {"label": "unc_bkg4_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.04", "--no-fit_background"]},
-        {"label": "unc_bkg6_nobkgfit", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.06", "--no-fit_background"]},
-        # Signal uncertainty with fixed background normalization for comparison
-        {"label": "unc_sig6_nobkgfit",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06", "--no-fit_background"]},
     ],
     # 9.1.2 — nuisance parameter decomposition (Sensitivity only)
     # Default profile is 'full' (sin²θ₁₃ + energy scale). Variants isolate each nuisance.
@@ -184,9 +222,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     ],
     # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
+    # analysis_override=["DayNight"]: SignalParticleK/MainK have no events in the HEP
+    # (14-30 MeV) or Sensitivity energy windows, so 04_best_cuts.py / cutflow_plot.py have
+    # no best-cuts entry to key on for those analyses and hard-fail with a KeyError. This
+    # restriction was verified and documented previously; restore it if STUDY_VARIANTS is
+    # ever rebuilt from a diff/rebase that drops it again.
     "energy": [
-        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True},
-        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True},
+        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True, "analysis_override": ["DayNight"]},
+        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True, "analysis_override": ["DayNight"]},
     ],
     # 9.2.2 — fiducialization (folder provides isolation; no study_label needed)
     "fiduc": [
@@ -302,35 +345,21 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "extra": ["--no-membrane_veto"],
         },
     ],
-    # fit_background — Legacy validation: run with background normalization fitting enabled
-    # Default for all other studies is now --no-fit_background (corrected). This group
-    # validates that the legacy behavior still works and can be compared against the corrected.
-    "fit_background": [
+    # legacy_fit — the single legacy-fit comparison (Sensitivity only).
+    # The default analysis is --fit_method pull on --flyweight templates. This variant feeds the
+    # SAME templates and nominal settings through the legacy nested-minimiser fitter, so the fit
+    # method is the only knob. Its chi2 grids go to results/<profile>_legacy/; the best-cut map,
+    # contour tables and figures are isolated by the label. Expect hours per exposure on HD
+    # (background-dominated) and validation-gate warnings -- that is what it is there to show.
+    "legacy_fit": [
         {
-            "label": "fit_background_legacy",
-            "skip_rebin": True,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
-            "skip_templates": True,
-            "extra": ["--fit_background"],
-        },
-        # Uncertainty scans with legacy background fitting for comparison
-        {
-            "label": "fit_background_unc_sig6",
+            "label": "legacy_fit",
             "skip_rebin": True,
             "skip_best_cuts": True,
             "skip_best_sigmas": True,
             "skip_templates": True,
             "analysis_override": ["Sensitivity"],
-            "extra": ["--fit_background", "--signal_uncertainty", "0.06"],
-        },
-        {
-            "label": "fit_background_unc_bkg6",
-            "skip_rebin": True,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
-            "skip_templates": True,
-            "extra": ["--fit_background", "--background_uncertainty", "0.06"],
+            "extra": ["--fit_method", "legacy"],
         },
     ],
 }

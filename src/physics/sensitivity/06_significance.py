@@ -39,11 +39,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 
 from lib.root import Sensitivity_Fitter
+from lib.template_guards import check_template_sampling_marker
 from lib.oscillation import get_oscillation_datafiles
 from lib.fitting import (
     _sensitivity_apply_energy_scale as _apply_energy_scale,
     _sensitivity_fit_with_escale    as _fit_with_escale,
     sensitivity_chi2_worker         as _chi2_worker,
+    sensitivity_pull_jacobian,
+    sensitivity_validation_gates,
+    SENSITIVITY_FIT_METHODS,
 )
 
 # Import rich progress components for manual progress tracking
@@ -175,15 +179,16 @@ parser.add_argument(
     default=get_analysis_threshold(str(root), "SENSITIVITY", stage="SIGNIFICANCE", fallback=0.0),
 )
 parser.add_argument(
-    "--exposure", type=float, help="Exposure in years. Templates are stored PER YEAR (detector_mass_kT x rate) and are scaled by this value at load time, so changing it needs no template regeneration.", default=30.0
+    "--exposure", type=float, help="Exposure in years. Templates are stored PER YEAR (detector_mass_kT x rate) and are scaled by this value at load time, so changing it needs no template regeneration. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.", default=get_analysis_exposure(str(root), "Sensitivity")
 )
 parser.add_argument(
     "--secondary_exposure", "--secondary-exposure",
-    type=float, default=10.0,
+    type=float, default=get_analysis_exposure(str(root), "Sensitivity", stage="SECONDARY", fallback=0.0),
     help=(
         "Also evaluate at this exposure in the same pass and write a tagged copy of every "
         "output (e.g. '_10Y'). Templates are per-year, so this is a rescale of the already "
-        "loaded templates -- no extra I/O and no pipeline re-run. 0/negative disables."
+        "loaded templates -- no extra I/O and no pipeline re-run. 0/negative disables. "
+        "Default from ANALYSIS_EXPOSURES['SENSITIVITY']['SECONDARY'] in config/analysis/config.json."
     ),
 )
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
@@ -257,6 +262,28 @@ parser.add_argument(
         "and compute oscillation templates on-the-fly using nufast. Avoids saving/loading ~14k templates."
     ),
 )
+parser.add_argument(
+    "--fit_method",
+    type=str,
+    choices=list(SENSITIVITY_FIT_METHODS),
+    default="pull",
+    help=(
+        "chi2 profiling method. 'pull' (default): closed-form pull-method profile refined with "
+        "Newton steps, sin13 profiled inside the fit (lib/fitting.py sensitivity_pull_profile); "
+        "writes results/<profile>/. 'legacy': nested numerical minimisers (lib/root.py "
+        "Sensitivity_Fitter), kept for comparison; writes results/<profile>_legacy/."
+    ),
+)
+parser.add_argument(
+    "--strict_validation",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+    help=(
+        "Fail (INVALID marker + non-zero exit) when a validation gate fails. Default: strict for "
+        "--fit_method pull, warn-only for legacy. The gate report is always written as "
+        "*_Validation{tag}.json next to the chi2 grids."
+    ),
+)
 
 args = parser.parse_args()
 if args.debug:
@@ -283,9 +310,27 @@ if args.fit_background and args.background_uncertainty > 0.05:
         .format(args.background_uncertainty)
     )
 
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _study_suffix    = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
+
+# The default (pull) fit owns the standard results/<profile>/ grids; the legacy comparison
+# fit writes next to them in results/<profile>_legacy/ so it can never overwrite them.
+_results_tag = "_legacy" if args.fit_method == "legacy" else ""
+if args.fit_method == "legacy" and not args.study_label:
+    rprint(
+        "[yellow][WARNING][/yellow] --fit_method legacy without --study_label: the chi2 grids are "
+        "isolated in results/<profile>_legacy/, but the best-cut map and JSON are the nominal ones. "
+        "Use the legacy_fit study (run_studies.py) for comparisons."
+    )
+_strict_validation = (
+    args.fit_method != "legacy" if args.strict_validation is None else bool(args.strict_validation)
+)
+if args.fit_method == "pull" and (args.fit_background or args.use_legacy_background_penalty):
+    rprint(
+        "[yellow][WARNING][/yellow] --fit_method pull always profiles the background normalisation "
+        "with its Gaussian prior; --fit_background / --legacy_background_penalty are ignored."
+    )
 
 config = args.config
 name = args.signal
@@ -617,6 +662,85 @@ def _compact_and_validate_grid(df: pd.DataFrame, label: str) -> pd.DataFrame:
     return validated
 
 
+def _json_default(value):
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    raise TypeError(f"Not JSON serializable: {type(value)}")
+
+
+def _flyweight_base_template(signal_path: str, config: str, name: str, nhits: int, adjcl: int, ophits: int):
+    """Load and check the unoscillated flyweight BASE template (N_reco_coarse x N_true_coarse, per year)."""
+    base_template_path = (
+        f"{signal_path}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_BASE.pkl"
+    )
+    if not os.path.exists(base_template_path):
+        raise FileNotFoundError(
+            f"Flyweight mode: base template not found at {base_template_path}. "
+            f"Run 02_signal_template.py with --flyweight first to generate base templates."
+        )
+    require_per_year_templates(signal_path)
+    base_template = np.nan_to_num(pd.read_pickle(base_template_path), nan=0.0)
+    expected_coarse_bins = len(sensitivity_rebin_centers)
+    if base_template.shape != (expected_coarse_bins, expected_coarse_bins):
+        raise ValueError(
+            f"Flyweight base template has unexpected shape {base_template.shape}. "
+            f"Expected ({expected_coarse_bins}, {expected_coarse_bins}) for coarse sensitivity bins."
+        )
+    return base_template
+
+
+def _flyweight_convolve(base_template, point):
+    """Signal template (N_nadir x N_reco_coarse, per year) at one oscillation point.
+
+    P_ee from nufast is integrated over OSC_NADIR_OVERSAMPLE nadir sub-bins per NADIR_BINS row
+    (PDF-weighted) and averaged over the fine energy bins inside each coarse sensitivity bin,
+    then convolved with the flyweight BASE template. Point-sampling the bin centres instead
+    aliases Earth regeneration at low dm2 and paints whole-row stripes in the chi2 grids (HD
+    dm2=3.83e-5: Delta chi2 38 between neighbours at 23), biasing Delta chi2 near 3 sigma by
+    up to ~4.
+    """
+    from lib.oscillation import _get_oscillation_map_computed
+
+    dm2_p, sin13_p, sin12_p = point
+    osc_map = _get_oscillation_map_computed(
+        dm2=[dm2_p],
+        sin13=[sin13_p],
+        sin12=[sin12_p],
+        backend="nufast",
+        output="df",
+        separate_day_night=False,
+        debug=False,
+        nadir_oversample=int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1)),
+    )
+    pee_df = list(osc_map.values())[0]
+    fine_energy_edges = np.linspace(
+        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[0],
+        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[1],
+        analysis_info.get("OSC_ENERGY_BINS", 120) + 1
+    )
+    fine_energy_centers = 0.5 * (fine_energy_edges[1:] + fine_energy_edges[:-1])
+    coarse_energy_centers = sensitivity_rebin_centers
+    pee_values_fine = pee_df.to_numpy(dtype=float)  # shape: (N_nadir, N_energy_fine)
+    pee_values_coarse = np.zeros((len(pee_df.index), len(coarse_energy_centers)))
+    coarse_edges = np.asarray(sensitivity_rebin, dtype=float)
+    for k, (lo, hi) in enumerate(zip(coarse_edges[:-1], coarse_edges[1:])):
+        inside = (fine_energy_centers >= lo) & (fine_energy_centers < hi)
+        if inside.any():
+            pee_values_coarse[:, k] = pee_values_fine[:, inside].mean(axis=1)
+        else:   # coarse bin narrower than a fine bin: fall back to centre interpolation
+            for i_nadir in range(len(pee_df.index)):
+                pee_values_coarse[i_nadir, k] = np.interp(
+                    coarse_energy_centers[k], fine_energy_centers, pee_values_fine[i_nadir, :]
+                )
+    # (N_nadir, N_true_coarse) @ (N_true_coarse, N_reco_coarse) -> (N_nadir, N_reco_coarse);
+    # base_template already carries detector_mass (per-year normalisation).
+    return np.dot(pee_values_coarse, base_template.T)
+
+
 def _mark_invalid(output_dir: str, reason: str, tag: str = "") -> None:
     marker = f"{output_dir}/{name}_{energy}_Sensitivity_INVALID{tag}.json"
     os.makedirs(output_dir, exist_ok=True)
@@ -743,18 +867,46 @@ for config in configs:
             # Load solar + reactor reference templates at best-fit oscillation point
             # These are FIXED predictions used to test against all grid points
             require_per_year_templates(paths["signal_path"])
-            pred1_raw = (np.nan_to_num(
-                pd.read_pickle(
-                    f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["SOLAR_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
-                ),
-                nan=0.0,
-            ))
-            pred2_raw = (np.nan_to_num(
-                pd.read_pickle(
-                    f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["REACT_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
-                ),
-                nan=0.0,
-            ))
+            base_template = None
+            if args.flyweight:
+                # The fixed predictions must come from the same template model as the fake data
+                # (every fit method). Flyweight fake data are nufast x BASE convolutions, whereas
+                # the per-point pkls on disk come from the fine-binned 02_signal_template.py path;
+                # mixing the two differs by up to ~8% per bin (Asimov chi2 1.5 for HD).
+                base_template = _flyweight_base_template(paths["signal_path"], config, name, nhits, adjcl, ophits)
+                pred1_raw = _flyweight_convolve(base_template, solar_tuple)
+                pred2_raw = _flyweight_convolve(base_template, react_tuple)
+                rprint(
+                    "[cyan][INFO][/cyan] Flyweight: solar/reactor predictions computed from the "
+                    "BASE template (same model as the fake data)."
+                )
+            else:
+                if osc_backend != "file":
+                    _sampling_ok, _sampling_reason = check_template_sampling_marker(
+                        paths["signal_path"], config, name, nhits, adjcl, ophits,
+                        backend=osc_backend,
+                        nadir_oversample=int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1)),
+                        scopes=("grid",),
+                    )
+                    if not _sampling_ok:
+                        raise FileNotFoundError(
+                            f"Signal templates for NHits{nhits} AdjCl{adjcl} OpHits{ophits} in "
+                            f"{paths['signal_path']} are not current: {_sampling_reason}. Regenerate them "
+                            "(03_template_compute.py --template signal --rewrite, i.e. run the pipeline "
+                            "without --skip-templates) or use --flyweight."
+                        )
+                pred1_raw = (np.nan_to_num(
+                    pd.read_pickle(
+                        f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["SOLAR_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
+                    ),
+                    nan=0.0,
+                ))
+                pred2_raw = (np.nan_to_num(
+                    pd.read_pickle(
+                        f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_dm2_{analysis_info["REACT_DM2"]:.3e}_sin13_{analysis_info["SIN13"]:.3e}_sin12_{analysis_info["SIN12"]:.3e}.pkl'
+                    ),
+                    nan=0.0,
+                ))
 
             if args.background:
                 background_template = resolve_background_template(
@@ -809,95 +961,15 @@ for config in configs:
             
             # Determine the template loading mode
             if args.flyweight:
-                # Flyweight mode: load single base template (unoscillated, in coarse bins) 
+                # Flyweight mode: load single base template (unoscillated, in coarse bins)
                 # and compute all oscillation templates on-the-fly
-                from lib.oscillation import _get_oscillation_map_computed
-                from lib.oscillation_backends import get_nadir_pdf_file
-                
-                # Load the base template for this cut (shape: N_reco_coarse x N_true_coarse = 30 x 30)
-                base_template_path = (
-                    f"{_signal_path}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_BASE.pkl"
-                )
-                
-                if not os.path.exists(base_template_path):
-                    raise FileNotFoundError(
-                        f"Flyweight mode: base template not found at {base_template_path}. "
-                        f"Run 02_signal_template.py with --flyweight first to generate base templates."
-                    )
-                
-                require_per_year_templates(paths["signal_path"])
-                base_template = np.nan_to_num(pd.read_pickle(base_template_path), nan=0.0)
+                if base_template is None:
+                    base_template = _flyweight_base_template(_signal_path, config, name, nhits, adjcl, ophits)
                 rprint(f"[cyan][INFO][/cyan] Flyweight mode: loaded base template for NHits{nhits} AdjCl{adjcl} OpHits{ophits}")
-                
-                # Validate base template shape - should be in coarse bins (30 x 30)
-                expected_coarse_bins = len(sensitivity_rebin_centers)
-                if base_template.shape != (expected_coarse_bins, expected_coarse_bins):
-                    raise ValueError(
-                        f"Flyweight base template has unexpected shape {base_template.shape}. "
-                        f"Expected ({expected_coarse_bins}, {expected_coarse_bins}) for coarse sensitivity bins."
-                    )
-                
-                rprint(f"[cyan][INFO][/cyan] Flyweight mode: computing {len(dm2_list)} signal templates on-the-fly "
-                       f"(backend=nufast, {n_io} thread(s))...")
-                
+
                 def _compute_one_flyweight(point):
                     """Compute signal template for one oscillation point using flyweight base template."""
-                    dm2_p, sin13_p, sin12_p = point
-                    
-                    # Get P_ee at this point using nufast
-                    osc_map = _get_oscillation_map_computed(
-                        dm2=[dm2_p],
-                        sin13=[sin13_p],
-                        sin12=[sin12_p],
-                        backend="nufast",
-                        output="df",
-                        separate_day_night=False,
-                        debug=False,
-                    )
-                    pee_df = list(osc_map.values())[0]
-                    
-                    # pee_df has shape (N_nadir_fine=180, N_energy_fine=120)
-                    # We need to rebin P_ee to coarse energy bins (30) to match base_template
-                    # P_ee is function of (nadir, true_energy)
-                    
-                    # Get fine and coarse energy edges
-                    fine_energy_edges = np.linspace(
-                        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[0],
-                        analysis_info.get("OSC_ENERGY_RANGE", [0, 30])[1],
-                        analysis_info.get("OSC_ENERGY_BINS", 120) + 1
-                    )
-                    fine_energy_centers = 0.5 * (fine_energy_edges[1:] + fine_energy_edges[:-1])
-                    coarse_energy_centers = sensitivity_rebin_centers
-                    
-                    # Rebin P_ee from fine (120) to coarse (30) energy bins
-                    # pee_df.columns are fine energy bins, pee_df.index are nadir bins
-                    pee_values_fine = pee_df.to_numpy(dtype=float)  # shape: (N_nadir_fine, N_energy_fine)
-                    
-                    # For each nadir bin, rebin P_ee to coarse energy bins
-                    pee_values_coarse = np.zeros((len(pee_df.index), len(coarse_energy_centers)))
-                    for i_nadir in range(len(pee_df.index)):
-                        # Interpolate P_ee at this nadir from fine to coarse energy bins
-                        interp_func = interpolate.interp1d(
-                            fine_energy_centers,
-                            pee_values_fine[i_nadir, :],
-                            kind='linear',
-                            bounds_error=False,
-                            fill_value='extrapolate'
-                        )
-                        pee_values_coarse[i_nadir, :] = interp_func(coarse_energy_centers)
-                    
-                    # Now convolve: convolved = P_ee_coarse @ base_template.T
-                    # P_ee_coarse shape: (N_nadir, N_true_coarse=30)
-                    # base_template shape: (N_reco_coarse=30, N_true_coarse=30)
-                    # convolved shape: (N_nadir, N_reco_coarse=30)
-                    convolved = np.dot(pee_values_coarse, base_template.T)
-                    
-                    # The result is already in coarse bins, no rebinning needed!
-                    # Scale by detector_mass (template was saved as detector_mass * h)
-                    # Actually, base_template was already scaled by detector_mass in 02_signal_template.py
-                    # So convolved is already scaled correctly
-                    
-                    return point, convolved
+                    return point, _flyweight_convolve(base_template, point)
                 
                 rprint(f"[cyan][INFO][/cyan] Flyweight mode: computing {len(dm2_list)} signal templates on-the-fly "
                        f"(backend=nufast, {n_io} thread(s))...")
@@ -941,6 +1013,44 @@ for config in configs:
                         description="Loading templates..."
                     ):
                         fake_raw_dict[_pt] = _df
+
+            _fetch_template = _compute_one_flyweight if args.flyweight else _load_one
+
+            def _sin13_derivative(ref_dm2, exposure_yr):
+                """d(pred)/d(sin^2 theta13) at (ref_dm2, SIN13, SIN12) for the pull fit.
+
+                Central secant between the nearest configured sin13 neighbours of SIN13 on the
+                (ref_dm2, SIN12) line, exposure-scaled WITHOUT the <1-event truncation so the
+                derivative stays smooth.
+                """
+                ref_sin13 = float(analysis_info["SIN13"])
+                ref_sin12 = float(analysis_info["SIN12"])
+                candidates = set(fake_raw_dict) | set(zip(*make_oscillation_grid(analysis_info)))
+                line = sorted(
+                    (
+                        p for p in candidates
+                        if np.isclose(p[0], ref_dm2)
+                        and np.isclose(p[2], ref_sin12)
+                        and not np.isclose(p[1], ref_sin13)
+                    ),
+                    key=lambda p: p[1],
+                )
+                below = [p for p in line if p[1] < ref_sin13]
+                above = [p for p in line if p[1] > ref_sin13]
+                if not below or not above:
+                    raise SystemExit(
+                        f"--fit_method pull with MARGINALIZE_SIN13 needs sin13 grid neighbours of "
+                        f"{ref_sin13} at dm2={ref_dm2:.3e}, sin12={ref_sin12}; none found in "
+                        "OSCILLATION_GRID. Add a sin13 line through this point or use a nuisance "
+                        "profile without sin13."
+                    )
+                lo, hi = below[-1], above[0]
+                raw = {
+                    p: np.asarray(fake_raw_dict[p] if p in fake_raw_dict else _fetch_template(p)[1], dtype=float)
+                    for p in (lo, hi)
+                }
+                deriv = float(exposure_yr) * (raw[hi] - raw[lo]) / (hi[1] - lo[1])
+                return deriv[:, thld:]
 
             # ── Per-exposure evaluation ─────────────────────────────────────
             # Templates are stored per-year, so a second exposure is just a rescale:
@@ -1003,7 +1113,33 @@ for config in configs:
                     "e_centers_thld": e_centers_thld,
                     "fit_background": args.fit_background,
                     "use_legacy_background_penalty": args.use_legacy_background_penalty,
+                    "fit_method": args.fit_method,
+                    "return_diagnostics": True,
                 }
+
+                sin13_in_fit = args.fit_method == "pull" and bool(analysis_info.get("MARGINALIZE_SIN13", False))
+                if args.fit_method == "pull":
+                    # Nuisance response templates depend only on the fixed predictions, so they
+                    # are built once here instead of once per grid point in the workers.
+                    sigma_sin13 = float(analysis_info.get("SIN13_SIGMA", 0.00056)) if sin13_in_fit else 0.0
+                    static_data["pull_jacobians"] = {}
+                    for _label, _pred_slice, _ref_dm2 in (
+                        ("solar", _pred1_slice, analysis_info["SOLAR_DM2"]),
+                        ("react", _pred2_slice, analysis_info["REACT_DM2"]),
+                    ):
+                        static_data["pull_jacobians"][_label] = sensitivity_pull_jacobian(
+                            _pred_slice, _bkg_slice,
+                            e_centers=e_centers_thld,
+                            sigma_pred=args.signal_uncertainty,
+                            sigma_bkg=args.background_uncertainty,
+                            sigma_e_scale=sigma_e_scale if marginalize_e_scale else 0.0,
+                            dpred_dsin13=_sin13_derivative(_ref_dm2, exposure_yr) if sin13_in_fit else None,
+                            sigma_sin13=sigma_sin13,
+                        )
+                    rprint(
+                        "[cyan][INFO][/cyan] Pull fit nuisances: "
+                        + ", ".join(static_data["pull_jacobians"]["solar"][2])
+                    )
 
                 # Simple task tuples: only varying data (params, obs)
                 simple_tasks = [
@@ -1012,7 +1148,7 @@ for config in configs:
                 ]
 
                 rprint(f"[cyan][INFO][/cyan] Chi² scan: {len(simple_tasks)} grid point(s), "
-                       f"{n_workers} worker(s), escale={marginalize_e_scale}")
+                       f"{n_workers} worker(s), escale={marginalize_e_scale}, method={args.fit_method}")
 
                 if n_workers == 1:
                     # Serial: no benefit from initializer pattern
@@ -1061,11 +1197,14 @@ for config in configs:
                                 results[idx] = future.result()
                                 progress.update(task_id, advance=1)
                 # ── Collect results (serial post-processing, order preserved) ─────────
-                for i, (params, solar_chi2, react_chi2) in track(
+                fit_diagnostics = {}
+                for i, (params, solar_chi2, react_chi2, *_diag) in track(
                     enumerate(results),
                     total=len(results),
                     description=f"Processing {len(results)} chi\u00b2 grid points..."
                 ):
+                    if _diag and _diag[0] is not None:
+                        fit_diagnostics[params] = _diag[0]
                     if args.debug:
                         rprint(f"\n--- Combination {i}: {params} ---")
 
@@ -1096,7 +1235,13 @@ for config in configs:
                     if _same_oscillation(params, solar_tuple):
                         reactor_fit_at_solar = chi2_value
 
-                if analysis_info.get("MARGINALIZE_SIN13", False) and len(solar_df) > 0:
+                if analysis_info.get("MARGINALIZE_SIN13", False):
+                    sin13_profile_mode = "fit" if sin13_in_fit else "grid"
+                else:
+                    sin13_profile_mode = "none"
+                # Pull method: sin13 is a nuisance inside the fit, so the grid-minimum below
+                # (which only covers the plane intersections) must not be applied on top.
+                if sin13_profile_mode == "grid" and len(solar_df) > 0:
                     sin13_bf    = float(analysis_info["SIN13"])
                     sin13_sigma = float(analysis_info.get("SIN13_SIGMA", 0.00056))
                     if args.debug:
@@ -1117,9 +1262,9 @@ for config in configs:
                         )
 
                 if args.background:
-                    path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%'
+                    path = f'{paths["signal_path"]}/results/{profile_name}{_results_tag}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%'
                 else:
-                    path = f'{paths["signal_path"]}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only'
+                    path = f'{paths["signal_path"]}/results/{profile_name}{_results_tag}/signal_{100*args.signal_uncertainty:.0f}%_only'
 
                 rprint(f"Saving data to {'/'.join(path.split('/')[:-1])}")
 
@@ -1160,6 +1305,50 @@ for config in configs:
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     df.to_pickle(file_path)
+
+                # ── Validation gates (every fit method) ─────────────────────────────
+                report = sensitivity_validation_gates(
+                    solar_df, react_df,
+                    {
+                        "solar_sin12": solar_sin12_df, "solar_sin13": solar_sin13_df,
+                        "react_sin12": react_sin12_df, "react_sin13": react_sin13_df,
+                    },
+                    diagnostics=fit_diagnostics,
+                    solar_point=solar_tuple,
+                    react_point=react_tuple,
+                    sin13_profile=sin13_profile_mode,
+                )
+                report.update(
+                    fit_method=args.fit_method, nuisance_profile=profile_name,
+                    exposure_yr=float(exposure_yr), strict=_strict_validation,
+                    cut={"NHits": nhits, "AdjCl": adjcl, "OpHits": ophits},
+                )
+                validation_file = f"{path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}_Validation{tag}.json"
+                if os.path.exists(validation_file):
+                    os.remove(validation_file)
+                with open(validation_file, "w") as handle:
+                    json.dump(report, handle, indent=2, default=_json_default)
+                gate_summary = ", ".join(
+                    f"{gate}={'skip' if res['passed'] is None else ('ok' if res['passed'] else 'FAIL')}"
+                    for gate, res in report["gates"].items()
+                )
+                failed_gates = [gate for gate, res in report["gates"].items() if res["passed"] is False]
+                if failed_gates:
+                    rprint(
+                        f"[{'red][ERROR][/red' if _strict_validation else 'yellow][WARNING][/yellow'}] "
+                        f"Validation gates failed ({args.fit_method}, {exposure_yr:g} yr): {gate_summary}. "
+                        f"Report: {validation_file}"
+                    )
+                    if _strict_validation:
+                        _mark_invalid(path, f"validation gates failed: {failed_gates} (see {validation_file})", tag)
+                        # os._exit, not SystemExit: lib/__init__.py registers an atexit os._exit(0)
+                        # (libarrow teardown workaround) that turns every SystemExit into exit 0,
+                        # so the pipeline would not stop on a failed gate.
+                        sys.stdout.flush()
+                        sys.stderr.flush()
+                        os._exit(1)
+                else:
+                    rprint(f"[green][VALIDATION][/green] {gate_summary} ({args.fit_method}, {exposure_yr:g} yr)")
 
                 return solar_fit_at_react, reactor_fit_at_solar
 

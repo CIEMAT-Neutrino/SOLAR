@@ -22,7 +22,8 @@ parser.add_argument("--adjcls",  type=int, default=None)
 parser.add_argument("--signal_uncertainty",     type=float, default=0.04)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
 parser.add_argument("--nuisance_profile",       type=str,   default=None)
-parser.add_argument("--exposure", type=float, default=30.0)
+parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "Sensitivity"),
+                    help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.")
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--reference",  type=str, default="SENSITIVITY",
                     choices=["DayNight", "SENSITIVITY", "HEP"])
@@ -44,6 +45,7 @@ parser.add_argument("--study", nargs="+", type=str, default=None, help="Study la
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled inputs.")
 parser.add_argument("--membrane_veto", action=argparse.BooleanOptionalAction, default=True, help="Membrane-veto event selection. Must match the flag passed to 03_analysis.py.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads the chi2 grid from the labeled template subfolder.")
+parser.add_argument("--fit_method", type=str, choices=["legacy", "pull"], default="pull", help="'pull' (default) reads results/<profile>/, 'legacy' reads results/<profile>_legacy/ (legacy_fit study).")
 args = parser.parse_args()
 
 _study_labels_to_run = resolve_study_labels(args.study, args.study_label, analysis="Sensitivity")
@@ -57,6 +59,7 @@ _CLI_DEFAULTS = {
     "charge_threshold":       args.charge_threshold,
     "truth_fiducial":         args.truth_fiducial,
     "membrane_veto":          args.membrane_veto,
+    "fit_method":             args.fit_method,
 }
 # Batch = more than one study label. A single run is what the caller explicitly
 # asked for, so a missing input is an error they need to see; a batch is expected
@@ -266,6 +269,8 @@ def _variant_settings(label):
                     settings["truth_fiducial"] = True
                 elif token == "--no-membrane_veto":
                     settings["membrane_veto"] = False
+                elif token == "--fit_method" and value is not None:
+                    settings["fit_method"] = value
             return settings
     return settings
 
@@ -277,7 +282,8 @@ def _results_path(info, nhits, adjcl, ophits, profile_name, template_suffix=""):
         if args.background
         else f"signal_{100*args.signal_uncertainty:.0f}%_only"
     )
-    return f"{sig_path}/results/{profile_name}/{suffix}"
+    results_tag = "_legacy" if args.fit_method == "legacy" else ""
+    return f"{sig_path}/results/{profile_name}{results_tag}/{suffix}"
 
 
 # ── main ────────────────────────────────────────────────────────────────────────
@@ -301,7 +307,7 @@ def run_study(study_label):
     for _key, _value in _variant_settings(study_label).items():
         setattr(args, _key, _value)
 
-    _ctx            = study_context(args)
+    _ctx            = study_context(args, analysis="Sensitivity")
     _save_subfolder = _ctx.save_subfolder
     _study_suffix   = _ctx.study_suffix
     _study_name     = study_label or "default"

@@ -77,7 +77,7 @@ parser.add_argument("--analysis", nargs="+", type=str, default=["Sensitivity"])
 parser.add_argument("--nhits",  type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
-parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for scaling. Defaults to EVALUATION_EXPOSURE_YEARS from params (20 if unset).")
+parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for scaling. Default resolved per --analysis from EVALUATION_EXPOSURE_YEARS in config/analysis/config.json (DayNight/HEP 20 yr, Sensitivity 30 yr).")
 parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per bin in the final-cut stage; bins below are zeroed (matches 03_analysis.py default).")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
@@ -93,6 +93,14 @@ parser.add_argument(
         "matches (VD planes 1-4), which HD never produces; unmatched clusters are rejected "
         "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
     ),
+)
+parser.add_argument("--study_label", type=str, default=None, help="Study variant label (see lib/study.py).")
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Truth-position fiducialisation variant: read the labeled Ref/mask pkls written by "
+         "03_analysis.py --truth_fiducial and label the cutflow outputs.",
 )
 
 args = parser.parse_args()
@@ -113,7 +121,10 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--debug"     if args.debug         else "--no-debug",
             "--plot"      if args.plot          else "--no-plot",
             "--membrane_veto" if args.membrane_veto else "--no-membrane_veto",
+            "--truth_fiducial" if args.truth_fiducial else "--no-truth_fiducial",
         ]
+        if args.study_label:
+            _cmd += ["--study_label", args.study_label]
         if args.exposure is not None:
             _cmd += ["--exposure", str(args.exposure)]
         if args.nhits  is not None:
@@ -129,17 +140,20 @@ if len(args.config) > 1 or len(args.analysis) > 1:
 # Unwrap single-element lists to plain strings for the rest of the script.
 args.config   = args.config[0]
 args.analysis = args.analysis[0]
+# Labeled Ref/mask inputs and cutflow outputs for truth-fiducial variants ("" otherwise).
+_ref_sfx = study_context(args).ref_suffix
 
 os.makedirs(f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}", exist_ok=True)
 
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
 _primary = args.signal[0]
 
+# Counts are quoted at the evaluation livetime (EVALUATION_EXPOSURE_YEARS), not at the
+# exposure the analysis is run to: DayNight/HEP 20 yr, Sensitivity 30 yr. The self-dispatch
+# above has already split a multi-analysis call into one child per analysis, so args.analysis
+# is a single analysis here and each one is scaled at its own livetime.
 if args.exposure is None:
-    _params_path = f"{root}/config/{args.config}/{args.config}_params.json"
-    _exposure = 20.0
-    if os.path.exists(_params_path):
-        _exposure = float(json.loads(open(_params_path).read()).get("EVALUATION_EXPOSURE_YEARS", 20.0))
+    _exposure = get_evaluation_exposure(str(root), args.analysis, config=args.config)
 else:
     _exposure = args.exposure
 
@@ -173,8 +187,12 @@ def _extract_cuts(obj) -> Optional[tuple]:
 
 
 def _load_pnfs_cuts() -> Optional[tuple]:
-    _subdir = args.analysis.upper()
-    _base   = f"{info['PATH']}/{_subdir}/{args.folder.lower()}/{args.config}/{_primary}"
+    if args.analysis.lower() == "sensitivity":
+        # 04_best_cuts.py / 06_significance.py: {PATH}/SENSITIVITY/{config}/{name}/{folder}/
+        _base = f"{info['PATH']}/SENSITIVITY/{args.config}/{_primary}/{args.folder.lower()}"
+    else:
+        # 05_best_sigmas.py: {PATH}/{ANALYSIS}/{folder}/{config}/{name}/
+        _base = f"{info['PATH']}/{args.analysis.upper()}/{args.folder.lower()}/{args.config}/{_primary}"
     # 04_best_cuts.py writes "highest_SENSITIVITY.pkl"; 05_best_sigmas.py preserves
     # args.analysis casing ("highest_DayNight.pkl", "highest_HEP.pkl").
     _analysis_tag = args.analysis.upper() if args.analysis.lower() == "sensitivity" else args.analysis
@@ -251,10 +269,11 @@ def _histogram(energy: np.ndarray, weights: np.ndarray, mask: np.ndarray) -> np.
 
 
 
-def _ref_pkl(name: str, filename: str) -> str:
+def _ref_pkl(name: str, filename: str, labeled: bool = True) -> str:
+    """Path of an 03_analysis.py export; truth-level pkls (labeled=False) have no study variant."""
     return (
         f"{ref_path}/{args.config}/{name}/{args.folder.lower()}/"
-        f"{args.config}_{name}_{filename}.pkl"
+        f"{args.config}_{name}_{filename}{_ref_sfx if labeled else ''}.pkl"
     )
 
 
@@ -396,8 +415,8 @@ def _try_load_truth_stage(name: str, weight_filename: str) -> Optional[tuple]:
     if truth_weight_file is None:
         return None
 
-    energy_pkl = _ref_pkl(name, "TruthEnergy_Ref")
-    weight_pkl = _ref_pkl(name, f"{truth_weight_file}_Ref")
+    energy_pkl = _ref_pkl(name, "TruthEnergy_Ref", labeled=False)
+    weight_pkl = _ref_pkl(name, f"{truth_weight_file}_Ref", labeled=False)
 
     if not os.path.exists(energy_pkl) or not os.path.exists(weight_pkl):
         return None
@@ -481,7 +500,7 @@ for _name in args.signal:
 
     # ── Save pkl (one per name) ────────────────────────────────────────────────
 
-    _pkl_filename = f"{args.energy}_{args.analysis}_Cutflow"
+    _pkl_filename = f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}"
     save_df(
         pd.DataFrame(cutflow_rows),
         data_path,
@@ -548,7 +567,7 @@ for _name in args.signal:
         fig,
         f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}",
         config=args.config, name=_name, subfolder=None,
-        filename=f"{args.energy}_{args.analysis}_Cutflow_{_cut_label}",
+        filename=f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}_{_cut_label}",
         rm=args.rewrite, debug=args.plot,
     )
 
@@ -562,7 +581,7 @@ if _all_rows:
         config=args.config,
         name=None,
         subfolder=f"{args.folder.lower()}/{args.analysis.lower()}",
-        filename=f"{args.energy}_{args.analysis}_Cutflow",
+        filename=f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}",
         rm=args.rewrite,
         debug=args.plot,
     )

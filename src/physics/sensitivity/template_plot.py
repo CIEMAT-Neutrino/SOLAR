@@ -66,7 +66,8 @@ parser.add_argument(
     help="The background uncertainty for the analysis",
     default=None,
 )
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "Sensitivity"),
+                    help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
@@ -80,7 +81,7 @@ parser.add_argument(
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 args = parser.parse_args()
 
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _save_subfolder   = _ctx.save_subfolder
 _save_folder_path = f"{save_path}/{_save_subfolder}"
 if not os.path.exists(_save_folder_path):
@@ -96,10 +97,14 @@ def load_best_cut_map() -> Optional[dict]:
     candidates = list(dict.fromkeys(["SENSITIVITY", args.reference.upper()]))
     for analysis in candidates if not _suffix else ["SENSITIVITY"]:
         for suffix in ([_suffix] if _suffix else [""]):
-            filepath = (
-                f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}/"
-                f"{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
+            # SENSITIVITY maps live in {PATH}/SENSITIVITY/{config}/{name}/{folder}/ (04/06);
+            # DayNight/HEP maps in {PATH}/{ANALYSIS}/{folder}/{config}/{name}/ (05_best_sigmas.py).
+            directory = (
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}"
+                if analysis == "SENSITIVITY"
+                else f"{info['PATH']}/{analysis}/{args.folder.lower()}/{args.config}/{args.signal}"
             )
+            filepath = f"{directory}/{args.config}_{args.signal}_highest_{analysis}{suffix}.pkl"
             if os.path.exists(filepath):
                 return pickle.load(open(filepath, "rb"))
     return None

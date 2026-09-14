@@ -1342,7 +1342,14 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     fit_background       : bool — if True, fit background normalization as free parameter
     use_legacy_background_penalty: bool — if True, use constant penalty for background uncertainty
                                          (legacy mode). If False (default), profile over background.
+    fit_method           : "legacy" (default, this nested-minimiser path) or "pull"
+                           (dispatches to sensitivity_chi2_worker_pull)
+    return_diagnostics   : append {"solar": {...}, "react": {...}} with chi2_zero (chi2 at
+                           nominal nuisances) so sensitivity_validation_gates can check the fit
     """
+    if task.get("fit_method", "legacy") == "pull":
+        return sensitivity_chi2_worker_pull(task)
+
     from lib.root import Sensitivity_Fitter
 
     params = task["params"]
@@ -1382,7 +1389,7 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
     
     # Preserve serial semantics: skip reactor if solar fit failed
     if solar_chi2 is None:
-        return params, None, None
+        return (params, None, None, None) if task.get("return_diagnostics") else (params, None, None)
 
     # Reactor chi²
     if use_esc:
@@ -1406,4 +1413,407 @@ def sensitivity_chi2_worker(task: dict) -> tuple:
         if not np.isfinite(react_chi2) or react_chi2 < 0:
             react_chi2 = 1e6  # Replace invalid with large value
 
+    if task.get("return_diagnostics"):
+        diagnostics = {}
+        for label, pred in (("solar", pred1), ("react", pred2)):
+            nominal = Sensitivity_Fitter(
+                obs, pred, bkg,
+                SigmaPred=sp, SigmaBkg=sb,
+                bb_mask=(bkg > 0),
+                fit_background=fit_bkg,
+                use_legacy_background_penalty=use_legacy
+            )
+            diagnostics[label] = {"chi2_zero": float(nominal.NumpyOperator(0.0, 0.0))}
+        return params, solar_chi2, react_chi2, diagnostics
+
     return params, solar_chi2, react_chi2
+
+
+# ─── Pull-method sensitivity chi² (closed-form profiling) ────────────────────
+# Alternative to the nested-minimiser path above, selected with --fit_method pull.
+#
+# Nuisances enter the expectation linearly, mu(alpha) = mu0 + J^T alpha. That is EXACT for
+# the signal and background normalisations and a first-order (secant over +-1 sigma)
+# approximation for the energy scale and sin^2(theta13). The Gaussian-approximation profile
+# then has a closed form (the "pull method", Fogli et al., hep-ph/0206162), and the Poisson
+# profile is reached from it with a few exact-Hessian Newton steps: the deviance is convex
+# in mu and mu is linear in alpha, so the problem is convex and Newton converges
+# quadratically. There are no bounded 1D searches, no finite-difference gradients and no
+# failure sentinels, so chi2 is a smooth function of the templates at any background level
+# (the legacy path breaks down once N_bkg * sigma_bkg^2 >> 1, e.g. HD with ~1e13 events).
+
+SENSITIVITY_FIT_METHODS = ("legacy", "pull")
+SENSITIVITY_CHI2_SENTINEL = 1e6   # value the legacy path writes when a fit fails
+
+
+def _poisson_deviance_terms(obs: np.ndarray, mu: np.ndarray) -> np.ndarray:
+    """Per-bin 2[mu - o + o ln(o/mu)], numerically stable when o ~ mu >> 1."""
+    out = 2.0 * mu   # o == 0 limit
+    pos = obs > 0
+    x = (obs[pos] - mu[pos]) / mu[pos]
+    f = np.empty_like(x)
+    small = np.abs(x) < 1e-3
+    xs = x[small]
+    # (1+x) ln(1+x) - x as a series: the closed form cancels catastrophically for |x| << 1
+    f[small] = xs * xs * (0.5 - xs * (1.0 / 6.0 - xs * (1.0 / 12.0 - xs / 20.0)))
+    xl = x[~small]
+    f[~small] = (1.0 + xl) * np.log1p(xl) - xl
+    out[pos] = 2.0 * mu[pos] * f
+    return out
+
+
+def _solve_equilibrated(matrix: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+    """Solve a small SPD system after Jacobi scaling (diagonals can span ~10 decades)."""
+    d = 1.0 / np.sqrt(np.abs(np.diag(matrix)))
+    scaled = matrix * d[:, None] * d[None, :]
+    try:
+        y = np.linalg.solve(scaled, rhs * d)
+    except np.linalg.LinAlgError:
+        y = np.linalg.lstsq(scaled, rhs * d, rcond=None)[0]
+    return y * d
+
+
+def sensitivity_pull_jacobian(
+    pred: np.ndarray,
+    bkg: np.ndarray,
+    e_centers: Optional[np.ndarray] = None,
+    sigma_pred: float = 0.0,
+    sigma_bkg: float = 0.0,
+    sigma_e_scale: float = 0.0,
+    dpred_dsin13: Optional[np.ndarray] = None,
+    sigma_sin13: float = 0.0,
+) -> tuple:
+    """Nuisance response templates d(mu)/d(alpha_k), their prior widths and names.
+
+    Nuisances with a zero (or missing) prior width are fixed and left out.
+    """
+    pred = np.asarray(pred, dtype=float)
+    cols, sigmas, names = [], [], []
+    if sigma_pred and sigma_pred > 0:
+        cols.append(pred)
+        sigmas.append(float(sigma_pred))
+        names.append("signal_norm")
+    if sigma_bkg and sigma_bkg > 0:
+        cols.append(np.asarray(bkg, dtype=float))
+        sigmas.append(float(sigma_bkg))
+        names.append("background_norm")
+    if sigma_e_scale and sigma_e_scale > 0:
+        if e_centers is None:
+            raise ValueError("sensitivity_pull_jacobian: energy-scale nuisance needs e_centers")
+        up = _sensitivity_apply_energy_scale(pred, +float(sigma_e_scale), e_centers)
+        down = _sensitivity_apply_energy_scale(pred, -float(sigma_e_scale), e_centers)
+        cols.append((up - down) / (2.0 * float(sigma_e_scale)))
+        sigmas.append(float(sigma_e_scale))
+        names.append("energy_scale")
+    if dpred_dsin13 is not None and sigma_sin13 and sigma_sin13 > 0:
+        cols.append(np.asarray(dpred_dsin13, dtype=float))
+        sigmas.append(float(sigma_sin13))
+        names.append("sin13")
+    jac = np.stack(cols) if cols else np.zeros((0,) + pred.shape)
+    return jac, np.asarray(sigmas, dtype=float), names
+
+
+def sensitivity_pull_profile(
+    obs: np.ndarray,
+    mu0: np.ndarray,
+    jac: np.ndarray,
+    sigma: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    max_iter: int = 50,
+    tol: float = 1e-9,
+) -> dict:
+    """Profile chi2 = min_alpha D_Poisson(obs, mu0 + J^T alpha) + sum_k (alpha_k/sigma_k)^2.
+
+    Returns a dict with chi2 (Poisson profile), chi2_gauss (closed-form Pearson profile),
+    chi2_zero (all nuisances at nominal, an upper bound on chi2), alpha, n_iter, converged.
+    """
+    obs = np.asarray(obs, dtype=float)
+    mu0 = np.asarray(mu0, dtype=float)
+    sel = mu0 > 0
+    if mask is not None:
+        sel = sel & np.asarray(mask, dtype=bool)
+    o, m0 = obs[sel], mu0[sel]
+    sigma = np.asarray(sigma, dtype=float)
+    k = sigma.size
+
+    chi2_zero = float(_poisson_deviance_terms(o, m0).sum())
+    result = {
+        "chi2": chi2_zero, "chi2_gauss": chi2_zero, "chi2_zero": chi2_zero,
+        "alpha": np.zeros(k), "n_iter": 0, "converged": True, "n_bins": int(o.size),
+    }
+    if k == 0 or o.size == 0:
+        return result
+
+    # Work in standardised nuisances beta = alpha / sigma (unit Gaussian priors).
+    a = np.asarray(jac, dtype=float)[:, sel] * sigma[:, None]
+    eye = np.eye(k)
+
+    def _objective(beta):
+        mu = m0 + a.T @ beta
+        if np.any(mu <= 0):
+            return np.inf, mu
+        return float(_poisson_deviance_terms(o, mu).sum() + beta @ beta), mu
+
+    # Closed-form Gaussian profile, V = diag(mu0): chi2 = r^T (V + A^T A)^-1 r (Woodbury).
+    r = o - m0
+    aw = a / m0
+    b = aw @ r
+    beta = _solve_equilibrated(eye + aw @ a.T, b)
+    result["chi2_gauss"] = float(r @ (r / m0) - b @ beta)
+
+    f_best, mu = _objective(beta)
+    if not np.isfinite(f_best) or f_best > chi2_zero:
+        beta, f_best, mu = np.zeros(k), chi2_zero, m0.copy()
+
+    converged = False
+    n_iter = 0
+    for n_iter in range(1, max_iter + 1):
+        ratio = o / mu
+        grad = 2.0 * (a @ (1.0 - ratio)) + 2.0 * beta
+        hess = 2.0 * ((a * (ratio / mu)) @ a.T) + 2.0 * eye
+        step = -_solve_equilibrated(hess, grad)
+        decrement = -float(grad @ step)          # Newton decrement^2 (~2x expected gain)
+        if decrement <= 2.0 * tol:
+            converged = True
+            break
+        t = 1.0
+        while t > 1e-12:
+            f_new, mu_new = _objective(beta + t * step)
+            if f_new <= f_best - 1e-4 * t * decrement:
+                break
+            t *= 0.5
+        else:
+            # No sufficient decrease: we are at the floating-point floor of the objective.
+            converged = decrement <= 1e-6 * max(1.0, f_best)
+            break
+        beta = beta + t * step
+        f_best, mu = f_new, mu_new
+
+    result.update(
+        chi2=float(f_best), alpha=beta * sigma, n_iter=int(n_iter), converged=bool(converged)
+    )
+    return result
+
+
+def sensitivity_pull_chi2(
+    obs: np.ndarray,
+    pred: np.ndarray,
+    bkg: np.ndarray,
+    sigma_pred: float = 0.0,
+    sigma_bkg: float = 0.0,
+    e_centers: Optional[np.ndarray] = None,
+    sigma_e_scale: float = 0.0,
+    dpred_dsin13: Optional[np.ndarray] = None,
+    sigma_sin13: float = 0.0,
+) -> dict:
+    """One-call pull-method fit of pred + bkg to obs (bins with bkg > 0, as in the legacy fitter)."""
+    bkg = np.asarray(bkg, dtype=float)
+    pred = np.asarray(pred, dtype=float)
+    jac, sigma, names = sensitivity_pull_jacobian(
+        pred, bkg, e_centers, sigma_pred, sigma_bkg, sigma_e_scale, dpred_dsin13, sigma_sin13
+    )
+    res = sensitivity_pull_profile(
+        obs, pred + bkg, jac, sigma, mask=(bkg > 0) if np.any(bkg > 0) else None
+    )
+    res["nuisances"] = dict(zip(names, (float(x) for x in res["alpha"])))
+    return res
+
+
+def sensitivity_chi2_worker_pull(task: dict) -> tuple:
+    """Pull-method counterpart of sensitivity_chi2_worker (same task keys).
+
+    Extra optional task keys
+    ------------------------
+    dpred1_dsin13, dpred2_dsin13 : d(pred)/d(sin^2 theta13) templates; sin13 is profiled
+                                   inside the fit when these and sigma_sin13 > 0 are given
+    sigma_sin13                  : prior width on sin^2 theta13
+    pull_jacobians               : {"solar": (jac, sigma, names), "react": (...)} precomputed
+                                   once per scan so workers skip the energy-scale shifts
+    return_diagnostics           : append a per-fit diagnostics dict to the returned tuple
+    """
+    params = task["params"]
+    obs = np.asarray(task["obs"], dtype=float)
+    bkg = np.asarray(task["bkg"], dtype=float)
+    mask = (bkg > 0) if np.any(bkg > 0) else None
+    precomputed = task.get("pull_jacobians") or {}
+
+    chi2, diagnostics = {}, {}
+    for label, pred_key, dsin13_key in (
+        ("solar", "pred1", "dpred1_dsin13"),
+        ("react", "pred2", "dpred2_dsin13"),
+    ):
+        pred = np.asarray(task[pred_key], dtype=float)
+        if label in precomputed:
+            jac, sigma, names = precomputed[label]
+        else:
+            jac, sigma, names = sensitivity_pull_jacobian(
+                pred, bkg,
+                e_centers=task.get("e_centers_thld"),
+                sigma_pred=task.get("sigma_pred", 0.0),
+                sigma_bkg=task.get("sigma_bkg", 0.0),
+                sigma_e_scale=task.get("sigma_e_scale", 0.0) if task.get("marginalize_e_scale") else 0.0,
+                dpred_dsin13=task.get(dsin13_key),
+                sigma_sin13=task.get("sigma_sin13", 0.0),
+            )
+        res = sensitivity_pull_profile(obs, pred + bkg, jac, sigma, mask=mask)
+        chi2[label] = res["chi2"]
+        diagnostics[label] = {
+            "chi2_zero": res["chi2_zero"],
+            "chi2_gauss": res["chi2_gauss"],
+            "converged": res["converged"],
+            "n_iter": res["n_iter"],
+            "nuisances": dict(zip(names, (float(x) for x in res["alpha"]))),
+        }
+
+    out = (params, chi2["solar"], chi2["react"])
+    return out + (diagnostics,) if task.get("return_diagnostics") else out
+
+
+def _grid_spikes(grid, abs_tol: float, rel_tol: float, level_tol: float = 0.0) -> list:
+    """Isolated extrema along either axis of a 2D chi2 grid.
+
+    A cell is a spike when it is a strict local extremum along an axis and BOTH jumps to its
+    neighbours exceed max(abs_tol, rel_tol * the neighbours' own outward steps,
+    level_tol * its Delta chi2 above the grid minimum). The minimum of a smooth bowl has jumps
+    ~c*h^2 against outward steps ~3*c*h^2, so it is not flagged; oscillating fit noise and
+    isolated outliers are. The level term ignores percent-level template roughness far outside
+    any contour of interest (e.g. a 1.4 bump at Delta chi2 = 74).
+    """
+    values = np.asarray(grid.to_numpy(dtype=float))
+    levels_all = values - np.nanmin(values)
+    spikes = []
+    for axis in (0, 1):
+        v = values if axis == 0 else values.T
+        lv = levels_all if axis == 0 else levels_all.T
+        n = v.shape[0]
+        for i in range(1, n - 1):
+            left, centre, right = v[i - 1], v[i], v[i + 1]
+            d_left, d_right = centre - left, centre - right
+            extremum = (np.sign(d_left) == np.sign(d_right)) & (d_left != 0)
+            outer = []
+            if i >= 2:
+                outer.append(np.abs(v[i - 1] - v[i - 2]))
+            if i + 2 < n:
+                outer.append(np.abs(v[i + 2] - v[i + 1]))
+            outer_step = np.nanmean(np.stack(outer), axis=0) if outer else np.zeros_like(centre)
+            jump = np.minimum(np.abs(d_left), np.abs(d_right))
+            threshold = np.maximum(np.maximum(abs_tol, rel_tol * outer_step), level_tol * lv[i])
+            flagged = extremum & (jump > threshold)
+            for j in np.flatnonzero(flagged):
+                row, col = (i, j) if axis == 0 else (j, i)
+                spikes.append({
+                    "dm2": float(grid.index[row]), "value": float(grid.columns[col]),
+                    "chi2": float(values[row, col]), "jump": float(jump[j]), "axis": "dm2" if axis == 0 else "x",
+                })
+    unique = {(s["dm2"], s["value"]): s for s in sorted(spikes, key=lambda s: s["jump"])}
+    return sorted(unique.values(), key=lambda s: -s["jump"])
+
+
+def sensitivity_validation_gates(
+    solar_df,
+    react_df,
+    grids: dict,
+    diagnostics: Optional[dict] = None,
+    solar_point: Optional[tuple] = None,
+    react_point: Optional[tuple] = None,
+    sin13_profile: str = "none",
+    asimov_tol: float = 0.01,
+    bound_tol: float = 1e-3,
+    spike_abs_tol: float = 1.0,
+    spike_rel_tol: float = 1.0,
+    spike_level_tol: float = 0.05,
+    max_report: int = 10,
+) -> dict:
+    """Method-independent sanity checks on a sensitivity chi2 scan.
+
+    Gates
+    -----
+    finite         every chi2 is finite and none equals the legacy failure sentinel
+    asimov         Asimov data at the reference point gives chi2 ~ 0 for its own fit
+    profile_bound  profiled chi2 <= chi2 with every nuisance at nominal (needs diagnostics)
+    smoothness     no isolated spikes in the 2D grids (see _grid_spikes)
+    sin13_profile  grid-minimum sin13 profiling only when every (dm2, sin12) cell has
+                   more than one sin13 value; otherwise it paints a cross artifact
+
+    Returns {"passed": bool, "gates": {name: {...}}}. A gate that cannot be evaluated
+    reports passed=None and does not fail the scan.
+    """
+    gates = {}
+
+    def _chi2_values(df):
+        return np.asarray(df["chi2"], dtype=float) if len(df) else np.zeros(0)
+
+    solar_vals, react_vals = _chi2_values(solar_df), _chi2_values(react_df)
+    n_nonfinite = int((~np.isfinite(solar_vals)).sum() + (~np.isfinite(react_vals)).sum())
+    n_sentinel = int((solar_vals >= SENSITIVITY_CHI2_SENTINEL).sum() + (react_vals >= SENSITIVITY_CHI2_SENTINEL).sum())
+    gates["finite"] = {
+        "passed": n_nonfinite == 0 and n_sentinel == 0,
+        "n_nonfinite": n_nonfinite, "n_sentinel": n_sentinel,
+        "n_points": int(solar_vals.size),
+    }
+
+    def _chi2_at(df, point):
+        if point is None or not len(df):
+            return None
+        hit = df[
+            np.isclose(df["dm2"].astype(float), point[0])
+            & np.isclose(df["sin13"].astype(float), point[1])
+            & np.isclose(df["sin12"].astype(float), point[2])
+        ]
+        return float(hit["chi2"].astype(float).iloc[0]) if len(hit) else None
+
+    solar_at_solar, react_at_react = _chi2_at(solar_df, solar_point), _chi2_at(react_df, react_point)
+    evaluated = [v for v in (solar_at_solar, react_at_react) if v is not None]
+    gates["asimov"] = {
+        "passed": (all(v <= asimov_tol for v in evaluated) if evaluated else None),
+        "solar_fit_at_solar": solar_at_solar, "react_fit_at_react": react_at_react,
+        "tolerance": asimov_tol,
+    }
+
+    if diagnostics:
+        violations = []
+        for fit_label, df in (("solar", solar_df), ("react", react_df)):
+            for dm2_v, sin13_v, sin12_v, chi2_v in df[["dm2", "sin13", "sin12", "chi2"]].astype(float).itertuples(index=False):
+                diag = (diagnostics.get((dm2_v, sin13_v, sin12_v)) or {}).get(fit_label)
+                if not diag or diag.get("chi2_zero") is None:
+                    continue
+                bound = float(diag["chi2_zero"])
+                excess = chi2_v - bound
+                if excess > bound_tol + 1e-9 * abs(bound):
+                    violations.append({"fit": fit_label, "dm2": dm2_v, "sin13": sin13_v, "sin12": sin12_v,
+                                       "chi2": chi2_v, "chi2_zero": bound, "excess": excess})
+        violations.sort(key=lambda v: -v["excess"])
+        not_converged = sum(
+            1 for d in diagnostics.values() for fit in (d or {}).values()
+            if isinstance(fit, dict) and fit.get("converged") is False
+        )
+        gates["profile_bound"] = {
+            "passed": not violations, "n_violations": len(violations),
+            "n_not_converged": int(not_converged), "worst": violations[:max_report],
+        }
+    else:
+        gates["profile_bound"] = {"passed": None, "reason": "no per-point diagnostics"}
+
+    smooth = {}
+    for grid_name, grid in grids.items():
+        spikes = _grid_spikes(grid.astype(float), spike_abs_tol, spike_rel_tol, spike_level_tol)
+        smooth[grid_name] = {"n_spikes": len(spikes), "worst": spikes[:max_report]}
+    gates["smoothness"] = {
+        "passed": all(v["n_spikes"] == 0 for v in smooth.values()),
+        "abs_tol": spike_abs_tol, "rel_tol": spike_rel_tol, "level_tol": spike_level_tol, "grids": smooth,
+    }
+
+    if sin13_profile == "grid" and len(solar_df):
+        counts = solar_df.groupby(["dm2", "sin12"]).size()
+        coverage = float((counts > 1).mean())
+        gates["sin13_profile"] = {
+            "passed": coverage == 1.0, "mode": "grid",
+            "fraction_cells_with_multiple_sin13": coverage,
+        }
+    else:
+        gates["sin13_profile"] = {"passed": None, "mode": sin13_profile}
+
+    return {
+        "passed": all(g["passed"] is not False for g in gates.values()),
+        "gates": gates,
+    }

@@ -42,7 +42,8 @@ parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument(
     "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal"]
 )
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "HEP"),
+                    help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.")
 parser.add_argument(
     "--energy",
     nargs="+",

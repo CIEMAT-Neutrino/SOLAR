@@ -52,6 +52,27 @@
       "background_uncertainty": 0.02
     }
   },
+  "ANALYSIS_EXPOSURES": {
+    "DEFAULT": {
+      "PRIMARY": 30.0
+    },
+    "DAYNIGHT": {
+      "PRIMARY": 30.0
+    },
+    "HEP": {
+      "PRIMARY": 30.0
+    },
+    "SENSITIVITY": {
+      "PRIMARY": 30.0,
+      "SECONDARY": 10.0
+    }
+  },
+  "EVALUATION_EXPOSURE_YEARS": {
+    "DEFAULT": 20.0,
+    "DAYNIGHT": 20.0,
+    "HEP": 20.0,
+    "SENSITIVITY": 30.0
+  },
   "BEST_SIGMA_SIGNIFICANCE_REFERENCE": {
     "DAYNIGHT": "Asimov",
     "HEP": "ProfileLikelihood",

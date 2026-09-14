@@ -17,6 +17,11 @@ Study groups
   bkg_gamma   9.2.5  Background gamma model (ClusterEnergy as calorimetric proxy)
   bkgmodel    9.2.6  Background model normalization (Nominal/Reduced folders)
   membrane_veto      Membrane/endcap optical matches (VD planes 1-4) on vs off
+  nuisance           Nuisance-profile decomposition (Sensitivity)
+  legacy_fit         Legacy nested-minimiser fit on the default templates (Sensitivity)
+
+Defaults: Sensitivity runs use --flyweight templates and --fit_method pull; the legacy_fit
+study is the only legacy-fit run.
 
 Usage
 -----
@@ -42,7 +47,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from lib import root, load_analysis_info
-from lib.study import ALL_GROUPS, STUDY_VARIANTS, StudyVariant
+from lib.study import ALL_GROUPS, STUDY_VARIANTS, StudyVariant, study_context
+from lib.template_guards import check_template_sampling_marker
 from rich import print as rprint
 
 _analysis_info = load_analysis_info(str(root))
@@ -85,14 +91,14 @@ parser.add_argument("--verbose",             choices=["quiet", "normal", "verbos
 parser.add_argument("--rewrite",        dest="rewrite",        action=argparse.BooleanOptionalAction, default=True, help="Overwrite existing pkl outputs (default: True)")
 parser.add_argument("--no-computation", dest="no_computation", action="store_true", help="Pass --no-computation to run_sensitivity.py (plots only, skip all computation)")
 parser.add_argument("--no-plot",        dest="no_plot",        action="store_true", help="Pass --no-plot to run_sensitivity.py (skip figure output)")
-parser.add_argument("--fit_background", dest="fit_background", action="store_true",
-                   help="Pass --fit_background to run_sensitivity.py (LEGACY: fit background normalization as free parameter). Default is --no-fit_background.")
-parser.add_argument("--legacy_background_penalty", dest="legacy_background_penalty", action="store_true",
-                   help="Pass --legacy_background_penalty to run_sensitivity.py to use the old constant penalty for background uncertainty. Default uses profiling.")
 parser.add_argument("--skip-templates", action="store_true", default=False,
                    help="Force --skip-templates for ALL variants (overrides per-variant skip_templates setting). Use when templates are already computed and you want to skip regeneration for all studies.")
 parser.add_argument("--draft", action=argparse.BooleanOptionalAction, default=False,
                    help="Pass --draft to run_sensitivity.py to enable draft mode (coarse grid) for Sensitivity analysis.")
+parser.add_argument("--fit_method", choices=["legacy", "pull"], default="pull",
+                   help="Sensitivity chi2 method passed to run_sensitivity.py (default 'pull'). The legacy_fit study overrides it per variant.")
+parser.add_argument("--strict_validation", action=argparse.BooleanOptionalAction, default=None,
+                   help="Pass --strict_validation / --no-strict_validation to run_sensitivity.py. Unset = 06_significance.py default (strict for pull, warn-only for legacy). A strict gate failure stops the whole study run.")
 parser.add_argument("--parallel", type=int, default=1, metavar="N",
                    help="Run N variants in parallel using subprocess. Use --parallel 2-4 for testing. Default is 1 (sequential).")
 parser.add_argument("--quiet", action="store_true", default=False,
@@ -104,8 +110,8 @@ parser.add_argument("--ophits", type=int, default=None,
                    help="OpHits cut value (passed to run_sensitivity.py)")
 parser.add_argument("--adjcls", type=int, default=None,
                    help="AdjCl cut value (passed to run_sensitivity.py)")
-parser.add_argument("--flyweight", action=argparse.BooleanOptionalAction, default=False,
-                   help="Pass --flyweight to run_sensitivity.py for flyweight mode in Sensitivity analysis")
+parser.add_argument("--flyweight", action=argparse.BooleanOptionalAction, default=True,
+                   help="Flyweight Sensitivity templates (default). --no-flyweight uses the per-point template grid.")
 parser.add_argument("--no-templates", dest="skip_templates", action="store_true",
                    help="Alias for --skip-templates: skip template computation")
 
@@ -198,27 +204,86 @@ def _all_rebin_exist(configs: List[str], folders: List[str], names: List[str],
     )
 
 
-def _all_templates_exist(configs: List[str], folders: List[str], names: List[str],
-                         energies: List[str], analyses: List[str], study_label: Optional[str] = None) -> bool:
-    """True only if every (config, folder, name, energy, analysis) has both background and signal template pkls.
+def _variant_flag(extra: List[str], flag: str, default: bool) -> bool:
+    """Value of a --flag / --no-flag pair in a variant's extra args (last one wins)."""
+    value = default
+    for token in extra:
+        if token == f"--{flag}":
+            value = True
+        elif token == f"--no-{flag}":
+            value = False
+    return value
 
-    Template files are written as {config}_{name}_{energy}_Template_{background|signal}{_study_label}.pkl
-    in the SENSITIVITY/ folder tree. This check verifies that both template types exist
-    for all combinations, optionally with a study label suffix.
+
+def _variant_option(extra: List[str], option: str, default=None):
+    """Value following --option in a variant's extra args (last one wins)."""
+    value = default
+    for idx, token in enumerate(extra[:-1]):
+        if token == f"--{option}":
+            value = extra[idx + 1]
+    return value
+
+
+def _templates_ready(variant: StudyVariant, folders: List[str], energies: List[str]) -> bool:
+    """True only if every Sensitivity template the variant reads under --skip-templates exists.
+
+    Layout written by 01_background_template.py / 02_signal_template.py:
+      {PATH}/SENSITIVITY/{config}/background/{folder}/{energy}{template_suffix}/
+          TEMPLATE_NORMALIZATION.json, {config}_background_NHits{n}_AdjCl{a}_OpHits{o}.pkl
+      {PATH}/SENSITIVITY/{config}/{signal}/{folder}/{energy}{template_suffix}/
+          TEMPLATE_NORMALIZATION.json and, per cut,
+          {config}_{signal}_NHits{n}_AdjCl{a}_OpHits{o}_BASE.pkl       (--flyweight)
+          {config}_{signal}_NHits{n}_AdjCl{a}_OpHits{o}_SAMPLING.json  (per-point grid)
+    template_suffix follows lib/study.py study_context, so only selection-changing variants
+    (charge, dm2, truth fiducial, membrane veto) get their own directories. Without
+    --nhits/--adjcls/--ophits the variant's cut comes from a best-cut map this orchestrator does
+    not read, so any complete cut counts.
     """
-    suffix = f"_{study_label}" if study_label else ""
-    return all(
-        all(
-            (_data_root / "SENSITIVITY" / folder.lower() / analysis.upper()
-             / config / name / f"{config}_{name}_{energy}_Template_{template_type}{suffix}.pkl").exists()
-            for template_type in ("background", "signal")
-        )
-        for config   in configs
-        for folder   in folders
-        for name     in names
-        for energy   in energies
-        for analysis in analyses
-    )
+    extra = list(variant.get("extra", []))
+    flyweight = _variant_flag(extra, "flyweight", args.flyweight)
+    backend = _variant_option(extra, "oscillation_backend", args.oscillation_backend)
+    manual = None not in (args.nhits, args.adjcls, args.ophits)
+    cut = f"NHits{args.nhits}_AdjCl{args.adjcls}_OpHits{args.ophits}" if manual else "NHits*_AdjCl*_OpHits*"
+    oversample = int(_analysis_info.get("OSC_NADIR_OVERSAMPLE", 1))
+
+    def _has(directory: Path, pattern: str) -> bool:
+        return (directory / pattern).exists() if manual else any(directory.glob(pattern))
+
+    for folder in folders:
+        ctx = study_context(argparse.Namespace(
+            study_label=variant.get("label"),
+            charge_threshold=float(_variant_option(extra, "charge_threshold", 0) or 0),
+            dm2=_variant_option(extra, "dm2"),
+            exposure=None,
+            truth_fiducial=_variant_flag(extra, "truth_fiducial", False),
+            membrane_veto=_variant_flag(extra, "membrane_veto", True),
+            folder=folder,
+        ), analysis="Sensitivity")
+        for config in args.config:
+            for energy in energies:
+                subdir = f"{energy}{ctx.template_suffix}"
+                bkg_dir = _data_root / "SENSITIVITY" / config / "background" / folder.lower() / subdir
+                if not (bkg_dir / "TEMPLATE_NORMALIZATION.json").exists():
+                    return False
+                if not _has(bkg_dir, f"{config}_background_{cut}.pkl"):
+                    return False
+                for signal in args.signals:
+                    sig_dir = _data_root / "SENSITIVITY" / config / signal / folder.lower() / subdir
+                    if not (sig_dir / "TEMPLATE_NORMALIZATION.json").exists():
+                        return False
+                    if flyweight:
+                        if not _has(sig_dir, f"{config}_{signal}_{cut}_BASE.pkl"):
+                            return False
+                    elif manual:
+                        current, _ = check_template_sampling_marker(
+                            str(sig_dir), config, signal, args.nhits, args.adjcls, args.ophits,
+                            backend=backend, nadir_oversample=oversample, scopes=("grid",),
+                        )
+                        if not current:
+                            return False
+                    elif not _has(sig_dir, f"{config}_{signal}_{cut}_SAMPLING.json"):
+                        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -306,12 +371,10 @@ def _run_variant(group: str, variant: StudyVariant) -> None:
 
 def _variant_priority(variant: StudyVariant) -> int:
     """Priority for variant ordering: background uncertainty variants run first."""
-    label = variant.get("label", "")
-    # Background uncertainty variants (unc_bkg*, fit_background_unc_bkg*) get highest priority (0)
-    if "unc_bkg" in label or "fit_background_unc_bkg" in label:
+    label = variant.get("label") or ""
+    if "unc_bkg" in label:
         return 0
-    # Other uncertainty variants get next priority (1)
-    if "unc_" in label or "fit_background" in label:
+    if "unc_" in label:
         return 1
     # All other variants get lowest priority (2)
     return 2
@@ -353,11 +416,14 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
     if skip_rebin and not _all_rebin_exist(args.config, folders, list(args.signals) + _background_components, energy, effective_analysis):
         skip_rebin = False
 
-    # Check templates
+    # Templates: --skip-templates is only honoured when this variant's templates really exist
     sensitivity_analyses = [a for a in effective_analysis if a.upper() == "SENSITIVITY"]
-    if skip_templates and sensitivity_analyses:
-        if not _all_templates_exist(args.config, folders, list(args.signals) + _background_components, energy, sensitivity_analyses, label):
-            skip_templates = False
+    if skip_templates and sensitivity_analyses and not _templates_ready(variant, folders, energy):
+        rprint(
+            f"[yellow][WARNING][/yellow] Templates for {label or folders} are missing or stale; "
+            "regenerating them instead of honouring --skip-templates."
+        )
+        skip_templates = False
 
     cmd: List[str] = [
         "python3", f"{root}/{PIPELINE_SCRIPT}",
@@ -378,14 +444,10 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
         cmd.append("--ignore_energy_window")
     if skip_best_sigmas:
         cmd.append("--skip_best_sigmas")
-    if args.fit_background:
-        cmd.append("--fit_background")
-    else:
-        cmd.append("--no-fit_background")
-    if args.legacy_background_penalty:
-        cmd.append("--legacy_background_penalty")
-    if args.flyweight:
-        cmd.append("--flyweight")
+    cmd.append("--flyweight" if args.flyweight else "--no-flyweight")
+    cmd += ["--fit_method", args.fit_method]        # variant "extra" below may override it
+    if args.strict_validation is not None:
+        cmd.append("--strict_validation" if args.strict_validation else "--no-strict_validation")
 
     cmd += variant.get("extra", [])
     return cmd

@@ -4,6 +4,7 @@
         1
     ],
     "NADIR_BINS": 40,
+    "OSC_NADIR_OVERSAMPLE": 4,
     "ROOT_NADIR_RANGE": [
         -1,
         1

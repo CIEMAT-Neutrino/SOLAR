@@ -399,7 +399,7 @@ parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
 parser.add_argument("--signal_uncertainty", type=float, default=None)
 parser.add_argument("--background_uncertainty", type=float, default=None)
-parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for plot scaling. Defaults to EVALUATION_EXPOSURE_YEARS from config (20 if not set).")
+parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for plot scaling. Default resolved per analysis from EVALUATION_EXPOSURE_YEARS in config/analysis/config.json (DayNight/HEP 20 yr, Sensitivity 30 yr).")
 parser.add_argument(
     "--energy", nargs="+", type=str,
     default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
@@ -473,12 +473,12 @@ _study_labels_to_run = resolve_study_labels(args.study, args.study_label, analys
 
 # ── post-parse defaults ────────────────────────────────────────────────────────
 
+# Spectra are quoted at the evaluation livetime, not at the exposure the analysis is
+# run to: DayNight/HEP 20 yr, Sensitivity 30 yr (EVALUATION_EXPOSURE_YEARS in config).
 if args.exposure is None:
-    _params_path = f"{root}/config/{args.config[0]}/{args.config[0]}_params.json"
-    _config_exposure = 20.0
-    if os.path.exists(_params_path):
-        _config_exposure = float(json.load(open(_params_path)).get("EVALUATION_EXPOSURE_YEARS", 20.0))
-    args.exposure = _config_exposure
+    args.exposure = get_evaluation_exposure(
+        str(root), args.analysis, config=args.config[0] if args.config else None
+    )
 
 if args.reference is None:
     if args.analysis == "DayNight":

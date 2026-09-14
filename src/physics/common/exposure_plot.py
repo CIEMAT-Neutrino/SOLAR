@@ -125,11 +125,11 @@ def _get_selection_cuts(config: str, name: str, energy: str, args: argparse.Name
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
 
     pkl_label = getattr(args, 'pkl_label', 'highest')
-    # Sensitivity path: SENSITIVITY/{folder}/{config}/{name}/...
+    # Sensitivity maps (04_best_cuts.py / 06_significance.py): SENSITIVITY/{config}/{name}/{folder}/
     if analysis_key == "SENSITIVITY":
         sigma_path = (
-            f"{info['PATH']}/SENSITIVITY/{args.folder.lower()}/"
-            f"{config}/{name}/{config}_{name}_{pkl_label}_{analysis_key}{study_suffix}.pkl"
+            f"{info['PATH']}/SENSITIVITY/{config}/{name}/{args.folder.lower()}/"
+            f"{config}_{name}_{pkl_label}_{analysis_key}{study_suffix}.pkl"
         )
     else:
         sigma_path = (
@@ -239,7 +239,8 @@ parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensiti
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal"])
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=None,
+                    help="Exposure the analysis is run to, in years. Default resolved per analysis from ANALYSIS_EXPOSURES in config/analysis/config.json (30 yr).")
 parser.add_argument("--energy", nargs="+", type=str)
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
@@ -258,6 +259,8 @@ parser.add_argument("--pkl_label", type=str, default="highest")
 parser.add_argument("--signal_uncertainty", type=float, default=None)
 parser.add_argument("--background_uncertainty", type=float, default=None)
 parser.add_argument("--nuisance_profile", type=str, default=None)
+parser.add_argument("--fit_method", type=str, choices=["legacy", "pull"], default="pull",
+                    help="Sensitivity only: 'pull' (default) reads results/<profile>/, 'legacy' reads the comparison grids in results/<profile>_legacy/.")
 parser.add_argument("--background", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--smooth_window", type=int, default=11)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
@@ -287,6 +290,13 @@ def _fail(message: str, context: str) -> None:
     rprint(f"[yellow][WARNING][/yellow] Skipping {context}: {message}")
 
 # ── POST-PARSE DEFAULTS ────────────────────────────────────────────────────────
+
+# The exposure the analysis is run to (ANALYSIS_EXPOSURES: 30 yr); the quoted livetime
+# EVALUATION_EXPOSURE_YEARS is a separate setting used by significance_plot.py.
+if args.exposure is None:
+    args.exposure = get_analysis_exposure(
+        str(root), args.analysis, config=args.config[0] if args.config else None
+    )
 
 if args.reference is None:
     if args.analysis == "DayNight":
@@ -1119,7 +1129,8 @@ for _sl in _study_labels_to_run:
                 if args.background else f"signal_{100*args.signal_uncertainty:.0f}%_only"
             )
             profile_name = args.nuisance_profile or analysis_info.get("DEFAULT_NUISANCE_PROFILE", "full")
-            prefix = f"{sig_path}/results/{profile_name}/{suffix}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+            _results_tag = "_legacy" if args.fit_method == "legacy" else ""
+            prefix = f"{sig_path}/results/{profile_name}{_results_tag}/{suffix}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
 
             try:
                 solar_sin12_df = pd.read_pickle(f"{prefix}_solar_sin12_df.pkl").astype(float)

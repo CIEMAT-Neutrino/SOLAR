@@ -57,7 +57,8 @@ parser.add_argument("--signal",   nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal"], default="Truncated")
 parser.add_argument("--energy",   nargs="+", type=str, default=["SolarEnergy"],
     choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=None,
+                    help="Exposure the analysis is run to, in years. Default resolved per analysis from ANALYSIS_EXPOSURES in config/analysis/config.json (30 yr).")
 parser.add_argument(
     "--oscillation_backend", type=str, choices=["file", "prob3", "nufast"], default="nufast",
     help="'file': load pre-computed pkl; 'prob3'/'nufast': compute on-the-fly.",
@@ -74,10 +75,17 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant: read the labeled Ref pkls written by 03_analysis.py --truth_fiducial.")
 parser.add_argument("--study", nargs="+", type=str, default=None, help="Study labels to iterate over in sequence; supersedes --study_label. 'all' expands to every label in lib/study.py STUDY_VARIANTS applicable to --analysis (nominal run included); 'default' names the unlabeled nominal run.")
 
 args = parser.parse_args()
 _study_labels_to_run = resolve_study_labels(args.study, args.study_label, analysis=args.analysis)
+
+# The exposure the analysis is run to (ANALYSIS_EXPOSURES: 30 yr for every analysis).
+if args.exposure is None:
+    args.exposure = get_analysis_exposure(
+        str(root), args.analysis, config=args.config[0] if args.config else None
+    )
 # Batch = more than one (study, config, signal, energy) combination. Missing inputs
 # are a hard fail for a single combination and a skip-with-warning across a batch.
 _batch_mode = (
@@ -118,8 +126,13 @@ rprint(
 # ── ITERATION ──────────────────────────────────────────────────────────────
 # study × config × signal × energy. Study context is rebuilt per study label so
 # _save_subfolder routes each variant to its own output subdirectory.
+from lib.study import study_variant_extra
+
+_cli_truth_fiducial = args.truth_fiducial
 for _sl in _study_labels_to_run:
     args.study_label = _sl
+    # With --study all each variant's own flags decide which labeled Ref pkls it reads.
+    args.truth_fiducial = _cli_truth_fiducial or "--truth_fiducial" in study_variant_extra(_sl)
     _ctx = study_context(args)
     _save_subfolder = _ctx.save_subfolder
     _study_name     = _sl or "default"
@@ -316,11 +329,13 @@ for _sl in _study_labels_to_run:
         if not args.signal_1d:
             continue
 
-        _ref_dir = os.path.join(export_path, config, name, _save_subfolder)
+        # 03_analysis.py --export_fiducial writes the Ref pkls per folder only (no study
+        # subfolder), so read them from there -- not from the figure subfolder.
+        _ref_dir = os.path.join(export_path, config, name, args.folder.lower())
 
 
         def _load_ref(filename: str) -> np.ndarray:
-            path = os.path.join(_ref_dir, f"{config}_{name}_{filename}.pkl")
+            path = os.path.join(_ref_dir, f"{config}_{name}_{filename}{_ctx.ref_suffix}.pkl")
             if not os.path.exists(path):
                 raise FileNotFoundError(
                     f"[oscillogram] Required Ref pkl not found: {path}\n"

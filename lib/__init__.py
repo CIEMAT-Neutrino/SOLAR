@@ -27,6 +27,10 @@ from .defaults import (
     get_default_nhits,
     load_analysis_info,
     get_analysis_threshold,
+    get_analysis_exposure,
+    get_evaluation_exposure,
+    DEFAULT_ANALYSIS_EXPOSURES,
+    DEFAULT_EVALUATION_EXPOSURES,
     load_folder_config,
     get_folder_choices,
     get_default_folder,
@@ -147,17 +151,56 @@ if os.path.isfile(_chrome_exe) and "BROWSER_PATH" not in os.environ:
 # The container carries both pyarrow's libarrow.so.2100 and the system
 # libarrow.so.900.  They have different sonames so the dynamic linker loads
 # both; the C++ ThreadPool vtable then resolves across incompatible versions
-# and segfaults during normal Python teardown.  Registering os._exit(0) as an
-# atexit handler (LIFO → runs last) lets all user handlers finish first, then
-# terminates before C++ destructors are invoked.  Guard on the conflicting
-# library so the workaround is inert everywhere else.
+# and segfaults during normal Python teardown.  An atexit handler (LIFO → runs
+# last) lets all user handlers finish first, then terminates with os._exit()
+# before C++ destructors are invoked.  Guard on the conflicting library so the
+# workaround is inert everywhere else.
+#
+# os._exit() bypasses the interpreter's own exit status, and the handler used to
+# hardcode 0: every failing script (traceback, raise SystemExit("..."), sys.exit(1))
+# reported success, so run_sensitivity.py / run_studies.py never stopped on a failed
+# stage.  The status is now reconstructed and passed to os._exit():
+#   - uncaught exception  -> 1 (130 for KeyboardInterrupt); the interpreter sets
+#                            sys.last_type before running atexit handlers
+#   - SystemExit          -> its code; recorded when raised, via a SystemExit subclass
+#                            installed as builtins.SystemExit and a sys.exit wrapper
+# Caveat: a SystemExit that is raised, caught and followed by a normal end still
+# reports its code.
 # ---------------------------------------------------------------------------
 import atexit as _atexit
+import builtins as _builtins
 import sys as _sys
 
 if os.path.exists("/lib64/libarrow.so.900"):
+    _exit_status = [0]
+
+    def _status_from_exit_code(code):
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return int(code) & 0xFF
+        return 1  # message: the interpreter prints it to stderr and exits with 1
+
+    class _StatusRecordingSystemExit(SystemExit):
+        """SystemExit that records its exit status for the teardown handler below."""
+
+        def __init__(self, *args):
+            super().__init__(*args)
+            _exit_status[0] = _status_from_exit_code(self.code)
+
+    def _status_recording_exit(status=None):
+        raise _StatusRecordingSystemExit(status)
+
+    _builtins.SystemExit = _StatusRecordingSystemExit
+    _sys.exit = _status_recording_exit
+
     def _exit_before_arrow_teardown():
+        status = _exit_status[0]
+        last_type = getattr(_sys, "last_type", None)
+        if last_type is not None:
+            status = 130 if issubclass(last_type, KeyboardInterrupt) else 1
         _sys.stdout.flush()
         _sys.stderr.flush()
-        os._exit(0)
+        os._exit(status)
+
     _atexit.register(_exit_before_arrow_teardown)

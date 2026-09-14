@@ -37,6 +37,14 @@ Post-analysis (all samples):
 Presentations (optional, --no-plot to skip):
   Presentation scripts per analysis (src/tools/presentations/)
 
+Sensitivity defaults
+--------------------
+  --flyweight and --fit_method pull are the defaults: one unoscillated BASE template per cut,
+  oscillated on the fly in 06_significance.py and fitted with the closed-form pull profile.
+  Outputs use the standard paths (results/<profile>/, highest_SENSITIVITY*.pkl). The legacy
+  fitter is kept for comparison only (--fit_method legacy, or the legacy_fit study in
+  run_studies.py) and writes its grids to results/<profile>_legacy/.
+
 Run examples
 ------------
   # Full pipeline (all analyses, default HD config):
@@ -64,7 +72,6 @@ Run examples
 
 import os
 import glob
-import shutil
 import sys
 import time
 import subprocess
@@ -331,17 +338,23 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis in years. When not set, each script uses its own default (significance_plot.py reads EVALUATION_EXPOSURE_YEARS from config).",
+    help=(
+        "The exposure the analyses are run to, in years (grid top, template scaling). When not "
+        "set, each script reads ANALYSIS_EXPOSURES from config/analysis/config.json (30 yr for "
+        "every analysis). The livetime results are quoted at is a separate, analysis-dependent "
+        "setting -- EVALUATION_EXPOSURE_YEARS, 20 yr for DayNight/HEP and 30 yr for Sensitivity."
+    ),
     default=None,
 )
 parser.add_argument(
     "--secondary_exposure",
     "--secondary-exposure",
     type=float,
-    default=10.0,
+    default=get_analysis_exposure(str(root), "Sensitivity", stage="SECONDARY", fallback=10.0),
     help=(
         "Also run the complete pipeline at this secondary exposure and isolate its outputs "
-        "under a derived study label (default: 10 years). Pass --no-secondary-exposure to disable."
+        "under a derived study label. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['SECONDARY'] "
+        "in config/analysis/config.json (10 years). Pass --no-secondary-exposure to disable."
     ),
 )
 parser.add_argument(
@@ -661,12 +674,11 @@ parser.add_argument(
 parser.add_argument(
     "--flyweight",
     action=argparse.BooleanOptionalAction,
-    default=False,
+    default=True,
     help=(
-        "Enable flyweight mode for Sensitivity analysis: saves only a single unoscillated base template "
-        "per cut instead of ~14k oscillation templates. Oscillation templates are computed on-the-fly "
-        "using nufast during 06_significance.py. Base templates are saved in coarse (30-bin) sensitivity bins "
-        "to avoid rebinning overhead. Use --flyweight to enable, --no-flyweight (default) for pre-computed templates."
+        "Flyweight mode for Sensitivity (default): save a single unoscillated base template per cut "
+        "instead of ~14k oscillation templates; 06_significance.py oscillates it on the fly with nufast. "
+        "--no-flyweight builds and reads the per-point template grid instead."
     ),
 )
 parser.add_argument(
@@ -679,16 +691,49 @@ parser.add_argument(
         "Only affects --analysis Sensitivity. Use --draft to enable, --no-draft (default) for full grid."
     ),
 )
+parser.add_argument(
+    "--fit_method",
+    type=str,
+    choices=["legacy", "pull"],
+    default="pull",
+    help=(
+        "Sensitivity chi2 method forwarded to 04_best_cuts.py, 06_significance.py, contour_plot.py "
+        "and exposure_plot.py. 'pull' (default): closed-form pull-method profile, standard output "
+        "paths. 'legacy': nested-minimiser fit for comparison, chi2 grids in results/<profile>_legacy/."
+    ),
+)
+parser.add_argument(
+    "--strict_validation",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+    help=(
+        "Forwarded to 06_significance.py: fail the stage when a validation gate fails. "
+        "Unset = script default (strict for pull, warn-only for legacy)."
+    ),
+)
 
 args = parser.parse_args()
 
+if args.fit_method != "legacy" and (args.fit_background or getattr(args, "legacy_background_penalty", False)):
+    rprint(
+        f"[yellow][WARNING][/yellow] --fit_method {args.fit_method} ignores --fit_background: the "
+        "background normalisation is always profiled with its Gaussian prior."
+    )
+if args.fit_method == "legacy" and not args.study_label and "Sensitivity" in args.analysis:
+    rprint(
+        "[yellow][WARNING][/yellow] --fit_method legacy without --study_label: chi2 grids go to "
+        "results/<profile>_legacy/, but best-cut maps, contour tables and figures use the nominal "
+        "names. Run the legacy_fit study (run_studies.py) for a fully isolated comparison."
+    )
+
 # Auto-generate study_label from exposure when the user passes --exposure but no --study_label.
 # Templates are pre-scaled as exposure_yr × detector_mass_kT × rate, so a non-default exposure
-# produces a distinct set of pkl files that must not overwrite the 30 yr default output.
+# produces a distinct set of pkl files that must not overwrite the default-exposure output
+# (ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'], 30 yr).
 # The auto label (e.g. "10yr") is forwarded to every sub-script via study_label_args_for(),
 # and lib/study.py will set template_suffix = study_suffix for non-default exposures so that
 # template pkls land in their own subfolder ({energy}_10yr/ instead of {energy}/).
-_DEFAULT_SENSITIVITY_EXPOSURE = 30.0
+_DEFAULT_SENSITIVITY_EXPOSURE = get_analysis_exposure(str(root), "Sensitivity", fallback=30.0)
 if (
     args.exposure is not None
     and args.exposure != _DEFAULT_SENSITIVITY_EXPOSURE
@@ -904,58 +949,20 @@ def fit_background_args_for() -> List[str]:
     return ["--fit_background"] if args.fit_background else []
 
 
+def fit_method_args_for() -> List[str]:
+    return ["--fit_method", args.fit_method]
+
+
+def strict_validation_args_for() -> List[str]:
+    if args.strict_validation is None:
+        return []
+    return ["--strict_validation" if args.strict_validation else "--no-strict_validation"]
+
+
 def study_label_args_for() -> List[str]:
     if args.study_label:
         return ["--study_label", args.study_label]
     return []
-
-
-def seed_study_artifacts_from_nominal(analysis: str, config: str, folder: str, name: str) -> None:
-    """Copy nominal best-cut / Results pkls to this study's labeled paths.
-
-    UNUSED — retained for reference only; do not re-introduce without care.
-
-    This existed because --skip_best_cuts used to gate 01_hep.py / 01_daynight.py, so a
-    labeled study produced no Results grid of its own and the downstream plot scripts had
-    nothing to read at the labeled path. Those two scripts now always run (--skip_best_cuts
-    gates 04_best_cuts.py only, per its documented contract), so every labeled study
-    computes its own grid and there is nothing left to seed.
-
-    Seeding is actively unsafe here: it writes NOMINAL physics to the study's label, so a
-    variant whose computation fails reports nominal numbers under its own name instead of
-    failing loudly. A missing artifact is the correct signal that a stage did not run.
-    """
-    if not (args.skip_best_cuts and args.study_label):
-        return
-
-    base = (
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{analysis.upper()}/{folder.lower()}"
-        f"/{config}/{name}/{config}_{name}"
-    )
-    stems: List[str] = [f"{label}_{analysis}" for label in ("highest", "highest_spiked")]
-    for energy in args.energy:
-        stems += [f"{energy}_{analysis}_Results", f"{energy}_{analysis}_SignificanceBins"]
-
-    if args.dm2 is not None:
-        rprint(
-            f"[yellow][WARNING][/yellow] --skip_best_cuts with --dm2 {args.dm2}: seeding "
-            f"{analysis} '{args.study_label}' from nominal pkls, which hold the nominal dm2 "
-            "physics. Drop --skip_best_cuts to compute this dm2's own grid."
-        )
-
-    for stem in stems:
-        src = f"{base}_{stem}.pkl"
-        dst = f"{base}_{stem}_{args.study_label}.pkl"
-        if os.path.exists(dst):
-            continue
-        if not os.path.exists(src):
-            # highest_spiked is only written when spiked curves are detected; its absence
-            # is normal and must not be reported as a problem.
-            if not stem.startswith("highest_spiked"):
-                rprint(f"[yellow][WARNING][/yellow] No nominal {analysis} pkl to seed from: {src}")
-            continue
-        shutil.copy2(src, dst)
-        rprint(f"[cyan][INFO][/cyan] Seeded {os.path.basename(dst)} from nominal.")
 
 
 def stacked_args_for() -> List[str]:
@@ -1459,7 +1466,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
                 cutopt_base_args = base_args_for(config, folder, include_background=True) + ["--signal", name]
                 run_analysis_script(
                     "src/physics/sensitivity/04_best_cuts.py",
-                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
+                    cutopt_base_args + energy_args + uncertainty_args + oscillation_args_for() + study_label_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for() + fit_method_args_for(),
                 )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping 04_best_cuts.py (--skip_best_cuts): using existing best-cut selection.")
@@ -1475,7 +1482,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             for profile_name in profile_names:
                 run_analysis_script(
                     "src/physics/sensitivity/06_significance.py",
-                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for() + fit_background_args_for() + draft_args_for() + flyweight_args_for(),
+                    background_base_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + secondary_exposure_args_for() + fit_background_args_for() + draft_args_for() + flyweight_args_for() + fit_method_args_for() + strict_validation_args_for(),
     )
         run_analysis_script(
             "src/physics/sensitivity/template_plot.py",
@@ -1484,11 +1491,11 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         for profile_name in profile_names:
             run_analysis_script(
                 "src/physics/sensitivity/contour_plot.py",
-                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for() + draft_args_for(),
+                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for() + draft_args_for() + fit_method_args_for(),
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
-                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for() + fit_method_args_for(),
     )
         run_analysis_script(
             "src/physics/common/significance_plot.py",
@@ -1514,7 +1521,9 @@ def run_oscillogram_stage(config: str, folder: str, name: str):
                 base_args
                 + ["--analysis", analysis_name, "--energy", energy]
                 + oscillation_args_for()
-                + ["--signal_1d" if args.computation else "--no-signal_1d"],
+                + ["--signal_1d" if args.computation else "--no-signal_1d"]
+                + study_label_args_for()
+                + truth_fiducial_args_for(),
             )
 
 
@@ -1640,6 +1649,9 @@ for config, folder in product(args.config, args.folder):
                 + energy_args
                 + oscillation_args_for()
                 + membrane_veto_args_for()
+                + study_label_args_for()
+                + truth_fiducial_args_for()
+                + cut_args_for()
                 + ["--best_cuts_only", "--no-plot"],
             )
 
@@ -1657,7 +1669,7 @@ for config, folder in product(args.config, args.folder):
                 "--rewrite" if args.rewrite else "--no-rewrite",
                 "--debug"   if args.verbose == "verbose" else "--no-debug",
                 "--plot"    if args.plot else "--no-plot",
-            ] + membrane_veto_args_for(),
+            ] + membrane_veto_args_for() + study_label_args_for() + truth_fiducial_args_for() + cut_args_for(),
         )
 
 run_presentations()

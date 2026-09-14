@@ -88,7 +88,7 @@ def plot_nadir_angle(fig, idx, norm: Optional[float] = None, plot_type: str = "s
             col=idx[1],
         )
     fig.update_xaxes(
-        title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=idx[0], col=idx[1]
+        title_text="Nadir Angle cos(" + unicode("eta") + ")", row=idx[0], col=idx[1]
     )
     fig.update_yaxes(title_text="PDF", row=idx[0], col=idx[1])
 
@@ -350,10 +350,16 @@ def _get_oscillation_map_computed(
     dm2=None, sin13=None, sin12=None,
     output="df", backend="prob3",
     separate_day_night=False, debug=False,
+    nadir_oversample=1,
 ):
     """
     Compute oscillation maps on-the-fly using prob3 or nufast backend.
     Returns same dict structure as get_oscillation_map(backend="file").
+
+    nadir_oversample > 1 evaluates P_ee on that many sub-bins per NADIR_BINS row and sums the
+    PDF-weighted sub-rows back to NADIR_BINS rows, i.e. integrates over each nadir bin instead of
+    point-sampling its centre (which aliases Earth regeneration at low dm2). Default 1 keeps the
+    original behaviour. Only supported for output="df" without separate_day_night.
     """
     from lib.oscillation_backends import (
         compute_prob3, compute_nufast,
@@ -372,7 +378,11 @@ def _get_oscillation_map_computed(
     e_range = analysis_info.get("OSC_ENERGY_RANGE", analysis_info.get("RECO_ENERGY_RANGE", [0, 30]))
     e_bins  = analysis_info.get("OSC_ENERGY_BINS",   120)
     energy_edges = np.linspace(e_range[0], e_range[1], e_bins + 1)
-    nadir_edges = np.linspace(-1.0, 1.0, analysis_info["NADIR_BINS"] + 1)
+    n_nadir_rows = int(analysis_info["NADIR_BINS"])
+    nadir_oversample = max(1, int(nadir_oversample))
+    if nadir_oversample > 1 and (separate_day_night or output != "df"):
+        raise NotImplementedError("nadir_oversample > 1 requires output='df' and separate_day_night=False")
+    nadir_edges = np.linspace(-1.0, 1.0, n_nadir_rows * nadir_oversample + 1)
     nadir_centers = 0.5 * (nadir_edges[1:] + nadir_edges[:-1])
 
     latitude_deg = analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
@@ -404,6 +414,14 @@ def _get_oscillation_map_computed(
             result_dict[key] = osc
         else:
             df = combine_day_night(osc, nadir_pdf)  # mirrors process_oscillation_map()
+            if nadir_oversample > 1:
+                # rows carry the normalised nadir PDF, so summing sub-rows integrates each bin
+                row_edges = np.linspace(-1.0, 1.0, n_nadir_rows + 1)
+                df = pd.DataFrame(
+                    df.to_numpy(dtype=float).reshape(n_nadir_rows, nadir_oversample, -1).sum(axis=1),
+                    index=pd.Index(0.5 * (row_edges[1:] + row_edges[:-1]), name=df.index.name),
+                    columns=df.columns,
+                )
             if output in ("interp1d", "interp2d"):
                 from scipy import interpolate as _interp
                 osc_map_x = df.columns.to_list()
@@ -438,9 +456,14 @@ def get_oscillation_map(
     debug: bool = False,
     backend: str = "file",
     separate_day_night: bool = False,
+    nadir_oversample: int = 1,
 ):
     """
     This function can be used to obtain the oscillation correction for DUNE's solar analysis.
+
+    nadir_oversample (computed backends only): integrate P_ee over that many nadir sub-bins per
+    NADIR_BINS row instead of point-sampling the bin centre (see _get_oscillation_map_computed).
+    Sensitivity templates pass OSC_NADIR_OVERSAMPLE from physics.json. Ignored by backend="file".
 
     Args:
         path (str): Path to the oscillation data files (default: f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/data/OSCILLATION/")
@@ -466,6 +489,7 @@ def get_oscillation_map(
             output=output, backend=backend,
             separate_day_night=separate_day_night,
             debug=debug,
+            nadir_oversample=nadir_oversample,
         )
 
     df_dict = {}
@@ -771,7 +795,7 @@ def rebin_df(
             origin="lower",
             color_continuous_scale="turbo",
             title="Oscillation Correction Map",
-            labels=dict(y=f"Azimuth Angle {unicode('eta')}", x="TrueEnergy"),
+            labels=dict(y=f"Nadir Angle {unicode('eta')}", x="TrueEnergy"),
         )
         fig = format_coustom_plotly(fig)
         fig.show()
@@ -836,7 +860,7 @@ def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, factor=1, debug=
         cols=3,
         horizontal_spacing=0.1,
         subplot_titles=(
-            f"DUNE's FD Yearly Azimuth Angle",
+            f"DUNE's FD Yearly Nadir Angle",
             f"Survival Probability",
             f"Convolved Probability * {factor}",
         ),
@@ -869,13 +893,13 @@ def make_oscillation_map_plot(dm2=None, sin13=None, sin12=None, factor=1, debug=
     fig = format_coustom_plotly(
         fig, matches=(None, None), tickformat=(None, None), add_units=False
     )
-    fig.update_xaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=1)
+    fig.update_xaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=1)
     fig.update_yaxes(range=[0.3, 1.09], title_text="Norm.", row=1, col=1)
     
     fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=2)
-    fig.update_yaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=2)
+    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=2)
     
     fig.update_xaxes(title_text="True Neutrino Energy (MeV)", row=1, col=3)
-    fig.update_yaxes(title_text="Azimuth Angle cos(" + unicode("eta") + ")", row=1, col=3)
+    fig.update_yaxes(title_text="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=3)
 
     return fig

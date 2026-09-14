@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.root import Sensitivity_Fitter
+from lib.fitting import SENSITIVITY_FIT_METHODS, sensitivity_pull_chi2
+from lib.template_guards import check_template_sampling_marker
 
 parser = argparse.ArgumentParser(
     description="Cut optimisation for Sensitivity analysis. "
@@ -31,7 +33,7 @@ parser.add_argument(
     "--oscillation_backend",
     type=str, choices=["file", "prob3", "nufast"], default="nufast",
 )
-parser.add_argument("--exposure",              type=float, default=30.0, help="Exposure in years.")
+parser.add_argument("--exposure",              type=float, default=get_analysis_exposure(str(root), "Sensitivity"), help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.")
 parser.add_argument("--signal_uncertainty",    type=float, default=None)
 parser.add_argument("--background_uncertainty",type=float, default=None)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
@@ -55,9 +57,16 @@ parser.add_argument(
 parser.add_argument("--nhits",  type=int, default=None, help="Number of hits cut. If provided, adds this cut to the evaluation list.")
 parser.add_argument("--adjcls", type=int, default=None, help="Adjacent clusters cut. If provided, adds this cut to the evaluation list.")
 parser.add_argument("--ophits", type=int, default=None, help="Optical hits cut. If provided, adds this cut to the evaluation list.")
+parser.add_argument(
+    "--fit_method",
+    type=str,
+    choices=list(SENSITIVITY_FIT_METHODS),
+    default="pull",
+    help="chi2 method used to score each cut: 'pull' (closed-form pull profile, default) or 'legacy' (Sensitivity_Fitter).",
+)
 
 args = parser.parse_args()
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _study_suffix    = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 
@@ -122,6 +131,17 @@ def _is_valid(path: str) -> bool:
         return not (arr.ndim >= 2 and (arr.shape[1] != expected_ecols or arr.shape[0] != expected_nrows))
     except Exception:
         return False
+
+
+def _sampling_current(cut) -> bool:
+    """Reference templates of this cut were built with the configured P_ee sampling."""
+    ok, _ = check_template_sampling_marker(
+        signal_path, args.config, args.signal, cut["NHits"], cut["AdjCl"], cut["OpHits"],
+        backend=args.oscillation_backend,
+        nadir_oversample=int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1)),
+        scopes=("scan", "grid"),
+    )
+    return ok
 
 
 def _generate_templates(cuts):
@@ -199,6 +219,7 @@ stale_cuts = [
     if args.rewrite
     or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], solar_dm2))
     or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], react_dm2))
+    or not _sampling_current(c)
 ]
 if stale_cuts:
     ok = _generate_templates(stale_cuts)
@@ -214,7 +235,7 @@ for cut in cut_candidates:
     solar_pkl = _pkl_path(nhits, adjcl, ophits, solar_dm2)
     react_pkl = _pkl_path(nhits, adjcl, ophits, react_dm2)
 
-    if not _is_valid(solar_pkl) or not _is_valid(react_pkl):
+    if not _is_valid(solar_pkl) or not _is_valid(react_pkl) or not _sampling_current(cut):
         rprint(
             f"[yellow][WARNING][/yellow] Templates missing or stale after generation for "
             f"NHits{nhits} AdjCl{adjcl} OpHits{ophits}; skipping."
@@ -251,25 +272,38 @@ for cut in cut_candidates:
     p_r  = pred_react_scaled[:, thld:]
     b_t  = bkg_scaled[:, thld:]
 
-    fitter_s = Sensitivity_Fitter(
-        obs_at_react, p_s, b_t,
-        SigmaPred=args.signal_uncertainty,
-        SigmaBkg=args.background_uncertainty,
-        bb_mask=(b_t > 0),
-        fit_background=False,
-        use_legacy_background_penalty=False,
-    )
-    chi2_solar_at_react, _, _ = fitter_s.Fit(0.0, 0.0)
+    if args.fit_method == "pull":
+        # Same nuisances as the legacy scorer (signal + background normalisation only).
+        chi2_solar_at_react = sensitivity_pull_chi2(
+            obs_at_react, p_s, b_t,
+            sigma_pred=args.signal_uncertainty or 0.0,
+            sigma_bkg=args.background_uncertainty or 0.0,
+        )["chi2"]
+        chi2_react_at_solar = sensitivity_pull_chi2(
+            obs_at_solar, p_r, b_t,
+            sigma_pred=args.signal_uncertainty or 0.0,
+            sigma_bkg=args.background_uncertainty or 0.0,
+        )["chi2"]
+    else:
+        fitter_s = Sensitivity_Fitter(
+            obs_at_react, p_s, b_t,
+            SigmaPred=args.signal_uncertainty,
+            SigmaBkg=args.background_uncertainty,
+            bb_mask=(b_t > 0),
+            fit_background=False,
+            use_legacy_background_penalty=False,
+        )
+        chi2_solar_at_react, _, _ = fitter_s.Fit(0.0, 0.0)
 
-    fitter_r = Sensitivity_Fitter(
-        obs_at_solar, p_r, b_t,
-        SigmaPred=args.signal_uncertainty,
-        SigmaBkg=args.background_uncertainty,
-        bb_mask=(b_t > 0),
-        fit_background=False,
-        use_legacy_background_penalty=False,
-    )
-    chi2_react_at_solar, _, _ = fitter_r.Fit(0.0, 0.0)
+        fitter_r = Sensitivity_Fitter(
+            obs_at_solar, p_r, b_t,
+            SigmaPred=args.signal_uncertainty,
+            SigmaBkg=args.background_uncertainty,
+            bb_mask=(b_t > 0),
+            fit_background=False,
+            use_legacy_background_penalty=False,
+        )
+        chi2_react_at_solar, _, _ = fitter_r.Fit(0.0, 0.0)
 
     if chi2_solar_at_react is None or chi2_react_at_solar is None:
         rprint(

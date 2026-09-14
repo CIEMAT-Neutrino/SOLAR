@@ -79,7 +79,6 @@ python3 src/pipelines/run_sensitivity.py \
   --analysis DayNight HEP Sensitivity \
   --folder Truncated \
   --energy SolarEnergy \
-  --exposure 30 \
   --oscillation_backend nufast \
   --no-rewrite \
   --plot
@@ -98,7 +97,7 @@ python3 src/pipelines/run_sensitivity.py \
 | `--analysis` | all three | `DayNight` / `HEP` / `Sensitivity` |
 | `--folder` | `Truncated` | Fiducial folder(s) |
 | `--energy` | `SolarEnergy` | Energy estimator |
-| `--exposure` | `30` | Exposure in years |
+| `--exposure` | `30` (config) | Exposure the analyses are run to, in years (`ANALYSIS_EXPOSURES` in `config/analysis/config.json`). Results are *quoted* at `EVALUATION_EXPOSURE_YEARS` — 20 yr for DayNight/HEP, 30 yr for Sensitivity, which also gets a 10 yr secondary pass. |
 | `--oscillation_backend` | `file` | `file` / `prob3` / `nufast` |
 | `--no-fiducialization` | | Skip signal fiducialization step |
 | `--no-rebin` | | Skip signal rebin step |

@@ -71,12 +71,12 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis in years.",
-    default=30.0,
+    help="The exposure for the analysis in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.",
+    default=get_analysis_exposure(str(root), "Sensitivity"),
 )
 parser.add_argument(
     "--secondary_exposure", "--secondary-exposure",
-    type=float, default=10.0,
+    type=float, default=get_analysis_exposure(str(root), "Sensitivity", stage="SECONDARY", fallback=0.0),
     help=(
         "Also export the tagged secondary-exposure grids written by 06_significance.py "
         "(e.g. '_10Y') as a separate Sensitivity_<N>Y_Contours.pkl. 0/negative disables."
@@ -103,12 +103,23 @@ parser.add_argument(
         "Contour plots will be generated from draft-mode chi2 grids if available."
     ),
 )
+parser.add_argument(
+    "--fit_method",
+    type=str,
+    choices=["legacy", "pull"],
+    default="pull",
+    help=(
+        "Which 06_significance.py fit method to plot: 'pull' (default) reads results/<profile>/, "
+        "'legacy' reads the comparison grids in results/<profile>_legacy/."
+    ),
+)
 
 args = parser.parse_args()
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _study_suffix    = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 _save_subfolder  = _ctx.save_subfolder
+_results_tag     = "_legacy" if args.fit_method == "legacy" else ""
 configs = {args.config: [args.signal]}
 if args.debug:
     rprint(args)
@@ -183,9 +194,9 @@ for config in configs:
             energy = key[2]
 
         if args.background:
-            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}{_results_tag}/signal_{100*args.signal_uncertainty:.0f}%_and_background_{100*args.background_uncertainty:.0f}%"
         else:
-            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}/signal_{100*args.signal_uncertainty:.0f}%_only"
+            data_path = f"{info['PATH']}/SENSITIVITY/{config}/{args.signal}/{args.folder.lower()}/{energy}{_template_suffix}/results/{profile_name}{_results_tag}/signal_{100*args.signal_uncertainty:.0f}%_only"
 
         invalid_marker = f"{data_path}/{name}_{energy}_Sensitivity_INVALID.json"
         if os.path.exists(invalid_marker):
@@ -199,6 +210,17 @@ for config in configs:
         ophits = int(args.ophits) if args.ophits is not None else int((fastest_sigma.get(key) or {}).get("OpHits", 4))
 
         _stem = f"{data_path}/{name}_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}"
+
+        # Gate report written by 06_significance.py for every fit method.
+        _validation_file = f"{_stem}_Validation.json"
+        if os.path.exists(_validation_file):
+            _report = json.load(open(_validation_file))
+            if _report.get("passed") is False:
+                _failed = [g for g, v in _report.get("gates", {}).items() if v.get("passed") is False]
+                rprint(
+                    f"[yellow][WARNING][/yellow] Plotting {args.fit_method} grids that FAILED validation "
+                    f"gates {_failed}: {_validation_file}"
+                )
 
         def _read_grids(tag):
             return {
@@ -230,6 +252,7 @@ for config in configs:
                     "Significance": np.asarray(_g.to_numpy(dtype=float)).tolist(),
                     "SignificanceUnit": r"\Delta\chi^2",
                     "NuisanceProfile": profile_name,
+                    "FitMethod": args.fit_method,
                     "SignalUncertainty": float(args.signal_uncertainty),
                     "BackgroundUncertainty": float(args.background_uncertainty) if args.background else 0.0,
                     "NHits": int(nhits), "AdjCl": int(adjcl), "OpHits": int(ophits),

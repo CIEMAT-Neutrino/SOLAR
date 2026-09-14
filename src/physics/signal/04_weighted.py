@@ -182,7 +182,12 @@ def _extract_best_cuts(obj, cfg, sig):
 
 
 def _load_best_cuts(cfg, sig, analysis, folder, info):
-    _base = f"{info['PATH']}/{analysis.upper()}/{folder.lower()}/{cfg}/{sig}"
+    if analysis.upper() == "SENSITIVITY":
+        # 04_best_cuts.py / 06_significance.py: {PATH}/SENSITIVITY/{config}/{name}/{folder}/
+        _base = f"{info['PATH']}/SENSITIVITY/{cfg}/{sig}/{folder.lower()}"
+    else:
+        # 05_best_sigmas.py: {PATH}/{ANALYSIS}/{folder}/{config}/{name}/
+        _base = f"{info['PATH']}/{analysis.upper()}/{folder.lower()}/{cfg}/{sig}"
     _pkl  = f"{_base}/{cfg}_{sig}_highest_{analysis}.pkl"
     if not os.path.exists(_pkl):
         rprint(f"[yellow][WARNING][/yellow] Best-cuts pkl not found: {_pkl}. Cut stage will be skipped.")
@@ -259,8 +264,11 @@ nhits_fiducial_list = []   # threshold-scan summary per (stage, hit variable)
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    _params_path = f"{root}/config/{config}/{config}_params.json"
-    _exposure    = float(json.loads(open(_params_path).read()).get("EVALUATION_EXPOSURE_YEARS", 20.0)) if os.path.exists(_params_path) else 20.0
+    # Counts are quoted at the evaluation livetime (EVALUATION_EXPOSURE_YEARS in
+    # config/analysis/config.json): DayNight/HEP 20 yr, Sensitivity 30 yr. The self-dispatch
+    # above already split a multi-analysis call into one child per analysis, so args.analysis
+    # is a single analysis here and each one is scaled at its own livetime.
+    _exposure    = get_evaluation_exposure(str(root), args.analysis, config=config)
     _scale       = get_full_detector_mass(config, info) * _exposure   # kT·yr → events/raw_weight
 
     for name in configs[config]:

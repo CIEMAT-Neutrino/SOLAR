@@ -44,7 +44,8 @@ parser.add_argument("--analysis", type=str, default="HEP")
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument("--folder", type=str, default="Reduced")
-parser.add_argument("--exposure", type=float, default=30)
+parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "HEP"),
+                    help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.")
 parser.add_argument("--signal_uncertainty", type=float, default=0.3)
 parser.add_argument("--background_uncertainty", type=float, default=0.02)
 parser.add_argument(

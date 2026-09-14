@@ -29,7 +29,7 @@ def write_template_normalization(template_dir: str, detector_mass_kT: float) -> 
         }, fh, indent=2)
 
 from lib.oscillation import get_oscillation_datafiles
-from lib.template_guards import clean_and_validate_template
+from lib.template_guards import clean_and_validate_template, write_template_sampling_marker
 
 save_path = f"{root}/output/images/analysis/sensitivity/templates"
 
@@ -78,8 +78,8 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis",
-    default=30,
+    help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.",
+    default=get_analysis_exposure(str(root), "Sensitivity"),
 )
 parser.add_argument(
     "--energy",
@@ -155,7 +155,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _study_suffix = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 
@@ -240,7 +240,17 @@ def _validate_signal_cut_consistency(cuts_to_process: list, info: dict, args) ->
     # Only validate if we have cuts to process
     if not cuts_to_process:
         return
-    
+
+    # Explicit --nhits/--adjcls/--ophits: the caller chose the cut, so no best-cut map is needed.
+    # Study variants run with --skip_best_cuts never write a labeled map, and 06_significance.py
+    # uses the same explicit cut, so requiring (or matching) a map here only blocks those runs.
+    if args.cuts is None and None not in (args.nhits, args.adjcls, args.ophits):
+        rprint(
+            f"[green][CUT CONSISTENCY][/green] Signal templates use the explicit cut "
+            f"NHits{args.nhits} AdjCl{args.adjcls} OpHits{args.ophits}"
+        )
+        return
+
     # If we have a study_label, we MUST have a best-cut file
     if args.study_label:
         loaded = _load_best_cut_map(info, args)
@@ -537,6 +547,9 @@ for config in configs:
         goto_phase_3 = False
 
     # ── Phase 2: oscillation loop (outer) × cuts loop (inner) ───────────────────
+    # P_ee is integrated over OSC_NADIR_OVERSAMPLE nadir sub-bins per row; point-sampling the
+    # nadir bin centres aliases Earth regeneration at low dm2 (whole-row chi2 stripes).
+    _nadir_oversample = int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1))
     if not goto_phase_3:
         for dm2, sin13, sin12 in track(
             zip(dm2_list, sin13_list, sin12_list),
@@ -559,6 +572,7 @@ for config in configs:
                     sin12=[float(sin12)],
                     output="df",
                     debug=args.debug,
+                    nadir_oversample=_nadir_oversample,
                 )
                 oscillation_df = next(iter(osc_map.values()))
 
@@ -661,6 +675,17 @@ for config in configs:
                         row=1, col=3,
                     )
 
+        # Stamp each cut only after the whole oscillation loop finished, so a partially
+        # regenerated cut is never reported as current to 04_best_cuts.py / 06_significance.py.
+        for nhits, adjcl, ophits, h, fig, title in cut_data:
+            write_template_sampling_marker(
+                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
+                args.config, args.signal, nhits, adjcl, ophits,
+                scope="scan" if args.scan_mode else "grid",
+                backend=args.oscillation_backend,
+                nadir_oversample=None if args.oscillation_backend == "file" else _nadir_oversample,
+            )
+
     # ── Phase 3: format and save per-cut figures ─────────────────────────────────
     for nhits, adjcl, ophits, h, fig, title in cut_data:
         fig = format_coustom_plotly(
@@ -675,7 +700,7 @@ for config in configs:
         fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=3)
         fig.update_xaxes(title="True Neutrino Energy (MeV)", row=1, col=1)
         fig.update_xaxes(title="True Neutrino Energy (MeV)", row=1, col=2)
-        fig.update_yaxes(title="Azimuth con(" + unicode("eta") + ")", row=1, col=3)
+        fig.update_yaxes(title="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=3)
         fig.update_layout(coloraxis=dict(colorbar=dict(title="log(Counts)")))
         save_figure(
             fig, f"{save_path}",

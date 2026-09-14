@@ -80,8 +80,8 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    help="The exposure for the analysis",
-    default=30,
+    help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.",
+    default=get_analysis_exposure(str(root), "Sensitivity"),
 )
 parser.add_argument(
     "--energy",
@@ -145,7 +145,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-_ctx = study_context(args)
+_ctx = study_context(args, analysis="Sensitivity")
 _study_suffix = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 if args.debug:

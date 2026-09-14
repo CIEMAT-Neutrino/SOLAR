@@ -86,8 +86,8 @@ parser.add_argument(
 parser.add_argument(
     "--exposure",
     type=float,
-    default=30,
-    help="Reference exposure in years.",
+    default=get_analysis_exposure(str(root), "HEP"),
+    help="Reference exposure in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.",
 )
 parser.add_argument(
     "--energy",
