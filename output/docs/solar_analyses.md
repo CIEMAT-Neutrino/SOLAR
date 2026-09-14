@@ -1,7 +1,10 @@
 # SOLAR/DUNE Significance Analyses
 ## Mathematical Derivations: Day-Night, HEP, and Sensitivity
 
-*SOLAR/DUNE Analysis — May 2026*
+*SOLAR/DUNE Analysis — May 2026. Sensitivity sections (§5, §8.1, §8.5, §9) revised 2026-09-14:
+§5 is now the complete description of the Sensitivity analysis, from template construction through
+the pull statistic, grid scan, validation and systematic studies to data products and
+configuration.*
 
 ---
 
@@ -36,6 +39,11 @@ $$
 \newcommand{\sbkg}{\sigma_{\mathrm{bkg}}}
 \newcommand{\eij}{e_{ij}}
 \newcommand{\oij}{o_{ij}}
+\newcommand{\pij}{p_{ij}}
+\newcommand{\muij}{\mu_{ij}}
+\newcommand{\muzero}{\mu^{0}_{ij}}
+\newcommand{\ses}{\sigma_{E}}
+\newcommand{\ssin}{\sigma_{13}}
 $$
 
 ---
@@ -46,7 +54,25 @@ $$
 2. [Common Ingredients](#common)
 3. [Day-Night Asymmetry Analysis](#daynight)
 4. [HEP Discovery Analysis](#hep)
-5. [Sensitivity Analysis](#sensitivity)
+5. [Sensitivity Analysis](#sensitivity) — *full description; subsections:*
+   [5.1 Goal](#sens-goal) ·
+   [5.2 Observable](#sens-observable) ·
+   [5.3 Templates](#sens-templates) ·
+   [5.4 Asimov data](#sens-asimov) ·
+   [5.5 Deviance](#sens-deviance) ·
+   [5.6 Response model](#sens-response) ·
+   [5.7 Profiled $\chi^2$](#sens-profile) ·
+   [5.8 Bin masking](#sens-mask) ·
+   [5.9 Nuisance profiles](#sens-profiles) ·
+   [5.10 Grid scan & cuts](#sens-scan) ·
+   [5.11 Contours](#sens-contours) ·
+   [5.12 Validation](#sens-validation) ·
+   [5.13 Studies](#sens-studies) ·
+   [5.14 Background uncertainty](#sens-bkg-prior) ·
+   [5.15 Legacy fitter](#sens-legacy) ·
+   [5.16](#sens-conv-figures)–[5.17 Figures](#sens-results) ·
+   [5.18 Data products & configuration](#sens-products) ·
+   [5.19 Reproduction](#sens-reproduction)
 6. [Comparison Across Analyses](#comparison)
 7. [Summary of Significance Outputs](#summary)
 8. [Recent Statistical Methodology Updates](#stat-updates)
@@ -59,15 +85,17 @@ $$
 
 This document presents the mathematical derivations underlying the three significance analyses in the SOLAR/DUNE software framework, ordered from simplest to most complex:
 
-1. **Day-Night Asymmetry** (`12DayNight.py`): searches for a time-modulated excess of solar neutrinos during nighttime relative to daytime, driven by the MSW matter effect inside the Earth. Significance is computed from both a Gaussian approximation on the rate-difference spectrum and a two-sample Poisson log-likelihood ratio (Asimov).
+1. **Day-Night Asymmetry** (`daynight/01_daynight.py`): searches for a time-modulated excess of solar neutrinos during nighttime relative to daytime, driven by the MSW matter effect inside the Earth. Significance is computed from both a Gaussian approximation on the rate-difference spectrum and a two-sample Poisson log-likelihood ratio (Asimov).
 
-2. **HEP Discovery** (`13HEP.py`): searches for the hep solar neutrino flux ($^3\mathrm{He}+p \to {}^4\mathrm{He}+e^++\nu_e$) as an absolute excess above background. Three significance estimators are computed: Gaussian, Asimov, and a profile-likelihood (PL) significance with a single global background nuisance, analytically profiled.
+2. **HEP Discovery** (`hep/01_hep.py`): searches for the hep solar neutrino flux ($^3\mathrm{He}+p \to {}^4\mathrm{He}+e^++\nu_e$) as an absolute excess above background. Three significance estimators are computed: Gaussian, Asimov, and a profile-likelihood (PL) significance with a single global background nuisance, analytically profiled.
 
-3. **Sensitivity** (`14Sensitivity.py`): maps the 2D sensitivity contour in the oscillation-parameter plane $(\Delta m^2,\,\sin^2\theta_{12})$. A Baker-Cousins Poisson deviance with two normalization nuisances is minimized numerically over 2D templates in energy and azimuth.
+3. **Sensitivity** (`sensitivity/06_significance.py`): maps the sensitivity contours in the oscillation-parameter planes spanned by $(\Delta m^2_{21},\,\sin^2\theta_{12},\,\sin^2\theta_{13})$. A Baker-Cousins Poisson deviance over 2D templates in reconstructed energy and solar nadir angle is profiled over up to four nuisance parameters — signal and background normalisation, reconstructed energy scale and $\sin^2\theta_{13}$ — through a linear response model with Gaussian priors.
 
 The three analyses share common ingredients (histogram smoothing, thresholds, adaptive rebinning for HEP) but differ in the statistical complexity of their model. See [Comparison Across Analyses](#comparison) for a summary table.
 
-**Common notation.** Throughout, $T$ is the exposure in kt·yr, $\Mdet$ the active detector mass in kt, and the exposure factor is $\Ecal = T\,\Mdet$. Index $i$ runs over energy bins; index $j$ over azimuth bins (Sensitivity only). Component label $c$ identifies one physical process (signal, neutron, gamma, radiological, ${}^8\mathrm{B}$).
+**Common notation.** Throughout, $T$ is the exposure in kt·yr, $\Mdet$ the active detector mass in kt, and the exposure factor is $\Ecal = T\,\Mdet$. Component label $c$ identifies one physical process (signal, neutron, gamma, radiological, ${}^8\mathrm{B}$).
+
+Bin indices follow the array layout of each analysis. For the 1D analyses (Day-Night, HEP) index $i$ runs over energy bins. For Sensitivity the templates are 2D arrays of shape (nadir, energy), so $i$ runs over the 40 nadir bins and $j$ over the 30 energy bins, and a bin is written $ij$.
 
 ---
 
@@ -81,7 +109,7 @@ $$\muc = \Ecal\,\rc = T\,\Mdet\,\rc$$
 
 All analyses apply a reconstructed-energy threshold $E_{\mathrm{th}}$ (configured in `analysis/config.json`); only bins with $E_i \ge E_{\mathrm{th}}$ enter the significance computation.
 
-### 2.2 Histogram Smoothing
+### 2.2 Histogram Smoothing {#histogram-smoothing}
 
 Each rate histogram $\rc$ is convolved with a one-dimensional Gaussian kernel before entering the significance computation:
 
@@ -93,7 +121,7 @@ implemented via `scipy.ndimage.gaussian_filter1d` with `mode='nearest'`. Whether
 
 $$\tilde{r}_{i}^{c} \leftarrow \max\!\left(0,\,\tilde{r}_{i}^{c}\right)$$
 
-### 2.3 Per-Component Background Error Model
+### 2.3 Per-Component Background Error Model {#background-error}
 
 For each background component $c$ the absolute uncertainty on the raw rate in bin $i$ combines MC-statistical and systematic contributions in quadrature:
 
@@ -183,7 +211,7 @@ $$\seff = \sqrt{\left(\frac{\sigma_{\mathrm{night},i}}{\fn}\right)^{\!2} +\left(
 
 set to zero wherever $\Beff = 0$.
 
-### 3.6 Two-Sample Poisson Asimov Significance
+### 3.6 Two-Sample Poisson Asimov Significance {#three-six}
 
 The Day-Night analysis also computes a two-sample Poisson log-likelihood ratio (Asimov) as an alternative to the Gaussian estimators. Under the signal hypothesis (asymmetry scale $\theta_s$), the Asimov (expected) observed counts are $n_i^{\mathrm{night}}$ and $n_i^{\mathrm{day}}$ from above. The null hypothesis $H_0$ assumes no asymmetry: both periods share the same per-bin total rate, allocated proportionally to period length:
 
@@ -407,101 +435,595 @@ $$(N^*,N_{\mathrm{op}}^*,N_{\mathrm{adj}}^*) = \arg\max_{\text{not spiked}} Z_{\
 
 ## 5. Sensitivity Analysis {#sensitivity}
 
-### 5.1 Overview
+*Complete description of the Sensitivity analysis: physical goal, template construction, test
+statistic, nuisance treatment, grid scan, contour construction, validation, systematic studies,
+data products and configuration.*
 
-The Sensitivity analysis maps how well the detector can distinguish between the solar ($\Delta m^2_\odot$) and reactor ($\Delta m^2_{\mathrm{react}}$) best-fit oscillation hypotheses. Rather than computing a single discovery significance it evaluates a $\chi^2$ surface over the oscillation-parameter grid $(\Delta m^2,\,\sin^2\theta_{13},\,\sin^2\theta_{12})$.
+### 5.1 Scientific Goal and Structure {#sens-goal}
 
-Key differences from HEP:
+The Sensitivity analysis quantifies the precision with which a DUNE far-detector module can
+determine the solar oscillation parameters $(\Delta m^2_{21},\,\sin^2\theta_{12},\,\sin^2\theta_{13})$
+from the $^8$B solar-neutrino event sample, and in particular whether it can discriminate between
+the two hypotheses that currently disagree at the $\sim2\sigma$ level:
 
-- Histograms are **two-dimensional** (energy $\times$ azimuth $\cos\eta$).
-- **Two** normalization nuisances are floated: $\Apred$ (signal) and $\Abkg$ (background).
-- The nuisance stationarity conditions have **no closed-form solution** — unlike HEP's quadratic for $\bhat$ — requiring full 2D numerical minimization.
-- The goal is a $\chi^2$ *map*, not a single significance.
+- the **solar** global-fit value, $\Delta m^2_\odot = 6.0\times10^{-5}\ \mathrm{eV}^2$;
+- the **reactor** (KamLAND) value, $\Delta m^2_{\mathrm{react}} = 7.54\times10^{-5}\ \mathrm{eV}^2$.
 
-### 5.2 Two-Dimensional Template Construction
+It is an Asimov sensitivity study: no pseudo-experiments are thrown. For each point $\vec\theta_k$
+of a three-parameter oscillation grid a noiseless expected dataset is constructed and fitted
+against two fixed reference hypotheses, producing a pair of $\chi^2$ surfaces from which confidence
+contours are drawn.
 
-Signal and background are represented as 2D arrays with axes energy ($j=1,\ldots,J$) and azimuth ($i=1,\ldots,I$).
+Key differences from HEP (§4):
 
-**Signal template.** For oscillation parameters $\vec{\theta} = (\Delta m^2,\sin^2\theta_{13},\sin^2\theta_{12})$, the signal template at exposure $\Ecal$ is:
+- Histograms are **two-dimensional** (reconstructed energy $\times$ solar nadir angle $\cos\eta$).
+- Systematics enter as **profiled nuisance parameters with Gaussian priors** — signal
+  normalisation, background normalisation, reconstructed energy scale and $\sin^2\theta_{13}$ —
+  rather than as a propagated error band.
+- The nuisances are profiled through a **linear response model**, which admits a closed-form
+  Gaussian solution and a fast safeguarded Newton iteration on the exact Poisson objective.
+- The goal is a $\chi^2$ *map* over parameter space, not a single significance versus exposure.
 
-$$\Tsig(\vec{\theta}) = \Ecal\cdot\Mdet\cdot\bigl[P(\vec{\theta})\,H\bigr]_{ij}$$
+### 5.2 Observable and Binning {#sens-observable}
 
-where $P(\vec{\theta})$ is the oscillation-probability matrix (azimuth $\times$ neutrino flavour) and $H$ is the detector energy-response matrix (neutrino energy $\times$ reconstructed energy), implemented in `14SensitivitySignalTemplate.py`.
+The observable is the two-dimensional distribution of selected cluster events in
+$(\cos\eta,\;E_{\mathrm{reco}})$, where $\eta$ is the solar **nadir angle** at the detector and
+$E_{\mathrm{reco}}$ is the reconstructed neutrino energy (`SolarEnergy` by default; §5.13 lists the
+variants).
 
-**Background template.** The background template $\Tbkg$ is independent of oscillation parameters and is constructed from detector simulations in `14SensitivityBackgroundTemplate.py`.
+| Axis | Range | Bins | Configuration key |
+|---|---|---|---|
+| $\cos\eta$ | $[-1,\,1]$ | 40 | `NADIR_BINS` |
+| $E_{\mathrm{reco}}$ | $[0,\,30]$ MeV | 30 (1 MeV) | `sensitivity_rebin` (`lib/__init__.py`) |
 
-### 5.3 Asimov Dataset Construction
+Templates are therefore $40\times30$ arrays, indexed below by $i$ (nadir) and $j$ (energy).
 
-For each scan point $\vec{\theta}_k$ the Asimov observed dataset is:
+The nadir axis carries the physics that separates this analysis from a pure spectral fit: the
+neutrino path length through the Earth, and hence the MSW regeneration probability, depends on
+$\cos\eta$ alone. The solar and reactor $\Delta m^2_{21}$ hypotheses differ both in the low-energy
+shape of the survival probability and in the amplitude and nadir structure of Earth regeneration,
+so the two-dimensional distribution discriminates between them more strongly than either
+projection.
 
-$$\oij(\vec{\theta}_k) = \Tsig(\vec{\theta}_k) + \Tbkg$$
+### 5.3 Template Construction {#sens-templates}
 
-Two *reference* templates fixed at the solar and reactor best-fit points:
+#### Signal templates
 
-$$p^{\mathrm{solar}}_{ij} = \Tsig(\vec{\theta}_{\odot}), \qquad p^{\mathrm{react}}_{ij} = \Tsig(\vec{\theta}_{\mathrm{react}})$$
+For oscillation parameters $\vec{\theta} = (\Delta m^2,\sin^2\theta_{13},\sin^2\theta_{12})$ the
+per-year signal template is the product of an oscillation-probability matrix and the detector
+response,
 
-### 5.4 Objective Function: Baker-Cousins Poisson Deviance
+$$\Tsig(\vec\theta) \;=\; \Mdet \sum_{k} P_{\nu_e\to\nu_e}\!\left(\vec\theta;\,E^{\mathrm{true}}_k,\,\cos\eta_i\right)H_{kj},$$
 
-The fit minimizes a Baker-Cousins Poisson deviance [Baker & Cousins 1984] with two free normalization nuisances:
+where $H_{kj}$ is the $(E^{\mathrm{true}}\times E^{\mathrm{reco}})$ smearing matrix built from the
+fiducialised MARLEY sample and $\Mdet$ is the fiducial mass in kt. Construction is performed by
+`src/physics/sensitivity/03_template_compute.py` invoked with `--template signal`; this is the
+entry point the pipeline uses, and the standalone `01_background_template.py` /
+`02_signal_template.py` scripts remain for manual regeneration.
 
-$$\chi^2(\Apred,\Abkg) = 2\sum_{i,j}\Delta\ell_{ij} + \left(\frac{\Apred}{\spred}\right)^{\!2} + \left(\frac{\Abkg}{\sbkg}\right)^{\!2}$$
+The survival probability is obtained from **NuFast** (`OSCILLATION_BACKEND = "nufast"`), evaluated
+on a fine grid of `OSC_ENERGY_BINS = 120` points over `OSC_ENERGY_RANGE = [0, 30]` MeV.
 
-where the expected model is:
+#### Nadir oversampling
 
-$$\eij = (1+\Abkg)\,\Tbkg + (1+\Apred)\,p_{ij}$$
+$P_{\nu_e\to\nu_e}$ is **not** sampled at the centre of each of the 40 nadir bins. Each bin is
+subdivided into `OSC_NADIR_OVERSAMPLE = 4` sub-bins, the probability is evaluated in each, and the
+result is averaged with the nadir-exposure PDF as weight; the fine energy grid is likewise averaged
+within each 1 MeV reconstruction bin.
 
-and the per-bin Poisson deviance is:
+This is not a refinement of convenience. Point-sampling the bin centres aliases the
+Earth-regeneration oscillation against the nadir binning and paints whole-row stripes into the
+$\chi^2$ grids: at $\Delta m^2_{21} = 3.83\times10^{-5}\ \mathrm{eV}^2$ in the HD geometry,
+neighbouring grid rows differed by $\Delta\chi^2 = 38$ at an absolute level of 23, biasing
+$\Delta\chi^2$ near the $3\sigma$ contour by up to $\sim4$. The oversampling is recorded in the
+template sampling marker and checked by `lib/template_guards.py` before a scan is allowed to reuse
+existing templates.
 
-$$\Delta\ell_{ij} = \begin{cases} \eij - \oij + \oij\ln(\oij/\eij) & \oij>0,\; \eij>0,\\ \eij & \oij=0,\; \eij>0,\\ 0 & \eij=0 \;\text{(or masked).} \end{cases}$$
+#### Flyweight evaluation
 
-Each term $\Delta\ell_{ij}\ge0$ by the Gibbs inequality; the sum is zero if and only if $\eij=\oij$ for all bins.
+Evaluating all 14 702 grid points as stored templates is possible (`--no-flyweight`) but costly in
+storage. The default `--flyweight` mode stores a single **base template**
+$\mathrm{BASE}_{kj} = \Mdet H_{kj}$ per selection cut and forms $\Tsig(\vec\theta)$ on the fly as
+the matrix product of the freshly computed oscillation map with the base template
+(`_flyweight_convolve`, `06_significance.py:696`). Flyweight mode requires the `nufast` backend;
+any other choice of `--oscillation_backend` is overridden, with a warning.
 
-**Structural connection to HEP.** Under $H_0$ (no signal, $p_{ij}=0$), the $\chi^2$ reduces to the HEP log-likelihood ratio with one nuisance per normalisation parameter. The Sensitivity objective is therefore the direct 2D two-nuisance generalization of the HEP test statistic.
+#### Background template
 
-### 5.5 Nuisance Parameters: Constraints and Non-Analyticity
+$\Tbkg$ is independent of the oscillation parameters. It is built from the radiological and
+cosmogenic simulation samples by `03_template_compute.py --template background`, and the nadir
+dependence is imposed by weighting the one-dimensional background spectrum $b(E_{\mathrm{reco}})$
+with the nadir-exposure PDF $p(\cos\eta)$ via `_project_1d_to_2d`.
 
-The penalty terms are Gaussian constraints identical in form to the HEP penalty $[(\bhat-1)/\srel]^2$, but with separate widths: $\spred = 4\%$ (signal flux uncertainty) and $\sbkg = 2\%$ (background uncertainty). These are configured via `analysis/config.json` under `ANALYSIS_UNCERTAINTIES.SENSITIVITY`.
+The background is overwhelmingly larger than the signal. For the reference configuration
+(`hd_1x2x6_centralAPA`, Truncated fiducialisation, cut `NHits1/AdjCl4/OpHits8`, 30 yr) the totals
+are
 
-**Why no analytic solution exists.** In HEP, $e_i = \beta\bi$ under $H_0$: the single global $\beta$ factors out and the stationarity condition collapses to a scalar quadratic. In Sensitivity, $\eij=(1+\Abkg)\Tbkg+(1+\Apred)p_{ij}$ mixes $\Tbkg$ and $p_{ij}$ in every bin. The two stationarity conditions are:
+$$B = 4.18\times10^{12}\ \text{events}, \qquad S = 3.01\times10^{5}\ \text{events}, \qquad S/B = 7.2\times10^{-8},$$
 
-$$\begin{align}
-\sum_{ij} p_{ij}\!\left(1-\frac{\oij}{\eij}\right) &= -\frac{\Apred}{\spred^2},\\
-\sum_{ij} \Tbkg\!\left(1-\frac{\oij}{\eij}\right) &= -\frac{\Abkg}{\sbkg^2},
-\end{align}$$
+with the background concentrated below $\sim8$ MeV and the signal extending to $\sim20$ MeV. The
+discriminating power therefore resides almost entirely in the high-energy tail. This hierarchy has
+direct consequences for the treatment of background systematics, developed in §5.14.
 
-which are jointly non-linear in $(\Apred,\Abkg)$ because $\eij$ in the denominators depends on both unknowns. Full 2D minimization is required.
+#### Per-year normalisation and exposure scaling
 
-### 5.6 Barlow-Beeston Mask for 2D Templates
+Templates are stored **per year** (normalisation schema v2, `TEMPLATE_NORMALIZATION.json`, units
+`detector_mass_kT × rate`, one file per template directory; see §8.3). Absolute counts are formed
+at load time:
 
-Bins where the background template is zero are excluded:
+$$X_{ij}(\Ecal) \;=\; \Ecal\,X_{ij}^{\mathrm{yr}}, \qquad X_{ij}(\Ecal) \to 0 \ \ \text{if } X_{ij}(\Ecal) < 1 ,$$
 
-$$\mathcal{M}_{ij} = \mathbf{1}\!\left[\Tbkg > 0\right]$$
+implemented in `scale_to_exposure` (`06_significance.py:375`). The truncation of bins carrying less
+than one expected event is exposure dependent, which is why it is applied here and not baked into
+the stored templates. `require_per_year_templates()` refuses v1 (pre-scaled) templates with a
+descriptive error rather than silently double-scaling them.
 
-passed as `bb_mask` to `Sensitivity_Fitter`. This prevents spurious large deviance from signal-only bins lacking a reliable background model, following the same spirit as the HEP Barlow-Beeston mask.
+Two exposures are evaluated in the same pass: the primary $\Ecal = 30$ yr
+(`ANALYSIS_EXPOSURES.SENSITIVITY.PRIMARY`) and the secondary $\Ecal = 10$ yr (`SECONDARY`), whose
+outputs carry the filename tag `_10Y`.
 
-### 5.7 Minimization: scipy L-BFGS-B
+### 5.4 Asimov Data and the Hypothesis Pair {#sens-asimov}
 
-The objective is minimized over $(\Apred,\Abkg)$ using the L-BFGS-B algorithm [Byrd et al. 1995; Zhu et al. 1997]:
+For every grid point $\vec\theta_k$ the Asimov dataset is the noiseless expectation
 
-$$(\hat{A}_{\mathrm{pred}},\hat{A}_{\mathrm{bkg}}) = \arg\min_{\Apred,\Abkg}\chi^2(\Apred,\Abkg)$$
+$$\oij(\vec\theta_k) \;=\; \Tsig(\vec\theta_k) + \Tbkg .$$
 
-with box constraints $|\Apred| \le 10\,\spred$, $|\Abkg| \le 10\,\sbkg$. L-BFGS-B uses gradient information and is well-suited to smooth, convex objectives with box constraints. Implemented in `lib/lib_root.py:Sensitivity_Fitter.Fit`.
+Two reference predictions are held fixed throughout the scan,
 
-### 5.8 Oscillation Grid Scan and Cut Quality Score
+$$p^{\mathrm{solar}}_{ij} = \Tsig(\vec\theta_\odot), \qquad p^{\mathrm{react}}_{ij} = \Tsig(\vec\theta_{\mathrm{react}}),$$
 
-For each analysis cut $(N_{\mathrm{hits}},N_{\mathrm{ophits}},N_{\mathrm{adjcl}})$ and each grid point $\vec{\theta}_k$:
+evaluated at $\vec\theta_\odot = (6.0\times10^{-5},\,0.022,\,0.304)$ and
+$\vec\theta_{\mathrm{react}} = (7.54\times10^{-5},\,0.022,\,0.304)$. Each Asimov dataset is fitted
+against **both** references, yielding $\chi^2_\odot(\vec\theta_k)$ and
+$\chi^2_{\mathrm{react}}(\vec\theta_k)$.
 
-1. Construct the Asimov dataset $\oij(\vec{\theta}_k)$.
-2. Minimize $\chi^2$ against $p^{\mathrm{solar}}$: obtain $\chi^2_\odot(\vec{\theta}_k)$.
-3. Minimize $\chi^2$ against $p^{\mathrm{react}}$: obtain $\chi^2_{\mathrm{react}}(\vec{\theta}_k)$.
+The same background template appears in the data and in both models; no background mismatch is
+injected anywhere in the procedure. This is a deliberate choice — the study measures parameter
+resolution, not robustness against background mismodelling — and it is one premise of the result in
+§5.14.
 
-The **cut quality score** is the average wrong-hypothesis $\chi^2$ (larger $\Rightarrow$ better discrimination):
+### 5.5 Objective Function: Baker-Cousins Poisson Deviance {#sens-deviance}
 
-$$\mathrm{Score}(\mathrm{cut}) = \tfrac{1}{2}\!\left[ \chi^2_\odot(\vec{\theta}_{\mathrm{react}}) + \chi^2_{\mathrm{react}}(\vec{\theta}_\odot) \right]$$
+The fit minimises a Baker-Cousins Poisson deviance [Baker & Cousins 1984] between the Asimov data
+and a model expectation $\muij$:
 
-The resulting $\chi^2$ surface over the oscillation grid gives the sensitivity contours.
+$$D(\oij\,\|\,\muij) = 2\sum_{ij\in\mathcal{M}}\Delta\ell_{ij}, \qquad
+\Delta\ell_{ij} = \begin{cases} \muij - \oij + \oij\ln(\oij/\muij) & \oij>0,\; \muij>0,\\ \muij & \oij=0,\; \muij>0,\\ 0 & \text{masked.} \end{cases}$$
 
-### 5.9 Template Construction Pipeline
+Each term $\Delta\ell_{ij}\ge0$ by the Gibbs inequality; the sum vanishes if and only if
+$\muij=\oij$ for all bins.
+
+**Numerical form.** The analysis operates at $\oij\sim\muij\sim10^{9}$ per bin, where the closed
+form cancels catastrophically. With $x = (\oij-\muij)/\muij$, `_poisson_deviance_terms`
+(`lib/fitting.py:1449`) evaluates $2\muij\left[(1+x)\ln(1+x)-x\right]$, switching below
+$|x|<10^{-3}$ to the series
+
+$$(1+x)\ln(1+x)-x \;=\; \tfrac{x^2}{2}-\tfrac{x^3}{6}+\tfrac{x^4}{12}-\tfrac{x^5}{20}+\mathcal{O}(x^6).$$
+
+Without this the deviance is dominated by round-off over most of the grid.
+
+**Structural connection to HEP.** Under $H_0$ (no signal, $\pij=0$) the statistic reduces to the
+HEP log-likelihood ratio with one nuisance per normalisation parameter. The Sensitivity objective
+is the 2D, multi-nuisance generalisation of the HEP test statistic.
+
+### 5.6 Nuisance Parameters as a Linear Response Model {#sens-response}
+
+Systematics enter through a linear response model,
+
+$$\muij(\alpha) = \muzero + \sum_k \alpha_k J^{(k)}_{ij}, \qquad \muzero = \pij + \Tbkg,$$
+
+with $J^{(k)} = \partial\mu/\partial\alpha_k$ the response template of nuisance $k$ and $\alpha_k$
+its value in physical units. The response templates are built once per scan by
+`sensitivity_pull_jacobian` (`lib/fitting.py:1476`):
+
+| $k$ | Name | $J^{(k)}_{ij}$ | Prior width | Exact? |
+|---|---|---|---|---|
+| 1 | `signal_norm` | $\pij$ | $\spred = 4\%$ | exact |
+| 2 | `background_norm` | $\Tbkg$ | $\sbkg = 2\%$ | exact |
+| 3 | `energy_scale` | $\bigl[\pij(+\ses)-\pij(-\ses)\bigr]/2\ses$ | $\ses = 2\%$ | linearised |
+| 4 | `sin13` | $\partial \pij/\partial\sin^2\theta_{13}$ | $\ssin = 5.6\times10^{-4}$ | linearised |
+
+A nuisance whose prior width is zero or absent is dropped from the problem entirely rather than
+fixed at zero with a column of zeros; this keeps the linear algebra well conditioned.
+
+Two properties of this table deserve emphasis.
+
+**The normalisation responses are exact, not approximations.** For $k=1$,
+$\muzero + \alpha_1\pij \equiv (1+\alpha_1)\pij + \Tbkg$, and likewise for $k=2$. The linear model
+is a first-order approximation only for the energy-scale and $\sin^2\theta_{13}$ nuisances, whose
+response templates are central differences — the energy scale from a linear interpolation of the
+template onto the shifted energy axis (`_sensitivity_apply_energy_scale`), the mixing angle from a
+secant between the nearest configured $\sin^2\theta_{13}$ grid neighbours of the reference value,
+computed without the sub-one-event truncation so that the derivative stays smooth.
+
+**The energy-scale response is built from the signal template only.** $J^{(3)}$ involves $\pij$ and
+never $\Tbkg$. The background consequently possesses exactly one degree of freedom in the entire
+fit — a global normalisation — and no shape freedom of any kind. §5.14 shows that this is not, in
+this analysis, a limitation with observable consequences.
+
+### 5.7 The Profiled $\chi^2$ and its Solution {#sens-profile}
+
+The statistic reported per grid point and hypothesis is the profile
+
+$$\boxed{\;\chi^2 \;=\; \min_{\alpha}\left[\,D\!\left(\oij \,\middle\|\, \muzero + \textstyle\sum_k \alpha_k J^{(k)}_{ij}\right) \;+\; \sum_k \left(\frac{\alpha_k}{\sigma_k}\right)^{2} \right]\;}$$
+
+implemented by `sensitivity_pull_profile` (`lib/fitting.py:1516`). This is the **pull method**,
+selected by `--fit_method pull`, the default since the revision recorded in §8.1.
+
+Alongside the profiled value the routine returns two diagnostics used downstream:
+
+- $\chi^2_0 \equiv D(\oij\|\muzero)$, the deviance with every nuisance held at nominal. Since the
+  profile minimises over a set containing $\alpha=0$, the bound $\chi^2\le\chi^2_0$ holds at every
+  point; the `profile_bound` validation gate (§5.12) tests exactly this.
+- $\chi^2_{\mathrm{gauss}}$, the closed-form Gaussian (Pearson) profile below.
+
+**Algorithm.** The minimisation is performed in **standardised** coordinates
+$\beta_k=\alpha_k/\sigma_k$, so that every prior becomes a unit Gaussian and the penalty is simply
+$\beta^{\!\top}\beta$. Writing $A_{k,ij}=\sigma_k J^{(k)}_{ij}$ restricted to the active bins and
+$r = \oij - \muzero$:
+
+1. **Closed-form Gaussian start.** Approximating the Poisson variance by
+   $V=\mathrm{diag}(\muzero)$ and the deviance by the Pearson form $r^{\!\top}V^{-1}r$, the profile
+   has the Woodbury solution
+   $$\beta^{\mathrm{G}} = \left(\mathbb{1}+AV^{-1}A^{\!\top}\right)^{-1}AV^{-1}r, \qquad
+     \chi^2_{\mathrm{gauss}} = r^{\!\top}V^{-1}r - \left(AV^{-1}r\right)^{\!\top}\beta^{\mathrm{G}} .$$
+   This is exact for the Gaussian objective and seeds the Poisson one.
+2. **Safeguard.** If $\beta^{\mathrm{G}}$ leads to a non-positive expectation in any bin, or to an
+   objective worse than $\chi^2_0$, the iteration restarts from $\beta=0$.
+3. **Newton iteration with backtracking.** With $\rho=\oij/\muij$,
+   $$g = 2A(\mathbb{1}-\rho) + 2\beta, \qquad
+     \mathcal{H} = 2\,A\,\mathrm{diag}\!\left(\rho/\muij\right)A^{\!\top} + 2\,\mathbb{1},$$
+   and the step $\delta=-\mathcal{H}^{-1}g$ is taken with an Armijo backtracking line search
+   (factor $\tfrac12$, sufficient-decrease constant $10^{-4}$). Convergence is declared when the
+   Newton decrement $-g^{\!\top}\delta$ falls below $2\times10^{-9}$, with at most 50 iterations.
+
+All small linear systems are solved by `_solve_equilibrated` (`lib/fitting.py:1465`), which applies
+Jacobi (diagonal) scaling before `numpy.linalg.solve` and falls back to a least-squares solve on
+`LinAlgError`. The scaling is necessary because the diagonal entries of $\mathcal{H}$ span roughly
+ten decades: the background-normalisation direction is constrained by $\sim10^{12}$ events while
+the $\sin^2\theta_{13}$ direction is constrained by the high-energy tail alone.
+
+The problem is small — at most four nuisances — and convex in the region of interest, so the
+procedure converges in a handful of iterations per grid point. The scan is distributed over worker
+processes by `sensitivity_chi2_worker_pull` (`lib/fitting.py:1622`); the response templates depend
+only on the fixed reference predictions and are therefore computed **once** per scan in the parent
+process and passed to the workers, rather than being rebuilt at each of the 14 702 grid points.
+
+**Why this supersedes a general-purpose optimiser.** The energy-scale shift becomes a profiled
+parameter instead of an outer grid scan; the Gaussian start removes the dependence on an
+optimiser's convergence behaviour at $10^9$ counts per bin; and the $\sin^2\theta_{13}$ constraint
+can be applied inside the fit rather than as a post-hoc minimisation over the parameter grid
+(§5.9).
+
+### 5.8 Bin Masking {#sens-mask}
+
+A bin enters the sum only if
+
+$$\mathcal{M}_{ij} = \mathbf{1}\!\left[\muzero>0\right]\wedge\mathbf{1}\!\left[\Tbkg > 0\right],$$
+
+the second condition being applied whenever the background template is not identically zero. This
+excludes bins in which a signal is predicted but no reliable background model exists, where the
+deviance would otherwise be unbounded. For the reference configuration 722 of the 1200 bins
+survive. The condition is the two-dimensional analogue of the HEP Barlow-Beeston mask
+[Barlow & Beeston 1993].
+
+### 5.9 Nuisance Profiles {#sens-profiles}
+
+Which of $k=3,4$ are active is set by a named **nuisance profile**, a key of `NUISANCE_PROFILES` in
+`config/analysis/config.json`, whose entries are merged into the analysis configuration at run
+time:
+
+| Profile | `MARGINALIZE_SIN13` | `ENERGY_SCALE_UNCERTAINTY` | Active nuisances |
+|---|---|---|---|
+| `full` *(default)* | true | true | 1, 2, 3, 4 |
+| `marginalize_sin13` | true | false | 1, 2, 4 |
+| `energy_scale` | false | true | 1, 2, 3 |
+| `nominal` | false | false | 1, 2 |
+
+The signal- and background-normalisation nuisances are **not** governed by the profile: they are
+present in every profile whenever their prior widths are non-zero. The `nuisance` study group runs
+the four profiles against one another to decompose the sensitivity loss attributable to each
+systematic. The default is `full`, the conservative choice; `run_sensitivity.py` warns at start-up
+that this marginalisation reduces the apparent sensitivity relative to a fixed-parameter fit.
+
+**Treatment of $\sin^2\theta_{13}$.** It is both a scan axis and a constrained parameter, and the
+two roles must not be applied simultaneously. The code distinguishes three modes
+(`06_significance.py:1238`):
+
+- **`fit`** — `--fit_method pull` with `MARGINALIZE_SIN13` true. $\sin^2\theta_{13}$ is nuisance
+  $k=4$ inside the profile, with prior $\ssin$. No further profiling is applied.
+- **`grid`** — `MARGINALIZE_SIN13` true under the legacy fitter. The constraint is imposed *after*
+  the scan by minimising
+  $\chi^2 + [(\sin^2\theta_{13}-\overline{\sin^2\theta_{13}})/\ssin]^2$ over the
+  $\sin^2\theta_{13}$ values present at each $(\Delta m^2,\sin^2\theta_{12})$ cell.
+- **`none`** — `MARGINALIZE_SIN13` false. $\sin^2\theta_{13}$ is held at its reference value.
+
+Applying the grid minimisation on top of a fit that already profiles $\sin^2\theta_{13}$ would
+double-count the constraint; the code guards against this explicitly. The `grid` mode additionally
+requires every $(\Delta m^2,\sin^2\theta_{12})$ cell to contain more than one $\sin^2\theta_{13}$
+value — otherwise the minimisation is a no-op on the plane through the reference point and a
+genuine minimisation elsewhere, painting a cross-shaped artifact through the grid. The
+`sin13_profile` validation gate (§5.12) enforces this.
+
+**Prior widths.**
+
+| Symbol | Meaning | Value | Source |
+|---|---|---|---|
+| $\spred$ | $^8$B flux normalisation | 0.04 | `ANALYSIS_UNCERTAINTIES.SENSITIVITY.signal_uncertainty` |
+| $\sbkg$ | background normalisation | 0.02 | `ANALYSIS_UNCERTAINTIES.SENSITIVITY.background_uncertainty` |
+| $\ses$ | reconstructed energy scale | 0.02 | **code fallback** — `ENERGY_SCALE_SIGMA` absent from configuration |
+| $\ssin$ | $\sin^2\theta_{13}$ | $5.6\times10^{-4}$ | **code fallback** — `SIN13_SIGMA` absent from configuration |
+
+$\ses$ and $\ssin$ are currently taken from the literal defaults in `06_significance.py:1089` and
+`:1123`, because the corresponding keys are not present in any configuration file. The values are
+defensible — $\ssin = 5.6\times10^{-4}$ is the PDG uncertainty on $\sin^2\theta_{13}$ — but they
+are not traceable through the configuration, and a thesis quoting them should either add them to
+`config/analysis/physics.json` or state that they are code defaults.
+
+### 5.10 Grid Scan and Selection Optimisation {#sens-scan}
+
+#### The oscillation grid
+
+The grid is not a dense three-dimensional cube. No Cartesian product is taken; instead
+`make_oscillation_grid` (`lib/oscillation.py:98`) forms the union of four two-dimensional **planes**
+and five denser one-dimensional **lines**, all passing through the reference points, as specified by
+`OSCILLATION_GRID` in `config/analysis/physics.json`:
+
+| | Scanned axes | Held fixed at | Steps |
+|---|---|---|---|
+| Plane 1 | $(\Delta m^2_{21},\ \sin^2\theta_{12})$ | $\sin^2\theta_{13}$ | $45\times45$ |
+| Plane 2 | $(\Delta m^2_{21},\ \sin^2\theta_{13})$ | $\sin^2\theta_{12}$ | $45\times45$ |
+| Plane 3 | $(\sin^2\theta_{13},\ \sin^2\theta_{12})$ | $\Delta m^2_\odot$ | $45\times45$ |
+| Plane 4 | $(\sin^2\theta_{13},\ \sin^2\theta_{12})$ | $\Delta m^2_{\mathrm{react}}$ | $45\times45$ |
+| Line 1 | $\Delta m^2_{21}$ | $\sin^2\theta_{13},\ \sin^2\theta_{12}$ | 50 |
+| Lines 2-3 | $\sin^2\theta_{12}$ | $\sin^2\theta_{13}$, and $\Delta m^2_\odot$ / $\Delta m^2_{\mathrm{react}}$ | 50 each |
+| Lines 4-5 | $\sin^2\theta_{13}$ | $\sin^2\theta_{12}$, and $\Delta m^2_\odot$ / $\Delta m^2_{\mathrm{react}}$ | 50 each |
+
+Axis ranges are $\Delta m^2_{21}\in[3\times10^{-5},\,1\times10^{-4}]\ \mathrm{eV}^2$,
+$\sin^2\theta_{13}\in[0.01,\,0.04]$ and $\sin^2\theta_{12}\in[0.15,\,0.45]$, all linear. The four
+reference values are pinned onto their axes unconditionally, so the reference points are guaranteed
+to be grid points — a prerequisite for the `asimov` validation gate. After de-duplication the union
+contains **14 702 distinct points**, each fitted twice. `--draft` substitutes a coarse grid for fast
+validation runs.
+
+Two planes are devoted to $(\sin^2\theta_{13},\sin^2\theta_{12})$ — one at each reference
+$\Delta m^2_{21}$ — and the lines duplicate the plane intersections at finer spacing, because the
+one-dimensional projections enter the parameter-resolution quotes while the planes supply the
+contours.
+
+#### Cut quality score
+
+For each analysis cut $(N_{\mathrm{hits}},N_{\mathrm{ophits}},N_{\mathrm{adjcl}})$ and each grid
+point $\vec\theta_k$:
+
+1. Construct the Asimov dataset $\oij(\vec\theta_k)$.
+2. Profile $\chi^2$ against $p^{\mathrm{solar}}$: obtain $\chi^2_\odot(\vec\theta_k)$.
+3. Profile $\chi^2$ against $p^{\mathrm{react}}$: obtain $\chi^2_{\mathrm{react}}(\vec\theta_k)$.
+
+`04_best_cuts.py` scores each candidate cut by the symmetric **wrong-hypothesis** $\chi^2$ — the
+average of the two cross-fits, larger meaning the hypotheses are harder to confuse:
+
+$$\mathrm{Score}(\mathrm{cut}) = \tfrac{1}{2}\!\left[ \chi^2_\odot(\vec\theta_{\mathrm{react}}) + \chi^2_{\mathrm{react}}(\vec\theta_\odot) \right]$$
+
+The winning cut is written to `highest_SENSITIVITY.pkl` and used by the full scan. The scorer uses
+the same statistic as the scan itself (`sensitivity_pull_chi2` under `--fit_method pull`), so
+optimisation and final result are internally consistent.
+
+The ordering of pipeline stages matters and is enforced by `run_sensitivity.py`: background
+templates for all candidate cuts (phase 1) → cut optimisation (phase 2) → signal template grid for
+the *selected* cut (phase 3) → $\chi^2$ scan (phase 4). Running the scan against templates
+generated for a different cut is the single most common way to obtain silently wrong results, and
+`validate_template_cut_consistency` aborts the run if the stored templates do not match the
+resolved cut.
+
+### 5.11 Contour Construction {#sens-contours}
+
+Contours are drawn from the **difference** to the grid minimum, never from absolute $\chi^2$:
+
+$$\Delta\chi^2(\vec\theta_k) = \chi^2(\vec\theta_k) - \min_{k'}\chi^2(\vec\theta_{k'}), \qquad
+Z(\vec\theta_k) = \sqrt{\max\left(\Delta\chi^2,\,0\right)} .$$
+
+`contour_plot.py` plots $Z$ with contour levels at $Z = 1,2,3$ and stores $\chi^2_{\min}$ alongside
+the grid for diagnostics. The distinction is essential, and is discussed further in §8.2: absolute
+thresholds conflate the overall goodness of fit with the *shape* of the likelihood surface, so any
+systematic that raises the whole surface would exclude points from the contour and make it shrink,
+which is precisely backwards.
+
+### 5.12 Validation Gates {#sens-validation}
+
+Every scan writes a `*_Validation.json` report next to its grids, produced by
+`sensitivity_validation_gates` (`lib/fitting.py:1712`). The gates are method-independent; a gate
+that cannot be evaluated reports `null` and does not fail the run.
+
+| Gate | Condition |
+|---|---|
+| `finite` | every $\chi^2$ is finite and none equals the legacy failure sentinel |
+| `asimov` | the reference point fitted against its own hypothesis gives $\chi^2 \le 0.01$ |
+| `profile_bound` | $\chi^2 \le \chi^2_0$ at every point, and every fit converged |
+| `smoothness` | no isolated spikes along either grid axis (`_grid_spikes`) |
+| `sin13_profile` | grid-mode $\sin^2\theta_{13}$ profiling only where every cell has $>1$ value |
+
+The `asimov` gate is the sharpest single check available in an Asimov study: fitting a dataset
+against the hypothesis that generated it must return $\chi^2 = 0$ up to numerical tolerance, and any
+error in template alignment, exposure scaling or bin masking breaks it immediately.
+
+Under `--fit_method pull` a failing gate is **fatal** by default: the run writes a
+`*_Sensitivity_INVALID.json` marker into the results directory and terminates with `os._exit(1)`,
+so a broken grid cannot silently propagate into a plot. The hard exit is deliberate — `lib`
+registers an `atexit` handler that would otherwise convert a `SystemExit` into exit status 0 and
+let the pipeline continue. Under the legacy method the gates are warn-only. The behaviour is
+overridable with `--strict_validation` / `--no-strict_validation`.
+
+### 5.13 Systematic Studies {#sens-studies}
+
+Study variants are registered in `lib/study.py` and dispatched by `run_studies.py`, which isolates
+each variant's outputs with a `--study_label` so the main analysis products are never overwritten.
+
+| Group | Thesis § | Knob varied |
+|---|---|---|
+| `metric` | 9.1.1 | raw vs. smoothed histogram metric |
+| `unc` | 9.1.2 | $\spred \in \{0,2,6\}\%$; $\sbkg \in \{0,4,6\}\%$ |
+| `oscpoint` | 9.1.3 | reference $\Delta m^2_{21}$ (solar vs. reactor) |
+| `energy` | 9.2.1 | energy estimator (`SolarEnergy`, `SignalParticleK`, `MainK`) |
+| `fiduc_truth` | 9.2.2 | truth vs. reconstructed position for the fiducial mask |
+| `fiduc` | 9.2.3 | fiducialisation folder (Nominal / Reduced / Truncated) |
+| `charge` | 9.2.4 | charge threshold scan, replacing the NHits/AdjCl axes |
+| `bkg_gamma` | 9.2.5 | background gamma model |
+| `bkgmodel` | 9.2.6 | background model normalisation |
+| `membrane_veto` | — | membrane/endcap optical veto on/off (VD) |
+| `nuisance` | — | nuisance-profile decomposition (§5.9) |
+| `legacy_fit` | — | legacy minimiser on the default templates (§5.15) |
+
+Only variants that change the event selection or the oscillation weighting receive their own
+template directory (`template_suffix` in `lib/study.py`); the remainder — including all of the
+`unc` group — reuse the default templates and differ only in the fit configuration, which is why
+they are cheap to run and why their outputs are separated by results directory rather than by
+filename.
+
+### 5.14 Sensitivity to the Background Normalisation Uncertainty {#sens-bkg-prior}
+
+#### Observation
+
+The `unc_bkg*` variants scan $\sbkg \in \{0,\,2,\,4,\,6\}\%$. Under `--fit_method pull` the
+resulting $\chi^2$ grids are **numerically identical** for every non-zero value. For the reference
+configuration (`hd_1x2x6_centralAPA`, Truncated, `SolarEnergy`, `NHits1/AdjCl4/OpHits8`, 30 yr):
+
+| $\sbkg$ | $\sum\chi^2_\odot$ (sin12 plane) | $\sum\chi^2_{\mathrm{react}}$ (sin12 plane) | $\max\lvert\Delta\rvert$ vs. $\sbkg=0$ |
+|---|---|---|---|
+| 0 % | 98 523.15018 | 96 149.12246 | — |
+| 2 % | 98 522.75789 | 96 148.76414 | $6.5\times10^{-4}$ |
+| 4 % | 98 522.75789 | 96 148.76414 | $6.5\times10^{-4}$ |
+| 6 % | 98 522.75789 | 96 148.76414 | $6.5\times10^{-4}$ |
+
+The $2/4/6\%$ grids agree to ten significant figures. The small offset of the $\sbkg = 0$ grid is
+not physical: removing the nuisance changes the dimension of the linear systems in §5.7 and hence
+the rounding, and $6\times10^{-4}$ is the resulting floating-point difference on a $\chi^2$ of
+order $10^2$.
+
+This is an expected property of the analysis, not a defect in the study machinery. The arguments do
+reach the fit — the results directory is named `signal_4%_and_background_6%` from the value
+actually used.
+
+#### Why the prior cannot bind
+
+Consider a single nuisance with response template $J$ and prior width $\sigma$, and let
+$r = \oij - \muzero$ be the residual. In the Gaussian limit the profile reduces the $\chi^2$ by
+
+$$\delta\chi^2 \;=\; \frac{\left(\sum_{ij} J_{ij}\,r_{ij}/\muzero\right)^{2}}{\sum_{ij} J_{ij}^{2}/\muzero \;+\; \sigma^{-2}} .$$
+
+Define the precision with which the **data themselves** determine that parameter,
+
+$$\sigma_{\mathrm{data}} \;\equiv\; \left(\sum_{ij} J_{ij}^{2}\big/\muzero\right)^{-1/2}.$$
+
+The prior enters only through the $\sigma^{-2}$ term in the denominator, and is therefore
+irrelevant whenever $\sigma \gg \sigma_{\mathrm{data}}$. In that regime the nuisance is effectively
+unconstrained by its prior, the profiled value is fixed entirely by the data, and $\delta\chi^2$
+becomes independent of $\sigma$.
+
+For the background normalisation $J = \Tbkg$ and $\muzero \simeq \Tbkg$, because $S/B \sim 10^{-7}$,
+so the sum collapses to the total background count:
+
+$$\sigma_{\mathrm{data}} \;\simeq\; \Big(\textstyle\sum_{ij} \Tbkg\Big)^{-1/2} \;=\; B^{-1/2}.$$
+
+The Asimov data determine the background normalisation to the Poisson precision of the total
+background count. Numerically, $B = 4.18\times10^{12}$ gives $B^{-1/2} = 4.9\times10^{-7}$, which
+reproduces the measured value of $4.892\times10^{-7}$ exactly. A $2\%$ prior is looser than the data
+constraint by a factor of $4\times10^{4}$, the profiled background shift comes out at
+$\alpha_2 \approx -1.0\times10^{-9}$, and the penalty $(\alpha_2/\sbkg)^2 \sim 10^{-15}$ lies below
+the numerical noise floor of the deviance.
+
+Direct evaluation of the reference fit confirms the argument: with $\spred = 4\%$ and the background
+nuisance active, $\chi^2_{\mathrm{react}}$ at the solar Asimov point is $1.36640410$ for every
+$\sbkg$ from $0.1\%$ to $20\%$, against $1.36640833$ with the nuisance removed altogether. The
+entire effect of granting the background a free normalisation is $4\times10^{-6}$ in $\chi^2$: the
+solar-reactor difference lives in the shape of the high-energy tail, very nearly orthogonal to a
+global background rescaling.
+
+#### The argument extends to background shape
+
+The conclusion is not a consequence of the background having only a normalisation degree of freedom
+(§5.6). For any smooth, fully correlated background deformation $J_{ij} = \Tbkg f(E_j)$,
+
+$$\sigma_{\mathrm{data}} = \Big(\textstyle\sum_{ij} \Tbkg f^{2}\Big)^{-1/2} \;\sim\; B^{-1/2}\big/\sqrt{\langle f^{2}\rangle},$$
+
+which remains of order $10^{-6}$ for any $f$ of order unity. Two candidate background shape
+nuisances were constructed and evaluated explicitly:
+
+| Candidate nuisance | $\sigma_{\mathrm{data}}$ | Shift in $\chi^2$ vs. current default | Dependence on its prior width over $10^{-3}$–$0.5$ |
+|---|---|---|---|
+| power-law tilt, $J = \Tbkg\ln(E/10\ \mathrm{MeV})$ | $6.3\times10^{-7}$ | $-4.8\times10^{-5}$ | none |
+| energy scale applied to $\Tbkg$ | $7.2\times10^{-8}$ | $-9.9\times10^{-5}$ | none |
+
+Against contour levels at $\Delta\chi^2 = 1,4,9$ a shift of $10^{-4}$ displaces the $1\sigma$
+contour by $\sim5\times10^{-5}\sigma$. Adding a background shape nuisance would therefore change
+neither the contours nor the outcome of a prior scan.
+
+#### Why breaking the correlation is not the remedy
+
+The only construction that makes a background systematic bite is to give each bin its own
+independent term, which is equivalent to inflating the per-bin variance from $\muij$ to
+$\muij + (\sigma \Tbkg)^2$. The relevant dimensionless quantity is $\sigma^2 \Tbkg$. With a mean of
+$B/722 = 5.8\times10^{9}$ events per active bin and $\sigma = 2\%$,
+
+$$\frac{\sigma^2 (\Tbkg)^{2}}{\muij} \;\simeq\; \sigma^{2}\,\Tbkg \;=\; 2.3\times10^{6},$$
+
+so each bin's effective variance is inflated by more than six orders of magnitude and $\Delta\chi^2$
+collapses towards zero. The analysis possesses no intermediate regime: a percent-level background
+uncertainty is either fully correlated, in which case the data calibrate it away and it is inert,
+or uncorrelated between bins, in which case it destroys the sensitivity entirely. Attempts to force
+a background uncertainty into the fit have repeatedly produced artifacts for this reason, and the
+`--fit_background` warning at `06_significance.py:304` is a symptom of the same structure.
+
+#### Where the prior would begin to matter
+
+$\sigma_{\mathrm{data}}$ is dominated by the low-energy bins, where the background is largest and
+the signal absent. Raising the analysis threshold removes them, and the prior becomes progressively
+more relevant:
+
+| Threshold | $B$ (30 yr) | $S/B$ | $\sigma_{\mathrm{data}}$ | $\chi^2(\sbkg{=}0)$ | $\chi^2(2\%)$ | $\chi^2(6\%)$ |
+|---|---|---|---|---|---|---|
+| 0 MeV *(default)* | $4.18\times10^{12}$ | $7.2\times10^{-8}$ | $4.9\times10^{-7}$ | 1.366408 | 1.366404 | 1.366404 |
+| 6 MeV | $2.47\times10^{11}$ | $1.1\times10^{-6}$ | $2.0\times10^{-6}$ | 1.366408 | 1.366360 | 1.366360 |
+| 8 MeV | $1.50\times10^{10}$ | $1.5\times10^{-5}$ | $8.2\times10^{-6}$ | 1.366391 | 1.366080 | 1.366080 |
+| 10 MeV | $1.09\times10^{8}$ | $1.1\times10^{-3}$ | $9.6\times10^{-5}$ | 1.366009 | 1.362028 | 1.362027 |
+| 12 MeV | $2.98\times10^{5}$ | $1.3\times10^{-1}$ | $1.9\times10^{-3}$ | 1.331534 | 1.290772 | 1.289475 |
+
+Only above $\sim12$ MeV, where the data constraint has degraded to $2\times10^{-3}$, does the
+$2\%\to6\%$ variation produce any change at all, and it is then $1.3\times10^{-3}$ in $\chi^2$. The
+analysis threshold `ANALYSIS_THRESHOLDS.SENSITIVITY.SIGNIFICANCE` is currently 0.
+
+#### Statement for the thesis
+
+The `unc_bkg*` variants should be presented as establishing an insensitivity rather than as a
+failed scan. A defensible formulation is:
+
+> Because the selected sample is background dominated by seven orders of magnitude, the Asimov
+> dataset constrains the background normalisation *in situ* to the Poisson precision of the total
+> background count, $B^{-1/2}\approx5\times10^{-7}$. Any external prior on the background
+> normalisation at the percent level is looser than this by four orders of magnitude and is
+> therefore non-binding: the oscillation-parameter contours are unchanged for $\sbkg$ anywhere
+> between 0 and 20 %. The same holds for any smooth, fully correlated deformation of the background
+> spectrum. The sensitivity reported here is consequently limited by the signal flux normalisation,
+> the reconstructed energy scale and the statistical power of the high-energy tail, and not by
+> knowledge of the background rate.
+
+The corresponding entry in the systematic-uncertainty table should read "< 0.001 in $\Delta\chi^2$;
+negligible" rather than being left blank or reported as an unavailable result.
+
+*Verified 2026-09-14; reproduction recipe in §5.19.*
+
+### 5.15 Legacy Fitter (superseded) {#sens-legacy}
+
+The original implementation (`--fit_method legacy`, class `Sensitivity_Fitter`) minimised the same
+deviance over the two normalisations $(\Apred,\Abkg)$ with `scipy.optimize` L-BFGS-B
+[Byrd et al. 1995; Zhu et al. 1997] under box constraints $|A|\le10\sigma$, wrapping the whole fit
+in an outer scan over discrete energy-scale shifts. It remains available for validation and writes
+into a parallel `results/<profile>_legacy/` tree so it can never overwrite the default outputs; the
+`legacy_fit` study group exists for this comparison. Under `--fit_method pull` the legacy flags
+`--fit_background` and `--use_legacy_background_penalty` are ignored, with a warning
+(`06_significance.py:330`).
+
+### 5.16 Template Construction Pipeline {#sens-conv-figures}
 
 The 2D templates $T^{\mathrm{sig}}$ and $T^{\mathrm{bkg}}$ are assembled from three physical inputs via a two-stage convolution.
 
@@ -516,7 +1038,7 @@ The 2D templates $T^{\mathrm{sig}}$ and $T^{\mathrm{bkg}}$ are assembled from th
 
 The background template $T^{\mathrm{bkg}}$ is formed by weighting $b(E_{\mathrm{reco}})$ by $p(\cos\eta)$ via `_project_1d_to_2d`; $T^{\mathrm{sig}}$ is the result of the full convolution $T^{\mathrm{sig}} = P_{\nu_e\to\nu_e}\cdot h^T$, where $h$ is the $(E_{\mathrm{reco}}\times E_{\mathrm{true}})$ smearing matrix.
 
-### 5.10 Results
+### 5.17 Results {#sens-results}
 
 | Figure | Description |
 |---|---|
@@ -527,22 +1049,111 @@ The background template $T^{\mathrm{bkg}}$ is formed by weighting $b(E_{\mathrm{
 | `figures/sens_lateral_react_sin12` | lateralAPA: $\Delta\chi^2$ contours under the reactor hypothesis |
 | `figures/sens_lateral_significance` | lateralAPA: hypothesis-separation significance vs. exposure |
 
+### 5.18 Data Products and Directory Layout {#sens-products}
+
+Scan outputs are written beneath the signal template directory:
+
+```
+{PATH}/SENSITIVITY/{config}/{signal}/{folder}/{energy}{template_suffix}/
+  results/{profile}[_legacy]/signal_{S}%_and_background_{B}%/       (--background, the default)
+  results/{profile}[_legacy]/signal_{S}%_only/                      (--no-background)
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_solar_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_react_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_solar_sin12_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_solar_sin13_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_react_sin12_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_react_sin13_df[_10Y].pkl
+      {signal}_{energy}_NHits{n}_AdjCl{a}_OpHits{o}_Validation[_10Y].json
+      {signal}_{energy}_Sensitivity_INVALID[_10Y].json        (only on gate failure)
+```
+
+- `*_df.pkl` — tidy long-format tables, one row per grid point, columns `dm2, sin13, sin12, chi2`.
+- `*_sin12_df.pkl`, `*_sin13_df.pkl` — the corresponding planes as $\Delta m^2$-indexed matrices,
+  ready for contour plotting.
+- `_10Y` — the secondary exposure, evaluated in the same pass.
+- The `{profile}` and `signal_{S}%_and_background_{B}%` levels are what separate the `nuisance` and
+  `unc` study variants; the study label itself does **not** appear in these filenames.
+
+**Configuration reference.**
+
+| Key | File | Value | Used for |
+|---|---|---|---|
+| `SOLAR_DM2` / `REACT_DM2` | `physics.json` | $6.0/7.54\times10^{-5}$ eV² | reference hypotheses |
+| `SIN13` / `SIN12` | `physics.json` | 0.022 / 0.304 | reference hypotheses |
+| `NADIR_BINS` | `physics.json` | 40 | template nadir axis |
+| `OSC_NADIR_OVERSAMPLE` | `physics.json` | 4 | anti-aliasing (§5.3) |
+| `OSC_ENERGY_BINS` / `_RANGE` | `physics.json` | 120 / [0,30] MeV | oscillation sampling |
+| `OSCILLATION_GRID` | `physics.json` | 4 planes + 5 lines | scan grid (§5.10) |
+| `OSCILLATION_BACKEND` | `physics.json` | `nufast` | probability engine |
+| `ANALYSIS_EXPOSURES.SENSITIVITY` | `config.json` | 30 yr / 10 yr | primary / secondary |
+| `ANALYSIS_THRESHOLDS.SENSITIVITY.SIGNIFICANCE` | `config.json` | 0 | low-energy cut (§5.14) |
+| `ANALYSIS_UNCERTAINTIES.SENSITIVITY` | `config.json` | 0.04 / 0.02 | $\spred$ / $\sbkg$ |
+| `NUISANCE_PROFILES` | `config.json` | 4 profiles | §5.9 |
+| `DEFAULT_NUISANCE_PROFILE` | `config.json` | `full` | §5.9 |
+| `ENERGY_SCALE_SIGMA` | — | **absent**, code default 0.02 | $\ses$ (§5.9) |
+| `SIN13_SIGMA` | — | **absent**, code default $5.6\times10^{-4}$ | $\ssin$ (§5.9) |
+
+### 5.19 Reproduction Recipe {#sens-reproduction}
+
+The numerical statements of §5.14 are reproduced by the following, which loads the stored templates
+directly and calls the same fitting routines used by the scan. Run inside the analysis container
+(`apptainer exec -B /pnfs:/pnfs -B /pc:/pc containers/solar_v1.0.sif python3 …`).
+
+```python
+import sys; sys.path.insert(0, "<repo root>")
+import numpy as np, pandas as pd
+from lib.fitting import sensitivity_pull_jacobian, sensitivity_pull_profile
+
+S = "<PATH>/SENSITIVITY/hd_1x2x6_centralAPA/marley/truncated/SolarEnergy"
+B = "<PATH>/SENSITIVITY/hd_1x2x6_centralAPA/background/truncated/SolarEnergy"
+cut, E = "NHits1_AdjCl4_OpHits8", 30.0
+L = lambda p: np.nan_to_num(np.asarray(pd.read_pickle(p), dtype=float), nan=0.0)
+
+bkg = E * L(f"{B}/hd_1x2x6_centralAPA_background_{cut}.pkl")
+p1  = E * L(f"{S}/hd_1x2x6_centralAPA_marley_{cut}_dm2_6.000e-05_sin13_2.200e-02_sin12_3.040e-01.pkl")
+p2  = E * L(f"{S}/hd_1x2x6_centralAPA_marley_{cut}_dm2_7.540e-05_sin13_2.200e-02_sin12_3.040e-01.pkl")
+obs, mask = p1 + bkg, bkg > 0                       # Asimov at the solar point
+
+# data-driven precision on the background normalisation, and its B^{-1/2} closed form
+sigma_data = 1.0 / np.sqrt(np.sum(bkg[mask] ** 2 / (p2 + bkg)[mask]))
+print(f"sigma_data = {sigma_data:.3e}   B^-1/2 = {bkg.sum() ** -0.5:.3e}")
+
+for sb in [0.0, 0.001, 0.02, 0.06, 0.20]:           # chi2 is identical for every sb > 0
+    jac, sig, _ = sensitivity_pull_jacobian(p2, bkg, sigma_pred=0.04, sigma_bkg=sb)
+    chi2 = sensitivity_pull_profile(obs, p2 + bkg, jac, sig, mask=mask)["chi2"]
+    print(f"sigma_bkg = {sb:<6} chi2_react = {chi2:.8f}")
+```
+
+Replace `p2` by `p1` for the solar-hypothesis fit. To activate the energy-scale nuisance, pass
+`e_centers=Ec` and `sigma_e_scale=0.02`, where `Ec` is `lib.sensitivity_rebin_centers`. To
+reproduce the background-tilt row of §5.14, append the column and its prior width by hand:
+
+```python
+from lib import sensitivity_rebin_centers as Ec
+tilt = bkg * np.log(np.asarray(Ec, dtype=float) / 10.0)[None, :]
+jac, sig, _ = sensitivity_pull_jacobian(p2, bkg, e_centers=Ec, sigma_pred=0.04,
+                                        sigma_bkg=0.02, sigma_e_scale=0.02)
+jac = np.concatenate([jac, tilt[None, :, :]])
+sig = np.concatenate([sig, [0.02]])                 # the result is independent of this value
+print(sensitivity_pull_profile(obs, p2 + bkg, jac, sig, mask=mask)["chi2"])
+```
+
 ---
 
 ## 6. Comparison Across Analyses {#comparison}
 
 | Feature | Day-Night | HEP | Sensitivity |
 |---|---|---|---|
-| Observable | 1D rate-difference spectrum | 1D energy spectrum | 2D (energy × azimuth) |
+| Observable | 1D rate-difference spectrum | 1D energy spectrum | 2D (nadir angle × energy) |
 | Signal | $\si{=}\Ecal\theta_s(r_i^{\rm night}{-}r_i^{\rm day})$ | $\si{=}\Ecal r_i^{\rm hep}$ | $\Tsig(\vec\theta)$ |
 | Goal | Detect day-night asymmetry | Discover hep flux | Map $(\Delta m^2,\sin^2\theta)$ contour |
 | Significance type | Gaussian (diagnostic), two-sample Asimov (primary) | Gaussian, Asimov, PL | $\chi^2$ surface |
-| Nuisances | None (error propagated) | $1\times\beta$ (background) | $\Apred + \Abkg$ |
-| Nuisance solution | — | Closed-form quadratic | L-BFGS-B (2D) |
-| Penalty form | — | $[(\bhat{-}1)/\srel]^2$ | $(\Apred/\spred)^2{+}(\Abkg/\sbkg)^2$ |
+| Nuisances | None (error propagated) | $1\times\beta$ (background) | signal + background norm.; energy scale and $\sin^2\theta_{13}$ by profile |
+| Nuisance solution | — | Closed-form quadratic | Pull profile: Gaussian (Woodbury) start + safeguarded Newton |
+| Penalty form | — | $[(\bhat{-}1)/\srel]^2$ | $\sum_k(\alpha_k/\sigma_k)^2$ |
 | Per-bin deviance | Two-sample LLR | Baker-Cousins per bin | Baker-Cousins 2D |
 | Effective background | $\Beff$ (inv-fraction-weighted) | $\bi = \Ecal\sum_{c\neq\mathrm{hep}} r_i^c$ | $\Tbkg$ (2D template) |
-| Barlow-Beeston mask | No | $N_i^{\rm MC}\ge N_{\rm MC}^{\min}$ | $\Tbkg>0$ |
+| Barlow-Beeston mask | No | $N_i^{\rm MC}\ge N_{\rm MC}^{\min}$ | $\muzero>0 \wedge \Tbkg>0$ |
 | Asymmetry/signal band | $\theta_s\in\{1\pm\epstot,1\}$ | $d\in\{2.9,3.0,3.1\}$ | — |
 | PL post-processing | — | Gauss($\sigma{=}6$) + PAVA (optional) | — |
 | Spike filter | — | $\Delta_{\max}$ on pre-PAVA | — |
@@ -554,7 +1165,9 @@ The Day-Night analysis makes no nuisance-parameter approximations: signal and ba
 
 The HEP analysis introduces the full profile-likelihood framework. The critical observation is that a single global $\beta$ correlated across all bins leads to a scalar stationarity equation, whose positive root is a closed-form quadratic. This makes the PL computation exact and fast. PAVA post-processing and adaptive rebinning address practical numerical issues (oscillations at low $S/B$; low-statistics tail bins).
 
-The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's per-bin LLR, but extends it to 2D and introduces a second nuisance $\Apred$ that couples the model both to signal and background simultaneously. This coupling breaks the factorization that enabled the HEP quadratic, requiring a full numerical 2D minimization. The result is a $\chi^2$ map rather than a significance curve.
+The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's per-bin LLR, extends it to 2D, and admits up to four nuisances at once. Coupling the model simultaneously to signal and background breaks the factorization that enabled the HEP quadratic, so no scalar closed form exists. The resolution is not a general-purpose optimiser but a *linear response model*: writing $\muij = \muzero + \sum_k\alpha_k J^{(k)}_{ij}$ makes the Gaussian limit exactly solvable by Woodbury, and that solution seeds a safeguarded Newton iteration on the exact Poisson objective. The result is a $\chi^2$ map rather than a significance curve.
+
+A structural feature of this analysis, absent from the other two, is that the Asimov data themselves constrain some nuisances far more tightly than their priors. The background normalisation is determined *in situ* to $B^{-1/2}\approx5\times10^{-7}$, so its 2 % prior never binds and the contours are independent of it ([§5.14](#sens-bkg-prior)). Systematic uncertainties in this analysis are therefore not interchangeable: only those whose prior is tighter than the corresponding $\sigma_{\mathrm{data}}$ affect the result.
 
 ---
 
@@ -580,27 +1193,47 @@ The Sensitivity analysis takes the same Baker-Cousins Poisson deviance as HEP's 
 | | `RawProfileLikelihood` | Raw | None | PL | Yes (post) |
 | | `ProfileLikelihood` | Smooth | None | PL | Yes (post) |
 | | `PreIsotonicProfileLikelihood` | Smooth | None | PL (pre-PAVA) | No |
-| **Sensitivity** | `chi2_solar` / `chi2_react` | 2D smooth | None | Baker-Cousins | — |
+| **Sensitivity** | `chi2_solar` / `chi2_react` | 2D smooth | None | Baker-Cousins + pull profile | — |
 
 ---
 
 ## 8. Recent Statistical Methodology Updates {#stat-updates}
 
-### 8.1 Sensitivity Analysis: Fitting Methodology Correction
+### 8.1 Sensitivity Analysis: Fitting Methodology
 
-**Problem:** The original Sensitivity analysis implementation (legacy mode) fitted **both** signal amplitude ($A_{\mathrm{pred}}$) and background normalization ($A_{\mathrm{bkg}}$) as free parameters in the $\chi^2$ minimization. This caused physically incorrect behavior: when background uncertainty increased, the background normalization could absorb signal mismatches, causing sensitivity contours to **shrink** (tighten) instead of **loosen** — the opposite of expected physical behavior.
+The Sensitivity fit has passed through three stages. The current default is the **pull method**
+(`--fit_method pull`); the two earlier stages are recorded here because published intermediate
+results exist for both.
 
-**Solution:** Introduced the `--fit_background` control flag in `Sensitivity_Fitter` and `06_significance.py`:
+**Stage 1 — original (superseded).** Both the signal amplitude $\Apred$ and the background
+normalisation $\Abkg$ were free in an L-BFGS-B minimisation. This produced physically incorrect
+behaviour: increasing the background uncertainty let the background normalisation absorb signal
+mismatches, so the sensitivity contours **shrank** instead of loosening.
 
-- **Corrected mode (new default):** `--no-fit_background` fixes $A_{\mathrm{bkg}} = 0$ (background normalization at nominal). Only $A_{\mathrm{pred}}$ is fitted. This produces physically meaningful sensitivity where contours properly loosen with increased background uncertainty.
-- **Legacy mode:** `--fit_background` enables the old behavior (both parameters free) for validation against historical results.
+**Stage 2 — `--fit_background` control (superseded).** A flag was introduced to fix $\Abkg = 0$,
+leaving only $\Apred$ free, on the reasoning that a background free to float was the source of the
+artifact. The legacy behaviour remained reachable with `--fit_background`.
 
-**Implementation details:**
-- When `fit_background=False`, the background term in the likelihood becomes $e_{ij} = \Tbkg + (1+A_{\mathrm{pred}})\cdot p_{ij}$, and only the signal pull term $(A_{\mathrm{pred}}/\spred)^2$ appears in the $\chi^2$ penalty.
-- When `fit_background=True` (legacy), $e_{ij} = (1+A_{\mathrm{bkg}})\Tbkg + (1+A_{\mathrm{pred}})p_{ij}$, with both pull terms active.
-- The stationarity conditions for the corrected mode reduce to a single parameter optimization (exact for 1D, L-BFGS-B for 2D), avoiding the coupled non-linearity that required full 2D minimization in legacy mode.
+**Stage 3 — pull method (current default).** The fit was restructured around the linear response
+model of [§5.6](#sens-response). All active nuisances — signal normalisation, background normalisation, and,
+according to the profile, energy scale and $\sin^2\theta_{13}$ — are profiled together against
+their Gaussian priors, with a closed-form Gaussian start and a safeguarded Newton iteration ([§5.7](#sens-profile)).
+Under `--fit_method pull` the background normalisation is **always** profiled with its prior, and
+`--fit_background` / `--use_legacy_background_penalty` are ignored with a warning.
 
-**Validation:** Study variants `unc_bkg4_nobkgfit`, `unc_bkg6_nobkgfit`, `unc_sig6_nobkgfit` demonstrate the corrected behavior. The `fit_background` study group provides legacy validation.
+**Status of the stage-1 diagnosis.** The shrinking-contour artifact was real, but attributing it to
+the background being free was incomplete. [§5.14](#sens-bkg-prior) shows that the Asimov data constrain the background
+normalisation to $B^{-1/2}\approx5\times10^{-7}$, so a floating background normalisation with a
+percent-level prior costs only $4\times10^{-6}$ in $\chi^2$ and cannot move a contour in either
+direction. What the stage-1 fitter actually did was let a bounded optimiser wander in a direction
+the data pin almost exactly, at $10^{9}$ counts per bin and without equilibration — a numerical
+failure, not a statistical one. The pull method removes it by construction, which is why
+`--fit_background` no longer has any effect under the default method.
+
+**Validation.** The `legacy_fit` study group runs the stage-1/2 minimiser on the default templates
+and writes to `results/<profile>_legacy/`, so the two methods can be compared without either
+overwriting the other. Validation gates ([§5.12](#sens-validation), `profile_bound`; `sensitivity_validation_gates`) are
+strict by default under the pull method and warn-only under legacy.
 
 ### 8.2 Sensitivity Analysis: Delta Chi-Square Contour Plotting
 
@@ -645,23 +1278,76 @@ $$n_i^{\mathrm{day}}(\theta_s) = \Ecal\,f\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{da
 **Note on band ordering:** Because the bands are unpenalised, it is possible for the upper band ($\+\epstot$) to produce a lower significance than the nominal when the detector is in a regime where the marginal gain from increased asymmetry is small. This indicates the physical prediction is saturated — additional asymmetry provides no extra discriminating power.
 
 
+
+### 8.5 Sensitivity Analysis: The Background Uncertainty Is Non-Binding
+
+**Observation.** Under `--fit_method pull` the `unc_bkg*` study variants
+($\sbkg\in\{0,2,4,6\}\%$) produce $\chi^2$ grids that agree to ten significant figures for every
+non-zero $\sbkg$. This is a property of the analysis, not a defect in the study machinery: the
+values do reach the fit, and the results directory is named from the value actually used.
+
+**Explanation.** A Gaussian prior of width $\sigma$ on a nuisance with response template $J$ affects
+the profile only through the $\sigma^{-2}$ term in
+
+$$\delta\chi^2 = \frac{\left(\sum_{ij}J_{ij}r_{ij}/\muzero\right)^2}{\sum_{ij}J^2_{ij}/\muzero + \sigma^{-2}},$$
+
+so it is irrelevant once $\sigma$ exceeds the precision
+$\sigma_{\mathrm{data}} = (\sum J^2/\muzero)^{-1/2}$ to which the data themselves determine the
+parameter. For the background normalisation this evaluates to $B^{-1/2} = 4.9\times10^{-7}$ at
+$B = 4.18\times10^{12}$ events — four orders of magnitude tighter than a 2 % prior.
+
+**Scope.** The conclusion extends to any smooth, fully correlated background deformation: a
+power-law spectral tilt and a background energy scale were both constructed and evaluated, and both
+have $\sigma_{\mathrm{data}}\sim10^{-7}$ and shift $\chi^2$ by $\lesssim10^{-4}$ irrespective of
+their prior width. Adding a background shape nuisance would therefore not change the default result
+and is not worth implementing. Conversely, breaking the bin-to-bin correlation inflates each bin's
+variance by $\sigma^2 b_{ij}\approx2\times10^{6}$ and collapses the sensitivity entirely; there is
+no intermediate regime.
+
+**Consequences for the thesis.** The `unc_bkg*` variants establish an insensitivity and should be
+reported as such rather than as an unavailable result. The systematic-uncertainty table entry for
+the background normalisation should read "< 0.001 in $\Delta\chi^2$; negligible". The full
+derivation, the measured tables, the threshold dependence and suggested wording are in
+[§5.14](#sens-bkg-prior).
+
+*Verified 2026-09-14 on `hd_1x2x6_centralAPA`, Truncated, `SolarEnergy`, cut `NHits1/AdjCl4/OpHits8`,
+30 yr, profile `full`.*
+
+
 ---
-
-
 
 ## 9. Workflow Flags and Configuration {#flags}
 
-**Orchestrator flags in `run_sensitivity.py`:**
+**Stage flags in `run_sensitivity.py`** (all `--x` / `--no-x` pairs):
 
 | Flag | Default | Effect when disabled |
 |---|---|---|
-| `--computation` | True | Skip all computation; run only plot macros |
-| `--significance` | True | Skip `12DayNight.py`, `13HEP.py`, `14Sensitivity*.py` |
-| `--fiducialization` | True | Skip `0XFiducializeSignal.py`, `0YBestFiducial.py` |
-| `--rebin` | True | Skip `11AnalysisSignal.py` adaptive rebinning |
-| `--optimization` | False | Run smoothing sigma optimizer `optimize_smoothing.py` |
+| `--computation` | on | Skip all computation; run only plot macros |
+| `--significance` | on | Skip `01_daynight.py`, `01_hep.py`, `06_significance.py` |
+| `--fiducialization` | on | Skip the fiducialisation scan |
+| `--rebin` | on | Skip `03_analysis.py` adaptive rebinning |
+| `--plot` | on | Skip all figure output |
+| `--skip_best_cuts` | off | *When set:* reuse the stored best-cut map instead of re-optimising |
+| `--skip-templates` | off | *When set:* reuse existing templates (guarded — regenerates if stale) |
+| `--optimization` | off | *When set:* run the smoothing-sigma optimiser |
 
-**Per-analysis workflow feature flags** (controlled by `analysis/config.json` under `WORKFLOW.{ANALYSIS}`):
+**Sensitivity-specific flags:**
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--fit_method {pull,legacy}` | `pull` | Statistic of [§5.7](#sens-profile) vs. the superseded fitter of [§5.15](#sens-legacy) |
+| `--nuisance_profiles` | `full` | One or more profiles from [§5.9](#sens-profiles); each gets its own `results/<profile>/` tree |
+| `--flyweight` | on | Convolve signal templates on the fly from a stored base template |
+| `--strict_validation` | pull: on, legacy: off | Fail the stage when a validation gate fails |
+| `--draft` | off | Coarse oscillation grid for fast validation |
+| `--exposure` | 30 yr | Primary exposure; templates are per-year and scaled at load |
+| `--secondary_exposure` | 10 yr | Second exposure evaluated in the same pass (`_10Y` outputs) |
+| `--signal_uncertainty` | 0.04 | $\spred$ |
+| `--background_uncertainty` | 0.02 | $\sbkg$ — see §8.5: the result is independent of this value |
+| `--fit_background` | off | Legacy only; **ignored** under `--fit_method pull`, with a warning |
+| `--study_label` | — | Isolate outputs of a study variant (§5, `run_studies.py`) |
+
+**Per-analysis workflow feature flags** (`config/analysis/config.json`, `WORKFLOW.{ANALYSIS}`):
 
 | Key | Default | Effect when true |
 |---|---|---|
@@ -670,6 +1356,9 @@ $$n_i^{\mathrm{day}}(\theta_s) = \Ecal\,f\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{da
 | `HEP.pl_signal_bands` | `true` | Evaluate three signal normalizations for $\pm1\sigma_s$ PL bands |
 | `HEP.pl_isotonic` | `false` | Apply Gaussian+PAVA post-processing to PL curves |
 | `HEP.significance_bins` | `false` | Save per-bin significance spectra at the display exposure |
+
+Sensitivity configuration keys are tabulated in [§5.18](#sens-products), including the two prior
+widths ($\ses$, $\ssin$) that are currently code defaults rather than configuration entries.
 
 ---
 

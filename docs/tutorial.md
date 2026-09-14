@@ -41,9 +41,19 @@ python3 src/pipelines/run_sensitivity.py \
   --config hd_1x2x6_centralAPA \
   --names marley gamma neutron \
   --analysis DayNight HEP Sensitivity \
-  --folder Reduced \
-  --exposure 30
+  --folder Reduced
 ```
+
+Leave `--exposure` unset. Two analysis-dependent settings in
+`config/analysis/config.json` cover it:
+
+- `ANALYSIS_EXPOSURES` — the exposure each analysis is **run to** (top of the significance
+  grid, template scaling): 30 yr for all three, plus a 10 yr secondary pass for Sensitivity.
+- `EVALUATION_EXPOSURE_YEARS` — the livetime results are **quoted at** (spectra scaled to
+  counts, cutflow tables): 20 yr for DayNight and HEP, 30 yr for Sensitivity.
+
+Passing `--exposure` overrides the first for every selected analysis and isolates the
+outputs under an auto `<N>yr` study label.
 
 What it does today:
 
