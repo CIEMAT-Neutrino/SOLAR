@@ -280,16 +280,7 @@ No Solar Contour (sin12)/Reactor Contour (sin12) contour pair found for HD Later
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin12)/Reactor Contour (sin12) contour pair found for VD Bottom Shielded
 
 ---
 
@@ -326,16 +317,7 @@ No Solar Contour (sin13)/Reactor Contour (sin13) contour pair found for HD Later
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/full/vd_1x8x14_3view_30deg_shielded_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin13)/Reactor Contour (sin13) contour pair found for VD Bottom Shielded
 
 ---
 
@@ -365,9 +347,7 @@ No significance plot found for VD Top.
 
 ### VD Bottom Shielded
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
+No significance plot found for VD Bottom Shielded.
 
 ---
 
@@ -453,33 +433,9 @@ No 1D projections found.
 
 ---
 
-### VD Bottom Shielded: Mixing Angle Projections
+### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin13_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded: Mass Splitting Projections
-
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
+No 1D projections found.
 
 ---
 
@@ -490,7 +446,7 @@ No 1D projections found.
 | HD Central | - | - | - | - | - | - |
 | HD Lateral | - | - | - | - | - | 28.75 |
 | VD Top | 8 | 10 | 8 | 4 | 2 | - |
-| VD Bottom Shielded | 8 | 10 | 10 | 4 | 2 | - |
+| VD Bottom Shielded | - | - | - | - | - | - |
 
 ---
 
@@ -630,7 +586,7 @@ No 1D projections found.
 ## Coverage and Notes
 
 - Configs with selected sin12 solar contour plots:
-- truncated: 2
+- truncated: 1
 - Cut table values are parsed from selected result filenames when available.
 - Re-run script to refresh this folder after each workflow run:
 - /usr/bin/python3 scripts/generate_sensitivity_presentation.py --folder truncated

@@ -60,8 +60,9 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help=(
-        "Use true MC particle coordinates (SignalParticleX/Y/Z) instead of reco "
-        "flash-matched coordinates (RecoX/Y/Z) for the fiducial volume scan. "
+        "Use true MC particle coordinates instead of reco flash-matched coordinates "
+        "(RecoX/Y/Z) for the fiducial volume scan. Mapping: marley→SignalParticleX/Y/Z, "
+        "gamma→EndX/Y/Z, neutron/radiological→MainX/Y/Z. "
         "Output pkl is saved with a '_fiduc_truth' suffix to avoid overwriting the nominal scan."
     ),
 )
@@ -187,9 +188,11 @@ for config in configs:
         _op_plane_arr = run["Reco"]["MatchedOpFlashPlane"]
         _op_pe_arr    = run["Reco"]["MatchedOpFlashPE"]
         if args.truth_fiducial:
-            _reco_x_arr = run["Reco"]["SignalParticleX"]
-            _reco_y_arr = run["Reco"]["SignalParticleY"]
-            _reco_z_arr = run["Reco"]["SignalParticleZ"]
+            # Use truth position keys: SignalParticle* for marley, Main* for backgrounds
+            _xkey, _ykey, _zkey = get_truth_pos_keys(str(root), sample_key)
+            _reco_x_arr = run["Reco"][_xkey]
+            _reco_y_arr = run["Reco"][_ykey]
+            _reco_z_arr = run["Reco"][_zkey]
         else:
             _reco_x_arr = run["Reco"]["RecoX"]
             _reco_y_arr = run["Reco"]["RecoY"]

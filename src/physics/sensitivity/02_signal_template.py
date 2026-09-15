@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial import _DEFAULT_POS_KEYS, get_truth_pos_keys
 
 
 TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
@@ -151,6 +152,16 @@ parser.add_argument(
     help=(
         "Enable flyweight mode: save only unoscillated base templates in coarse (30-bin) sensitivity bins "
         "instead of computing and saving ~14k oscillation templates. Skips Phase 2 (oscillation loop)."
+    ),
+)
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Use true MC particle coordinates (SignalParticleX/Y/Z for marley, EndX/Y/Z for gamma, "
+        "MainX/Y/Z for neutron/radiological) instead of reco flash-matched coordinates (RecoX/Y/Z). "
+        "Output templates are saved with a '_fiduc_truth' suffix."
     ),
 )
 
@@ -353,7 +364,8 @@ for config in configs:
     info = json.loads(
         open(f"{root}/config/{config}/{config}_config.json").read()
     )
-    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+    _fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{_fiducials_stem}.json").read())
     selected_fiducial = get_best_fiducial(fiducials, config, args.energy, "SENSITIVITY")
     selected_fiducial_bands = get_best_fiducial_bands(fiducials, config, args.energy, "SENSITIVITY")
     analysis_info = load_analysis_info(str(root))
@@ -449,6 +461,13 @@ for config in configs:
             shared_yaxes=True,
         )
 
+        # Use truth positions for fiducialization when --truth_fiducial is enabled.
+        # _DEFAULT_POS_KEYS is private, so the `from lib import *` above does not bring it
+        # in — import it explicitly, as 03_analysis.py does for the same pair.
+        from lib.fiducial import _DEFAULT_POS_KEYS, get_truth_pos_keys
+        sample_key = args.signal.split("_")[0].lower()
+        _pos_keys = get_truth_pos_keys(str(root), sample_key) if args.truth_fiducial else _DEFAULT_POS_KEYS
+        
         quality_mask = (
             (
                 (run["Reco"]["SignalParticleSurface"] >= 0)
@@ -469,6 +488,7 @@ for config in configs:
         spatial_mask = build_energy_band_spatial_mask(
             run, config, detector_x, detector_y, info, args.folder,
             selected_fiducial, selected_fiducial_bands, energy,
+            pos_keys=_pos_keys,
         )
         this_filter = np.where(quality_mask & spatial_mask)
 

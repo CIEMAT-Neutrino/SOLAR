@@ -1457,7 +1457,9 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             if not args.skip_templates:
                 run_analysis_script(
                     "src/physics/sensitivity/03_template_compute.py",
-                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for(),
+                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "background"] + oscillation_args_for() + truth_fiducial_args_for() + membrane_veto_args_for()
+                    # A study that optimises its own cuts has no best-cut map yet: build every cut.
+                    + ([] if args.skip_best_cuts else ["--force-all-cuts"]),
                 )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping background template computation (--skip-templates).")
@@ -1474,7 +1476,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             if not args.skip_templates:
                 run_analysis_script(
                     "src/physics/sensitivity/03_template_compute.py",
-                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for() + membrane_veto_args_for() + flyweight_args_for(),
+                    template_base_args + reference_args + energy_args + uncertainty_args + ["--template", "signal"] + oscillation_args_for() + membrane_veto_args_for() + flyweight_args_for() + truth_fiducial_args_for(),
                 )
             else:
                 rprint("[cyan][INFO][/cyan] Skipping signal template computation (--skip-templates).")

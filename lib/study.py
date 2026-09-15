@@ -231,12 +231,6 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True, "analysis_override": ["DayNight"]},
         {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True, "analysis_override": ["DayNight"]},
     ],
-    # 9.2.2 — fiducialization (folder provides isolation; no study_label needed)
-    "fiduc": [
-        {"folder": "Nominal",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Reduced",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-        {"folder": "Truncated", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True},
-    ],
     # 9.2.3 — charge threshold scan
     # AdjCl energy features are recomputed with AdjClCharge > Q before the Rebin pkl is
     # written, so the energy axis itself reflects the charge cut — not just event selection.
@@ -276,15 +270,19 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
     ],
     # 9.2.2 / 9.2.3 — truth x-fiducialisation vs reco flash-matching
-    # Runs full fiducialization with SignalParticleX/Y/Z instead of RecoX/Y/Z.
+    # Runs full fiducialization with per-sample truth positions instead of RecoX/Y/Z:
+    #   marley → SignalParticleX/Y/Z, gamma → EndX/Y/Z, neutron/radiological → MainX/Y/Z
     # Produces BestFiducials_fiduc_truth.json and labeled Rebin pkls.
-    # Background scans always use nominal coordinates (no truth position available).
+    # Deliberate exception to the one-knob policy: this study measures what ideal
+    # fiducialization buys end to end, so it re-selects its own best cuts and smoothing
+    # sigmas on the truth-fiducial spectra instead of inheriting the nominal ones. Signal AND
+    # background templates are then built from the labeled truth-fiducial Rebin pkls.
     "fiduc_truth": [
         {
             "label": "fiduc_truth",
             "skip_rebin": False,
-            "skip_best_cuts": True,
-            "skip_best_sigmas": True,
+            "skip_best_cuts": False,
+            "skip_best_sigmas": False,
             "fiducialization": True,
             "extra": ["--truth_fiducial"],
         },

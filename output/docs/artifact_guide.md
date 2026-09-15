@@ -149,11 +149,11 @@ default and variants now agree at 0.97206.
 {cfg}_marley_MainK_HEP_Results_{label}.pkl           # energy_maink
 ```
 
-**Standard columns (SolarEnergy variants):** `ProfileLikelihood` (smoothed PL), `RawProfileLikelihood` (raw PL), `RawGaussian`, `RawAsimov`, `Gaussian`, `Asimov`, etc.
+**Standard columns (SolarEnergy variants):** `ProfileLikelihood` (PL — computed on the **raw**, unsmoothed spectrum despite the unprefixed name; there is no smoothed PL), `PreIsotonicProfileLikelihood` (the same curve before Gaussian+PAVA post-processing), `RawGaussian`, `RawAsimov`, `Gaussian`, `Asimov`, etc. `RawProfileLikelihood` exists as a column but is **never written** — it is zero-dimensional and must not be read. See `solar_analyses.md` §7.
 
 **Energy variant columns (SignalParticleK / MainK):** Only `ProfileLikelihood` + `PreIsotonicProfileLikelihood`. No `Asimov`, `Gaussian`, or `RawXxx` columns. `skip_rebin=True` suppresses non-PL metrics.
 
-**Extraction — best Smoothed PL at 10yr:**
+**Extraction — best PL at 10yr** (raw spectrum; the only PL there is):
 ```python
 def best_hep_pl(pkl_path):
     df = pickle.load(open(pkl_path, "rb"))
@@ -174,13 +174,14 @@ The OLD scheme pkl is what the artifact's baseline stat card was built from. The
 ```python
 def hep_pl_from_exposure(pkl_path):
     df = pickle.load(open(pkl_path, "rb"))
+    # SpectrumType is meaningless for PL rows: "Raw" and "Smoothed" carry identical values.
     row = df[(df["Variable"] == "ProfileLikelihood") & (df["SpectrumType"] == "Smoothed")]
     return float(row["Significance"].iloc[0][IDX10])
 ```
 
 **Current artifact HEP PL baselines** *(re-verified 2026-09-07)*:
 
-| Config | HEP PL Smoothed | Note |
+| Config | HEP PL (raw spectrum, post-PAVA, 10 yr) | Note |
 |--------|----------------|------|
 | cAPA   | 7.624          | unchanged |
 | lAPA   | 3.547          | was 3.569 |

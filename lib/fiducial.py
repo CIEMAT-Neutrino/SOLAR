@@ -146,7 +146,9 @@ def build_fiducial_spatial_mask(
 
     pos_keys selects which coordinate arrays to read from run["Reco"]:
       default  = ("RecoX", "RecoY", "RecoZ")   — reco flash-matched position
-      truth    = ("SignalParticleX", "SignalParticleY", "SignalParticleZ")
+      truth    = ("SignalParticleX", "SignalParticleY", "SignalParticleZ") for marley signal
+      truth    = ("MainX", "MainY", "MainZ") for neutron/radiological backgrounds
+      truth    = ("EndX", "EndY", "EndZ") for gamma backgrounds
     """
     xk, yk, zk = pos_keys
     return np.asarray(

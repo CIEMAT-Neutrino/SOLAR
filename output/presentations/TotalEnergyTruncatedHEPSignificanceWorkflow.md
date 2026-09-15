@@ -34,44 +34,44 @@ Config aliases:
 - folder: **Truncated**
 - analysis: HEP
 - exposure: default **30 years**
-- threshold in 13HEP.py: from [analysis/config.json](../../analysis/config.json) HEP -> THRESHOLDS -> (no threshold config found)
+- threshold in hep/01_hep.py: from [config/analysis/config.json](../../config/analysis/config.json) HEP -> THRESHOLDS -> (no threshold config found)
 - optional cuts override: nhits, ophits, adjcls
 - significance reference in plots: ProfileLikelihood
-- best-cut selection in 0ZBestSigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
+- best-cut selection in sensitivity/05_best_sigmas.py: **ProfileLikelihood** (smoothed, 3σ crossing)
 
 ---
 
 ### Workflow Skip Flags
 
-Used for [src/analysis/10SensitivityAnalysis.py](../../src/analysis/10SensitivityAnalysis.py):
+Used for [src/pipelines/run_sensitivity.py](../../src/pipelines/run_sensitivity.py):
 - `--no-computation`: skip all analysis, run plot macros only
-- `--no-significance`: skip 13HEP.py/12DayNight.py/14Sensitivity.py only
-- `--no-fiducialization`: skip 0XFiducializeSignal.py only
-- `--no-rebin`: skip 11AnalysisSignal.py rebinning step only
+- `--no-significance`: skip 01_hep.py/01_daynight.py/06_significance.py only
+- `--no-fiducialization`: skip signal/01_fiducialize.py only
+- `--no-rebin`: skip signal/03_analysis.py rebinning step only
 
 ---
 
 ### Workflow Outputs
 
-- Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
-- Best cut summaries (JSON): [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
+- Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
+- Best cut summaries (JSON): [config/*/hep-json/{folder}/{config}_highest_HEP.json](../../config)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/truncated)
-- Figures: [images/analysis/hep/truncated](../../images/analysis/hep/truncated)
+- Figures: [output/images/analysis/hep/truncated](../../output/images/analysis/hep/truncated)
 
 ---
 
 ### Histogram and Significance Flow I: Building, Smoothing, and Evaluation
 
-- Step 1: Build HEP rates and threshold region in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) per component.
-- Step 2: Apply component-aware smoothing via [lib/lib_smooth.py](../../lib/lib_smooth.py) using HEP smoothing config.
-- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
+- Step 1: Build HEP rates and threshold region in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) per component.
+- Step 2: Apply component-aware smoothing via [lib/smoothing.py](../../lib/smoothing.py) using HEP smoothing config.
+- Step 3: Evaluate Gaussian, Asimov, and ProfileLikelihood significance curves in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) for **all** analysis cuts. ProfileLikelihood uses a single global background normalization nuisance profiled jointly across all bins (see *Background Normalization Model* slide). Background bins with fewer than `min_mc_per_bin` raw MC events are masked using the [Barlow-Beeston lite criterion](https://www.sciencedirect.com/science/article/pii/009350659390005W) (as implemented in [ROOT HistFactory](https://root.cern.ch/doc/master/classRooStats_1_1HistFactory_1_1Measurement.html)) to suppress LLR divergence from empty bins. Smoothed histogram rates are clipped to ≥ 0 before the PL step to prevent negative-rate blowup at high exposures.
 
 ---
 
 ### Histogram and Significance Flow II: Post-Processing and Plotting
 
-- Step 4: Select the best cut by ProfileLikelihood in [src/analysis/0ZBestSigmas.py](../../src/analysis/0ZBestSigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
-- Step 5: Render exposure/significance and comparison plots in [src/analysis/13HEPExposurePlot.py](../../src/analysis/13HEPExposurePlot.py), [src/analysis/13HEPSignificancePlot.py](../../src/analysis/13HEPSignificancePlot.py), [src/analysis/13HEPSignificanceComparisonPlot.py](../../src/analysis/13HEPSignificanceComparisonPlot.py), and [src/analysis/13HEPExposureComparisonPlot.py](../../src/analysis/13HEPExposureComparisonPlot.py).
+- Step 4: Select the best cut by ProfileLikelihood in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py). Cuts whose PL curve contains a single-step jump exceeding `max_pl_jump` σ in either the raw or smoothed pre-isotonic column are flagged as spiked, excluded from the main `highest` selection, and saved separately as `highest_spiked` for inspection.
+- Step 5: Render exposure/significance and comparison plots in [src/physics/hep/exposure_plot.py](../../src/physics/hep/exposure_plot.py), [src/physics/hep/significance_plot.py](../../src/physics/hep/significance_plot.py), [src/physics/hep/significance_comparison.py](../../src/physics/hep/significance_comparison.py), and [src/physics/hep/exposure_comparison.py](../../src/physics/hep/exposure_comparison.py).
 
 ---
 
@@ -92,7 +92,7 @@ $$
 ### ProfileLikelihood Smoothing
 
 PL curves are post-processed with **Gaussian kernel smoothing followed by isotonic regression** to produce a continuous, monotone exposure curve:
-  1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/analysis/13HEP.py`](../../src/analysis/13HEP.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
+  1. [`scipy.ndimage.gaussian_filter1d`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.gaussian_filter1d.html) convolves the raw PL significance array with a Gaussian kernel (σ = 6 exposure-grid index units, tunable via `_PL_SMOOTH_SIGMA` in [`src/physics/hep/01_hep.py`](../../src/physics/hep/01_hep.py)). This mirrors the approach used by [ROOT `TH1::Smooth`](https://root.cern.ch/doc/master/classTH1.html#a16) for smoothing discrete numerical histograms.
   2. [`sklearn.isotonic.IsotonicRegression`](https://scikit-learn.org/stable/modules/generated/sklearn.isotonic.IsotonicRegression.html) (PAVA) is then applied to enforce strict monotonicity. It finds the non-decreasing sequence that minimises the L2 distance from the smoothed values, ensuring more data cannot reduce sensitivity.
 
 These steps remove residual numerical oscillations from the profile-likelihood solver at low signal-to-background ratios.
@@ -117,8 +117,7 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Stage | Enabled | Method | Component Mode | Smoothed Components | Sigma |
 |---|---|---|---|---|---|
-| Fiducial | Yes | gaussian | only | gamma, neutron, radiological, 8B | 0.62 |
-| Significance | Yes | gaussian | only | gamma, neutron, radiological, 8B | 0.62 |
+| *(no HEP smoothing stage config found)* | - | - | - | - | - |
 
 ---
 
@@ -136,10 +135,10 @@ No fiducial optimization plots were found for this folder.
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 80 | 120 | 140 | 0.000 | 0.002 | 3.36 |
-| HD Lateral | 40 | 280 | 80 | 0.000 | 0.000 | 2.84 |
-| VD Top | 40 | 80 | 200 | 0.002 | 0.004 | 5.25 |
-| VD Bottom Shielded | 140 | 60 | 40 | 0.002 | 0.004 | 5.41 |
+| HD Central | 20 | 0 | 0 | 0.036 | 0.055 | 6.38 |
+| HD Lateral | 0 | 0 | 40 | 0.047 | 0.056 | 6.37 |
+| VD Top | 60 | 120 | 20 | 0.060 | 0.093 | 5.75 |
+| VD Bottom Shielded | 20 | 120 | 40 | 0.031 | 0.102 | 6.01 |
 
 ---
 
@@ -149,77 +148,25 @@ No fiducial optimization plots were found for this folder.
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
-</div>
+No matching HEP significance or exposure plot found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
-</div>
+No matching HEP significance or exposure plot found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
-</div>
+No matching HEP significance or exposure plot found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> Lower panel note: not available (significance plot missing).
-</div>
+No matching HEP significance or exposure plot found for VD Bottom Shielded
 
 ---
 
@@ -257,97 +204,25 @@ No matching reference-comparison pair found for VD Bottom Shielded
 
 ### HD Central
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for VD Bottom Shielded
 
 ---
 
@@ -366,53 +241,37 @@ No matching reference-comparison pair found for VD Bottom Shielded
 
 ---
 
-### HD Central — best excluded (spiked)
+### Spike Debug
 
-No spiked plots found.
+No spiked-cut plots found. Run workflow with `--pkl_label highest_spiked` to generate them.
 
----
-
-### HD Lateral — best excluded (spiked)
-
-No spiked plots found.
+## Oscillograms
 
 ---
 
-### VD Top — best excluded (spiked)
+### HD Central
 
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
-
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
-### VD Bottom Shielded — best excluded (spiked)
+### HD Lateral
 
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
+No oscillogram found.
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<p>Significance plot not available.</p>
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
+---
+
+### VD Top
+
+No oscillogram found.
+
+---
+
+### VD Bottom Shielded
+
+No oscillogram found.
+
+---
 
 
 
@@ -433,8 +292,8 @@ No spiked plots found.
 
 ### Adaptive Rebinning: Strategy
 
-- Rebinning is applied in [src/analysis/13HEP.py](../../src/analysis/13HEP.py) through [lib/lib_smooth.py](../../lib/lib_smooth.py) using `apply_adaptive_tail_rebin`.
-- It is controlled by [analysis/config.json](../../analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
+- Rebinning is applied in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py) through [lib/smoothing.py](../../lib/smoothing.py) using `apply_adaptive_tail_rebin`.
+- It is controlled by [config/analysis/config.json](../../config/analysis/config.json) under `ADAPTIVE_REBIN -> ANALYSES -> HEP`.
 - At each exposure, bins are merged from the high-energy tail until the expected detectable signal per rebinned group reaches the configured threshold.
 - This stabilizes low-statistics significance estimates while preserving discovery sensitivity.
 
@@ -455,7 +314,7 @@ $$
 Z = Z\!\left(S_{\mathrm{group}},\,B_{\mathrm{group}},\,\sigma_{B,\mathrm{group}}\right)
 $$
 
-ProfileLikelihood implementation in [src/analysis/13HEP.py](../../src/analysis/13HEP.py):
+ProfileLikelihood implementation in [src/physics/hep/01_hep.py](../../src/physics/hep/01_hep.py):
 - PL is computed for **every** analysis cut combination.
 - Original fine binning used throughout — no adaptive rebin. PL is optimal at the finest resolution; the likelihood ratio naturally suppresses bins with negligible signal without merging.
 - A **single global background normalization nuisance** (β ~ Gaussian(1, σ_rel)) is profiled jointly across all bins. See the *Background Normalization Model* slide.

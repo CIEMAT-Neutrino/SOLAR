@@ -126,7 +126,7 @@ All analyses apply a reconstructed-energy threshold $E_{\mathrm{th}}$ (configure
 
 Each rate histogram $\rc$ is convolved with a one-dimensional Gaussian kernel before entering the significance computation:
 
-$$\tilde{r}_{i}^{c} = \sum_{j} G_\sigma(i-j)\, r_j^{c}, \qquad G_\sigma(k) = \frac{1}{\sqrt{2\pi}\,\sigma} \exp\!\left(-\frac{k^2}{2\sigma^2}\right)$$
+$$\tilde{r}_{i}^{c} = \sum_{i'} G_\sigma(i-i')\, r_{i'}^{c}, \qquad G_\sigma(d) = \frac{1}{\sqrt{2\pi}\,\sigma} \exp\!\left(-\frac{d^2}{2\sigma^2}\right)$$
 
 implemented via `scipy.ndimage.gaussian_filter1d` with `mode='nearest'`. Whether smoothing is applied to a given component, and the width $\sigma$, are configured in `analysis/smoothing.json` under `SMOOTHING.ANALYSES.{ANALYSIS}.STAGES`. Separate stages are provided for the fiducial scan and the significance computation.
 
@@ -169,16 +169,27 @@ r_i^{\mathrm{night}} &= \text{solar rate in nighttime (Earth-crossing) exposure}
 
 Isotropic backgrounds (cosmogenic, geological, detector-intrinsic) are assumed time-uniform and therefore split proportionally between periods.
 
-Event counts observed in day and night periods are:
+Event counts observed in day and night periods, at asymmetry scale factor $\theta_s$ (see
+[Asymmetry Uncertainty Band](#asymmetry-band)), are:
 
 $$\begin{align}
-n_i^{\mathrm{night}} &= \Ecal\bigl(\fn\, r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}}\bigr),\\
-n_i^{\mathrm{day}}   &= \Ecal\bigl(\fd\, r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}}\bigr).
+n_i^{\mathrm{night}}(\theta_s) &= \Ecal\,\fn\,\bigl[\,r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}} + \theta_s\bigl(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}\bigr)\bigr],\\
+n_i^{\mathrm{day}}             &= \Ecal\,\fd\,\bigl[\,r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}}\bigr].
 \end{align}$$
 
-The **asymmetry signal** at scale factor $\theta_s$ (see [Asymmetry Uncertainty Band](#asymmetry-band)) is:
+The period fraction multiplies the **whole** rate — signal as well as background — because it is a
+livetime fraction, and the asymmetry scale sits *inside* the bracket, acting only on the excess
+$r_i^{\mathrm{night}} - r_i^{\mathrm{day}}$ over the daytime rate. At $\theta_s = 1$ the night
+bracket reduces to $r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}}$, as it must; writing
+$r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}} + \theta_s(\cdots)$ instead would count the night rate
+twice.
+
+The **asymmetry signal** entering the Gaussian estimators is the un-fractioned excess:
 
 $$\si(\theta_s) = \Ecal\cdot\theta_s\cdot\bigl(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}\bigr)$$
+
+The two forms are consistent: the Gaussian path works with the asymmetry and its effective
+background (§3.3), while the Asimov LLR (§3.6) works with the two period count spectra above.
 
 ### 3.3 Effective Two-Sample Background
 
@@ -236,17 +247,52 @@ $$q_i(\theta_s) = 2\!\left[ n_i^{\mathrm{night}}\ln\frac{n_i^{\mathrm{night}}}{h
 
 defined as zero whenever any count or null hypothesis count is non-positive.
 
-**Gaussian constraint on the asymmetry amplitude.** The asymmetry amplitude $\theta_s$ is treated as a constrained nuisance: $\theta_s \sim \mathcal{N}(1, \epstot^2)$, where $\epstot$ is the total band (see [Asymmetry Uncertainty Band](#asymmetry-band)). For each band scenario $\theta_s \in \{1+\epstot,\;1,\;1-\epstot\}$ the penalised test statistic is:
+**No penalty on the asymmetry amplitude.** Each band scenario
+$\theta_s \in \{1+\epstot,\;1,\;1-\epstot\}$ is evaluated independently and **without** a
+constraint term; $\theta_s$ is a scenario label, not a profiled nuisance. The Asimov significance
+is simply
 
-$$q^{\mathrm{pen}}(\theta_s) = \sum_{i \ge i_{\mathrm{th}}} q_i(\theta_s) - \left(\frac{\theta_s - 1}{\epstot}\right)^{\!2}$$
+$$\ZA(\theta_s) = \sqrt{\max\!\left(0,\,\textstyle\sum_{i \ge i_{\mathrm{th}}} q_i(\theta_s)\right)}$$
 
-The Asimov significance for each band scenario is:
+The consequence is that the three curves bracket the predicted range but are not confidence bands,
+and the off-nominal curves are not guaranteed to straddle the nominal one — see §8.4 for the
+resulting ordering caveat.
 
-$$\ZA(\theta_s) = \sqrt{\max\!\left(0,\,q^{\mathrm{pen}}(\theta_s)\right)}$$
+**Asimov as the primary cut-optimization metric.** The nominal-band smoothed Asimov significance
+$\ZA(\theta_s{=}1)$ is the metric that selects the topological cuts. Two quantities are derived
+from it per cut, and only one of them drives the selection:
 
-At the nominal point $\theta_s=1$ the penalty vanishes. At $\theta_s = 1\pm\epstot$ the penalty equals $1$, deflating the raw sum by exactly $1\,\sigma^2$ relative to the nominal curve. This correctly reflects the prior information on the asymmetry scale: the off-nominal band significances are not free upper/lower bounds but penalised estimates constrained by the prior uncertainty.
+| Quantity | Where computed | Role |
+|---|---|---|
+| $\ZA$ evaluated on the exposure grid | `daynight/01_daynight.py` | **the selection metric** |
+| `Sigma2` / `Sigma3` — exposure at which $\ZA$ first crosses $2\sigma$ / $3\sigma$ | `daynight/01_daynight.py` | recorded per cut; reported, not selected on |
 
-**Asimov as the primary cut-optimization metric.** The nominal-band smoothed Asimov significance $\ZA(\theta_s{=}1)$ is the primary metric for selecting the optimal topological cuts: the cut that minimises the exposure needed to reach $\ZA \ge 2\sigma$ is retained. The Gaussian significance is computed in parallel as a diagnostic output but does not drive cut selection. The output columns `Sigma2`/`Sigma3` and `AsimovSigma2`/`AsimovSigma3` are identical (both record the Asimov-based exposure thresholds); `AsimovSigma2` is an alias retained for backward compatibility.
+`sensitivity/05_best_sigmas.py` retains the cut that **maximises** $\ZA$
+(`BEST_SIGMA_SIGNIFICANCE_REFERENCE.DAYNIGHT = "Asimov"`, with the smoothed histogram reference),
+taking the maximum over all cut rows and all exposure steps.
+
+Two distinct exposures are involved, and they are not the same number:
+
+| | Config key | Value | Role |
+|---|---|---|---|
+| Grid top $\Ecal_{\max}$ | `ANALYSIS_EXPOSURES.DAYNIGHT.PRIMARY` | 30 yr | sets the exposure grid the analysis is run to |
+| Reference exposure | `EVALUATION_EXPOSURE_YEARS.DAYNIGHT` | 20 yr | the livetime results are quoted at |
+
+The grid is $\log$-spaced, `np.logspace(-1, log10(30), 100)`, running from 0.1 to 30 yr. Because
+$\ZA$ increases monotonically with exposure, the maximum that selects the cut is attained at the
+**grid top, 30 yr** — not at the 20-year reference exposure, which sits strictly inside the grid at
+node 92 of 100 (20.043 yr). The cut is therefore chosen for its asymptotic reach while the
+significance is reported at 20 yr; the two coincide only for the Sensitivity analysis, where grid
+top and reference exposure are both 30 yr.
+
+Running the grid past the reference exposure is deliberate: it keeps the quoted livetime away from
+the grid boundary, so the 20-year value is interpolated from both sides rather than read off the
+final node, and it leaves the $3\sigma$ crossing visible for cuts that reach it only beyond 20 yr.
+
+The Gaussian significance is computed in parallel as a diagnostic but does not drive cut selection.
+The output columns `Sigma2`/`Sigma3` and `AsimovSigma2`/`AsimovSigma3` are identical (both record
+the Asimov-based exposure thresholds); `AsimovSigma2` is an alias retained for backward
+compatibility.
 
 ### 3.7 Asymmetry Uncertainty Band {#asymmetry-band}
 
@@ -263,7 +309,11 @@ $$\theta_s \in \{1+\epstot,\;1,\;1-\epstot\}$$
 
 **Gaussian estimators.** The scale $\theta_s$ enters the signal multiplicatively, leaving the background unchanged. Three curves (upper, nominal, lower) are produced for each Gaussian estimator.
 
-**Asimov estimator.** For the Asimov LLR the asymmetry amplitude is treated as a constrained nuisance (see [Two-Sample Poisson Asimov](#three-six)): $\theta_s$ enters both the signal and the Gaussian penalty term $(\theta_s-1)^2/\epstot^2$. The three Asimov curves are therefore deflated from their unconstrained values by the penalty, correctly encoding the prior information on the asymmetry scale.
+**Asimov estimator.** For the Asimov LLR the three scenarios are evaluated independently and
+**unpenalised** (see [Two-Sample Poisson Asimov](#three-six)): $\theta_s$ enters the night count
+spectrum through $r_i^{\mathrm{day}} + \theta_s(r_i^{\mathrm{night}} - r_i^{\mathrm{day}})$ and
+nowhere else. No constraint term is subtracted, so the three curves are the raw significances of
+the three predicted scenarios rather than penalised estimates.
 
 ### 3.8 Results
 
@@ -360,11 +410,15 @@ where $\srel$ is the relative background uncertainty (`--background_uncertainty`
 
 #### Profiling $\bhat$
 
-The stationarity condition $\partial\ln\mathcal{L}/\partial\beta\big|_{\bhat}=0$ at the Asimov point $\nni=\si+\bi$ gives:
+The stationarity condition $\partial\ln\mathcal{L}/\partial\beta\big|_{\bhat}=0$ at the Asimov point $\nni=\si+\bi$ reads
 
-$$\Ntot = \bhat\Btot + \frac{\bhat-1}{\srelsq}, \quad \Ntot = \sum_i \nni,\;\Btot = \sum_i \bi$$
+$$\frac{\Ntot}{\bhat} - \Btot - \frac{\bhat-1}{\srelsq} = 0, \quad \Ntot = \sum_i \nni,\;\Btot = \sum_i \bi$$
 
-Because $\beta$ is *global*, the per-bin denominators $\beta\bi$ factorize and the stationarity condition is a scalar equation. Rearranging:
+and multiplying through by $\bhat$:
+
+$$\Ntot = \bhat\Btot + \frac{\bhat\left(\bhat-1\right)}{\srelsq}$$
+
+Because $\beta$ is *global*, the per-bin denominators $\beta\bi$ factorize and the stationarity condition is a scalar equation. Multiplying by $\srelsq$ and collecting terms:
 
 $$\bhat^2 + \left(\Btot\srelsq-1\right)\bhat - \Ntot\srelsq = 0$$
 
@@ -408,7 +462,15 @@ $$s_i^{(d)} = \si\,(1 + d\cdot\srel^{\mathrm{sig}})$$
 
 Background is never shifted; $\bhat$ and its quadratic solution are unaffected.
 
-The raw PL significance curve $Z(T)$ is post-processed by two steps when `pl_isotonic` is enabled (controlled by `analysis/config.json` under `WORKFLOW.HEP.pl_isotonic`):
+The raw PL significance curve $Z(T)$ is post-processed by two steps when `pl_isotonic` is enabled
+(`config/analysis/config.json`, `WORKFLOW.HEP.pl_isotonic`). **This flag is `true` in the
+configuration used for the thesis**, so the Gaussian + PAVA post-processing described here is
+applied to every `ProfileLikelihood` curve in the results; the un-post-processed values are
+retained alongside them in the `PreIsotonicProfileLikelihood` columns. The two differ by a few
+per cent — for `hd_1x2x6_centralAPA` at 10 yr the best cut gives $7.624$ post-PAVA against
+$7.512$ pre-PAVA — so quoting one where the other is meant is a visible discrepancy.
+
+The two steps are:
 
 1. **Gaussian kernel smoothing** with $\sigma_{\mathrm{PL}}=6$ exposure-grid index units (`scipy.ndimage.gaussian_filter1d`), which suppresses numerical oscillations from the PL solver at low signal-to-background ratio.
 2. **Isotonic regression (PAVA)** [Robertson 1988]:
@@ -765,14 +827,14 @@ genuine minimisation elsewhere, painting a cross-shaped artifact through the gri
 |---|---|---|---|
 | $\spred$ | $^8$B flux normalisation | 0.04 | `ANALYSIS_UNCERTAINTIES.SENSITIVITY.signal_uncertainty` |
 | $\sbkg$ | background normalisation | 0.02 | `ANALYSIS_UNCERTAINTIES.SENSITIVITY.background_uncertainty` |
-| $\ses$ | reconstructed energy scale | 0.02 | **code fallback** — `ENERGY_SCALE_SIGMA` absent from configuration |
-| $\ssin$ | $\sin^2\theta_{13}$ | $5.6\times10^{-4}$ | **code fallback** — `SIN13_SIGMA` absent from configuration |
+| $\ses$ | reconstructed energy scale | 0.02 | `ENERGY_SCALE_SIGMA` (`physics.json`) |
+| $\ssin$ | $\sin^2\theta_{13}$ | $5.6\times10^{-4}$ | `SIN13_SIGMA` (`physics.json`) |
 
-$\ses$ and $\ssin$ are currently taken from the literal defaults in `06_significance.py:1089` and
-`:1123`, because the corresponding keys are not present in any configuration file. The values are
-defensible — $\ssin = 5.6\times10^{-4}$ is the PDG uncertainty on $\sin^2\theta_{13}$ — but they
-are not traceable through the configuration, and a thesis quoting them should either add them to
-`config/analysis/physics.json` or state that they are code defaults.
+$\ssin = 5.6\times10^{-4}$ is the PDG uncertainty on $\sin^2\theta_{13}$. Both keys were added to
+`config/analysis/physics.json` on 2026-09-14; before that they existed only as literal defaults in
+`06_significance.py:1089` and `:1123` and were not traceable through the configuration. The values
+committed are identical to those defaults, so no stored result changes — but results produced
+before that date used the same numbers by fallback rather than by configuration.
 
 ### 5.10 Grid Scan and Selection Optimisation {#sens-scan}
 
@@ -1104,8 +1166,8 @@ Scan outputs are written beneath the signal template directory:
 | `ANALYSIS_UNCERTAINTIES.SENSITIVITY` | `config.json` | 0.04 / 0.02 | $\spred$ / $\sbkg$ |
 | `NUISANCE_PROFILES` | `config.json` | 4 profiles | §5.9 |
 | `DEFAULT_NUISANCE_PROFILE` | `config.json` | `full` | §5.9 |
-| `ENERGY_SCALE_SIGMA` | — | **absent**, code default 0.02 | $\ses$ (§5.9) |
-| `SIN13_SIGMA` | — | **absent**, code default $5.6\times10^{-4}$ | $\ssin$ (§5.9) |
+| `ENERGY_SCALE_SIGMA` | `physics.json` | 0.02 | $\ses$ (§5.9) |
+| `SIN13_SIGMA` | `physics.json` | $5.6\times10^{-4}$ | $\ssin$ (§5.9) |
 
 ### 5.19 Reproduction Recipe {#sens-reproduction}
 
@@ -1193,8 +1255,8 @@ A structural feature of this analysis, absent from the other two, is that the As
 | | `RawErrorGaussian` | Raw | None | Gaussian + $\seff$ | No |
 | | `Gaussian` | Smooth | None | Gaussian | No |
 | | `ErrorGaussian` | Smooth | None | Gaussian + $\seff$ | No |
-| | `RawAsimov` | Raw | None | Two-sample LLR (penalised) | No |
-| | `Asimov` | Smooth | None | Two-sample LLR (penalised) | No |
+| | `RawAsimov` | Raw | None | Two-sample LLR (unpenalised) | No |
+| | `Asimov` | Smooth | None | Two-sample LLR (unpenalised) | No |
 | | `Sigma2` / `AsimovSigma2` | Smooth | None | Asimov exposure threshold (alias pair) | — |
 | **HEP** | `RawGaussianNoRebin` | Raw | None | Gaussian | No |
 | | `RawAsimovNoRebin` | Raw | None | Asimov | No |
@@ -1204,10 +1266,45 @@ A structural feature of this analysis, absent from the other two, is that the As
 | | `AsimovNoRebin` | Smooth | None | Asimov | No |
 | | `Gaussian` | Smooth | Adaptive | Gaussian | Yes |
 | | `Asimov` | Smooth | Adaptive | Asimov | Yes |
-| | `RawProfileLikelihood` | Raw | None | PL | Yes (post) |
-| | `ProfileLikelihood` | Smooth | None | PL | Yes (post) |
-| | `PreIsotonicProfileLikelihood` | Smooth | None | PL (pre-PAVA) | No |
+| | `ProfileLikelihood` | **Raw** | None | PL | Yes (post) |
+| | `PreIsotonicProfileLikelihood` | **Raw** | None | PL (pre-PAVA) | No |
+| | `RawProfileLikelihood` | — | — | *never written* | — |
 | **Sensitivity** | `chi2_solar` / `chi2_react` | 2D smooth | None | Baker-Cousins + pull profile | — |
+
+**There is no smoothed profile-likelihood.** `_hep_profile_step` in
+[`hep/01_hep.py`](../../src/physics/hep/01_hep.py) is called with `raw_signal_rate` and
+`raw_background_rate`, and its output is stored under the name `ProfileLikelihood`. The name is a
+misnomer inherited from the Gaussian/Asimov columns, where `Raw*` and unprefixed names really do
+distinguish unsmoothed from smoothed histograms. PL is deliberately evaluated on the unsmoothed,
+finely binned spectrum, since smoothing and rebinning can only destroy information the likelihood
+would otherwise use. Two consequences:
+
+- The `RawProfileLikelihood`, `RawGaussian` and `RawAsimov` columns exist in the results
+  DataFrames but are **empty** (zero-dimensional) in PL-only runs; they must not be read.
+- The `SpectrumType` tag attached to a `ProfileLikelihood` row in the exported `*_HEP_Exposure.pkl`
+  is meaningless. Where both a `Raw` and a `Smoothed` row are present for a PL variable they carry
+  **bit-identical** values (verified across `charge_*`, `unc_*`, `energy_*`, `oscpoint_*` and
+  `fiduc_truth` for `hd_1x2x6_centralAPA`), because they are the same numbers written twice.
+
+**Reconciling the 7.624 and 4.379 baselines.** Both are the *same* quantity — the raw-histogram,
+post-PAVA `ProfileLikelihood` at 10 yr for `hd_1x2x6_centralAPA` — evaluated at *different
+selection cuts*. They are not a smoothed/raw pair, and no smoothed PL exists that could produce a
+second number:
+
+| Value | Cut $(N_{\mathrm{hits}}, N_{\mathrm{ophits}}, N_{\mathrm{adjcl}})$ | Standing in the 1466-cut scan |
+|---|---|---|
+| **7.624** | $(4, 13, 5)$ | the selected best cut — the maximum |
+| 7.530 | $(4, 12, 5)$ | the runner-up, 0.09 below; **not** a different normalisation scheme |
+| 4.379 | $(3, 4, 3)$ | an ordinary non-optimal cut, near the scan median of 4.651 |
+
+Any figure quoted as 7.530 is the $N_{\mathrm{ophits}} = 12$ cut, not the selected one. All
+best-cut records for this configuration — `highest_HEP`, `fastest_sigma2`, `fastest_sigma3`, in
+both `hep-json/` and `best-sigma-json/` — give $N_{\mathrm{ophits}} = 13$.
+
+The scan spans 2.418 to 7.624 at 10 yr. **7.624 is the number to quote** as the centralAPA HEP PL
+baseline; any accompanying "raw" figure should be removed rather than relabelled, since it does not
+represent a different spectrum treatment. (The pre-PAVA value at the same best cut is 7.512 — see
+§4.7 — which is the only other defensible 10-yr number for this configuration.)
 
 ---
 
@@ -1284,8 +1381,12 @@ Each scale factor is evaluated independently without penalty terms. The Asimov l
 $$q_0(\theta_s) = \sum_{i \ge i_{\mathrm{th}}} 2\left[ n_i^{\mathrm{night}}(\theta_s)\ln\frac{n_i^{\mathrm{night}}(\theta_s)}{h_{0,i}^{\mathrm{night}}} + n_i^{\mathrm{day}}(\theta_s)\ln\frac{n_i^{\mathrm{day}}(\theta_s)}{h_{0,i}^{\mathrm{day}}} \right]$$
 
 where the observed counts under asymmetry scale $\theta_s$ are:
-$$n_i^{\mathrm{night}}(\theta_s) = \Ecal\,g\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}} + \theta_s\,(r_i^{\mathrm{night}} - r_i^{\mathrm{day}}))$$  
-$$n_i^{\mathrm{day}}(\theta_s) = \Ecal\,f\,(r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}})\qquad\qquad\qquad\qquad\qquad\qquad\qquad\qquad\qquad$$
+$$n_i^{\mathrm{night}}(\theta_s) = \Ecal\,g\,\bigl[\,r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}} + \theta_s\,(r_i^{\mathrm{night}} - r_i^{\mathrm{day}})\bigr]$$
+$$n_i^{\mathrm{day}} = \Ecal\,f\,\bigl[\,r_i^{\mathrm{bkg}} + r_i^{\mathrm{day}}\bigr]\qquad\qquad\qquad\qquad\qquad\qquad\;$$
+
+The night bracket builds up from the **daytime** rate: at $\theta_s=1$ it collapses to
+$r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}}$. Adding $\theta_s(\cdots)$ to
+$r_i^{\mathrm{bkg}} + r_i^{\mathrm{night}}$ instead would count the night rate twice. See §3.2.
 
 **Note on asymmetric bands:** The LLR $q_0$ is non-linear in $\theta_s$ (Poisson likelihoods, per-bin normalisation). Therefore `Gaussian+Error` (at $\theta_s=1+\epstot$) and `Gaussian-Error` (at $\theta_s=1-\epstot$) need not be symmetric about `Gaussian` (at $\theta_s=1$). This asymmetry is a genuine feature of the Poisson statistics, not an artifact.
 
@@ -1368,7 +1469,7 @@ derivation, the measured tables, the threshold dependence and suggested wording 
 | `DAYNIGHT.background_error` | `true` | Compute Error Gaussian curves |
 | `DAYNIGHT.significance_bins` | `true` | Save per-bin significance spectra at the display exposure |
 | `HEP.pl_signal_bands` | `true` | Evaluate three signal normalizations for $\pm1\sigma_s$ PL bands |
-| `HEP.pl_isotonic` | `false` | Apply Gaussian+PAVA post-processing to PL curves |
+| `HEP.pl_isotonic` | `true` | Apply Gaussian+PAVA post-processing to PL curves (**on** for the thesis configuration — see §4.7) |
 | `HEP.significance_bins` | `false` | Save per-bin significance spectra at the display exposure |
 
 Sensitivity configuration keys are tabulated in [§5.18](#sens-products), including the two prior

@@ -630,12 +630,24 @@ for config in configs:
                 # Never persist an all-zero template: it silently propagates into the cut
                 # optimiser, which then walks to the loosest grid corner because there is
                 # no background left to reject.
-                if float(np.sum([np.sum(_c) for _c in rebin_df["MCCounts"]])) == 0.0:
+                # EXCEPTION: non-essential backgrounds (e.g., radiological) may legitimately have
+                # zero events after fiducial/quality cuts; allow them to pass with a warning.
+                from lib.background import get_essential_backgrounds
+                essential_map = get_essential_backgrounds(str(root))
+                _is_essential = essential_map.get(str(name).lower(), False)
+                _mc_sum = float(np.sum([np.sum(_c) for _c in rebin_df["MCCounts"]]))
+                if _mc_sum == 0.0 and _is_essential:
                     raise SystemExit(
                         f"[ERROR] Rebin template for '{name}' ({config}, {args.folder}, {analysis}, "
                         f"{energy}) has zero MCCounts at every cut — refusing to overwrite "
                         f"{_rebin_label}.pkl.\n"
                         "  No event survived the surface/spatial/quality masks. Investigate before rerunning."
+                    )
+                elif _mc_sum == 0.0:
+                    rprint(
+                        f"[yellow][WARNING][/yellow] Rebin template for non-essential background "
+                        f"'{name}' ({config}, {args.folder}, {analysis}, {energy}) has zero MCCounts "
+                        f"— allowing to pass (non-essential)."
                     )
 
                 save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name]}/{analysis.upper()}", config=config, name=name, filename=_rebin_label, rm=user_input['rewrite'], debug=user_input['debug'])

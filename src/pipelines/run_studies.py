@@ -7,18 +7,17 @@ touching intermediate or final files from the main analysis.
 
 Study groups
 ------------
-  metric      9.1.1  Raw/Smoothed histogram metric comparison
-  unc         9.1.2  Signal/background uncertainty impacts
-  oscpoint    9.1.3  Oscillation parameter choice (solar vs reactor Δm²₂₁)
-  energy      9.2.1  Energy variable (SignalParticleK, MainK)
-  fiduc_truth 9.2.2  Truth x-fiducialisation (SignalParticleX/Y/Z vs RecoX/Y/Z)
-  fiduc       9.2.3  Fiducialization folder comparison (Nominal/Reduced/Truncated)
-  charge      9.2.4  Charge threshold scan (replaces NHits/AdjCl axes)
-  bkg_gamma   9.2.5  Background gamma model (ClusterEnergy as calorimetric proxy)
-  bkgmodel    9.2.6  Background model normalization (Nominal/Reduced folders)
-  membrane_veto      Membrane/endcap optical matches (VD planes 1-4) on vs off
-  nuisance           Nuisance-profile decomposition (Sensitivity)
-  legacy_fit         Legacy nested-minimiser fit on the default templates (Sensitivity)
+  metric        9.1.1  Raw/Smoothed histogram metric comparison
+  unc           9.1.2  Signal/background uncertainty impacts
+  oscpoint      9.1.3  Oscillation parameter choice (solar vs reactor Δm²₂₁)
+  fiduc_truth   9.2.1  Truth x-fiducialisation (SignalParticleX/Y/Z and MainX/Y/Z and EndX/Y/Z vs RecoX/Y/Z)
+  energy        9.2.2  Energy variable (SignalParticleK, MainK)
+  bkg_gamma     9.2.3  Background gamma model (ClusterEnergy and TotalEnergy as calorimetric proxy)
+  charge        9.2.4  Charge threshold scan (uses SelectedEnergy for different charge thresholds)
+  bkgmodel      9.2.5  Background model normalization (Nominal/Reduced folders)
+  membrane_veto 9.2.6  Membrane/endcap optical matches (VD planes 1-4) on vs off
+  nuisance             Nuisance-profile decomposition (Sensitivity)
+  legacy_fit           Legacy nested-minimiser fit on the default templates (Sensitivity)
 
 Defaults: Sensitivity runs use --flyweight templates and --fit_method pull; the legacy_fit
 study is the only legacy-fit run.

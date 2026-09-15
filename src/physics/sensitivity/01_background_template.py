@@ -143,6 +143,28 @@ parser.add_argument(
     default=False,
     help="Flyweight mode flag (accepted but ignored for background templates).",
 )
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Truth-fiducial study: build the background templates from the labeled truth-fiducial "
+        "Rebin pkls written by 03_analysis.py --truth_fiducial (truth positions and "
+        "BestFiducials_fiduc_truth.json applied to every background sample)."
+    ),
+)
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accepted for parity with 02_signal_template.py: 03_template_compute.py forwards "
+        "--no-membrane_veto to both template scripts. The plane selection itself is already "
+        "baked into the Rebin pkls this script reads, but study_context needs the flag so "
+        "membrane_veto_off background templates get their labeled subfolder instead of "
+        "overwriting the nominal ones."
+    ),
+)
 
 args = parser.parse_args()
 _ctx = study_context(args, analysis="Sensitivity")
@@ -295,13 +317,18 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json").read())
+_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{_fiducials_stem}.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)
 
 df_list = []
 background_samples = []
-_bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
+# Read the labeled background Rebins whenever the variant changed the background event
+# selection in 03_analysis.py: a charge threshold, or truth-position fiducialization (which
+# re-cuts every background sample on its truth position and the truth best fiducials).
+_bkg_selection_changed = getattr(args, "charge_threshold", 0) > 0 or args.truth_fiducial
+_bkg_study_label = args.study_label if _bkg_selection_changed else None
 for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_bkg_study_label):
     bkg_df = pd.read_pickle(filepath)
     df_list.append(bkg_df)
@@ -440,7 +467,10 @@ else:
             f"[yellow][WARNING][/yellow] Falling back to {len(cut_entries)} cut triplets discovered from background data"
         )
 
-    if args.study_label and fastest_sigma is None:
+    # A study that optimises its own cuts has no map yet at this stage: Phase 1 is exactly
+    # where its all-cut background templates are produced, and run_sensitivity.py asks for
+    # that with --force-all-cuts. Only a study holding nominal cuts must never get here.
+    if args.study_label and fastest_sigma is None and not args.force_all_cuts:
         raise FileNotFoundError(
             f"Missing best-cut map for study '{args.study_label}'; refusing to discover cuts from nominal background data"
         )

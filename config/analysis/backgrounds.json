@@ -8,10 +8,10 @@
     },
     "default":          ["gamma", "neutron", "radiological"],
     "surface_filtered": ["gamma", "neutron"],
-    "_truth_position_keys_comment": "Truth fiducialisation reference per sample. Samples with no valid signal particle (radiological has SignalParticleSurface == -1 for every event) must use the Main* energy-deposit position instead of SignalParticle*. gamma and neutron are external (wall/rock) backgrounds -- SignalParticleX/Y/Z is the originating particle's emission point outside the cryostat, not a fiducialisable position, so they use Main* too.",
+    "_truth_position_keys_comment": "Truth fiducialisation reference per sample. Samples with no valid signal particle (radiological has SignalParticleSurface == -1 for every event) must use the Main* energy-deposit position instead of SignalParticle*. neutron is external (wall/rock) backgrounds -- SignalParticleX/Y/Z is the originating particle's emission point outside the cryostat, not a fiducialisable position, so they use Main* too. gamma uses EndX/Y/Z (end of track/cluster) for fiducialisation. radiological (non-essential) uses MainX/Y/Z.",
     "truth_position_keys": {
       "radiological": ["MainX", "MainY", "MainZ"],
-      "gamma":        ["MainX", "MainY", "MainZ"],
+      "gamma":        ["EndX", "EndY", "EndZ"],
       "neutron":      ["MainX", "MainY", "MainZ"]
     },
     "ANALYSES": {

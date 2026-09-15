@@ -85,6 +85,25 @@ parser.add_argument(
         "~14k oscillation templates. Forwarded to 02_signal_template.py only (signal templates)."
     ),
 )
+parser.add_argument(
+    "--truth_fiducial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Truth-fiducial study: forwarded to both template scripts, so signal and background "
+        "templates are built from the labeled truth-fiducial Rebin pkls and best fiducials."
+    ),
+)
+parser.add_argument(
+    "--force-all-cuts",
+    action="store_true",
+    default=False,
+    help=(
+        "Forwarded to 01_background_template.py: build background templates for every cut. "
+        "run_sensitivity.py sets it for studies that optimise their own cuts, which have no "
+        "best-cut map yet when the background templates are produced."
+    ),
+)
 
 args = parser.parse_args()
 
@@ -143,8 +162,10 @@ def run_macro(script_name: str, extra_args: Optional[List[str]] = None):
 
 
 if args.template in ["background", "all"]:
-    run_macro("src/physics/sensitivity/01_background_template.py")
+    background_args = (["--truth_fiducial"] if args.truth_fiducial else []) + (["--force-all-cuts"] if args.force_all_cuts else [])
+    run_macro("src/physics/sensitivity/01_background_template.py", extra_args=background_args)
 
 if args.template in ["signal", "all"]:
     flyweight_args = ["--flyweight"] if args.flyweight else []
-    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"] + flyweight_args)
+    truth_fiducial_args = ["--truth_fiducial"] if args.truth_fiducial else []
+    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"] + flyweight_args + truth_fiducial_args)

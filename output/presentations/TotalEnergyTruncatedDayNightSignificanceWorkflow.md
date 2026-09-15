@@ -33,10 +33,10 @@ Config aliases:
 - folder: **Truncated**
 - analysis: DayNight
 - exposure: default **30 years**
-- threshold in 12DayNight.py: default 8.0 MeV
+- threshold in daynight/01_daynight.py: default 8.0 MeV
 - optional cuts override: nhits, ophits, adjcls
 - MC threshold (`--mc_threshold`): minimum MC counts required in each essential background (gamma, neutron) per cut; prevents selecting cuts that eliminate backgrounds statistically
-- best-curve reference in 0ZBestSigmas.py: **Asimov** (two-sample Poisson LLR)
+- best-curve reference in sensitivity/05_best_sigmas.py: **Asimov** (two-sample Poisson LLR)
 - day-fraction (`--day_fraction`): fraction of exposure in daytime; default 0.5
 - oscillation band (`--oscillation_band`): residual uncertainty on θ₁₂, Δm²₂₁; combined in quadrature with earth-density band
 
@@ -44,17 +44,17 @@ Config aliases:
 
 ### Workflow Outputs
 
-- Fiducial optimization: [data/solar/fiducial/truncated/BestFiducials.json](../../data/solar/fiducial/truncated/BestFiducials.json)
-- Best cut summaries (JSON): [data/analysis/best-sigma-json/daynight/truncated](../../data/analysis/best-sigma-json/daynight/truncated)
-- Backward-compatible local fallback: [data/analysis/daynight-json/truncated](../../data/analysis/daynight-json/truncated)
+- Fiducial optimization: [config/analysis/fiducial/truncated/BestFiducials.json](../../config/analysis/fiducial/truncated/BestFiducials.json)
+- Best cut summaries (JSON): [config/*/best-sigma-json/daynight/{folder}/{config}_highest_DayNight.json](../../config)
+- Local fallback: [config/*/daynight-json/{folder}/{config}_highest_DayNight.json](../../config)
 - Significance scans (PNFS outputs): [/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated](/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/truncated)
-- Figures: [images/analysis/day-night/truncated](../../images/analysis/day-night/truncated)
+- Figures: [output/images/analysis/day-night/truncated](../../output/images/analysis/day-night/truncated)
 
 ---
 
 ### Day-Night Discovery Statistic
 
-Two statistics are computed in parallel by [src/analysis/12DayNight.py](../../src/analysis/12DayNight.py):
+Two statistics are computed in parallel by [src/physics/daynight/01_daynight.py](../../src/physics/daynight/01_daynight.py):
 
 **Gaussian (legacy):** per-bin $Z_i = \Delta S_i / \sqrt{B_i^{eff}}$ combined as $Z = \sqrt{\sum_i Z_i^2}$, where $B_i^{eff}$ accounts for unequal day/night fractions:
 $$
@@ -71,19 +71,17 @@ $$
 
 Under $H_0$ (common day/night rate), the MLE is the pooled rate, giving expected counts $h_i^{night} = g(n_i^{night} + n_i^{day})$, $h_i^{day} = f(n_i^{night} + n_i^{day})$.  The test statistic sums linearly over bins:
 $$
-q_0 = 2\sum_i \left[ n_i^{night} \ln
-rac{n_i^{night}}{h_i^{night}} + n_i^{day} \ln
-rac{n_i^{day}}{h_i^{day}} 
-ight], \quad Z = \sqrt{q_0}
+q_0 = 2\sum_i \left[ n_i^{night} \ln\frac{n_i^{night}}{h_i^{night}} + n_i^{day} \ln\frac{n_i^{day}}{h_i^{day}} \right], \quad Z = \sqrt{q_0}
 $$
+
 Asymmetry uncertainty is bracketed by scaling the night signal: $S_i^{night,k} = S_i^{day} + k(S_i^{night} - S_i^{day})$ with $k \in \{1 \pm \sigma_{tot}\}$, $\sigma_{tot} = \sqrt{\sigma_{earth}^2 + \sigma_{osc}^2}$.
 
 ---
 
 ### Day-Night Discovery Statistic Details
 
-- Both Gaussian and Asimov curves are stored per cut; **Asimov is the default** for best-cut selection in [src/analysis/0ZBestSigmas.py](../../src/analysis/0ZBestSigmas.py) and exposure plots.
-- σ2/σ3 crossing exposures are tracked independently for both statistics: `Sigma2`/`Sigma3` (Gaussian) and `AsimovSigma2`/`AsimovSigma3`; fastest-discovery selection uses the Asimov crossing columns.
+- Both Gaussian and Asimov curves are stored per cut; **Asimov is the default** for best-cut selection in [src/physics/sensitivity/05_best_sigmas.py](../../src/physics/sensitivity/05_best_sigmas.py) and exposure plots.
+- σ2/σ3 crossing exposures: `Sigma2`/`Sigma3` and `AsimovSigma2`/`AsimovSigma3` are both Asimov-based (profiled nuisance); Gaussian significance is stored as a diagnostic only.
 - MC threshold gate: cuts where any essential background (gamma, neutron) has fewer than `--mc_threshold` MC events are skipped; prevents selecting cuts that deplete backgrounds statistically.
 - Smoothing is applied per component above threshold; the threshold slice keeps unsmoothed bins below threshold and replaces bins above with smoothed values.
 
@@ -161,10 +159,10 @@ No fiducial optimization plots were found for this folder.
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 100 | 180 | 140 | 0.006 | 0.196 | 2.73 |
-| HD Lateral | 20 | 0 | 0 | 0.006 | 0.011 | 6.38 |
-| VD Top | 80 | 100 | 20 | 0.006 | 0.030 | 5.75 |
-| VD Bottom Shielded | 0 | 0 | 240 | 0.000 | 0.000 | 6.05 |
+| HD Central | 100 | 280 | 120 | 0.049 | 0.215 | 2.16 |
+| HD Lateral | 0 | 60 | 0 | 0.045 | 0.055 | 6.08 |
+| VD Top | 0 | 60 | 40 | 0.095 | 0.097 | 6.87 |
+| VD Bottom Shielded | 0 | 40 | 0 | 0.092 | 0.107 | 7.37 |
 
 ---
 
@@ -174,61 +172,25 @@ No fiducial optimization plots were found for this folder.
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../images/analysis/day-night/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/day-night/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../images/analysis/day-night/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/day-night/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_TotalEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../images/analysis/day-night/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/day-night/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_TotalEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../images/analysis/day-night/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../images/analysis/day-night/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_TotalEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for VD Bottom Shielded
 
 ---
 
@@ -240,6 +202,37 @@ No fiducial optimization plots were found for this folder.
 | HD Lateral | 4 | 4 | 3 | 0.733 |
 | VD Top | 7 | 8 | 3 | 0.791 |
 | VD Bottom Shielded | 6 | 9 | 8 | 2.105 |
+
+---
+
+## Oscillograms
+
+---
+
+### HD Central
+
+No oscillogram found.
+
+---
+
+### HD Lateral
+
+No oscillogram found.
+
+---
+
+### VD Top
+
+No oscillogram found.
+
+---
+
+### VD Bottom Shielded
+
+No oscillogram found.
+
+---
+
 
 
 ---
