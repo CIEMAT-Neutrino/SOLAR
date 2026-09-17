@@ -1,5 +1,14 @@
 import os
 import sys
+import tempfile
+import logging as _logging
+
+# Kaleido drives a headless Chrome for figure export and logs "Resorting to unclean kill
+# browser." whenever it has to SIGKILL it, which is often on a loaded node. The image is
+# already written by then, so the warning is noise.
+for _noisy in ("choreographer", "kaleido"):
+    _logging.getLogger(_noisy).setLevel(_logging.ERROR)
+
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -11,22 +20,52 @@ TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
 TEMPLATE_NORMALIZATION_VERSION = 2   # v2 = per-year (mass x rate); v1 = pre-scaled by exposure
 
 
+_NORMALIZATION_STAMPED = set()
+
+
 def write_template_normalization(template_dir: str, detector_mass_kT: float) -> None:
-    """Stamp a template directory as per-year so consumers can refuse stale v1 templates."""
-    os.makedirs(template_dir, exist_ok=True)
-    _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
-    # PNFS/dCache is write-once: opening an existing file for writing raises
-    # "Operation not permitted". Remove first, exactly as prepare_file_save() does.
-    if os.path.exists(_marker):
-        os.remove(_marker)
-    with open(_marker, "w") as fh:
-        json.dump({
-            "version": TEMPLATE_NORMALIZATION_VERSION,
-            "per_year": True,
-            "units": "detector_mass_kT * rate (counts per year)",
-            "detector_mass_kT": float(detector_mass_kT),
-            "note": "Multiply by exposure_yr at load time (06_significance.py).",
-        }, fh, indent=2)
+    """Stamp a template directory as per-year so consumers can refuse stale v1 templates.
+
+    This is called from inside the per-cut loops, and a coarse scan runs several template
+    workers over the same directory at once. Rewriting the marker on every call made them
+    race: one worker removes the file another is about to remove, which surfaces as
+    FileNotFoundError or, on PNFS, as OSError Errno 5. The marker is identical for every cut,
+    so write it once per directory per process, atomically, and never let a marker failure
+    kill a worker whose templates are already on disk.
+    """
+    if template_dir in _NORMALIZATION_STAMPED:
+        return
+    payload = {
+        "version": TEMPLATE_NORMALIZATION_VERSION,
+        "per_year": True,
+        "units": "detector_mass_kT * rate (counts per year)",
+        "detector_mass_kT": float(detector_mass_kT),
+        "note": "Multiply by exposure_yr at load time (06_significance.py).",
+    }
+    try:
+        os.makedirs(template_dir, exist_ok=True)
+        _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
+        try:
+            with open(_marker) as fh:
+                if json.load(fh) == payload:
+                    _NORMALIZATION_STAMPED.add(template_dir)
+                    return
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+        # PNFS/dCache is write-once: build the file under a private name, then swap it in.
+        _handle, _tmp = tempfile.mkstemp(prefix=".normalization_", dir=template_dir)
+        with os.fdopen(_handle, "w") as fh:
+            json.dump(payload, fh, indent=2)
+        try:
+            os.remove(_marker)
+        except FileNotFoundError:
+            pass
+        os.replace(_tmp, _marker)
+        _NORMALIZATION_STAMPED.add(template_dir)
+    except OSError as exc:
+        # A missing marker is recoverable; losing this worker's templates is not.
+        rprint(f"[yellow][WARNING][/yellow] Could not stamp {template_dir}: {exc}")
+        _NORMALIZATION_STAMPED.add(template_dir)
 
 from lib.root import Sensitivity_Fitter
 from lib.oscillation import get_oscillation_datafiles
@@ -325,9 +364,14 @@ detector_mass = get_full_detector_mass(args.config, info)
 df_list = []
 background_samples = []
 # Read the labeled background Rebins whenever the variant changed the background event
-# selection in 03_analysis.py: a charge threshold, or truth-position fiducialization (which
-# re-cuts every background sample on its truth position and the truth best fiducials).
-_bkg_selection_changed = getattr(args, "charge_threshold", 0) > 0 or args.truth_fiducial
+# selection in 03_analysis.py: a charge threshold, truth-position fiducialization (which
+# re-cuts every background sample on its truth position and the truth best fiducials), or
+# lifting the membrane veto (which admits VD plane 1-4 optical matches for every sample).
+_bkg_selection_changed = (
+    getattr(args, "charge_threshold", 0) > 0
+    or args.truth_fiducial
+    or not args.membrane_veto
+)
 _bkg_study_label = args.study_label if _bkg_selection_changed else None
 for bkg, filepath in load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_bkg_study_label):
     bkg_df = pd.read_pickle(filepath)
@@ -391,6 +435,20 @@ save_figure(
     filename="NadirDistribution", rm=args.rewrite, debug=args.plot,
 )
 
+class _NullFigure:
+    """No-op stand-in for a plotly figure, for cuts whose plots are skipped.
+
+    A pre-04_best_cuts.py scan covers every cut triplet in the background data, so the
+    per-cut 4-panel figure is built and saved for the first cut only; the rest would be
+    thousands of identical-format plots nothing reads.
+    """
+
+    def __getattr__(self, _name):
+        def _noop(*_args, **_kwargs):
+            return self
+        return _noop
+
+
 cut_entries = []
 
 # CRITICAL: Check for pipeline ordering issues
@@ -418,6 +476,13 @@ if args.nhits is not None and args.adjcls is not None and args.ophits is not Non
             "OpHits": int(args.ophits),
         }
     ]
+    warn_if_not_best_cut(
+        cut_entries[0],
+        _load_best_cut_map(info, args),
+        (args.config, args.signal, args.energy),
+        stage="Background template",
+        reason="explicit --nhits/--adjcls/--ophits",
+    )
 else:
     # SAFE LOAD: Use new function with warnings
     fastest_sigma = _load_best_cut_map_safe(info, args, phase="Background Template Generation")
@@ -488,20 +553,26 @@ for idx, cut in enumerate(cut_entries):
     adjcl = int(cut["AdjCl"])
     ophits = int(cut["OpHits"])
 
-    fig = make_subplots(
-        rows=1,
-        cols=4,
-        shared_xaxes=False,
-        shared_yaxes=False,
-        subplot_titles=(
-            [
-                "Background Components",
-                "Raw 2D Background",
-                "Smoothed 2D Background",
-                "Residual (Smoothed - Raw)",
-            ]
-        ),
-    )
+    # Every cut gets its template; only the first gets the 4-panel diagnostic figure.
+    _plot_this_cut = bool(args.plot) and (idx == 0 or len(cut_entries) == 1)
+
+    if _plot_this_cut:
+        fig = make_subplots(
+            rows=1,
+            cols=4,
+            shared_xaxes=False,
+            shared_yaxes=False,
+            subplot_titles=(
+                [
+                    "Background Components",
+                    "Raw 2D Background",
+                    "Smoothed 2D Background",
+                    "Residual (Smoothed - Raw)",
+                ]
+            ),
+        )
+    else:
+        fig = _NullFigure()
 
     component_energy = np.asarray(sensitivity_rebin_centers)
 
@@ -594,9 +665,10 @@ for idx, cut in enumerate(cut_entries):
             _bkg_1d_fig,
             title=f"1D Background Spectrum {args.config} {energy}",
             legend_title="Component",
+            tickformat=(".1f", ".0e"),
         )
-        _bkg_1d_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)")
-        _bkg_1d_fig.update_yaxes(title="Counts per Energy (kt·yr·MeV)⁻¹", type="log", range=[-1, 7])
+        _bkg_1d_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", range=[0, 25])
+        _bkg_1d_fig.update_yaxes(title="Counts per Energy (kt·yr·MeV)⁻¹", type="log", range=[-2.5, 14])
         save_figure(
             _bkg_1d_fig, save_path, config=args.config, name=args.signal, subfolder=args.folder.lower(),
             filename=f"Background1D_{energy}", rm=args.rewrite, debug=args.plot,
@@ -605,8 +677,8 @@ for idx, cut in enumerate(cut_entries):
     bkg_hist = _project_1d_to_2d(total, oscillation_df, nadir_pdf=_nadir_pdf_weights)
     smoothed_bkg_hist = _project_1d_to_2d(total_smoothed, oscillation_df, nadir_pdf=_nadir_pdf_weights)
 
-    # The '<1 expected event' mask is exposure dependent and is therefore applied
-    # by 06_significance.py after scaling, not baked into the per-year template.
+    # No '<1 expected event' floor here: templates are per-year. 06_significance.py scales
+    # them and applies that floor for the legacy Gaussian fitter only (see scale_to_exposure).
     residual_bkg_hist = smoothed_bkg_hist - bkg_hist
     
     if args.debug:
@@ -705,49 +777,52 @@ for idx, cut in enumerate(cut_entries):
         col=1,
     )
 
-    add_histogram_style_legend_traces(
-        fig,
-        row=1,
-        col=1,
-        legend="legend2",
-    )
+    if _plot_this_cut:
+        add_histogram_style_legend_traces(
+            fig,
+            row=1,
+            col=1,
+            legend="legend2",
+        )
 
-    fig = format_coustom_plotly(
-        fig,
-        title=f"{energy} Background {args.config}",
-        log=(False, False),
-        matches=("x", None),
-        tickformat=(".1f", ".0e"),
-        legend_title="Component",
-        debug=args.debug,
-    )
+        fig = format_coustom_plotly(
+            fig,
+            title=f"{energy} Background {args.config}",
+            log=(False, False),
+            matches=("x", None),
+            tickformat=(".1f", ".0e"),
+            legend_title="Component",
+            debug=args.debug,
+        )
 
-    fig.update_layout(
-        legend2=dict(x=0.12, y=0.94, bgcolor="rgba(255,255,255,0.7)"),
-    )
+        fig.update_layout(
+            legend2=dict(x=0.12, y=0.94, bgcolor="rgba(255,255,255,0.7)"),
+        )
 
-    fig.update_xaxes(
-        title=f"Reconstructed Energy (MeV)",
-    )
+        fig.update_xaxes(
+            title=f"Reconstructed Energy (MeV)",
+            range=[0, 25],
+        )
 
-    fig.update_yaxes(
-        title=f"Counts per Energy (kT·year·MeV)⁻¹",
-        type="log",
-        range=[-1, 7],
-        row=1,
-        col=1,
-    )
+        fig.update_yaxes(
+            title=f"Counts per Energy (kT·year·MeV)⁻¹",
+            type="log",
+            range=[-2.5, 14],
+            row=1,
+            col=1,
+        )
 
-    save_figure(
-        fig,
-        f"{save_path}",
-        config=args.config,
-        name=args.signal,
-        subfolder=args.folder.lower(),
-        filename=f"Background_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
-        rm=args.rewrite,
-        debug=args.plot,
-    )
+        save_figure(
+            fig,
+            f"{save_path}",
+            config=args.config,
+            name=args.signal,
+            subfolder=args.folder.lower(),
+            filename=f"Background_{energy}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}",
+            rm=args.rewrite,
+            debug=args.plot,
+        )
 
-    if args.energy is not None and isinstance(args.energy, str):
-        break
+# A `break` here used to end the loop after the first cut whenever --energy was a string,
+# which it always is: --force-all-cuts silently produced exactly one background template,
+# so 04_best_cuts.py only ever chose between the cuts that happened to be on disk.

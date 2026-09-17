@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import subprocess
+import tempfile
 from glob import glob as glob_files
 from shlex import quote
 
@@ -34,8 +35,17 @@ parser.add_argument(
     type=str, choices=["file", "prob3", "nufast"], default="nufast",
 )
 parser.add_argument("--exposure",              type=float, default=get_analysis_exposure(str(root), "Sensitivity"), help="Exposure in years. Default from ANALYSIS_EXPOSURES['SENSITIVITY']['PRIMARY'] in config/analysis/config.json.")
-parser.add_argument("--signal_uncertainty",    type=float, default=None)
-parser.add_argument("--background_uncertainty",type=float, default=None)
+# Default to the configured Sensitivity uncertainties (ANALYSIS_UNCERTAINTIES.SENSITIVITY in
+# config/analysis/config.json), i.e. what run_sensitivity.py forwards. With the old None -> 0
+# default a manual run scored every cut with a FIXED signal normalisation (Delta chi2 20.3 for
+# NHits3 AdjCl2 OpHits12 against 6.0 with the 4% prior), so the map disagreed with 06_significance.
+_configured_unc = load_analysis_info(str(root)).get("ANALYSIS_UNCERTAINTIES", {}).get("SENSITIVITY", {})
+parser.add_argument("--signal_uncertainty",    type=float,
+                    default=float(_configured_unc.get("signal_uncertainty", load_analysis_info(str(root)).get("SIGNAL_ERROR", 0.04))),
+                    help="Signal normalisation prior width. Default: ANALYSIS_UNCERTAINTIES.SENSITIVITY.signal_uncertainty.")
+parser.add_argument("--background_uncertainty",type=float,
+                    default=float(_configured_unc.get("background_uncertainty", load_analysis_info(str(root)).get("BACKGROUND_ERROR", 0.02))),
+                    help="Background normalisation prior width. Default: ANALYSIS_UNCERTAINTIES.SENSITIVITY.background_uncertainty.")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=False)
@@ -53,6 +63,46 @@ parser.add_argument(
         "(VD planes 1-4). Forwarded to sensitivity/02_signal_template.py. "
         "Used by the membrane_veto study."
     ),
+)
+parser.add_argument(
+    "--min_background_mc",
+    type=int,
+    default=20,
+    help=(
+        "Reject cuts where an essential background has fewer than this many simulated events "
+        "summed over the spectrum (default 10). 03_analysis.py zeroes bins with MC < "
+        "--mc_filter_threshold, so a thinly simulated background reads as exactly zero and the "
+        "cut optimiser is rewarded for a background it cannot see. 0 disables the guard."
+    ),
+)
+parser.add_argument(
+    "--scan_strategy",
+    type=str,
+    choices=["coarse", "full"],
+    default="coarse",
+    help="How to search the cut grid. 'coarse' (default) scores a strided seed grid, then "
+         "refines around the best --scan_top cuts at halving offsets down to adjacent cuts. "
+         "'full' scores every cut that has a background template (6800 cuts, ~42 h serial).",
+)
+parser.add_argument(
+    "--scan_fraction",
+    type=float,
+    default=0.01,
+    help="Coarse strategy: target fraction of the grid for the seed scan (default 0.01). The "
+         "per-axis stride is the cube root of its inverse; axis extremes are always included.",
+)
+parser.add_argument(
+    "--scan_top",
+    type=int,
+    default=3,
+    help="Coarse strategy: how many leading cuts to refine around each round (default 3).",
+)
+parser.add_argument(
+    "--scan_workers",
+    type=int,
+    default=8,
+    help="Signal templates are built by this many concurrent 02_signal_template.py processes "
+         "(default 8). Each holds its own copy of the signal dataframe, ~4 GB.",
 )
 parser.add_argument("--nhits",  type=int, default=None, help="Number of hits cut. If provided, adds this cut to the evaluation list.")
 parser.add_argument("--adjcls", type=int, default=None, help="Adjacent clusters cut. If provided, adds this cut to the evaluation list.")
@@ -144,14 +194,17 @@ def _sampling_current(cut) -> bool:
     return ok
 
 
-def _generate_templates(cuts):
+# The cut list goes to 02_signal_template.py in a file, not on the command line: a full
+# pre-best-cut scan is 6800 triplets (~279 KiB of JSON), over the 128 KiB cap on a single argv
+# entry, and printing it would bury every other line of the log.
+def _template_command(cuts_path):
     cmd = [
         "python3", f"{root}/src/physics/sensitivity/02_signal_template.py",
         "--config",               args.config,
         "--signal",                 args.signal,
         "--folder",               args.folder,
         "--energy",               args.energy,
-        "--cuts",                 json.dumps(cuts),
+        "--cuts_file",            cuts_path,
         "--exposure",             str(args.exposure),
         "--oscillation_backend",  args.oscillation_backend,
         "--scan_mode",
@@ -164,18 +217,84 @@ def _generate_templates(cuts):
         cmd += ["--charge_threshold", str(args.charge_threshold)]
     if not args.membrane_veto:
         cmd += ["--no-membrane_veto"]
+    # Without this the scan builds nominal-fiducial templates and study_context gives them an
+    # empty template suffix, so they land in the unlabeled energy directory while this script
+    # looks for them under {energy}_{label} — every candidate then reads as missing or stale.
+    if args.truth_fiducial:
+        cmd += ["--truth_fiducial"]
     if args.study_label:
         cmd += ["--study_label", args.study_label]
-    cmd_str = " ".join(quote(str(c)) for c in cmd)
-    rprint(f"\n[green][CMD][/green] {cmd_str}")
-    result = subprocess.run(cmd, check=False)
-    if result.returncode != 0:
-        rprint(
-            f"[yellow][WARNING][/yellow] sensitivity/02_signal_template.py failed "
-            f"(exit {result.returncode})"
+    return cmd
+
+
+def _generate_templates(cuts):
+    """Build signal templates for `cuts`, split across --scan_workers processes.
+
+    Each cut writes its own per-cut pkls, so workers share no state; the split is round-robin
+    to keep per-worker load even.
+    """
+    cuts = list(cuts)
+    if not cuts:
+        return True
+    workers = max(1, min(int(args.scan_workers), len(cuts)))
+    chunks = [chunk for chunk in (cuts[i::workers] for i in range(workers)) if chunk]
+
+    _cuts_dir = f"{root}/output/tmp"
+    os.makedirs(_cuts_dir, exist_ok=True)
+    procs, paths, logs = [], [], []
+    for chunk in chunks:
+        _handle, cuts_path = tempfile.mkstemp(
+            prefix=f"cuts_{args.config}_{args.signal}_{args.folder.lower()}_",
+            suffix=".json",
+            dir=_cuts_dir,
         )
-        return False
-    return True
+        with os.fdopen(_handle, "w") as _cuts_file:
+            json.dump(chunk, _cuts_file)
+        paths.append(cuts_path)
+        # Workers share the parent's terminal, so their progress bars and tracebacks would
+        # interleave. Each writes to its own log; failures are reported with a tail below.
+        log_path = f"{root}/output/logs/scan_worker_{len(procs)}_{args.config}_{args.folder.lower()}.log"
+        log_handle = open(log_path, "w")
+        logs.append((log_path, log_handle))
+        procs.append(subprocess.Popen(_template_command(cuts_path), stdout=log_handle, stderr=subprocess.STDOUT))
+
+    rprint(
+        f"[cyan][INFO][/cyan] Generating signal templates for {len(cuts)} cut(s) "
+        f"across {len(procs)} worker(s)."
+    )
+    if paths:
+        rprint(f"\n[green][CMD][/green] {' '.join(quote(str(c)) for c in _template_command(paths[0]))}")
+
+    ok = True
+    try:
+        for i, proc in enumerate(procs):
+            if proc.wait() != 0:
+                ok = False
+                log_path, _ = logs[i]
+                rprint(
+                    f"[yellow][WARNING][/yellow] signal template worker {i} failed "
+                    f"(exit {proc.returncode}); last lines of {log_path}:"
+                )
+                try:
+                    with open(log_path) as fh:
+                        for line in fh.readlines()[-15:]:
+                            rprint(f"    {line.rstrip()}")
+                except OSError:
+                    pass
+    finally:
+        for _, handle in logs:
+            try:
+                handle.close()
+            except OSError:
+                pass
+        for cuts_path in paths:
+            try:
+                os.remove(cuts_path)
+            except FileNotFoundError:
+                pass
+    if ok:
+        rprint(f"[cyan][INFO][/cyan] {len(procs)} worker(s) finished; logs in {root}/output/logs/scan_worker_*.log")
+    return ok
 
 
 def _load_template(path: str):
@@ -204,6 +323,74 @@ if not cut_candidates:
     )
     raise SystemExit(1)
 
+
+def _mc_supported_cuts():
+    """Cuts whose essential backgrounds carry enough simulation to be believed.
+
+    The Rebin pkls keep the raw unweighted MC entry count per bin. Where that is thin,
+    03_analysis.py has already zeroed the weighted Counts, so the background is not small
+    here, it is unmeasured - and a cut scan maximises exactly that.
+    """
+    if args.min_background_mc <= 0:
+        return None
+    essential = [s for s, is_essential in get_essential_backgrounds(str(root)).items() if is_essential]
+    if not essential:
+        return None
+    # Match the labeled Rebins 01_background_template.py reads for this variant.
+    _selection_changed = (
+        getattr(args, "charge_threshold", 0) > 0
+        or args.truth_fiducial
+        or not args.membrane_veto
+    )
+    _label = args.study_label if _selection_changed else None
+    supported, checked = None, []
+    for sample, filepath in load_available_background_dataframes(
+        str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_label
+    ):
+        if sample not in essential:
+            continue
+        frame = pd.read_pickle(filepath)
+        if "MCCounts" not in frame.columns:
+            rprint(f"[yellow][WARNING][/yellow] {sample} Rebin has no MCCounts; MC support unchecked.")
+            continue
+        ok = set()
+        for _, row in frame.iterrows():
+            entries = row["MCCounts"]
+            total_entries = float(np.nansum(np.asarray(list(entries), dtype=float))) if hasattr(entries, "__len__") else float(entries)
+            if total_entries >= args.min_background_mc:
+                ok.add((int(row["NHits"]), int(row["AdjCl"]), int(row["OpHits"])))
+        checked.append(sample)
+        supported = ok if supported is None else (supported & ok)
+    if supported is None:
+        return None
+    rprint(
+        f"[cyan][INFO][/cyan] MC support: {len(supported)} of {len(cut_candidates)} cuts have "
+        f">= {args.min_background_mc} simulated events in every essential background "
+        f"({', '.join(checked)})."
+    )
+    return supported
+
+
+_supported = _mc_supported_cuts()
+if _supported is not None:
+    _rejected = [c for c in cut_candidates if (c["NHits"], c["AdjCl"], c["OpHits"]) not in _supported]
+    cut_candidates = [c for c in cut_candidates if (c["NHits"], c["AdjCl"], c["OpHits"]) in _supported]
+    if _rejected:
+        rprint(
+            f"[yellow][WARNING][/yellow] Dropping {len(_rejected)} cut(s) where an essential "
+            f"background is too thinly simulated to trust (e.g. "
+            + ", ".join(
+                f"NHits{c['NHits']} AdjCl{c['AdjCl']} OpHits{c['OpHits']}" for c in _rejected[:3]
+            )
+            + "). Raise --min_background_mc to tighten, or 0 to disable."
+        )
+    if not cut_candidates:
+        rprint(
+            "[red][ERROR][/red] No cut has adequate MC support for its essential backgrounds. "
+            "Lower --min_background_mc, or simulate more background statistics."
+        )
+        raise SystemExit(1)
+
 rprint(
     f"[cyan][INFO][/cyan] Found {len(cut_candidates)} background-template cut candidates "
     f"for {args.config} {args.signal} {args.folder} {args.energy}."
@@ -213,21 +400,8 @@ rprint(
 
 cut_quality = []
 
-# Collect stale cuts and regenerate in a single subprocess call
-stale_cuts = [
-    c for c in cut_candidates
-    if args.rewrite
-    or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], solar_dm2))
-    or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], react_dm2))
-    or not _sampling_current(c)
-]
-if stale_cuts:
-    ok = _generate_templates(stale_cuts)
-    if not ok:
-        rprint("[red][ERROR][/red] Template generation failed; aborting.")
-        raise SystemExit(1)
-
-for cut in cut_candidates:
+def _score_cut(cut):
+    """Score one cut, or return None when its templates are unusable."""
     nhits = cut["NHits"]
     adjcl = cut["AdjCl"]
     ophits = cut["OpHits"]
@@ -240,7 +414,7 @@ for cut in cut_candidates:
             f"[yellow][WARNING][/yellow] Templates missing or stale after generation for "
             f"NHits{nhits} AdjCl{adjcl} OpHits{ophits}; skipping."
         )
-        continue
+        return None
 
     pred_solar = _load_template(solar_pkl)
     pred_react = _load_template(react_pkl)
@@ -251,15 +425,16 @@ for cut in cut_candidates:
     else:
         bkg = np.zeros_like(pred_solar)
 
-    # Scale per-year templates to expected counts, then drop bins below one expected
-    # event. That threshold is not cosmetic: bb_mask=(b_t > 0) below uses it to decide
-    # which bins enter the Barlow-Beeston fit, and a bin with ~0 expected background
-    # contributes an unbounded chi2. It used to be baked into the templates by
-    # 01/02_*_template.py; those now store per-year values, so it is applied here (and
-    # in 06_significance.scale_to_exposure) at the exposure actually being evaluated.
+    # Scale per-year templates to expected counts. The '<1 expected event -> 0' floor is
+    # applied for the legacy Gaussian fitter only (bb_mask=(b_t > 0): a bin with ~0 expected
+    # background has an unbounded Gaussian chi2). The pull fit's Poisson deviance handles
+    # small expectations, and flooring the background there throws the cleanest cells out of
+    # the fit, so it would reward cuts that leave some background in every cell. Mirrors
+    # 06_significance.scale_to_exposure.
     def _to_counts(arr):
         scaled = args.exposure * np.asarray(arr, dtype=float)
-        scaled[scaled < 1.0] = 0.0
+        if args.fit_method == "legacy":
+            scaled[scaled < 1.0] = 0.0
         return scaled
 
     pred_solar_scaled = _to_counts(pred_solar)
@@ -276,13 +451,13 @@ for cut in cut_candidates:
         # Same nuisances as the legacy scorer (signal + background normalisation only).
         chi2_solar_at_react = sensitivity_pull_chi2(
             obs_at_react, p_s, b_t,
-            sigma_pred=args.signal_uncertainty or 0.0,
-            sigma_bkg=args.background_uncertainty or 0.0,
+            sigma_pred=args.signal_uncertainty,
+            sigma_bkg=args.background_uncertainty,
         )["chi2"]
         chi2_react_at_solar = sensitivity_pull_chi2(
             obs_at_solar, p_r, b_t,
-            sigma_pred=args.signal_uncertainty or 0.0,
-            sigma_bkg=args.background_uncertainty or 0.0,
+            sigma_pred=args.signal_uncertainty,
+            sigma_bkg=args.background_uncertainty,
         )["chi2"]
     else:
         fitter_s = Sensitivity_Fitter(
@@ -310,21 +485,135 @@ for cut in cut_candidates:
             f"[yellow][WARNING][/yellow] Fitter returned None for "
             f"NHits{nhits} AdjCl{adjcl} OpHits{ophits}; skipping."
         )
-        continue
+        return None
 
     score = 0.5 * (float(chi2_solar_at_react) + float(chi2_react_at_solar))
-    cut_quality.append({
+    rprint(
+        f"  NHits{nhits} AdjCl{adjcl} OpHits{ophits}  "
+        f"solar@react={chi2_solar_at_react:.3f}  react@solar={chi2_react_at_solar:.3f}  "
+        f"score={score:.3f}"
+    )
+    return {
         "NHits":             nhits,
         "AdjCl":             adjcl,
         "OpHits":            ophits,
         "SolarFitAtReact":   float(chi2_solar_at_react),
         "ReactorFitAtSolar": float(chi2_react_at_solar),
         "Score":             score,
-    })
+    }
+
+
+# ── search the cut grid ────────────────────────────────────────────────────────
+
+_AXES = ("NHits", "AdjCl", "OpHits")
+
+
+def _key(cut):
+    return tuple(int(cut[k]) for k in _AXES)
+
+
+def _axis_values(cuts):
+    return {k: sorted({int(c[k]) for c in cuts}) for k in _AXES}
+
+
+def _seed_grid(axes, stride, available):
+    """Every `stride`-th value per axis, extremes always included."""
+    picks = {}
+    for k, values in axes.items():
+        taken = list(values[::stride]) or list(values[:1])
+        if values[-1] not in taken:
+            taken.append(values[-1])
+        picks[k] = taken
+    return [
+        {"NHits": n, "AdjCl": a, "OpHits": o}
+        for n in picks["NHits"]
+        for a in picks["AdjCl"]
+        for o in picks["OpHits"]
+        if (n, a, o) in available
+    ]
+
+
+def _neighbours(cut, axes, offset, available, scanned):
+    """Unscanned grid positions `offset` lattice steps from `cut` along any axis."""
+    index = {k: axes[k].index(int(cut[k])) for k in _AXES}
+    out = []
+    for dn in (-offset, 0, offset):
+        for da in (-offset, 0, offset):
+            for do in (-offset, 0, offset):
+                if dn == da == do == 0:
+                    continue
+                position, inside = {}, True
+                for k, delta in zip(_AXES, (dn, da, do)):
+                    j = index[k] + delta
+                    if not 0 <= j < len(axes[k]):
+                        inside = False
+                        break
+                    position[k] = axes[k][j]
+                if inside and _key(position) in available and _key(position) not in scanned:
+                    out.append(position)
+    return out
+
+
+cut_quality = []
+_scanned = set()
+_available = {_key(c) for c in cut_candidates}
+_axes = _axis_values(cut_candidates)
+
+
+def _scan(batch, label):
+    """Generate templates for the unscanned cuts in `batch`, then score them."""
+    batch = [c for c in batch if _key(c) not in _scanned]
+    if not batch:
+        return []
+    rprint(f"[cyan][INFO][/cyan] {label}: {len(batch)} cut(s)")
+    stale = [
+        c for c in batch
+        if args.rewrite
+        or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], solar_dm2))
+        or not _is_valid(_pkl_path(c["NHits"], c["AdjCl"], c["OpHits"], react_dm2))
+        or not _sampling_current(c)
+    ]
+    if stale and not _generate_templates(stale):
+        rprint("[red][ERROR][/red] Template generation failed; aborting.")
+        raise SystemExit(1)
+    scored = []
+    for cut in batch:
+        _scanned.add(_key(cut))
+        result = _score_cut(cut)
+        if result is not None:
+            scored.append(result)
+            cut_quality.append(result)
+    return scored
+
+
+if args.scan_strategy == "full":
+    _scan(cut_candidates, f"Full scan of {len(cut_candidates)} cut(s)")
+else:
+    _stride = max(1, int(round((1.0 / max(args.scan_fraction, 1e-9)) ** (1.0 / 3.0))))
+    _scan(_seed_grid(_axes, _stride, _available), f"Coarse seed scan (stride {_stride})")
+    _offset = max(1, _stride // 2)
+    while cut_quality:
+        _top = sorted(cut_quality, key=lambda item: item["Score"], reverse=True)[: max(1, args.scan_top)]
+        rprint(
+            "[cyan][INFO][/cyan] Leading cuts: "
+            + ", ".join(
+                f"NHits{t['NHits']} AdjCl{t['AdjCl']} OpHits{t['OpHits']} ({t['Score']:.3f})"
+                for t in _top
+            )
+        )
+        _batch, _seen = [], set()
+        for _cut in _top:
+            for _nb in _neighbours(_cut, _axes, _offset, _available, _scanned):
+                if _key(_nb) not in _seen:
+                    _seen.add(_key(_nb))
+                    _batch.append(_nb)
+        _scan(_batch, f"Refinement at offset {_offset} around the top {len(_top)}")
+        if _offset == 1:
+            break
+        _offset = max(1, _offset // 2)
     rprint(
-        f"  NHits{nhits} AdjCl{adjcl} OpHits{ophits}  "
-        f"solar@react={chi2_solar_at_react:.3f}  react@solar={chi2_react_at_solar:.3f}  "
-        f"score={score:.3f}"
+        f"[cyan][INFO][/cyan] Coarse-to-fine scan scored {len(_scanned)} of "
+        f"{len(cut_candidates)} cuts ({100 * len(_scanned) / max(len(cut_candidates), 1):.1f}%)."
     )
 
 if not cut_quality:

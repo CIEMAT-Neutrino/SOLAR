@@ -72,6 +72,7 @@ Run examples
 
 import os
 import glob
+import pickle
 import sys
 import time
 import subprocess
@@ -959,6 +960,71 @@ def strict_validation_args_for() -> List[str]:
     return ["--strict_validation" if args.strict_validation else "--no-strict_validation"]
 
 
+def seed_held_best_cut_map(config: str, folder: str, name: str, energy: str) -> None:
+    """Give a study that holds the nominal cuts (skip_best_cuts) its own labelled best-cut map.
+
+    The template and significance scripts refuse to run a labelled study without
+    highest_SENSITIVITY_{label}.pkl, and 04_best_cuts.py never writes one for a held-cut study.
+    The nominal cuts come from the Truncated (baseline) map, re-keyed to the variant's energy
+    estimator (charge_* / energy_* override it). Score columns are dropped: 06_significance.py
+    rewrites this map with the variant's own Score.
+    """
+    if not (args.study_label and args.skip_best_cuts):
+        return
+    if None not in (args.nhits, args.ophits, args.adjcls):
+        return
+    base = f"{analysis_info.get('PATH', '')}/SENSITIVITY/{config}/{name}"
+    target = f"{base}/{folder.lower()}/{config}_{name}_highest_SENSITIVITY_{args.study_label}.pkl"
+    source = f"{base}/truncated/{config}_{name}_highest_SENSITIVITY.pkl"
+    if not os.path.exists(source):
+        raise SystemExit(
+            f"[ERROR] Study '{args.study_label}' holds the nominal cuts but the nominal best-cut map "
+            f"is missing: {source}. Run the nominal Sensitivity pipeline for {config} first."
+        )
+    nominal = pickle.load(open(source, "rb"))
+    entries = [v for k, v in nominal.items() if k[0] == config and k[1] == name]
+    if len(entries) != 1:
+        raise SystemExit(
+            f"[ERROR] Expected one ({config}, {name}, *) entry in {source}, found {len(entries)}."
+        )
+    cuts = {key: int(entries[0][key]) for key in ("NHits", "AdjCl", "OpHits")}
+
+    if os.path.exists(target):
+        # A labelled map left by an earlier run is only valid while it still holds the
+        # nominal cuts. Once 04_best_cuts.py moves the nominal cut (1/4/8 -> 3/2/12 on
+        # 2026-09-17) every held-cut study kept reading its old map, so unc_bkg*, charge_*
+        # and legacy_fit silently stayed at the old working point and were not comparable
+        # to the default. Re-seed whenever the cuts differ.
+        try:
+            existing = pickle.load(open(target, "rb"))
+            held = [v for k, v in existing.items() if k[0] == config and k[1] == name]
+            same = len(held) == 1 and all(int(held[0][key]) == cuts[key] for key in cuts)
+        except Exception as exc:  # unreadable map: treat as stale
+            rprint(f"[yellow][WARNING][/yellow] Could not read {target} ({exc}); re-seeding.")
+            same = False
+        if same:
+            return
+        if not args.rewrite:
+            raise SystemExit(
+                f"[ERROR] Held-cut map {target} is stale (nominal cuts are now "
+                f"NHits={cuts['NHits']} AdjCl={cuts['AdjCl']} OpHits={cuts['OpHits']}) and "
+                "--no-rewrite forbids replacing it. Re-run with --rewrite or delete the file."
+            )
+        rprint(
+            f"[yellow][WARNING][/yellow] Held-cut map for '{args.study_label}' is stale "
+            f"({held[0] if held else 'unreadable'}); re-seeding from the nominal Truncated map."
+        )
+        os.remove(target)  # PNFS/dCache is write-once: remove before rewriting
+
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "wb") as handle:
+        pickle.dump({(config, name, energy): cuts}, handle)
+    rprint(
+        f"[cyan][INFO][/cyan] Seeded held-cut best-cut map for '{args.study_label}' "
+        f"(NHits={cuts['NHits']} AdjCl={cuts['AdjCl']} OpHits={cuts['OpHits']}, {energy}): {target}"
+    )
+
+
 def study_label_args_for() -> List[str]:
     if args.study_label:
         return ["--study_label", args.study_label]
@@ -1453,6 +1519,7 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
     for energy in args.energy:
         energy_args = common_analysis_args_for([energy])
         if args.computation and args.significance:
+            seed_held_best_cut_map(config, folder, name, energy)
             # Phase 1 — background templates (all cuts)
             if not args.skip_templates:
                 run_analysis_script(
@@ -1493,7 +1560,9 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
         for profile_name in profile_names:
             run_analysis_script(
                 "src/physics/sensitivity/contour_plot.py",
-                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + secondary_exposure_args_for() + draft_args_for() + fit_method_args_for(),
+                # truth_fiducial/membrane_veto decide the template suffix, and so which results
+                # directory 06_significance.py wrote the chi2 grids to.
+                background_base_args + reference_args + energy_args + uncertainty_args + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for() + secondary_exposure_args_for() + draft_args_for() + fit_method_args_for(),
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
@@ -1611,9 +1680,9 @@ for config, folder in product(args.config, args.folder):
             f"\n  PHASE 4: 06_significance.py (uses templates for SAME cut)"
             f"\n\n"
             f"  ⚠️  MISMATCH RISK: If Phase 1 runs AFTER best-cut file exists, it may only"
-            f"      generate templates for the OLD best cut. Then if Phase 2 selects a"
-            f"      NEW best cut, Phase 3 will generate signal templates for that NEW cut,"
-            f"      causing Phase 4 to use MISMATCHED templates (background: OLD, signal: NEW)."
+            f" generate templates for the OLD best cut. Then if Phase 2 selects a"
+            f" NEW best cut, Phase 3 will generate signal templates for that NEW cut,"
+            f" causing Phase 4 to use MISMATCHED templates (background: OLD, signal: NEW)."
             f"\n"
             f"  ✅ SAFE: Use --rewrite to regenerate all files with consistent cuts."
             f"\n"

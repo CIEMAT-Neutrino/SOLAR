@@ -627,12 +627,17 @@ Templates are stored **per year** (normalisation schema v2, `TEMPLATE_NORMALIZAT
 `detector_mass_kT × rate`, one file per template directory; see §8.3). Absolute counts are formed
 at load time:
 
-$$X_{ai}(\Ecal) \;=\; \Ecal\,X_{ai}^{\mathrm{yr}}, \qquad X_{ai}(\Ecal) \to 0 \ \ \text{if } X_{ai}(\Ecal) < 1 ,$$
+$$X_{ai}(\Ecal) \;=\; \Ecal\,X_{ai}^{\mathrm{yr}},$$
 
-implemented in `scale_to_exposure` (`06_significance.py:375`). The truncation of bins carrying less
-than one expected event is exposure dependent, which is why it is applied here and not baked into
-the stored templates. `require_per_year_templates()` refuses v1 (pre-scaled) templates with a
-descriptive error rather than silently double-scaling them.
+implemented in `scale_to_exposure` (`06_significance.py`). No cell is floored for the pull fit: the
+Poisson deviance of §5.5 is well defined for small expectations, and the mask of §5.8 only removes
+cells with *no* background simulation. The former "$X \to 0$ if $X < 1$" floor survives for the
+legacy Gaussian fitter only (§5.15), where a cell with $b \to 0$ has an unbounded $\chi^2$.
+Applied to the pull fit it removed exactly the clean high-energy cells (0.1 expected background
+events, hundreds of signal events over 30 yr), so a cleaner detector scored *lower*: HD Reduced
+(gamma/6.7, neutron/50) gave $\Delta\chi^2 = 0.55$ against 5.3 for Truncated with the same signal
+template; without the floor both give $\approx 6$ (2026-09-17). `require_per_year_templates()` refuses
+v1 (pre-scaled) templates with a descriptive error rather than silently double-scaling them.
 
 Two exposures are evaluated in the same pass: the primary $\Ecal = 30$ yr
 (`ANALYSIS_EXPOSURES.SENSITIVITY.PRIMARY`) and the secondary $\Ecal = 10$ yr (`SECONDARY`), whose
@@ -777,10 +782,12 @@ A bin enters the sum only if
 
 $$\mathcal{M}_{ai} = \mathbf{1}\!\left[\muzero>0\right]\wedge\mathbf{1}\!\left[\Tbkg > 0\right],$$
 
-the second condition being applied whenever the background template is not identically zero. This
-excludes bins in which a signal is predicted but no reliable background model exists, where the
-deviance would otherwise be unbounded. For the reference configuration 722 of the 1200 bins
-survive. The condition is the two-dimensional analogue of the HEP Barlow-Beeston mask
+the second condition being applied whenever the background template is not identically zero. It
+excludes bins in which a signal is predicted but no background simulation reached the cell at all,
+where the model would be unsupported rather than small. Since 2026-09-17 the scaled templates are
+no longer floored at one expected event before this mask is applied (§5.3), so a cell with a small
+but simulated background stays in the fit; only cells with a truly empty background template are
+dropped. The condition is the two-dimensional analogue of the HEP Barlow-Beeston mask
 [Barlow & Beeston 1993].
 
 ### 5.9 Nuisance Profiles {#sens-profiles}
@@ -1365,7 +1372,7 @@ strict by default under the pull method and warn-only under legacy.
 **Solution:** Templates are now stored **per-year** (v2), with normalization metadata in `TEMPLATE_NORMALIZATION.json`:
 
 - Templates represent rates: units of $(\mathrm{yr\cdot kt\cdot MeV})^{-1}$ integrated over bin width.
-- Exposure scaling is applied at load time via `scale_to_exposure(arr, exposure_yr)`, which also zeros bins below 1 expected event.
+- Exposure scaling is applied at load time via `scale_to_exposure(arr, exposure_yr)`. The one-expected-event floor is applied for the legacy fitter only (see §5.3).
 - Validation: `require_per_year_templates()` refuses v1 templates with a descriptive error message.
 - Benefit: A single template set serves all exposure values without regeneration.
 

@@ -1,5 +1,14 @@
 import os
 import sys
+import tempfile
+import logging as _logging
+
+# Kaleido drives a headless Chrome for figure export and logs "Resorting to unclean kill
+# browser." whenever it has to SIGKILL it, which is often on a loaded node. The image is
+# already written by then, so the warning is noise.
+for _noisy in ("choreographer", "kaleido"):
+    _logging.getLogger(_noisy).setLevel(_logging.ERROR)
+
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -12,22 +21,52 @@ TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
 TEMPLATE_NORMALIZATION_VERSION = 2   # v2 = per-year (mass x rate); v1 = pre-scaled by exposure
 
 
+_NORMALIZATION_STAMPED = set()
+
+
 def write_template_normalization(template_dir: str, detector_mass_kT: float) -> None:
-    """Stamp a template directory as per-year so consumers can refuse stale v1 templates."""
-    os.makedirs(template_dir, exist_ok=True)
-    _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
-    # PNFS/dCache is write-once: opening an existing file for writing raises
-    # "Operation not permitted". Remove first, exactly as prepare_file_save() does.
-    if os.path.exists(_marker):
-        os.remove(_marker)
-    with open(_marker, "w") as fh:
-        json.dump({
-            "version": TEMPLATE_NORMALIZATION_VERSION,
-            "per_year": True,
-            "units": "detector_mass_kT * rate (counts per year)",
-            "detector_mass_kT": float(detector_mass_kT),
-            "note": "Multiply by exposure_yr at load time (06_significance.py).",
-        }, fh, indent=2)
+    """Stamp a template directory as per-year so consumers can refuse stale v1 templates.
+
+    This is called from inside the per-cut loops, and a coarse scan runs several template
+    workers over the same directory at once. Rewriting the marker on every call made them
+    race: one worker removes the file another is about to remove, which surfaces as
+    FileNotFoundError or, on PNFS, as OSError Errno 5. The marker is identical for every cut,
+    so write it once per directory per process, atomically, and never let a marker failure
+    kill a worker whose templates are already on disk.
+    """
+    if template_dir in _NORMALIZATION_STAMPED:
+        return
+    payload = {
+        "version": TEMPLATE_NORMALIZATION_VERSION,
+        "per_year": True,
+        "units": "detector_mass_kT * rate (counts per year)",
+        "detector_mass_kT": float(detector_mass_kT),
+        "note": "Multiply by exposure_yr at load time (06_significance.py).",
+    }
+    try:
+        os.makedirs(template_dir, exist_ok=True)
+        _marker = os.path.join(template_dir, TEMPLATE_NORMALIZATION_FILE)
+        try:
+            with open(_marker) as fh:
+                if json.load(fh) == payload:
+                    _NORMALIZATION_STAMPED.add(template_dir)
+                    return
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+        # PNFS/dCache is write-once: build the file under a private name, then swap it in.
+        _handle, _tmp = tempfile.mkstemp(prefix=".normalization_", dir=template_dir)
+        with os.fdopen(_handle, "w") as fh:
+            json.dump(payload, fh, indent=2)
+        try:
+            os.remove(_marker)
+        except FileNotFoundError:
+            pass
+        os.replace(_tmp, _marker)
+        _NORMALIZATION_STAMPED.add(template_dir)
+    except OSError as exc:
+        # A missing marker is recoverable; losing this worker's templates is not.
+        rprint(f"[yellow][WARNING][/yellow] Could not stamp {template_dir}: {exc}")
+        _NORMALIZATION_STAMPED.add(template_dir)
 
 from lib.oscillation import get_oscillation_datafiles
 from lib.template_guards import clean_and_validate_template, write_template_sampling_marker
@@ -127,7 +166,16 @@ parser.add_argument(
     type=str,
     default=None,
     help='JSON list of cut dicts [{"NHits":N,"AdjCl":A,"OpHits":O}, ...]. '
-         "When provided, processes all listed cuts in a single invocation.",
+         "When provided, processes all listed cuts in a single invocation. "
+         "Prefer --cuts_file for long lists: a single argv entry is capped at 128 KiB.",
+)
+parser.add_argument(
+    "--cuts_file",
+    type=str,
+    default=None,
+    help="Path to a JSON file holding the same list of cut dicts as --cuts. Takes precedence "
+         "over --cuts. 04_best_cuts.py writes one per scan so a 6800-cut list neither hits the "
+         "argv size cap nor floods the log with the full list.",
 )
 parser.add_argument("--charge_threshold", type=float, default=0,
     help="Charge threshold Q (ADC). When >0, applies Charge>Q cut to signal template events.")
@@ -255,10 +303,27 @@ def _validate_signal_cut_consistency(cuts_to_process: list, info: dict, args) ->
     # Explicit --nhits/--adjcls/--ophits: the caller chose the cut, so no best-cut map is needed.
     # Study variants run with --skip_best_cuts never write a labeled map, and 06_significance.py
     # uses the same explicit cut, so requiring (or matching) a map here only blocks those runs.
-    if args.cuts is None and None not in (args.nhits, args.adjcls, args.ophits):
+    if args.cuts is None and args.cuts_file is None and None not in (args.nhits, args.adjcls, args.ophits):
         rprint(
             f"[green][CUT CONSISTENCY][/green] Signal templates use the explicit cut "
             f"NHits{args.nhits} AdjCl{args.adjcls} OpHits{args.ophits}"
+        )
+        warn_if_not_best_cut(
+            {"NHits": args.nhits, "AdjCl": args.adjcls, "OpHits": args.ophits},
+            _load_best_cut_map(info, args),
+            (args.config, args.signal, args.energy),
+            stage="Signal template",
+            reason="explicit --nhits/--adjcls/--ophits",
+        )
+        return
+
+    # --cuts/--cuts_file with --scan_mode: 04_best_cuts.py is scanning candidate cuts and passes
+    # each one explicitly. The labeled best-cut map is what that scan is about to write, so
+    # requiring it here deadlocks every study that optimises its own cuts (fiduc_truth).
+    if (args.cuts is not None or args.cuts_file is not None) and args.scan_mode:
+        rprint(
+            f"[green][CUT CONSISTENCY][/green] Scan mode: signal templates use the "
+            f"{len(cuts_to_process)} cut(s) supplied by the cut optimiser."
         )
         return
 
@@ -406,7 +471,11 @@ for config in configs:
     energy = args.energy
 
     # Build cuts_to_process
-    if args.cuts is not None:
+    if args.cuts_file is not None:
+        with open(args.cuts_file) as _cuts_handle:
+            cuts_to_process = json.load(_cuts_handle)
+        rprint(f"[cyan][INFO][/cyan] Read {len(cuts_to_process)} cut(s) from {args.cuts_file}")
+    elif args.cuts is not None:
         cuts_to_process = json.loads(args.cuts)
     elif args.nhits is not None and args.adjcls is not None and args.ophits is not None:
         cuts_to_process = [{"NHits": args.nhits, "AdjCl": args.adjcls, "OpHits": args.ophits}]
@@ -431,7 +500,7 @@ for config in configs:
     _validate_signal_cut_consistency(cuts_to_process, info, args)
 
     # ── Phase 1: pre-compute per-cut histograms ──────────────────────────────────
-    cut_data = []  # (nhits, adjcl, ophits, h, fig, title)
+    cut_data = []  # (nhits, adjcl, ophits, h_array, fig, title)
     
     # Determine which binning to use based on flyweight mode
     if args.flyweight:
@@ -504,38 +573,38 @@ for config in configs:
         if args.debug:
             print(f"# of events (counts): {np.sum(h)}")
         fig.add_trace(
-            go.Heatmap(z=np.log10(h), x=_energy_centers_for_plot, y=_energy_centers_for_plot, colorscale="Turbo", coloraxis="coloraxis"),
+            go.Heatmap(z=np.log10(h), x=_energy_centers_for_plot, y=_energy_centers_for_plot, coloraxis="coloraxis", zmin=-2),
             row=1, col=1,
         )
         for weight in ["B8", "hep", ""]:
-            h, xedges, yedges = np.histogram2d(
+            h_weighted, xedges, yedges = np.histogram2d(
                 run["Reco"][f"{energy}"][this_filter],
                 run["Reco"]["SignalParticleK"][this_filter],
                 bins=(_bin_edges, _bin_edges),
                 weights=run["Reco"][f"SignalParticleWeight{weight.lower()}"][this_filter],
             )
             if args.debug:
-                print(f"# of weighted events (counts) {(weight if weight != '' else 'solar')}: {np.sum(h):.2f}")
+                print(f"# of weighted events (counts) {(weight if weight != '' else 'solar')}: {np.sum(h_weighted):.2f}")
 
-        # NOTE: the '<1 expected event' mask is exposure dependent, so it is NOT
-        # applied here — templates are stored per-year and 06_significance.py
-        # applies the mask after scaling to the requested exposure.
-        h = np.where(np.isfinite(h), h, np.nan)
+        # NOTE: no '<1 expected event' floor here — templates are stored per-year.
+        # 06_significance.py scales them and applies that floor for the legacy
+        # Gaussian fitter only (see scale_to_exposure).
+        h_weighted = np.where(np.isfinite(h_weighted), h_weighted, np.nan)
         fig.add_trace(
-            go.Heatmap(z=np.log10(h), x=_energy_centers_for_plot, y=_energy_centers_for_plot, colorscale="Turbo", coloraxis="coloraxis"),
+            go.Heatmap(z=np.log10(h_weighted), x=_energy_centers_for_plot, y=_energy_centers_for_plot, coloraxis="coloraxis", zmin=-2),
             row=1, col=2,
         )
-        h = np.nan_to_num(h, nan=0.0)
+        h_weighted = np.nan_to_num(h_weighted, nan=0.0)
 
-        cut_data.append((nhits, adjcl, ophits, h, fig, title))
+        cut_data.append((nhits, adjcl, ophits, [h, h_weighted, None], fig, title))
     
     # ── Phase 1.5: Flyweight mode - save base templates and skip oscillation loop ────
     if args.flyweight:
         rprint(f"[cyan][INFO][/cyan] Flyweight mode: saving {len(cut_data)} base template(s) in coarse bins...")
-        for nhits, adjcl, ophits, h, fig, title in cut_data:
+        for nhits, adjcl, ophits, h_array, fig, title in cut_data:
             # Apply stability guards to base histogram before scaling
             h_clean = clean_and_validate_template(
-                h,
+                h_array[1],  # solar-weighted histogram (weight="")
                 label=f"Signal base template {args.config} {args.signal} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits}",
                 debug=args.debug,
             )
@@ -558,7 +627,14 @@ for config in configs:
             )
             if args.debug:
                 rprint(f"[cyan][INFO][/cyan] Saved flyweight base template: NHits{nhits} AdjCl{adjcl} OpHits{ophits}")
-        
+
+            fig.add_trace(
+                go.Heatmap(z=np.log10(h_clean), x=_energy_centers_for_plot, y=_energy_centers_for_plot, coloraxis="coloraxis", zmin=-2),
+                row=1, col=3,
+            )
+            h_clean = np.nan_to_num(h_clean, nan=0.0)
+            h_array[2] = h_clean  # Store the cleaned base template for plotting
+
         # Skip Phase 2 (oscillation loop) in flyweight mode
         rprint(f"[cyan][INFO][/cyan] Flyweight mode: skipping Phase 2 (oscillation loop)")
         # Still need to save figures - jump to Phase 3
@@ -575,6 +651,8 @@ for config in configs:
             zip(dm2_list, sin13_list, sin12_list),
             total=len(dm2_list),
             description="Convolving oscillation files...",
+            # Scan workers share one terminal; their bars would interleave into noise.
+            disable=bool(args.scan_mode),
         ):
             if args.debug:
                 rprint(f"dm2: {dm2:.3e}, sin13: {sin13:.3e}, sin12: {sin12:.3e}")
@@ -602,8 +680,8 @@ for config in configs:
                 and sin12 == analysis_info["SIN12"]
             )
 
-            for nhits, adjcl, ophits, h, fig, title in cut_data:
-                convolved = np.dot(oscillation_df.values, h.T)
+            for nhits, adjcl, ophits, h_array, fig, title in cut_data:
+                convolved = np.dot(oscillation_df.values, h_array[1].T)
                 rebin_x, rebin_y, rebin_z, rebin_z_per_x = rebin_hist2d(
                     energy_centers,
                     np.asarray(list(oscillation_df.index)),
@@ -689,15 +767,15 @@ for config in configs:
                             z=np.log10(np.where(rebin_z > 0, rebin_z, np.nan)) if not signal_smoothing_active else np.log10(smooth_histogram_with_config(rebin_z, signal_smoothing_config)),
                             x=sensitivity_rebin,
                             y=rebin_y,
-                            colorscale="Turbo",
                             coloraxis="coloraxis",
+                            zmin=-2,  # Global lower limit for the color axis
                         ),
                         row=1, col=3,
                     )
 
         # Stamp each cut only after the whole oscillation loop finished, so a partially
         # regenerated cut is never reported as current to 04_best_cuts.py / 06_significance.py.
-        for nhits, adjcl, ophits, h, fig, title in cut_data:
+        for nhits, adjcl, ophits, h_array, fig, title in cut_data:
             write_template_sampling_marker(
                 f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
                 args.config, args.signal, nhits, adjcl, ophits,
@@ -707,7 +785,7 @@ for config in configs:
             )
 
     # ── Phase 3: format and save per-cut figures ─────────────────────────────────
-    for nhits, adjcl, ophits, h, fig, title in cut_data:
+    for nhits, adjcl, ophits, h_array, fig, title in cut_data:
         fig = format_coustom_plotly(
             fig,
             title=title,
@@ -715,13 +793,19 @@ for config in configs:
             tickformat=(".0f", ".0f"),
             matches=("x", None),
         )
+        fig.update_layout(
+            coloraxis=dict(
+                colorbar=dict(title="log10(Counts)"),
+                cmin=-2,  # Global lower limit for the color axis
+                cmax=float(np.nanmax(np.log10(h_array[1][h_array[1] > 0]))),  # Global upper limit for the color axis
+            ),
+        )
         fig.update_yaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=1)
         fig.update_yaxes(title="", row=1, col=2)
         fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=3)
         fig.update_xaxes(title="True Neutrino Energy (MeV)", row=1, col=1)
         fig.update_xaxes(title="True Neutrino Energy (MeV)", row=1, col=2)
         fig.update_yaxes(title="Nadir Angle cos(" + unicode("eta") + ")", row=1, col=3)
-        fig.update_layout(coloraxis=dict(colorbar=dict(title="log(Counts)")))
         save_figure(
             fig, f"{save_path}",
             config=args.config, name=args.signal, subfolder=f"{args.folder.lower()}",

@@ -54,6 +54,51 @@ def _reference_exposures_for(analysis: Optional[object]) -> tuple:
     )
 
 
+def warn_if_not_best_cut(cut, best_map, key, *, stage: str, reason: str = "") -> bool:
+    """Warn when `stage` works at a cut that is not the best cut for `key`.
+
+    `cut` is any mapping with NHits/AdjCl/OpHits; `best_map` the highest_*.pkl dict
+    ({(config, name, energy): {"NHits": ..., ...}}) or None. Returns True when a
+    non-best cut is in use. A cut scan (many cuts, before 04_best_cuts.py) is not a
+    deviation and must not call this; an explicitly requested cut is.
+    """
+    from rich import print as rprint
+
+    keys = ("NHits", "AdjCl", "OpHits")
+    used = tuple(int(cut[k]) for k in keys)
+    _fmt = lambda c: f"NHits{c[0]} AdjCl{c[1]} OpHits{c[2]}"
+    _why = f" ({reason})" if reason else ""
+
+    if not best_map:
+        rprint(
+            f"[yellow][WARNING][/yellow] {stage}: using {_fmt(used)}{_why} with no best-cut map "
+            "available — cannot verify this is the optimised cut."
+        )
+        return True
+
+    entry = best_map.get(key)
+    if entry is None:
+        # Energy-override variants hold the cuts of the single (config, name, *) entry.
+        same = [v for k, v in best_map.items() if k[:2] == key[:2]]
+        entry = same[0] if len(same) == 1 else None
+    if entry is None:
+        rprint(
+            f"[yellow][WARNING][/yellow] {stage}: using {_fmt(used)}{_why}; the best-cut map has "
+            f"no entry for {key} — cannot verify this is the optimised cut."
+        )
+        return True
+
+    best = tuple(int(entry[k]) for k in keys)
+    if used != best:
+        rprint(
+            f"[yellow][WARNING][/yellow] {stage}: using {_fmt(used)}{_why}, which is NOT the best "
+            f"cut {_fmt(best)} selected by 04_best_cuts.py for {key}. Results are evaluated at a "
+            "sub-optimal working point and are not comparable to best-cut numbers."
+        )
+        return True
+    return False
+
+
 @dataclass(frozen=True)
 class StudyContext:
     study_suffix: str     # "_<label>" or ""
@@ -254,8 +299,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     ],
     # 9.2.4 — background model normalization (folder provides isolation)
     "bkgmodel": [
-        {"folder": "Nominal", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True},
-        {"folder": "Reduced", "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True},
+        # skip_rebin/skip_templates False: the Nominal/Reduced Rebins on disk predate the current
+        # shielding factors in folder_configs.json (Reduced still carries gamma/10, neutron x1), so
+        # both folders must rebuild their spectra and templates rather than reuse them.
+        {"label": "bkgmodel_nominal", "folder": "Nominal", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False},
+        {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
     # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates
@@ -273,15 +321,16 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # Runs full fiducialization with per-sample truth positions instead of RecoX/Y/Z:
     #   marley → SignalParticleX/Y/Z, gamma → EndX/Y/Z, neutron/radiological → MainX/Y/Z
     # Produces BestFiducials_fiduc_truth.json and labeled Rebin pkls.
-    # Deliberate exception to the one-knob policy: this study measures what ideal
-    # fiducialization buys end to end, so it re-selects its own best cuts and smoothing
-    # sigmas on the truth-fiducial spectra instead of inheriting the nominal ones. Signal AND
-    # background templates are then built from the labeled truth-fiducial Rebin pkls.
+    # It re-optimises its own fiducial volume and smoothing sigmas (that is the knob), but
+    # holds the nominal topological cuts (skip_best_cuts=True) so the Sensitivity number is
+    # read at the same working point as the default -- a re-tuned cut would confound the
+    # comparison (see the one-knob policy above). Signal AND background templates are built
+    # from the labeled truth-fiducial Rebin pkls at that held cut.
     "fiduc_truth": [
         {
             "label": "fiduc_truth",
             "skip_rebin": False,
-            "skip_best_cuts": False,
+            "skip_best_cuts": True,
             "skip_best_sigmas": False,
             "fiducialization": True,
             "extra": ["--truth_fiducial"],
@@ -388,9 +437,9 @@ def all_study_labels(
 
     Notes
     -----
-    Folder-isolated groups (`fiduc`, `bkgmodel`) define no "label" -- they vary
-    --folder instead -- so they are absent here by construction. Iterate
-    --folder Nominal/Reduced/Truncated to cover them.
+    Folder-isolated groups define no "label" -- they vary --folder instead --
+    so they are absent here by construction. As of the bkgmodel study update,
+    all active study groups now use explicit labels.
     """
     labels: List[Optional[str]] = [None] if include_default else []
     for variants in STUDY_VARIANTS.values():

@@ -162,7 +162,7 @@ _scale         = _detector_mass * _exposure                 # kT·yr
 
 # ── Resolve best cuts ─────────────────────────────────────────────────────────
 
-def _extract_cuts(obj) -> Optional[tuple]:
+def _extract_cuts(obj, allow_energy_fallback: bool = False) -> Optional[tuple]:
     """Extract (NHits, OpHits, AdjCl) from a highest-sensitivity pkl.
 
     Handles two formats:
@@ -172,14 +172,24 @@ def _extract_cuts(obj) -> Optional[tuple]:
                   MultiIndex columns (config, name, energy).
                   Written by DayNight / HEP analyses.
     """
+    def _fallback_key(keys):
+        # The nominal map is keyed by the nominal energy estimator; energy-override variants
+        # (energy_*, bkg_gamma_*, charge_*) hold those same topological cuts.
+        same = [k for k in keys if k[0] == args.config and k[1] == _primary]
+        return same[0] if allow_energy_fallback and len(same) == 1 else None
+
     if isinstance(obj, dict):
         key = (args.config, _primary, args.energy)
+        if key not in obj:
+            key = _fallback_key(list(obj.keys())) or key
         row = obj.get(key)
         if row is None:
             raise KeyError(f"Key {key} not found in best-cuts pkl. Available: {list(obj.keys())[:5]}")
         return int(row["NHits"]), int(row["OpHits"]), int(row["AdjCl"])
     else:  # DataFrame
         key = (args.config, _primary, args.energy)
+        if key not in obj.columns:
+            key = _fallback_key(list(obj.columns)) or key
         if key not in obj.columns:
             raise KeyError(f"Column {key} not found in best-cuts DataFrame. Available: {list(obj.columns[:5])}")
         s = obj[key]
@@ -197,12 +207,21 @@ def _load_pnfs_cuts() -> Optional[tuple]:
     # args.analysis casing ("highest_DayNight.pkl", "highest_HEP.pkl").
     _analysis_tag = args.analysis.upper() if args.analysis.lower() == "sensitivity" else args.analysis
     exact = f"{_base}/{args.config}_{_primary}_highest_{_analysis_tag}.pkl"
+    # A study variant's own record comes first: it is what 04_best_cuts.py / 05_best_sigmas.py
+    # just wrote for this label, keyed by the variant's own energy estimator.
+    if args.study_label:
+        labeled = f"{_base}/{args.config}_{_primary}_highest_{_analysis_tag}_{args.study_label}.pkl"
+        if os.path.exists(labeled):
+            try:
+                return _extract_cuts(pickle.load(open(labeled, "rb")))
+            except KeyError as exc:
+                rprint(f"[yellow][WARNING][/yellow] {exc} — falling back to the nominal best-cut map.")
     if not os.path.exists(exact):
         raise SystemExit(
             f"[ERROR] Best-cuts pkl not found: {exact}\n"
             "Run the full pipeline (04_best_cuts.py / 05_best_sigmas.py) for this config/analysis/folder first."
         )
-    return _extract_cuts(pickle.load(open(exact, "rb")))
+    return _extract_cuts(pickle.load(open(exact, "rb")), allow_energy_fallback=True)
 
 
 _nhits  = args.nhits

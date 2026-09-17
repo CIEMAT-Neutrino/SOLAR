@@ -28,15 +28,10 @@ def _deep_merge_dict(base: dict, update: dict) -> dict:
 
 
 def _merge_and_write_json(path: str, payload: dict) -> None:
-    existing: dict = {}
-    if os.path.exists(path):
-        with open(path, "r") as f_read:
-            existing = json.load(f_read)
-    merged = _deep_merge_dict(existing, payload)
-    if os.path.exists(path):
-        os.remove(path)
-    with open(path, "w") as f_write:
-        json.dump(merged, f_write, indent=4)
+    # BestFiducials.json is shared by every detector config: lib.io.merge_and_write_json
+    # serialises the read-merge-write with a file lock so parallel per-config pipelines
+    # cannot drop each other's entries.
+    merge_and_write_json(path, payload, indent=4)
 
 
 def combine_components(df: pd.DataFrame, components: List[str]) -> pd.DataFrame:

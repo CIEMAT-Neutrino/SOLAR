@@ -358,7 +358,7 @@ No significance plot found for VD Bottom Shielded.
 ### HD Central Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Background_SolarEnergy_NHits1_AdjCl4_OpHits8.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Background_SolarEnergy_NHits1_AdjCl1_OpHits4.png">
 </div>
 
 ---
@@ -366,7 +366,7 @@ No significance plot found for VD Bottom Shielded.
 ### HD Lateral Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_SolarEnergy_NHits3_AdjCl2_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_SolarEnergy_NHits4_AdjCl2_OpHits9.png">
 </div>
 
 ---
@@ -374,7 +374,7 @@ No significance plot found for VD Bottom Shielded.
 ### VD Top Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_SolarEnergy_NHits8_AdjCl8_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_SolarEnergy_NHits4_AdjCl6_OpHits12.png">
 </div>
 
 ---

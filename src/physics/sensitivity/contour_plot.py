@@ -94,6 +94,8 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Fa
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads chi2 grids from labeled template subfolders.")
+parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 06_significance.py so study_context points at the labeled results directory.")
+parser.add_argument("--membrane_veto", action=argparse.BooleanOptionalAction, default=True, help="Membrane-veto event selection. Must match the flag passed to 06_significance.py.")
 parser.add_argument(
     "--draft",
     action=argparse.BooleanOptionalAction,

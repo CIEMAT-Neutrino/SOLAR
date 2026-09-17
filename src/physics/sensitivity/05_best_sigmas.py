@@ -342,14 +342,26 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
     if args.reference_study_label is not None:
         _ref_pkl_path = (
             f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
-            f"{config}/{name}/highest_{args.analysis}{_ref_suffix}.pkl"
+            f"{config}/{name}/{config}_{name}_highest_{args.analysis}{_ref_suffix}.pkl"
         )
         if os.path.exists(_ref_pkl_path):
             try:
                 _ref_df = pd.read_pickle(_ref_pkl_path)
-                _ref_nhits = _ref_df.loc["NHits", (config, name, energy_label)]
-                _ref_ophits = _ref_df.loc["OpHits", (config, name, energy_label)]
-                _ref_adjcl = _ref_df.loc["AdjCl", (config, name, energy_label)]
+                _ref_key = (config, name, energy_label)
+                if _ref_key not in _ref_df.columns:
+                    # Energy-override variants (energy_spk/maink, bkg_gamma_*, charge_*) hold the
+                    # nominal topological cuts, and the nominal map is keyed by the nominal
+                    # energy estimator. NHits/OpHits/AdjCl do not depend on the estimator.
+                    _same_sample = [col for col in _ref_df.columns if col[0] == config and col[1] == name]
+                    if len(_same_sample) == 1:
+                        _ref_key = _same_sample[0]
+                        rprint(
+                            f"[cyan][INFO][/cyan] Reference map has no {energy_label} entry; holding the "
+                            f"nominal {_ref_key[2]} cuts for {config}/{name}."
+                        )
+                _ref_nhits = _ref_df.loc["NHits", _ref_key]
+                _ref_ophits = _ref_df.loc["OpHits", _ref_key]
+                _ref_adjcl = _ref_df.loc["AdjCl", _ref_key]
             except (KeyError, Exception) as exc:
                 rprint(
                     f"[yellow][WARNING][/yellow] Could not read reference cuts for "
@@ -361,6 +373,16 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
                 f"[yellow][WARNING][/yellow] Reference highest pkl not found: {_ref_pkl_path}. "
                 "Falling back to max selection."
             )
+
+    # Explicit --nhits/--ophits/--adjcls win over any reference map: a caller that names
+    # the cut (e.g. a per-analysis study run at the Truncated best cuts) must get exactly
+    # that cut written to its highest pkl, not the grid maximum.
+    if args.nhits is not None and args.ophits is not None and args.adjcls is not None:
+        _ref_nhits, _ref_ophits, _ref_adjcl = args.nhits, args.ophits, args.adjcls
+        rprint(
+            f"[cyan][INFO][/cyan] Using explicit cuts NHits={_ref_nhits} OpHits={_ref_ophits} "
+            f"AdjCl={_ref_adjcl} for the highest {args.analysis} selection."
+        )
 
     rprint(f"Evaluating {energy_label}")
     for idx, sigma_label in enumerate(["Sigma2", "Sigma3"]):
@@ -403,6 +425,12 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
                         clean_df[reference_column] == clean_df[reference_column].max()
                     ].copy()
                 else:
+                    # sigmas_df was exploded per exposure, so a cut is ~100 rows ordered from
+                    # 0.1 yr up. Taking the first one recorded the 0.1-yr significance
+                    # (DayNight 'Values' 0.28 for a 4.8 sigma curve, Sigma2 0). Read the held
+                    # cut at the run-to exposure, like the max selection effectively does.
+                    if "Exposure" in _fixed.columns:
+                        _fixed = _fixed.loc[_fixed["Exposure"] == _fixed["Exposure"].max()]
                     this_sigma_df_best = _fixed
             else:
                 this_sigma_df_best = clean_df.loc[

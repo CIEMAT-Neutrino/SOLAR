@@ -250,8 +250,9 @@ if signal_template is not None:
         z=np.log10(np.where(signal_template > 0, signal_template, np.nan)),
         x=sensitivity_rebin_centers,
         y=nadir_axis,
-        colorscale="Turbo",
+        zmin=-2,
         colorbar=dict(title="log₁₀(Counts)"),
+        coloraxis="coloraxis",
     ), row=1, col=1)
     _sig_tmpl_fig = format_coustom_plotly(
         _sig_tmpl_fig,
@@ -263,6 +264,13 @@ if signal_template is not None:
     )
     _sig_tmpl_fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", range=[sensitivity_rebin_centers.min(), sensitivity_rebin_centers.max()])
     _sig_tmpl_fig.update_yaxes(title="cos(η) Nadir Angle", range=[-1.0, 1.0])
+    _sig_tmpl_fig.update_layout(
+        coloraxis=dict(
+            colorbar=dict(title="log10(Counts)"),
+            cmin=-2,  # Global lower limit for the color axis
+            cmax=float(np.nanmax(np.log10(signal_template[signal_template > 0]))),  # Global upper limit for the color axis
+        ),
+    )
     save_figure(
         _sig_tmpl_fig, _save_folder_path,
         config=args.config, name=args.signal, subfolder=None,
@@ -277,7 +285,8 @@ if background_template is not None:
         z=np.log10(np.where(background_template > 0, background_template, np.nan)),
         x=sensitivity_rebin_centers,
         y=nadir_axis,
-        colorscale="Turbo",
+        zmin=-2,
+        coloraxis="coloraxis",
         colorbar=dict(title="log₁₀(Counts)"),
     ), row=1, col=1)
     _bkg_tmpl_fig = format_coustom_plotly(
@@ -324,7 +333,7 @@ for idx, (title, template_data, colorscale, use_log) in enumerate(panel_specs, s
             y=nadir_axis,
             colorscale=colorscale,
             coloraxis="coloraxis",
-            zmin=log_min,
+            zmin=-2,
             zmax=log_max,
             showscale=(idx == 1),
         ),
@@ -346,8 +355,13 @@ for idx in range(1, len(panel_specs) + 1):
     fig.update_xaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=idx, range=[sensitivity_rebin_centers.min(), sensitivity_rebin_centers.max()])
     fig.update_yaxes(title="cos(η) Nadir Angle", row=1, col=idx, range=[-1.0, 1.0])
 
+# Set a global lower limit for the color axis
 fig.update_layout(
-    coloraxis=dict(colorbar=dict(title="log10(Counts)")),
+    coloraxis=dict(
+        colorbar=dict(title="log10(Counts)"),
+        cmin=-2,  # Global lower limit for the color axis
+        cmax=log_max,  # Global upper limit for the color axis
+    ),
 )
 
 figure_name = f"Sensitivity_Templates_{args.energy}_NHits{nhits_value}_AdjCl{adjcl_value}_OpHits{ophits_value}"

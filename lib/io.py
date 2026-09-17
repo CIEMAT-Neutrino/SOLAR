@@ -69,22 +69,50 @@ def deep_merge_dict(base: dict, updates: dict) -> dict:
     return merged
 
 
-def merge_and_write_json(path: str, updates: dict, debug: bool = False) -> None:
-    """Load existing JSON at path (if any), deep-merge updates, and write back."""
-    existing: dict = {}
-    if os.path.exists(path):
+def merge_and_write_json(path: str, updates: dict, debug: bool = False, indent: int = 2) -> None:
+    """Load existing JSON at path (if any), deep-merge updates, and write back.
+
+    The read-merge-write is done under an exclusive advisory lock on ``<path>.lock`` so that
+    pipelines running in parallel (one per detector config) cannot drop each other's entries
+    from the shared records: config/analysis/fiducial/<folder>/BestFiducials*.json is merged by
+    every config, and the config/<cfg>/*-json maps by every study of that config. The lock
+    lives beside the file; on PNFS/dCache (no locking) it degrades to the previous behaviour.
+    """
+    import fcntl
+
+    lock_path = f"{path}.lock"
+    lock = None
+    try:
+        lock = open(lock_path, "a+")
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    except OSError:
+        lock = None
+    try:
+        existing: dict = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f_in:
+                    loaded = json.loads(f_in.read())
+                    if isinstance(loaded, dict):
+                        existing = loaded
+            except (OSError, json.JSONDecodeError):
+                pass
+        merged = deep_merge_dict(existing, updates)
+        # Same remove-then-write race as prepare_file_save: a concurrent writer may already have
+        # removed the file (PNFS/dCache needs the remove because it is write-once).
         try:
-            with open(path, "r") as f_in:
-                loaded = json.loads(f_in.read())
-                if isinstance(loaded, dict):
-                    existing = loaded
-        except (OSError, json.JSONDecodeError):
+            os.remove(path)
+        except FileNotFoundError:
             pass
-    merged = deep_merge_dict(existing, updates)
-    if os.path.exists(path):
-        os.remove(path)
-    with open(path, "w") as f_out:
-        json.dump(merged, f_out, indent=2)
+        with open(path, "w") as f_out:
+            json.dump(merged, f_out, indent=indent)
+    finally:
+        if lock is not None:
+            try:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+            lock.close()
     if debug:
         rprint(f"Saved JSON to {path}")
 
@@ -150,7 +178,13 @@ def prepare_file_save(
     # Check if file already exists
     if os.path.isfile(f"{save_path}/{filename}"):
         if rm:
-            os.remove(f"{save_path}/{filename}")
+            # Another process writing the same file (e.g. a DayNight and a HEP run of the same
+            # config/folder exporting the analysis-independent *_Ref arrays) may have removed it
+            # between the isfile() check and here. The goal — no stale file in the way — holds.
+            try:
+                os.remove(f"{save_path}/{filename}")
+            except FileNotFoundError:
+                pass
             if debug:
                 output += f"Removed existing file - "
         else:

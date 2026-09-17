@@ -26,6 +26,7 @@ python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA 
 """
 
 import os
+from typing import Optional
 import sys
 import re
 import copy
@@ -372,14 +373,23 @@ def require_per_year_templates(template_dir: str) -> float:
     return float(meta.get("detector_mass_kT", float("nan")))
 
 
-def scale_to_exposure(arr, exposure_yr: float):
-    """Per-year template -> absolute counts, then drop bins below one expected event.
+def scale_to_exposure(arr, exposure_yr: float, floor: Optional[bool] = None):
+    """Per-year template -> absolute counts.
 
-    The '<1 expected event' cut is exposure dependent, which is exactly why it lives here
-    and not in the template writers.
+    `floor` zeroes cells below one expected event. That floor exists for the legacy Gaussian
+    fitter only (a cell with b -> 0 has an unbounded Gaussian chi2), so it defaults to
+    ``args.fit_method == "legacy"``. The pull fit uses the Poisson deviance, where small
+    expectations are well defined, and the fit mask (bkg > 0) is meant to drop cells with NO
+    background simulation. Applying the floor there removed every clean high-energy cell
+    (0.1 expected background, hundreds of signal events over 30 yr) from the fit, so a
+    cleaner detector scored LOWER: HD Reduced (gamma/6.7, neutron/50) gave Delta chi2 0.55
+    against 5.3 for Truncated with the same signal template; without the floor both give ~6.
     """
     scaled = np.asarray(arr, dtype=float) * float(exposure_yr)
-    scaled[scaled < 1.0] = 0.0
+    if floor is None:
+        floor = getattr(args, "fit_method", "pull") == "legacy"
+    if floor:
+        scaled[scaled < 1.0] = 0.0
     return scaled
 
 
@@ -597,14 +607,19 @@ def _resolve_cut_entries(paths: dict, info: dict, args, analysis_info: dict, con
         and args.ophits is not None
     )
     if manual_triplet:
-        return [
-            {
-                "NHits": int(args.nhits),
-                "AdjCl": int(args.adjcls),
-                "OpHits": int(args.ophits),
-                "source": "manual",
-            }
-        ]
+        manual_cut = {
+            "NHits": int(args.nhits),
+            "AdjCl": int(args.adjcls),
+            "OpHits": int(args.ophits),
+        }
+        warn_if_not_best_cut(
+            manual_cut,
+            _load_best_cut_map(info, args, config, name),
+            (config, name, args.energy),
+            stage="Significance fit",
+            reason="explicit --nhits/--adjcls/--ophits",
+        )
+        return [dict(manual_cut, source="manual")]
 
     best_map = _load_best_cut_map(info, args, config, name)
     if best_map is not None:

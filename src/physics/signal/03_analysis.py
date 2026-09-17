@@ -194,6 +194,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.DEBUG,
 )
+# numba inherits the root DEBUG level and dumps its whole compiler trace here
+# (~0.9 GB per sample per run, appended every run); keep only its warnings.
+logging.getLogger("numba").setLevel(logging.WARNING)
 
 user_input = {
     "workflow": "SIGNIFICANCE",
@@ -488,6 +491,18 @@ for config in configs:
                             np.sum(~mc_filter), args.mc_filter_threshold,
                             energy, this_nhit, this_ophit, this_adjcl,
                         )
+                        if not np.any(mc_filter):
+                            # Every bin fell below the MC threshold: this component's spectrum
+                            # is now identically zero at this cut, which reads downstream as
+                            # "no background here" rather than "not enough simulation to say".
+                            # 04_best_cuts.py then rewards the cut for a background it cannot see.
+                            logging.warning(
+                                "%s: ALL %d bins below MC threshold %d at NHits=%d OpHits=%d "
+                                "AdjCl=%d (%s) - spectrum zeroed; the estimate is unsupported, "
+                                "not small.",
+                                name, len(mc_filter), args.mc_filter_threshold,
+                                this_nhit, this_ophit, this_adjcl, energy,
+                            )
                     analysis_cache[cache_key] = {
                         "mask": mask,
                         "reco_bin_idx": reco_bin_idx,
