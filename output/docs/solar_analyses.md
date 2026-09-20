@@ -948,14 +948,51 @@ each variant's outputs with a `--study_label` so the main analysis products are 
 | `unc` | 9.1.2 | $\spred \in \{0,2,6\}\%$; $\sbkg \in \{0,4,6\}\%$ |
 | `oscpoint` | 9.1.3 | reference $\Delta m^2_{21}$ (solar vs. reactor) |
 | `energy` | 9.2.1 | energy estimator (`SolarEnergy`, `SignalParticleK`, `MainK`) |
-| `fiduc_truth` | 9.2.2 | truth vs. reconstructed position for the fiducial mask |
+| `fiduc_truth` | 9.2.2 | truth position for the fiducial mask, plus a truth-judged flash-match consistency cut (see below) |
 | `fiduc` | 9.2.3 | fiducialisation folder (Nominal / Reduced / Truncated) |
 | `charge` | 9.2.4 | charge threshold scan, replacing the NHits/AdjCl axes |
 | `bkg_gamma` | 9.2.5 | background gamma model |
-| `bkgmodel` | 9.2.6 | background model normalisation |
+| `bkgmodel` | 9.2.6 | background model normalisation (Nominal / Reduced folders at the Truncated fiducial volumes and best cuts, `--reference_folder Truncated`) |
 | `membrane_veto` | — | membrane/endcap optical veto on/off (VD) |
 | `nuisance` | — | nuisance-profile decomposition (§5.9) |
 | `legacy_fit` | — | legacy minimiser on the default templates (§5.15) |
+
+Two variants deserve a note. `bkgmodel` runs the Nominal and Reduced folders with the *Truncated*
+fiducial volumes and DayNight/HEP/Sensitivity best cuts held fixed (`--reference_folder Truncated`,
+forwarded as `--fiducial_folder` to the analysis and template stages and as `--reference_folder` to
+`05_best_sigmas.py`), so a folder with more background can only score lower and one with less
+only higher; left to optimise its own cuts, Nominal drifted to tight corners where the neutron MC
+had 13 events and scored *above* Truncated (2026-09-17). `fiduc_truth` uses truth for everything
+position-related: the fiducial mask is evaluated on the true position, and events are kept only if
+the reconstructed position agrees with it (`truth_match_purity` in `config/analysis/backgrounds.json`, applied to the *backgrounds only* since 2026-09-19:
+an ideal detector keeps signal events whose reco position is wrong, and gating the signal cost 20-50% of it on
+the VD configs and most of the high-energy HEP signal, which made `fiduc_truth` score below the default there;
+$|X_{\rm reco}-X_{\rm true}|\le 100$ cm, $|Y,Z_{\rm reco}-Y,Z_{\rm true}|\le 50$ cm, gross-mismatch thresholds that keep 75-84% of the signal, 73-85% of the gammas and 85-94% of the neutrons in 6-20 MeV on HD central, but only a few percent of the radiologicals, whose `Main*` position is the event's main decay rather than the reconstructed cluster's; an optional
+`MatchedOpFlashPur` threshold is off because the backtracked purity is zero for half of the correctly
+positioned signal events). Without that cut the reco fiducial mask silently out-performs the truth
+one: a neutron whose flash match is wrong is placed outside the volume by the reconstruction and
+rejected, while its true position is inside (reco X cut at 20 cm removes 21% of neutrons, the truth
+cut 2%). The purity cut alone was not enough to make the study monotone against the default:
+`hd_1x2x6_lateralAPA`'s own-optimal truth volume (X60/Y60/Z20, chosen by the fiducial-volume scan,
+which scores raw weighted counts and knows nothing about the downstream topological cut) carries
+more true signal than the reco volume but also grows its radiological background slightly faster,
+so evaluating it at the reco-optimised *reference* cut read worse (2026-09-18). Since
+2026-09-18 the study therefore also frees the cut search (`skip_best_cuts=False`,
+`skip_best_sigmas=False`): every analysis picks its own best NHits/AdjCl/OpHits on the
+truth-fiducial spectra instead of being held at the reco reference cut. Full cut freedom is a
+superset of the held-cut configuration, so the study can no longer score below the default by
+construction (worst case it reconverges near the reco optimum); it costs a full `04_best_cuts.py`
+scan per config, DayNight/HEP add no extra cost since `01_daynight.py`/`01_hep.py` already compute
+the full per-cut grid regardless of this flag.
+
+Two further points (2026-09-19). (i) When the truth fiducial scan has no volume above the MC threshold (VD HEP: the purity
+cut thins the background MC), `02_best_fiducial.py` writes the *reference* volume into `BestFiducials_fiduc_truth.json`
+(entry flagged `"Fallback": "reference"`); it used to leave the previous run's entry in place, and lowering the threshold
+picked a volume that scored 1.2-2.0 sigma against 2.8-3.7 for the reference. (ii) `study_status.py` reports `fiduc_truth`
+as the better of its own volume and `fiduc_truth_refvol`, because the scan optimum is not always the best downstream volume:
+neutrons are uniformly distributed and gammas pile at the Y wall (already removed by the reference Y margin), so truth positions
+offer little beyond the reference volume on HD central, and truth `Main*` positions of radiologicals are largely outside the
+active volume. The raw own-volume value stays in the `fiduc_truth` row of the CSV.
 
 Only variants that change the event selection or the oscillation weighting receive their own
 template directory (`template_suffix` in `lib/study.py`); the remainder — including all of the
