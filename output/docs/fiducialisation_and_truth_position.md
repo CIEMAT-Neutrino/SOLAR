@@ -168,7 +168,15 @@ the 100–200 cm shell (truth position, no topological cut):
 | neutron, HD central / lateral | ×0.7 / ×4.2 | ×0.9 / ×1.1 |
 | neutron, VD (nominal / shielded) | ×19 / ×19 | ×2.2 / ×2.4 |
 
-Gamma piles up at the walls, signal and (in HD) neutron do not. The nearest face of the *surviving* background
+Gamma piles up at the walls, signal and (in HD) neutron do not.
+
+Reading the cumulative curves: the largest possible distance to the nearest face is the smallest half-width of the box,
+$\min(L_X,L_Y,L_Z)/2$ for the whole box, i.e. 360 cm (HD central), **180 cm (HD lateral, whose X range is only 0–360 cm)** and 330 cm (VD).
+The HD lateral curves therefore reach 100% at 180 cm (signal and neutron) while HD central and VD signal are still at about
+95% at the 300 cm edge of the plot. This is geometry, not a plotting or computation artefact. The distance uses all six faces of
+the active box, so the $x=0$ plane of the lateral config counts as a face and the $x=0$ plane of the central config does not.
+
+The nearest face of the *surviving* background
 (after the DayNight cut and the reco fiducial, weight share):
 
 - HD lateral: gamma 90% X low (the $x=0$ plane), neutron 31% X low and 65% X high; the Y face, 49% of the gamma
