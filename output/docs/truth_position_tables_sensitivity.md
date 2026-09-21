@@ -10,8 +10,8 @@ Weighted (B/S) in the shell divided by (B/S) in the 100–200 cm shell, truth po
 |---|---|---|---|---|
 | HD central APA | gamma | ×60.0 | ×17.6 | ×1.0 |
 | HD central APA | neutron | ×0.7 | ×0.9 | ×1.0 |
-| HD lateral APA | gamma | ×125.5 | ×24.2 | ×1.0 |
-| HD lateral APA | neutron | ×4.2 | ×1.1 | ×1.0 |
+| HD lateral APA | gamma | ×132.9 | ×24.6 | ×1.0 |
+| HD lateral APA | neutron | ×3.5 | ×1.1 | ×1.0 |
 | VD nominal | gamma | ×39.9 | ×15.5 | ×1.0 |
 | VD nominal | neutron | ×19.4 | ×2.2 | ×1.0 |
 | VD shielded | gamma | ×52.8 | ×18.9 | ×1.0 |

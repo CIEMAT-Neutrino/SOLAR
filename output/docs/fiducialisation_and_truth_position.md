@@ -41,6 +41,10 @@ The fiducial volume is defined by three margins $(F_X, F_Y, F_Z)$ measured inwar
   (`Nominal`; see §1.5). For `Truncated` and `Reduced` the endcap backgrounds are removed by the
   surface filter `0 <= SignalParticleSurface < 3` instead.
 
+**Walls used by the checks.** The distance-to-wall and entry-face checks of §3 use these walls: HD central $x=\pm360$ cm
+(the plane $x=0$ is interior); HD lateral $x=0$ only, because the background piles up there (see §3.1) and the pipeline itself cuts
+from it, while the far $x=360$ is not counted; VD $x=\pm330$ cm; the two Y and two Z faces for all configs.
+
 The fiducial mass entering the exposure is described in
 [SOLARReference.md, "Fiducialization"](../presentations/SOLARReference.md) (formula with
 $\rho_{\rm LAr}=1.396$ g/cm³ and the drift factor of each config); it is not re-derived here.
@@ -162,25 +166,26 @@ the 100–200 cm shell (truth position, no topological cut):
 | | 0–20 cm | 20–100 cm |
 |---|---|---|
 | gamma, HD central | ×60 | ×18 |
-| gamma, HD lateral | ×126 | ×24 |
+| gamma, HD lateral | ×133 | ×25 |
 | gamma, VD nominal | ×40 | ×15 |
 | gamma, VD shielded | ×53 | ×19 |
-| neutron, HD central / lateral | ×0.7 / ×4.2 | ×0.9 / ×1.1 |
+| neutron, HD central / lateral | ×0.7 / ×3.5 | ×0.9 / ×1.1 |
 | neutron, VD (nominal / shielded) | ×19 / ×19 | ×2.2 / ×2.4 |
 
 Gamma piles up at the walls, signal and (in HD) neutron do not.
 
-Reading the cumulative curves: the largest possible distance to the nearest face is the smallest half-width of the box,
-$\min(L_X,L_Y,L_Z)/2$ for the whole box, i.e. 360 cm (HD central), **180 cm (HD lateral, whose X range is only 0–360 cm)** and 330 cm (VD).
-The HD lateral curves therefore reach 100% at 180 cm (signal and neutron) while HD central and VD signal are still at about
-95% at the 300 cm edge of the plot. This is geometry, not a plotting or computation artefact. The distance uses all six faces of
-the active box, so the $x=0$ plane of the lateral config counts as a face and the $x=0$ plane of the central config does not.
+Reading the cumulative curves: the largest possible distance to the nearest wall is set by the smallest extent, i.e. 360 cm for HD central
+(half of its 720 cm X extent) and for HD lateral (its X extent from the $x=0$ wall to $x=360$ is 360 cm), and 330 cm for VD. On HD
+lateral the gamma pile-up is at $x=0$: 21% of the gamma weight lies within 20 cm of that plane against 4% of the signal (×5), and
+the far $x=360$ wall carries less than the signal (2.5% against 4.5% beyond $x=340$). On HD central the plane $x=0$ is not a wall:
+gamma is 7.8% within 20 cm of it against 4.5% for the signal (×1.7), and its wall pile-up is at the Y faces (96% of the gamma has a Y face as
+its nearest wall). (An earlier version of the figure also counted $x=360$ as a lateral wall; the curves then ended at 180 cm by geometry.)
 
 The nearest face of the *surviving* background
 (after the DayNight cut and the reco fiducial, weight share):
 
-- HD lateral: gamma 90% X low (the $x=0$ plane), neutron 31% X low and 65% X high; the Y face, 49% of the gamma
-  before the volume cut, falls to 0.9%. Radiological (4 MC events): 75% X high, 25% Z.
+- HD lateral: gamma 91% X low (the $x=0$ plane), neutron 58% X low, 26% Y and 16% Z; the Y face, 52% of the gamma before the volume cut,
+  falls to 3.7%. Radiological (4 MC events): 25% Y and 75% Z.
 - VD: gamma 98% (nominal) and 100% (shielded) through the top face; neutron 97% (nominal), 74% top and 25% X low (shielded).
 - HD central: the survivors are Y-face dominated (gamma 99%, neutron 94%).
 
@@ -218,11 +223,11 @@ same rejection, so the truth and reco pipelines end up selecting the same events
 
 ### 3.4 Drift-coordinate residuals at the entry face (Table F2)
 
-Gamma and neutron within 100 cm of the entry X face(s) (both for HD, top for VD), after the cut:
+Gamma and neutron within 100 cm of the entry X wall(s) (HD central both walls, HD lateral $x=0$ only, VD the top face), after the cut:
 
 | | median \|ΔX\| gamma / neutron | \|ΔX\| > 100 cm gamma / neutron | RecoX at the volume edge |
 |---|---|---|---|
-| HD lateral | 4.9 / 14.5 cm | 5% / 25% | ≤ 1% |
+| HD lateral (x = 0 only) | 4.1 / 5.5 cm | 2% / 2% (neutron: 328 MC events) | 0 |
 | VD nominal | 386 / 335 cm | 78% / 100% (48 MC events) | ≈ 0 |
 | VD shielded | 357 / 203 cm | 83% / 81% | ≈ 0 |
 
@@ -317,8 +322,8 @@ exceeds 2σ. Default and truth runs therefore share it while `Values` differ.
 
 1. Y and Z are wire-based and already accurate; the drift coordinate is where reco and truth differ, and the
    volume cut removes the Y-face gamma background in both.
-2. **HD lateral:** the surviving background enters through the X faces and reco localises it (median
-   \|ΔX\| 5–15 cm). The DayNight and HEP gain of `fiduc_truth` comes from the smaller truth volume: at the
+2. **HD lateral:** the surviving background enters through the $x=0$ plane and reco localises it (median
+   \|ΔX\| 4–6 cm at the $x=0$ plane). The DayNight and HEP gain of `fiduc_truth` comes from the smaller truth volume: at the
    reference volume the truth position gives 1.517 (DayNight) and 5.451 (HEP) against 1.537 and 5.672. The limit
    is geometrical at these cuts; a further gain would have to come from light-based tagging.
 3. **VD:** gamma and neutron enter through the top face and reco X is wrong by more than 100 cm in 76–100% of them.
