@@ -2,12 +2,10 @@ import json
 import numba
 import pandas as pd
 import numpy as np
-import dask.dataframe as dd
 import plotly.graph_objects as go
 import plotly.express as px
 
 from typing import Optional, Union
-from dask import delayed
 from rich import print as rprint
 from plotly.subplots import make_subplots
 
@@ -434,7 +432,8 @@ def generate_truth_dataframe(
     if fullname:
         columns = list(bkg_dict.values())[1:]
     else:
-        name_dict = get_simple_name(list(bkg_dict.values())[1:])
+        from .io import get_simple_names  # local: io imports dataframe
+        name_dict = get_simple_names(list(bkg_dict.values())[1:])
         columns = [name_dict[name] for name in list(bkg_dict.values())[1:]]
 
     truth_gen_df = pd.DataFrame(

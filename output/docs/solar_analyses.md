@@ -944,16 +944,16 @@ each variant's outputs with a `--study_label` so the main analysis products are 
 
 | Group | Thesis § | Knob varied |
 |---|---|---|
-| `metric` | 9.1.1 | raw vs. smoothed histogram metric |
-| `unc` | 9.1.2 | $\spred \in \{0,2,6\}\%$; $\sbkg \in \{0,4,6\}\%$ |
-| `oscpoint` | 9.1.3 | reference $\Delta m^2_{21}$ (solar vs. reactor) |
-| `energy` | 9.2.1 | energy estimator (`SolarEnergy`, `SignalParticleK`, `MainK`) |
-| `fiduc_truth` | 9.2.2 | truth position for the fiducial mask, plus a truth-judged flash-match consistency cut (see below) |
-| `fiduc` | 9.2.3 | fiducialisation folder (Nominal / Reduced / Truncated) |
-| `charge` | 9.2.4 | charge threshold scan, replacing the NHits/AdjCl axes |
-| `bkg_gamma` | 9.2.5 | background gamma model |
-| `bkgmodel` | 9.2.6 | background model normalisation (Nominal / Reduced folders at the Truncated fiducial volumes and best cuts, `--reference_folder Truncated`) |
-| `membrane_veto` | — | membrane/endcap optical veto on/off (VD) |
+| `metric` | Ch. 8 | raw vs. smoothed histogram metric (grouped with `unc`, `oscpoint` in the main-results chapter) |
+| `unc` | Ch. 8 | $\spred \in \{0,2,6\}\%$; $\sbkg \in \{0,4,6\}\%$ |
+| `oscpoint` | Ch. 8 | reference $\Delta m^2_{21}$ (solar vs. reactor) |
+| `energy` | 9.2 | energy estimator (`SolarEnergy`, `SignalParticleK`, `MainK`) |
+| `fiduc_truth` | 9.1 | truth position for the fiducial mask, plus a truth-judged flash-match consistency cut (see below) |
+| `fiduc_truth_refvol` | — | optional diagnostic: truth positions at the *reference* volumes (`--fiducial_from_reco`), free cuts; excluded from `--all` |
+| `charge` | 9.4 | charge threshold scan, replacing the NHits/AdjCl axes |
+| `bkg_gamma` | 9.3 | background gamma model |
+| `bkgmodel` | 9.5 | background model normalisation (Nominal / Reduced folders at the Truncated fiducial volumes and best cuts, `--reference_folder Truncated`) |
+| `membrane_veto` | 9.6 | membrane/endcap optical veto on/off (VD) |
 | `nuisance` | — | nuisance-profile decomposition (§5.9) |
 | `legacy_fit` | — | legacy minimiser on the default templates (§5.15) |
 
@@ -993,6 +993,23 @@ as the better of its own volume and `fiduc_truth_refvol`, because the scan optim
 neutrons are uniformly distributed and gammas pile at the Y wall (already removed by the reference Y margin), so truth positions
 offer little beyond the reference volume on HD central, and truth `Main*` positions of radiologicals are largely outside the
 active volume. The raw own-volume value stays in the `fiduc_truth` row of the CSV.
+
+**Event-level checks (2026-09-20).** Why the truth position adds so little is documented, with the fiducialisation procedure
+itself, in [fiducialisation_and_truth_position.md](fiducialisation_and_truth_position.md) (tables in
+`truth_position_{tables,faces}_{daynight,sensitivity}.md`). In short: (i) reco Y,Z (wire-based) agree with the truth key to 30 cm for
+89–100% of signal and gamma, while the drift coordinate $X$, obtained from the flash-matched drift time, is the weak one; (ii) the
+`End` key of the gamma is validated (Y,Z within 30 cm for 89–96%), the `Main` key of the neutron describes the reconstructed cluster in
+only 36–70% of events, and 12 of the 36 HD central neutrons surviving the DayNight cut are simply a different object from the label
+particle: the reco fiducial cut rejects them (1.1% pass), a truth-position cut alone keeps them (99.5%), and the consistency cut
+above restores the rejection (0.7%); (iii) on HD lateral the surviving background enters through the $x=0$ plane and reco already
+localises it (median $|\Delta X|$ 4–6 cm), so the DayNight/HEP gain of `fiduc_truth` there is the smaller truth volume (at the
+reference volume: 1.517 vs 1.537 DayNight, 5.451 vs 5.672 HEP); (iv) on VD gamma and neutron enter through the top face and reco $X$
+is wrong by more than 100 cm in 76–100% of them, so truth $X$ raises a gamma+neutron $S/\sqrt B$ proxy by a factor of about 2–2.6 at
+equal or higher signal efficiency, but radiological is about 99% or more of the raw VD background weight and DayNight/HEP do not move; (v) the
+Sensitivity Score moves on all four configs, but where a single radiological MC event carries the whole background weight and the
+truth pipeline rejects it the gain is not a measure of position information (a `fiduc_truth_refvol` run without radiological in
+`truth_match_purity.apply_to` would test this; not run). The Score is $\tfrac12[\chi^2_\odot(\vec\theta_{\rm react})+\chi^2_{\rm react}(\vec\theta_\odot)]$,
+a wrong-hypothesis $\Delta\chi^2$ (§5.10), so the σ-equivalent is $\sqrt{\rm Score}$; DayNight and HEP values are in σ.
 
 Only variants that change the event selection or the oscillation weighting receive their own
 template directory (`template_suffix` in `lib/study.py`); the remainder — including all of the

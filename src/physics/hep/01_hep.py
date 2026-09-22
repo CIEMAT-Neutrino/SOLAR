@@ -233,6 +233,17 @@ parser.add_argument(
     help="Minimum summed MCCounts required for every essential background component after cuts",
 )
 parser.add_argument(
+    "--min_nonessential_mc",
+    type=float,
+    default=get_analysis_threshold(str(root), "HEP", stage="MC", fallback=0.0),
+    help=(
+        "MC-support threshold for non-essential backgrounds (radiological), same purpose as "
+        "--mc_threshold for essential ones (previously unchecked -- see "
+        "lib.background.adaptive_mc_thresholds). Adaptive: a background with 0 MC across the "
+        "WHOLE cut grid is not gated at all."
+    ),
+)
+parser.add_argument(
     "--threshold",
     type=float,
     default=get_analysis_threshold(str(root), "HEP", stage="SIGNIFICANCE", fallback=0.0),
@@ -261,6 +272,12 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.",
+)
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Membrane-veto variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled (veto-off) Rebin pkl instead of the default one.",
 )
 parser.add_argument(
     "--charge_threshold",
@@ -393,6 +410,30 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         bkg_df = pd.read_pickle(filepath)
         plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)
 
+    # MC support, computed once for the whole grid so non-essential backgrounds (radiological)
+    # get an adaptive threshold instead of the previous free pass -- see 04_best_cuts.py's
+    # _mc_supported_cuts docstring and [[sensitivity-one-event-floor]]. Mirrors the per-cut
+    # MC-sum arithmetic in the loop below (Oscillation=="Truth", Mean=="Mean", threshold_idx-sliced).
+    def _background_mc_by_cut(df, comps):
+        out = {c: {} for c in comps}
+        for component in comps:
+            comp_df = df.loc[(df["Component"] == component) & (df["Oscillation"] == "Truth") & (df["Mean"] == "Mean")]
+            if comp_df.empty or "MCCounts" not in comp_df.columns:
+                continue
+            for _, row in comp_df.iterrows():
+                cut = (int(row["NHits"]), int(row["OpHits"]), int(row["AdjCl"]))
+                mc = np.asarray(row["MCCounts"], dtype=float)
+                out[component][cut] = out[component].get(cut, 0.0) + float(np.nansum(mc[threshold_idx:]))
+        return out
+
+    _mc_thresholds = adaptive_mc_thresholds(
+        _background_mc_by_cut(plot_df, _hep_bkg_components),
+        essential_background_components, args.mc_threshold, args.min_nonessential_mc,
+    )
+    for _comp, _thr in _mc_thresholds.items():
+        if _thr <= 0:
+            rprint(f"[cyan][INFO][/cyan] MC support: '{_comp}' has 0 simulated events everywhere in this grid; not gated.")
+
     sigmamax = 0.0
     last_sigma2 = 1e6
     last_sigma3 = 1e6
@@ -501,8 +542,9 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             cuts_with_all_components += 1
 
         has_required_background_mc = all(
-            mc_sums.get(component, 0.0) >= args.mc_threshold
-            for component in essential_background_components
+            mc_sums.get(component, 0.0) >= _mc_thresholds.get(component, 0.0)
+            for component in _hep_bkg_components
+            if _mc_thresholds.get(component, 0.0) > 0
         )
 
         for component in essential_background_components:

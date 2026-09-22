@@ -209,6 +209,10 @@ output/logs/**
 output/presentations/**
 output/scripts_for_lowe_publication/**
 output/docs/**
+output/tmp/**
+
+# merge_and_write_json's file-locking semaphores (0 bytes, filesystem-only, never useful in git)
+*.json.lock
 
 # =============================================================================
 # CONFIGURATION FILES - Ignore Generated/Heavy Configs

@@ -76,6 +76,32 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--min_nonessential_mc",
+    type=int,
+    default=20,
+    help=(
+        "MC-support threshold for non-essential backgrounds (radiological), same purpose as "
+        "--min_background_mc for essential ones. Adaptive: a background that is structurally "
+        "absent (0 MC) across the WHOLE cut grid is not gated at all (see "
+        "lib.background.adaptive_mc_thresholds)."
+    ),
+)
+parser.add_argument(
+    "--max_sparse_weight_fraction",
+    type=float,
+    default=0.0,
+    help=(
+        "Reject cuts where more than this fraction of the summed weighted background sits in bins "
+        "with fewer than --sparse_mc_bins simulated events (0 disables, the default). The total-MC "
+        "gates above let through a cut whose background is a handful of heavy-weight events: "
+        "hd_1x2x6_lateralAPA energy_spk picked NHits4/OpHits16 where radiological fell from 704 to "
+        "23 MC events, 62%% of the weighted background was in bins with <3 events (median over all "
+        "6800 cuts: 0%%), the score jumped 0.27 -> 4.1 on one OpHits step, and the resulting "
+        "chi2 grid failed the smoothness gate."
+    ),
+)
+parser.add_argument("--sparse_mc_bins", type=int, default=3, help="Bins with fewer simulated events than this count as sparse for --max_sparse_weight_fraction.")
+parser.add_argument(
     "--scan_strategy",
     type=str,
     choices=["coarse", "full"],
@@ -325,17 +351,29 @@ if not cut_candidates:
 
 
 def _mc_supported_cuts():
-    """Cuts whose essential backgrounds carry enough simulation to be believed.
+    """Cuts whose backgrounds -- essential AND non-essential -- carry enough simulation to be
+    believed.
 
     The Rebin pkls keep the raw unweighted MC entry count per bin. Where that is thin,
     03_analysis.py has already zeroed the weighted Counts, so the background is not small
     here, it is unmeasured - and a cut scan maximises exactly that.
+
+    Until 2026-09-18 this only checked essential backgrounds (gamma, neutron): radiological is
+    ESSENTIAL=false and was exempt, yet it dominates the Sensitivity/HEP background at loose
+    cuts (10^6-10^9 weighted counts) and can drop to 0-1 simulated events at others with no
+    guard at all -- the exact mechanism behind the Nominal/Reduced folders spuriously beating
+    Truncated (see [[sensitivity-one-event-floor]]) and hd_1x2x6_lateralAPA's fiduc_truth
+    regression (see [[truth-fiducial-and-reference-folder]]). Every configured background is now
+    gated, essential ones at --min_background_mc and the rest at an adaptive threshold
+    (lib.background.adaptive_mc_thresholds): a component that is structurally absent from the
+    whole grid (0 MC everywhere -- a small, physically zero contribution) is not gated at all,
+    since surveyed HD/VD Truncated grids show every configured background reaches
+    --min_background_mc at 18-37% of the 6800 cuts, the adaptive tiers below that rarely engage
+    in practice but protect a future analysis/config where a background genuinely has none.
     """
-    if args.min_background_mc <= 0:
+    if args.min_background_mc <= 0 and args.max_sparse_weight_fraction <= 0:
         return None
     essential = [s for s, is_essential in get_essential_backgrounds(str(root)).items() if is_essential]
-    if not essential:
-        return None
     # Match the labeled Rebins 01_background_template.py reads for this variant.
     _selection_changed = (
         getattr(args, "charge_threshold", 0) > 0
@@ -343,30 +381,53 @@ def _mc_supported_cuts():
         or not args.membrane_veto
     )
     _label = args.study_label if _selection_changed else None
-    supported, checked = None, []
+    mc_by_component: dict = {}
+    sparse_weight: dict = {}
+    total_weight: dict = {}
     for sample, filepath in load_available_background_dataframes(
         str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_label
     ):
-        if sample not in essential:
-            continue
         frame = pd.read_pickle(filepath)
         if "MCCounts" not in frame.columns:
             rprint(f"[yellow][WARNING][/yellow] {sample} Rebin has no MCCounts; MC support unchecked.")
             continue
-        ok = set()
+        per_cut = {}
         for _, row in frame.iterrows():
             entries = row["MCCounts"]
             total_entries = float(np.nansum(np.asarray(list(entries), dtype=float))) if hasattr(entries, "__len__") else float(entries)
-            if total_entries >= args.min_background_mc:
-                ok.add((int(row["NHits"]), int(row["AdjCl"]), int(row["OpHits"])))
-        checked.append(sample)
+            _cut = (int(row["NHits"]), int(row["AdjCl"]), int(row["OpHits"]))
+            per_cut[_cut] = total_entries
+            if args.max_sparse_weight_fraction > 0 and "Counts" in frame.columns and hasattr(entries, "__len__"):
+                _w = np.asarray(list(row["Counts"]), dtype=float)
+                _m = np.asarray(list(entries), dtype=float)
+                sparse_weight[_cut] = sparse_weight.get(_cut, 0.0) + float(_w[(_m < args.sparse_mc_bins) & (_w > 0)].sum())
+                total_weight[_cut] = total_weight.get(_cut, 0.0) + float(_w.sum())
+        mc_by_component[sample] = per_cut
+    if not mc_by_component:
+        return None
+    thresholds = adaptive_mc_thresholds(mc_by_component, essential, args.min_background_mc, args.min_nonessential_mc)
+    supported = None
+    if args.max_sparse_weight_fraction > 0 and total_weight:
+        supported = {c for c, tot in total_weight.items() if tot <= 0 or sparse_weight.get(c, 0.0) / tot <= args.max_sparse_weight_fraction}
+        rprint(
+            f"[cyan][INFO][/cyan] Sparse-weight gate: {len(supported)} of {len(total_weight)} cuts keep <= "
+            f"{args.max_sparse_weight_fraction:.0%} of the weighted background in bins with < {args.sparse_mc_bins} MC events."
+        )
+    for sample, per_cut in mc_by_component.items():
+        if args.min_background_mc <= 0:
+            continue
+        threshold = thresholds[sample]
+        if threshold <= 0:
+            rprint(f"[cyan][INFO][/cyan] MC support: '{sample}' has 0 simulated events everywhere in this grid; not gated.")
+            continue
+        ok = {cut for cut, mc in per_cut.items() if mc >= threshold}
         supported = ok if supported is None else (supported & ok)
     if supported is None:
         return None
     rprint(
-        f"[cyan][INFO][/cyan] MC support: {len(supported)} of {len(cut_candidates)} cuts have "
-        f">= {args.min_background_mc} simulated events in every essential background "
-        f"({', '.join(checked)})."
+        f"[cyan][INFO][/cyan] MC support: {len(supported)} of {len(cut_candidates)} cuts pass "
+        + ", ".join(f"{sample}>={thresholds[sample]:g}" for sample in mc_by_component if thresholds[sample] > 0)
+        + "."
     )
     return supported
 
@@ -397,8 +458,6 @@ rprint(
 )
 
 # ── generate scan templates and score ──────────────────────────────────────────
-
-cut_quality = []
 
 def _score_cut(cut):
     """Score one cut, or return None when its templates are unusable."""

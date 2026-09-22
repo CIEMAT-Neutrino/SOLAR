@@ -1,13 +1,12 @@
 import ROOT
 
 import numpy as np
-import pandas as pd
 
 from scipy.special import gammaln
 from scipy.optimize import minimize, minimize_scalar
 from scipy.optimize import Bounds
 from iminuit import Minuit
-from ROOT import TFile, TTree, TList
+from ROOT import TFile
 from rich import print as rprint
 
 # Maximum chi2 value to use as fallback for failed fits

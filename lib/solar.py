@@ -1,20 +1,16 @@
 from src.utils import get_project_root
 
-import os
 import json
 import plotly
 import numba
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import plotly.express as px
 import plotly.graph_objects as go
 
 from typing import Optional
 from plotly.subplots import make_subplots
 from scipy import interpolate
 from particle import Particle
-from rich.progress import track
 from scipy import constants as const
 from rich import print as rprint
 

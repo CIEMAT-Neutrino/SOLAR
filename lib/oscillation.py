@@ -1,6 +1,6 @@
 from src.utils import get_project_root
 
-import os, glob, uproot, json
+import os, glob, uproot
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 
 from typing import Optional
 from scipy import interpolate
-from rich.progress import track
 from rich import print as rprint
 from plotly.subplots import make_subplots
 
@@ -683,7 +682,6 @@ def plot_oscillation_map(fig, idx, dm2=None, sin13=None, sin12=None, factor=1, d
     Returns:
         fig (plotly.graph_objects.Figure): Plotly figure.
     """
-    analysis_info = load_analysis_info(str(root))
     oscillation_map = get_oscillation_map(
         dm2=dm2, sin13=sin13, sin12=sin12, debug=debug
     )
@@ -756,7 +754,6 @@ def rebin_df(
             print_colored("Rebinning data with custom parameters!", "DEBUG")
 
     # Create an empty reduced data frame
-    goal_int = df.sum().mean()
     small_df = pd.DataFrame(index=reduced_rows, columns=energy_centers)
 
     for col in energy_centers:

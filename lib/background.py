@@ -1,9 +1,52 @@
-import json
 import os
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from .defaults import load_analysis_info, get_folder_flags
+
+
+def adaptive_mc_thresholds(
+    mc_by_component: Mapping[str, Mapping[Any, float]],
+    essential: Iterable[str],
+    essential_threshold: float,
+    nonessential_threshold: float,
+) -> Dict[str, float]:
+    """Per-component MC-support threshold for a cut/fiducial-volume scan, essential or not.
+
+    ``mc_by_component[component]`` maps each candidate (cut or fiducial point) to that
+    component's summed MCCounts there. Essential components always gate at
+    ``essential_threshold`` (the existing behaviour, e.g. 04_best_cuts.py --min_background_mc).
+
+    Non-essential components (radiological, for every analysis currently configured) were
+    previously exempt from any MC-support gate, so a candidate could be rewarded for a
+    background that has near-zero simulated events there rather than a background that is
+    genuinely small (see [[sensitivity-one-event-floor]] and the 2026-09-18 energy-study
+    finding). Gating them at the SAME threshold as essential components is usually too strict:
+    radiological's window support varies by three orders of magnitude across analysis windows
+    (e.g. HEP: literally absent for some configs, thin for others; DayNight: normally
+    well supported). So each non-essential component gets an adaptive threshold from its own
+    grid-wide maximum support:
+      - max == 0   -> 0 (no-op: this component is structurally absent from this window for
+                     every candidate, not selectively thin at some; gating it would reject
+                     every candidate for a physical zero, not a statistics problem)
+      - 0 < max < nonessential_threshold -> 1 (require at least one simulated event; the full
+                     threshold is unreachable everywhere, but "some support" still beats "none")
+      - max >= nonessential_threshold -> nonessential_threshold
+    """
+    essential_lower = {str(s).lower() for s in essential}
+    out: Dict[str, float] = {}
+    for component, per_candidate in mc_by_component.items():
+        if str(component).lower() in essential_lower:
+            out[component] = float(essential_threshold)
+            continue
+        grid_max = max(per_candidate.values()) if per_candidate else 0.0
+        if grid_max <= 0:
+            out[component] = 0.0
+        elif grid_max < nonessential_threshold:
+            out[component] = 1.0
+        else:
+            out[component] = float(nonessential_threshold)
+    return out
 
 
 def folder_applies_surface_cut(root: str, folder: str) -> bool:

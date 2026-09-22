@@ -28,23 +28,18 @@ python3 src/physics/sensitivity/06_significance.py --config hd_1x2x6_centralAPA 
 import os
 from typing import Optional
 import sys
-import re
 import copy
 from glob import glob as glob_files
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from scipy import interpolate
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
 
-from lib.root import Sensitivity_Fitter
 from lib.template_guards import check_template_sampling_marker
 from lib.oscillation import get_oscillation_datafiles
 from lib.fitting import (
-    _sensitivity_apply_energy_scale as _apply_energy_scale,
-    _sensitivity_fit_with_escale    as _fit_with_escale,
     sensitivity_chi2_worker         as _chi2_worker,
     sensitivity_pull_jacobian,
     sensitivity_validation_gates,
@@ -208,6 +203,17 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.",
+)
+parser.add_argument(
+    "--membrane_veto",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Accept only cathode/APA optical matches (the default). --no-membrane_veto marks the "
+        "membrane_veto_off study: study_context then reads the labeled {energy}_membrane_veto_off "
+        "templates and writes the chi2 grids next to them. Without this flag the study silently "
+        "fitted the nominal templates and overwrote the nominal grids (2026-09-18)."
+    ),
 )
 parser.add_argument(
     "--charge_threshold",
@@ -597,7 +603,6 @@ def _same_oscillation(point: tuple, reference: tuple) -> bool:
     )
 
 
-# _apply_energy_scale and _fit_with_escale imported from lib.fitting as aliases above
 
 
 def _resolve_cut_entries(paths: dict, info: dict, args, analysis_info: dict, config: str, name: str):

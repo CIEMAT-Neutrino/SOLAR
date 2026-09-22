@@ -117,7 +117,6 @@ def compute_prob3(
 
     # Split on nadir sign: day = cos(η) > 0, night = cos(η) < 0
     day_mask   = n_centers >  0.0
-    night_mask = n_centers <= 0.0
 
     # Day: average over day-nadir bins → energy-only Series
     day_pee   = pee_2d[:, day_mask].mean(axis=1) if day_mask.any() else pee_2d[:, 0]

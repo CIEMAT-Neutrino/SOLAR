@@ -1,29 +1,90 @@
 {
   "BACKGROUND_SAMPLES": {
     "ESSENTIAL": {
-      "gamma":        true,
-      "alpha":        false,
-      "neutron":      true,
+      "gamma": true,
+      "alpha": false,
+      "neutron": true,
       "radiological": false
     },
-    "default":          ["gamma", "neutron", "radiological"],
-    "surface_filtered": ["gamma", "neutron"],
+    "default": [
+      "gamma",
+      "neutron",
+      "radiological"
+    ],
+    "surface_filtered": [
+      "gamma",
+      "neutron"
+    ],
     "_truth_position_keys_comment": "Truth fiducialisation reference per sample. Samples with no valid signal particle (radiological has SignalParticleSurface == -1 for every event) must use the Main* energy-deposit position instead of SignalParticle*. neutron is external (wall/rock) backgrounds -- SignalParticleX/Y/Z is the originating particle's emission point outside the cryostat, not a fiducialisable position, so they use Main* too. gamma uses EndX/Y/Z (end of track/cluster) for fiducialisation. radiological (non-essential) uses MainX/Y/Z.",
     "truth_position_keys": {
-      "radiological": ["MainX", "MainY", "MainZ"],
-      "gamma":        ["EndX", "EndY", "EndZ"],
-      "neutron":      ["MainX", "MainY", "MainZ"]
+      "radiological": [
+        "MainX",
+        "MainY",
+        "MainZ"
+      ],
+      "gamma": [
+        "EndX",
+        "EndY",
+        "EndZ"
+      ],
+      "neutron": [
+        "MainX",
+        "MainY",
+        "MainZ"
+      ]
     },
     "ANALYSES": {
-      "DAYNIGHT":    ["gamma", "neutron", "radiological"],
-      "HEP":         ["gamma", "neutron", "radiological"],
-      "SENSITIVITY": ["gamma", "neutron", "radiological"]
+      "DAYNIGHT": [
+        "gamma",
+        "neutron",
+        "radiological"
+      ],
+      "HEP": [
+        "gamma",
+        "neutron",
+        "radiological"
+      ],
+      "SENSITIVITY": [
+        "gamma",
+        "neutron",
+        "radiological"
+      ]
     },
     "STYLE": {
-      "gamma":        {"label": "gamma",        "color": "black",             "reduction": 3},
-      "neutron":      {"label": "neutron",      "color": "rgb(15,133,84)",    "reduction": 2},
-      "alpha":        {"label": "alpha",        "color": "rgb(29, 105, 150)", "reduction": 1},
-      "radiological": {"label": "radiological", "color": "rgb(120, 94, 240)", "reduction": 1}
+      "gamma": {
+        "label": "gamma",
+        "color": "black",
+        "reduction": 3
+      },
+      "neutron": {
+        "label": "neutron",
+        "color": "rgb(15,133,84)",
+        "reduction": 2
+      },
+      "alpha": {
+        "label": "alpha",
+        "color": "rgb(29, 105, 150)",
+        "reduction": 1
+      },
+      "radiological": {
+        "label": "radiological",
+        "color": "rgb(120, 94, 240)",
+        "reduction": 1
+      }
+    },
+    "truth_containment_margin_cm": 10.0,
+    "_truth_containment_comment": "Truth-position runs only (fiduc_truth): events whose truth position lies more than this many cm outside the active volume (config DETECTOR_MIN/MAX_X/Y/Z) are dropped in every fiducial scan point, including the no-fiducial baseline. Reco positions are always inside the detector; truth positions of backgrounds are not (Main*/End* of showers from the cryostat and rock: VD neutron 26-28% and radiological 63-79% of weight above X=+330, HD lateral neutron 11% above X=360). abs(X) and the missing far-side bound of lateral, and the VD one-sided x < 330 - fid cut, never removed them at fid=0. The margin keeps signal at the boundary (marley truth reaches ~7 cm outside in Y/Z, 3 cm in X). < 0 disables.",
+    "truth_match_purity": {
+      "_comment": "fiduc_truth study only (lib.fiducial.truth_match_purity_mask): keep events whose reconstructed position agrees with the truth position keys above, i.e. whose flash match / cluster is genuinely theirs. Tolerances in cm, <= 0 disables a term; they are gross-mismatch thresholds (hd_1x2x6_centralAPA, NHits>=3, 6-20 MeV: marley keeps 75-84%, gamma 73-85%, neutron 85-94%, radiological a few %: for radiological Main* is the event's main decay, not the reconstructed cluster's, so this term rejects it almost entirely -- a bookkeeping effect to keep in mind). min_purity applies to MatchedOpFlashPur (off: the backtracked purity is 0 for half of the correctly positioned marley events and absent for radiological). apply_to lists the samples the cut applies to; per_sample overrides any field per sample. 2026-09-19: marley is NOT gated. An ideal detector keeps signal events whose reco position is wrong (truth position is used for the fiducial cut), so gating the signal only threw away 20-50% of it (VD: 50%; highest-energy events worst, HEP hep signal collapsed 453->2 at the selected cut) while the reco study never gets those events back. Backgrounds keep the cut: a wrong flash match is exactly what the reco fiducial cut rejects by accident.",
+      "min_purity": 0.0,
+      "drift_tolerance_cm": 100.0,
+      "transverse_tolerance_cm": 50.0,
+      "apply_to": [
+        "gamma",
+        "neutron",
+        "radiological"
+      ],
+      "per_sample": {}
     }
   },
   "SPECTRA": {
@@ -38,21 +99,21 @@
     },
     "SHIELDING_COMPARISONS": [
       {
-        "corrected":  "vd_1x8x14_3view_30deg_shielded",
-        "reference":  "vd_1x8x14_3view_30deg_nominal"
+        "corrected": "vd_1x8x14_3view_30deg_shielded",
+        "reference": "vd_1x8x14_3view_30deg_nominal"
       }
     ]
   },
   "PDF": {
-    "FLOOR": 1e-8,
+    "FLOOR": 1e-08,
     "BINWIDTH_FACTOR": 0.02,
     "GAMMA_MOMENTUM_THRESHOLD_MEV": 4.0,
     "VALIDATION_SAMPLE": 1000,
     "VALIDATION_SCALE": 1000
   },
   "DATA_PATHS": {
-    "TRUTH":       "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth",
-    "LEGACY":      "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
+    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth",
+    "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
     "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
   },
   "DEFAULT_CONFIGS": [
@@ -63,15 +124,33 @@
   ],
   "TRUTH_PIPELINE": {
     "PDF_BACKEND": "truth",
-    "BACKGROUND_NAMES": ["gamma", "neutron"],
-    "SIGNAL_NAMES": ["marley"],
+    "BACKGROUND_NAMES": [
+      "gamma",
+      "neutron"
+    ],
+    "SIGNAL_NAMES": [
+      "marley"
+    ],
     "COMPARISON_CONFIGS": [
       "hd_1x2x6_centralAPA",
       "hd_1x2x6_lateralAPA",
       "vd_1x8x14_3view_30deg_nominal",
       "vd_1x8x14_3view_30deg_shielded"
     ],
-    "FLUX_REGIONS_MEV": [[0, 2.7], [2.7, 8], [8, 14]],
+    "FLUX_REGIONS_MEV": [
+      [
+        0,
+        2.7
+      ],
+      [
+        2.7,
+        8
+      ],
+      [
+        8,
+        14
+      ]
+    ],
     "FLUX_REFERENCE_CONFIG": "vd_1x8x14_3view_30deg_nominal"
   }
 }

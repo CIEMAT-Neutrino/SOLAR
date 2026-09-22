@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Optional
 from rich import print as rprint
-from .formatting import reshape_array, get_param_dict, remove_branches
+from .formatting import reshape_array, get_param_dict
 
 from src.utils import get_project_root
 

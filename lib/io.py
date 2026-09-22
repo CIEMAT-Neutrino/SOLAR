@@ -4,7 +4,6 @@ import copy
 import json
 import stat
 import pickle
-import tempfile
 import plotly
 import uproot
 import argparse

@@ -204,8 +204,10 @@ class StudyVariant(TypedDict):
     energy_override:      NotRequired[Optional[str]]   # single energy replacing CLI --energy
     analysis_override:    NotRequired[Optional[List[str]]]  # override --analysis for this variant only
     ignore_energy_window: NotRequired[bool]            # pass --ignore_energy_window to run_sensitivity.py
+    reference_energy:     NotRequired[str]             # hold this energy's BestFiducials volume (--reference_energy) instead of scanning
     skip_best_sigmas:     NotRequired[bool]            # pass --skip_best_sigmas (use nominal best cuts)
     skip_templates:       NotRequired[bool]            # pass --skip-templates (reuse existing template pkls)
+    excluded_configs:     NotRequired[List[str]]       # configs this variant does not run for
     extra:                NotRequired[List[str]]       # verbatim flags appended last
 
 
@@ -249,11 +251,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "unc_sig0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.00"]},
         {"label": "unc_sig2",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.02"]},
         {"label": "unc_sig6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--signal_uncertainty", "0.06"]},
-        # Background uncertainty — DayNight + Sensitivity; effect enters when σ_bkg²·N_bkg > 1.
-        # σ_bkg² · N_bkg > 1  →  N_bkg > 1/σ_bkg²  (6%→278, 4%→625, 2%(default)→2500 events)
-        {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.00"]},
-        {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.04"]},
-        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "extra": ["--background_uncertainty", "0.06"]},
+        # Background uncertainty — DayNight + HEP. Sensitivity is excluded: the pull fit pins the
+        # background normalisation to sigma_data ~ B^-1/2 ~ 5e-7 at the nominal cut, four orders of
+        # magnitude tighter than any 0-6% prior, so unc_bkg0/4/6 give identical Sensitivity results
+        # (see [[sensitivity-background-uncertainty-degenerate]]). Effect enters for DayNight when
+        # sigma_bkg^2 * N_bkg > 1  ->  N_bkg > 1/sigma_bkg^2  (6%->278, 4%->625, 2%(default)->2500 events).
+        {"label": "unc_bkg0",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["DayNight", "HEP"], "extra": ["--background_uncertainty", "0.00"]},
+        {"label": "unc_bkg4",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["DayNight", "HEP"], "extra": ["--background_uncertainty", "0.04"]},
+        {"label": "unc_bkg6",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["DayNight", "HEP"], "extra": ["--background_uncertainty", "0.06"]},
     ],
     # 9.1.2 — nuisance parameter decomposition (Sensitivity only)
     # Default profile is 'full' (sin²θ₁₃ + energy scale). Variants isolate each nuisance.
@@ -265,18 +270,32 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "nuisance_sin13",   "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "marginalize_sin13"]},
         {"label": "nuisance_escale",  "skip_rebin": True, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": True, "analysis_override": ["Sensitivity"], "extra": ["--nuisance_profiles", "energy_scale"]},
     ],
-    # 9.2.1 — energy variable: energy_override replaces CLI --energy for this variant
+    # 9.2 — energy variable: energy_override replaces CLI --energy for this variant
     # fiducialization=True required — Fiducial_Scan.pkl for these energies may not exist
-    # analysis_override=["DayNight"]: SignalParticleK/MainK have no events in the HEP
-    # (14-30 MeV) or Sensitivity energy windows, so 04_best_cuts.py / cutflow_plot.py have
-    # no best-cuts entry to key on for those analyses and hard-fail with a KeyError. This
-    # restriction was verified and documented previously; restore it if STUDY_VARIANTS is
-    # ever rebuilt from a diff/rebase that drops it again.
+    # analysis_override=["DayNight"] used to restrict this study: with the analysis energy
+    # window applied, SignalParticleK/MainK have no events in the HEP (14-30 MeV) or
+    # Sensitivity windows, so 04_best_cuts.py / cutflow_plot.py had no best-cuts entry to key on
+    # and hard-failed with a KeyError. Lifted 2026-09-20 now that ignore_energy_window bypasses
+    # the window; if HEP/Sensitivity fail again with that KeyError, restore the restriction.
+    #
+    # skip_best_sigmas was True (held at the SolarEnergy-tuned reference cut) until
+    # 2026-09-18: on hd_1x2x6_centralAPA that read 0.04 sigma for energy_spk against a 5.47
+    # sigma default, not because SignalParticleK is a poor DayNight discriminant (its own best
+    # cut reaches double digits sigma) but because the reference cut is not tuned for it and,
+    # at that cut, radiological piles ~6e7 weighted counts into the truth-energy window with
+    # no MC-support gate protecting the comparison (see [[energy-study-held-cut-near-zero]]).
+    # Same remedy as fiduc_truth (see below): free the cut search so each energy estimator is
+    # read at its own optimum, now that the MC-support gate (adaptive_mc_thresholds, applied
+    # in 01_daynight.py/01_hep.py/04_best_cuts.py since 2026-09-18) keeps that optimum honest.
+    # 2026-09-21: the fiducial volume is now HELD at the SolarEnergy reference (reference_energy). The un-cut
+    # fiducial scan on a truth-energy variable is background-dominated (central DayNight SignalParticleK
+    # ~0.02 sigma at every volume; MainK 2 vs SolarEnergy 3.7), so its argmax was noise (20/0/20) and
+    # the study read 0.63 sigma vs 5.47 -- a fiducial artefact, not the estimator. One knob: energy only.
     "energy": [
-        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True, "analysis_override": ["DayNight"]},
-        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True, "analysis_override": ["DayNight"]},
+        {"label": "energy_spk",   "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False, "fiducialization": True, "energy_override": "SignalParticleK", "ignore_energy_window": True, "reference_energy": "SolarEnergy", "extra": ["--max_sparse_weight_fraction", "0.25"]},
+        {"label": "energy_maink", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False, "fiducialization": True, "energy_override": "MainK",           "ignore_energy_window": True, "reference_energy": "SolarEnergy", "extra": ["--max_sparse_weight_fraction", "0.25"]},
     ],
-    # 9.2.3 — charge threshold scan
+    # 9.4 — charge threshold scan
     # AdjCl energy features are recomputed with AdjClCharge > Q before the Rebin pkl is
     # written, so the energy axis itself reflects the charge cut — not just event selection.
     # SelectedEnergy (= Energy + SelectedAdjClEnergy) is used as the analysis metric:
@@ -297,13 +316,18 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "charge_Q100", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "100"]},
         {"label": "charge_Q500", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "energy_override": "SelectedEnergy", "extra": ["--charge_threshold", "500"]},
     ],
-    # 9.2.4 — background model normalization (folder provides isolation)
+    # 9.5 — background model normalization (folder provides isolation)
+    # --reference_folder Truncated: the Nominal/Reduced runs hold the Truncated fiducial volumes
+    # (BestFiducials.json) and the Truncated DayNight/HEP/Sensitivity best cuts, so only the
+    # background model differs from the reference. A folder with more background (Nominal) can
+    # then only come out worse, and one with less (Reduced) only better. skip_rebin/skip_templates
+    # False: the spectra and templates must be rebuilt at the held volume and cut.
+    # excluded_configs: vd_1x8x14_3view_30deg_shielded does not run this study (2026-09-22, by request).
     "bkgmodel": [
-        # skip_rebin/skip_templates False: the Nominal/Reduced Rebins on disk predate the current
-        # shielding factors in folder_configs.json (Reduced still carries gamma/10, neutron x1), so
-        # both folders must rebuild their spectra and templates rather than reuse them.
-        {"label": "bkgmodel_nominal", "folder": "Nominal", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False},
-        {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False},
+        {"label": "bkgmodel_nominal", "folder": "Nominal", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
+         "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
+        {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
+         "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
     # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates
@@ -317,26 +341,55 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
     ],
-    # 9.2.2 / 9.2.3 — truth x-fiducialisation vs reco flash-matching
+    # 9.1 — truth x-fiducialisation vs reco flash-matching
     # Runs full fiducialization with per-sample truth positions instead of RecoX/Y/Z:
     #   marley → SignalParticleX/Y/Z, gamma → EndX/Y/Z, neutron/radiological → MainX/Y/Z
     # Produces BestFiducials_fiduc_truth.json and labeled Rebin pkls.
-    # It re-optimises its own fiducial volume and smoothing sigmas (that is the knob), but
-    # holds the nominal topological cuts (skip_best_cuts=True) so the Sensitivity number is
-    # read at the same working point as the default -- a re-tuned cut would confound the
-    # comparison (see the one-knob policy above). Signal AND background templates are built
-    # from the labeled truth-fiducial Rebin pkls at that held cut.
+    # Truth is used for everything position related: the fiducial cut runs on the true
+    # position, and the matched flash must be pure and agree with it (truth_match_purity in
+    # backgrounds.json) -- the rejection the reco fiducial cut gets by accident from wrong
+    # flash matches is made explicit.
+    #
+    # Deliberate SECOND exception to the one-knob policy (2026-09-18, on top of the volume
+    # re-optimisation already granted above): skip_best_cuts/skip_best_sigmas are False, so
+    # every analysis picks its own best NHits/AdjCl/OpHits on the truth-fiducial spectra
+    # instead of being held at the reco-fiducial reference cut. Holding the reference cut
+    # measured "truth positions with the cut tuned for reco positions", which is not what
+    # this study asks and does not have to be monotone: hd_1x2x6_lateralAPA's optimal truth
+    # volume (small, X60/Y60/Z20) has both more true signal AND more radiological background
+    # than the reco volume at the SAME topological cut (background grows ~7% faster), so the
+    # held comparison read worse even though the purity cut is working as intended. Full cut
+    # freedom is a superset of the held-cut configuration, so this study can no longer score
+    # below the default by construction (worst case it reconverges near the reco optimum).
+    # Costs a full 04_best_cuts.py scan per config; DayNight/HEP add no extra cost since
+    # 01_daynight.py / 01_hep.py already compute the full per-cut grid regardless of this flag.
     "fiduc_truth": [
         {
             "label": "fiduc_truth",
             "skip_rebin": False,
-            "skip_best_cuts": True,
+            "skip_best_cuts": False,
             "skip_best_sigmas": False,
             "fiducialization": True,
             "extra": ["--truth_fiducial"],
         },
     ],
-    # 9.2.5 — background gamma model: ClusterEnergy vs TotalEnergy comparison
+    # fiduc_truth_refvol (2026-09-19): the same truth positions and background match cut as fiduc_truth, but
+    # at the REFERENCE fiducial volumes (BestFiducials.json, no fiducialization stage) with free cuts. The
+    # fiducial-volume scan scores raw counts without the analysis cuts, so its own truth optimum is not
+    # always the best volume downstream (VD HEP: truth volume 40/0/0 vs reco 0/0/40); this variant isolates
+    # what perfect position knowledge buys at an unchanged volume. Optional diagnostic since 2026-09-20
+    # (OPTIONAL_GROUPS): with the truth-containment cut fiduc_truth is at or above the default in every
+    # row, so it is no longer needed to define fiduc_truth or to rescue a row; it is excluded from --all.
+    "fiduc_truth_refvol": [
+        {
+            "label": "fiduc_truth_refvol",
+            "skip_rebin": False,
+            "skip_best_cuts": False,
+            "skip_best_sigmas": False,
+            "extra": ["--truth_fiducial", "--fiducial_from_reco"],
+        },
+    ],
+    # 9.3 — background gamma model: ClusterEnergy vs TotalEnergy comparison
     # Variant 1: ClusterEnergy (sum of cluster hit charge × calibration) as direct calorimetric proxy
     # Variant 2: TotalEnergy as comparison baseline (bkg_gamma included)
     # ClusterEnergy is already computed in the reco workflow; no new simulation needed.
@@ -361,7 +414,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
             "ignore_energy_window": True,
         },
     ],
-    # 9.2.6 — membrane veto: which optical planes may supply the TPC-PDS match.
+    # 9.6 — membrane veto: which optical planes may supply the TPC-PDS match.
     # QUALITY_CUTS.OPFLASH_PLANE == 0 keeps cathode (VD) / APA (HD) matches only, and
     # stays the default everywhere. HD reports no other plane, so the veto is free
     # there; VD also reports Membrane 1/2 and Front/EndCap (planes 1-4), which carry
@@ -412,6 +465,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 }
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
+# Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol"]
+DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 
 def all_study_labels(

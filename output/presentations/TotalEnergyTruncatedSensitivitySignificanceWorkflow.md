@@ -195,10 +195,10 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 100 | 140 | 140 | 0.001 | 0.225 | 2.99 |
+| HD Central | 100 | 280 | 120 | 0.045 | 0.247 | 2.16 |
 | HD Lateral | 0 | 0 | 40 | 0.016 | 0.073 | 6.37 |
 | VD Top | 0 | 0 | 0 | 0.097 | 0.097 | 7.84 |
-| VD Bottom Shielded | 120 | 300 | 20 | 0.003 | 0.013 | 3.49 |
+| VD Bottom Shielded | 60 | 80 | 0 | 0.061 | 0.101 | 6.28 |
 
 ---
 
@@ -301,7 +301,7 @@ No significance plot found for VD Bottom Shielded.
 ### HD Lateral Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_TotalEnergy_NHits3_AdjCl2_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_TotalEnergy_NHits6_AdjCl3_OpHits14.png">
 </div>
 
 ---
@@ -309,7 +309,7 @@ No significance plot found for VD Bottom Shielded.
 ### VD Top Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_TotalEnergy_NHits8_AdjCl8_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_TotalEnergy_NHits7_AdjCl7_OpHits20.png">
 </div>
 
 ---
@@ -317,7 +317,7 @@ No significance plot found for VD Bottom Shielded.
 ### VD Bottom Shielded Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Background_TotalEnergy_NHits8_AdjCl10_OpHits10.png">
+  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Background_TotalEnergy_NHits7_AdjCl15_OpHits18.png">
 </div>
 
 ---
@@ -362,63 +362,15 @@ No 1D projections found.
 
 ---
 
-### VD Top: Mixing Angle Projections
+### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_sin13_projection_NuFit61.png">
-  </div>
-</div>
+No 1D projections found.
 
 ---
 
-### VD Top: Mass Splitting Projections
+### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_vd_1x8x14_3view_30deg_nominal_marley_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded: Mixing Angle Projections
-
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_sin13_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded: Mass Splitting Projections
-
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_vd_1x8x14_3view_30deg_shielded_marley_Truncated_SolarEnergy_NHits8_AdjCl10_OpHits10_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
+No 1D projections found.
 
 ---
 
@@ -426,10 +378,10 @@ No 1D projections found.
 
 | Config | NHits | OpHits | AdjCl | Signal Unc. (%) | Bkg Unc. (%) | 1D Asimov Z (σ) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | - | - | - | - | - | 951.44 |
+| HD Central | - | - | - | - | - | - |
 | HD Lateral | - | - | - | - | - | 28.75 |
-| VD Top | - | - | - | - | - | 14.91 |
-| VD Bottom Shielded | - | - | - | - | - | 74.48 |
+| VD Top | - | - | - | - | - | - |
+| VD Bottom Shielded | - | - | - | - | - | - |
 | *(no parsable cut metadata found in selected filenames)* | - | - | - | - | - | - |
 
 ---

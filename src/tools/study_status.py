@@ -5,13 +5,25 @@ Reads the records the pipeline leaves on disk (highest_* maps, Exposure pkls, Se
 Contours pkls) for the nominal run and every STUDY_VARIANTS label, prints a status table and
 writes a submission queue for the rows that are stale.
 
+Trend check
+  Every study row is compared with a reference row (the default run, or the neighbouring
+  variant of a scan) under the relation physics expects, see EXPECTED_TRENDS. The `trend`
+  column reads e.g. ">= default 6.69 vs 5.79 OK" and is coloured
+    green   expected relation holds
+    orange  unexpected, but the study or its reference is stale (known bug / rerun pending):
+            re-check after the queue
+    red     unexpected on two fresh results: a bug to evaluate (listed at the end)
+    grey    informational (estimator swap) or reference missing
+
 Staleness rules (each row lists the reasons that apply)
   missing          no record on disk for a (config, folder, analysis, label) the registry expects
-  epoch            record older than the last statistic change for that analysis (--epoch)
-  behind_default   study record older than the default record it is compared against
+  epoch            record older than the last statistic change for that analysis (--epoch), or older than the
+                   last code change that touches that particular study (STUDY_EPOCHS)
   values_bug       DayNight/HEP map 'Values' does not match the exposure curve at 30 yr
                    (05_best_sigmas read the 0.1-yr row for held cuts before 2026-09-17)
-  cut!=ref         Sensitivity study evaluated at a cut other than the nominal Truncated cut
+  cut!=ref         Sensitivity study that is meant to HOLD the nominal Truncated cut (skip_best_cuts in
+                   lib.study) but was evaluated at another one. Studies that scan their own cut by design
+                   (energy_*, fiduc_truth*) are never flagged.
   fit!=pull        Sensitivity contours not produced by the pull fit
 
 Usage (inside the container: apptainer exec -B /pnfs,/afs,/pc,/cvmfs --home=<repo>/ --pwd <repo>/ <repo>/containers/solar_v1.0.sif python3 ...)
@@ -36,18 +48,108 @@ import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from lib import load_analysis_info, root
-from lib.study import STUDY_VARIANTS
+from lib.study import OPTIONAL_GROUPS, STUDY_VARIANTS
+
+OPTIONAL_STUDIES = {v["label"] for g in OPTIONAL_GROUPS for v in STUDY_VARIANTS[g]}
 from rich import print as rprint
 
 ANALYSES = ("DayNight", "HEP", "Sensitivity")
 LOCAL_DIR = {"DayNight": "day-night", "HEP": "hep", "Sensitivity": "sensitivity"}
 DEFAULT_EPOCHS = {
-    # DayNight: asymmetry penalty terms removed (daynight_nopenalty_rerun.log)
-    "DayNight": "2026-09-07T22:13",
-    # Sensitivity: one-expected-event floor removed from the pull fit (see solar_analyses.md 5.3)
-    "Sensitivity": "2026-09-17T17:00",
-    "HEP": "2026-09-01T00:00",
+    # DayNight/HEP/Sensitivity: adaptive MC-support gate on the cut scan now also covers
+    # non-essential backgrounds (radiological), not just essential ones -- see
+    # lib.background.adaptive_mc_thresholds and [[sensitivity-one-event-floor]]. A cut chosen
+    # before this can be resting on a background estimate backed by 0-1 simulated events.
+    "DayNight": "2026-09-18T13:00",
+    "Sensitivity": "2026-09-18T13:00",
+    "HEP": "2026-09-18T13:00",
 }
+# Code changes that only touch one study: a record for that study is stale when older than its
+# epoch, on top of the analysis-wide epoch above. `ok` therefore means "produced after every change
+# that can alter this row", not just "after the last statistic change".
+STUDY_EPOCHS = {
+    # 01_daynight/01_hep forward --no-membrane_veto and 03_analysis no longer hard-codes plane == 0
+    "membrane_veto_off": "2026-09-20T17:38",
+    # truth containment / truth-position consistency cut (lib/fiducial.py)
+    "fiduc_truth": "2026-09-20T13:01",
+    "fiduc_truth_refvol": "2026-09-20T13:01",
+    # energy studies rerun with the fiducial volume held at the SolarEnergy reference (lib/study.py, 2026-09-21)
+    "energy_spk": "2026-09-21T11:13",
+    "energy_maink": "2026-09-21T11:13",
+}
+# Studies that do not apply to a geometry (label -> config-name prefix): the veto only acts on VD planes;
+# bkgmodel is not run on vd_1x8x14_3view_30deg_shielded (2026-09-22, by request; also lib.study excluded_configs).
+NOT_APPLICABLE = {
+    "membrane_veto_off": ("hd_",),
+    "bkgmodel_nominal": ("vd_1x8x14_3view_30deg_shielded",),
+    "bkgmodel_reduced": ("vd_1x8x14_3view_30deg_shielded",),
+}
+
+
+# Expected relation of a study to its reference: {label: {analysis or "*": (ref_label, relation)}}.
+# relation: ">=" / "<=" (the study should be at least/at most the reference, REL_TOL slack),
+# "==" (same within EQ_TOL), None (informational, no expectation). ref_label "default" is the
+# nominal run of the same folder; "default:Truncated" pins the Truncated nominal run.
+EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
+    # signal-normalisation prior: tighter prior -> larger Delta chi2 / significance
+    "unc_sig0":  {"*": ("unc_sig2", ">=")},
+    "unc_sig2":  {"*": ("default", ">=")},
+    "unc_sig6":  {"*": ("default", "<=")},
+    "unc_sig20": {"*": ("default", ">=")},
+    "unc_sig40": {"*": ("default", "<=")},
+    # background prior: non-binding for Sensitivity and the DayNight Asimov metric
+    "unc_bkg0":  {"*": ("default", "==")},
+    "unc_bkg4":  {"*": ("default", "==")},
+    "unc_bkg6":  {"*": ("default", "==")},
+    # fewer nuisances -> larger Delta chi2 (full profile = default)
+    "nuisance_nominal": {"*": ("nuisance_sin13", ">=")},
+    "nuisance_sin13":   {"*": ("default", ">=")},
+    "nuisance_escale":  {"*": ("default", ">=")},
+    # a different fitter is expected to give different chi2 (that difference is what the study shows, and
+    # lib/study.py notes the validation-gate warnings), so there is no equality to enforce: informational
+    "legacy_fit":       {"*": ("default", None)},
+    # charge threshold scan: informational only. A higher threshold does NOT necessarily lower the
+    # significance (removing low-charge background can cost less signal than it removes background),
+    # so no trend is imposed; each row is shown against its neighbour without a verdict.
+    "charge_Q0":   {"*": ("default", None)},
+    "charge_Q50":  {"*": ("charge_Q0", None)},
+    "charge_Q100": {"*": ("charge_Q50", None)},
+    "charge_Q500": {"*": ("charge_Q100", None)},
+    # background normalisation folders vs the Truncated baseline
+    "bkgmodel_nominal": {"*": ("default:Truncated", "<=")},
+    "bkgmodel_reduced": {"*": ("default:Truncated", ">=")},
+    # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
+    "oscpoint_solar":   {"*": ("default", "==")},
+    "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
+    # ideal fiducialisation should not lose sensitivity
+    "fiduc_truth": {"*": ("default", ">=")},
+    # optional diagnostic (lib.study.OPTIONAL_GROUPS): informational, read against fiduc_truth
+    "fiduc_truth_refvol": {"*": ("fiduc_truth", None)},
+    # different energy estimators: informational only
+    "energy_spk": {"*": ("default", None)}, "energy_maink": {"*": ("default", None)},
+    "bkg_gamma_cluster": {"*": ("default", None)}, "bkg_gamma_total": {"*": ("default", None)},
+    # membrane planes add VD signal; a no-op on HD
+    # DayNight/HEP: extra membrane matches should not lose sensitivity. Sensitivity is informational: the
+    # cuts are held at the veto-on optimum and the extra events carry poorly reconstructed drift (X), so
+    # it can drop (VD shielded 0.34 vs 0.40) without a bug; the study measures the effect at held cuts.
+    "membrane_veto_off": {"DayNight": ("default", ">="), "HEP": ("default", ">="), "Sensitivity": ("default", None)},
+}
+FOLDER_TRENDS = {"Nominal": "<=", "Reduced": ">="}   # folder defaults vs the Truncated default
+REL_TOL, EQ_TOL, ABS_TOL = 0.02, 0.05, 0.05
+
+
+def judge(value: float, ref: float, relation: Optional[str]) -> Optional[bool]:
+    """True/False for an expected relation, None when there is no expectation."""
+    if relation is None or not (np.isfinite(value) and np.isfinite(ref)):
+        return None
+    # relative slack with an absolute floor: a Delta chi2 of 0.1 vs 0.2 is noise, not a trend
+    scale = max(abs(ref), 1e-9)
+    slack_rel, slack_eq = max(REL_TOL * scale, ABS_TOL), max(EQ_TOL * scale, ABS_TOL)
+    if relation == ">=":
+        return value >= ref - slack_rel
+    if relation == "<=":
+        return value <= ref + slack_rel
+    return abs(value - ref) <= slack_eq
 
 
 def _mtime(path: str) -> Optional[dt.datetime]:
@@ -69,8 +171,42 @@ def variants() -> List[dict]:
                 "label": v["label"], "group": group, "folder": (v.get("folder") or "Truncated"),
                 "analyses": list(v.get("analysis_override") or ANALYSES),
                 "energy": v.get("energy_override") or "SolarEnergy",
+                "held_cut": bool(v.get("skip_best_cuts", False)),
             })
     return out
+
+
+_FIDUCIAL_CACHE: Dict[str, Optional[dict]] = {}
+
+
+def read_fiducial(root: str, folder: str, cfg: str, an: str, energy: str, label: Optional[str]) -> str:
+    """FiducialX/Y/Z (cm) used for (folder, config, analysis, energy) from BestFiducials*.json.
+
+    fiduc_truth is the only variant with its own labeled file (BestFiducials_fiduc_truth.json,
+    written with --truth_fiducial); every other variant reuses the folder's plain
+    BestFiducials.json, keyed by its own energy (energy_override), see STUDY_VARIANTS.
+    """
+    stem = "BestFiducials_fiduc_truth" if label == "fiduc_truth" else "BestFiducials"
+    path = f"{root}/config/analysis/fiducial/{folder.lower()}/{stem}.json"
+    if path not in _FIDUCIAL_CACHE:
+        payload = None
+        if os.path.exists(path):
+            try:
+                import json
+                payload = json.load(open(path))
+            except Exception:
+                payload = None
+        _FIDUCIAL_CACHE[path] = payload
+    payload = _FIDUCIAL_CACHE[path]
+    if not payload:
+        return "-"
+    node = payload.get(cfg, {}).get(an.upper(), {}).get(energy)
+    if node is None:
+        return "-"
+    try:
+        return f"{int(node['FiducialX'])}/{int(node['FiducialY'])}/{int(node['FiducialZ'])}"
+    except Exception:
+        return "-"
 
 
 def read_map(path: str, an: str):
@@ -90,6 +226,11 @@ def read_map(path: str, an: str):
         return None
 
 
+# The reported statistic: the Exposure pkl also carries the other estimators (and the +/-Error bands)
+# for the same cut, and taking the maximum over all of them picked the Gaussian row for HEP reactor.
+REPORTED_VARIABLE = {"DayNight": "Asimov", "HEP": "ProfileLikelihood"}
+
+
 def read_exposure(path: str, an: str, cut) -> Dict[str, float]:
     """Smoothed significance at 20 and 30 yr for `cut`, from the Exposure pkl."""
     out = {"S20": np.nan, "S30": np.nan}
@@ -104,6 +245,8 @@ def read_exposure(path: str, an: str, cut) -> Dict[str, float]:
         sel = sel[sel["Mode"] == "NoRebin"]
     if cut is not None:
         sel = sel[(sel["NHits"] == cut[0]) & (sel["OpHits"] == cut[1]) & (sel["AdjCl"] == cut[2])]
+    if "Variable" in sel.columns and (sel["Variable"] == REPORTED_VARIABLE.get(an)).any():
+        sel = sel[sel["Variable"] == REPORTED_VARIABLE[an]]
     best = None
     for _, r in sel.iterrows():
         e, s = np.atleast_1d(np.asarray(r["Exposure"], float)), np.atleast_1d(np.asarray(r["Significance"], float))
@@ -146,7 +289,6 @@ def main() -> None:
     ap.add_argument("--config", nargs="+", default=None)
     ap.add_argument("--signal", default="marley")
     ap.add_argument("--epoch", nargs="*", default=[], help="Analysis=ISO-datetime; records older than this are stale")
-    ap.add_argument("--no-behind-default", action="store_true", help="Do not treat 'older than the default record' as stale")
     ap.add_argument("--tag", default=None, help="Stamp for the output files (default: now)")
     ap.add_argument("--per-config", action="store_true",
                     help="Write one queue script per config plus a launcher that runs them in parallel")
@@ -182,15 +324,15 @@ def main() -> None:
                       for an in ANALYSES) or folder == "Truncated"
             if has:
                 entries.append({"label": None, "group": "default", "folder": folder, "analyses": list(ANALYSES), "energy": "SolarEnergy"})
-        entries += regs
-        default_time: Dict[tuple, Optional[dt.datetime]] = {}
+        entries += [e for e in regs if not any(cfg.startswith(pre) for pre in NOT_APPLICABLE.get(e["label"], ()))]
         for e in entries:
             label, folder = e["label"], e["folder"]
             sfx = f"_{label}" if label else ""
             sub = label or "default"
             for an in e["analyses"]:
                 row = {"config": cfg, "folder": folder, "analysis": an, "study": sub, "group": e["group"],
-                       "cut": "-", "value": "-", "at_eval": "-", "record": "-", "reasons": []}
+                       "cut": "-", "fiducial": read_fiducial(str(root), folder, cfg, an, e["energy"], label),
+                       "value": "-", "at_eval": "-", "record": "-", "reasons": [], "metric": np.nan}
                 if an in ("DayNight", "HEP"):
                     mp = f"{P}/{an.upper()}/{folder.lower()}/{cfg}/{sig}/{cfg}_{sig}_highest_{an}{sfx}.pkl"
                     ex = f"{root}/output/data/analysis/{LOCAL_DIR[an]}/{cfg}/{sig}/{folder.lower()}/{sub}/{cfg}_{sig}_{an}_Exposure.pkl"
@@ -202,6 +344,7 @@ def main() -> None:
                         cut, values, energy = rec
                         curve = read_exposure(ex, an, cut)
                         row["cut"] = f"{cut[0]}/{cut[1]}/{cut[2]}"
+                        row["metric"] = values
                         row["value"] = f"{values:.2f}σ@30y"
                         row["at_eval"] = f"{curve['S20']:.2f}σ@20y" if np.isfinite(curve["S20"]) else "-"
                         # The 05_best_sigmas bug wrote the 0.1-yr value (factors of 10 off); the
@@ -220,39 +363,98 @@ def main() -> None:
                     else:
                         cut = rec["cut"]
                         row["cut"] = f"{cut[0]}/{cut[1]}/{cut[2]}" if cut else "-"
+                        row["metric"] = rec["solar"]
                         row["value"] = f"Δχ² {rec['solar']:.2f}/{rec['react']:.2f}@30y"
-                        row["at_eval"] = f"Δχ² {c10['solar']:.2f}/{c10['react']:.2f}@10y" if c10 else "-"
-                        if rec["fit"] != "pull":
+                        # Sensitivity is quoted at its primary 30-yr exposure (EVALUATION_EXPOSURE_YEARS); the 10-yr
+                        # secondary pass stays available as c10 but is no longer what at_eval reports.
+                        row["at_eval"] = row["value"]
+                        if rec["fit"] != "pull" and label != "legacy_fit":   # legacy_fit is the non-pull fit by design
                             row["reasons"].append("fit!=pull")
-                        if label and ref_cut and cut != ref_cut:
+                        if label and e["held_cut"] and ref_cut and cut != ref_cut:
                             row["reasons"].append(f"cut!=ref{ref_cut}")
                         if label is None and folder == "Truncated":
                             ref_cut = ref_cut or cut
                 row["record"] = _fmt(t)
-                if t is not None and t < epochs.get(an, dt.datetime.min):
+                ep = epochs.get(an, dt.datetime.min)
+                if label in STUDY_EPOCHS:
+                    ep = max(ep, dt.datetime.fromisoformat(STUDY_EPOCHS[label]))
+                if t is not None and t < ep:
                     row["reasons"].append("epoch")
-                if label is None:
-                    default_time[(folder, an)] = t
-                elif t is not None and not args.no_behind_default:
-                    dref = default_time.get(("Truncated", an))
-                    if dref and t < dref:
-                        row["reasons"].append("behind_default")
                 rows.append(row)
 
     table = pd.DataFrame(rows)
     table["status"] = table["reasons"].apply(lambda r: "ok" if not r else ",".join(r))
+
+    # ── trend check against the expected reference ──────────────────────────────────
+    def _lookup(cfg, folder, an, label):
+        if label.startswith("default:"):
+            folder = label.split(":", 1)[1]
+            label = "default"
+        hit = table[(table.config == cfg) & (table.folder == folder) & (table.analysis == an) & (table.study == label)]
+        return (float(hit.iloc[0]["metric"]), hit.iloc[0]["status"]) if len(hit) else (np.nan, "missing")
+
+    trend, verdict = [], []
+    for _, r in table.iterrows():
+        if r.study == "default":
+            rel = FOLDER_TRENDS.get(r.folder)
+            ref_label = "default:Truncated" if rel else None
+        else:
+            spec = EXPECTED_TRENDS.get(r.study, {})
+            ref_label, rel = spec.get(r.analysis, spec.get("*", (None, None)))
+        if ref_label is None:
+            trend.append("-"); verdict.append("n/a"); continue
+        ref_val, ref_status = _lookup(r.config, r.folder, r.analysis, ref_label)
+        ok = judge(r.metric, ref_val, rel)
+        ref_name = ref_label.replace("default:Truncated", "Truncated default")
+        if not np.isfinite(r.metric) or not np.isfinite(ref_val):
+            trend.append(f"{rel or 'vs'} {ref_name}: n/a"); verdict.append("n/a"); continue
+        stale_pair = (r.status != "ok" or ref_status != "ok")
+        if ok is None:
+            trend.append(f"vs {ref_name}: {r.metric:.2f} vs {ref_val:.2f}"); verdict.append("info")
+        elif ok:
+            trend.append(f"{rel} {ref_name}: {r.metric:.2f} vs {ref_val:.2f} OK"); verdict.append("expected")
+        elif stale_pair:
+            # unexpected, but one side carries a known bug or still awaits its rerun
+            trend.append(f"{rel} {ref_name}: {r.metric:.2f} vs {ref_val:.2f} UNEXPECTED (rerun pending)")
+            verdict.append("unexpected_stale")
+        else:
+            # unexpected on two fresh results: a bug to evaluate
+            trend.append(f"{rel} {ref_name}: {r.metric:.2f} vs {ref_val:.2f} UNEXPECTED (fresh)")
+            verdict.append("unexpected")
+    table["trend"], table["verdict"] = trend, verdict
     stamp = args.tag or dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs(f"{root}/output/logs", exist_ok=True)
-    cols = ["config", "folder", "analysis", "study", "cut", "value", "at_eval", "record", "status"]
+    cols = ["config", "folder", "analysis", "study", "cut", "fiducial", "value", "at_eval", "record", "status", "trend"]
+    badge = {"expected": "🟢", "unexpected": "🔴", "unexpected_stale": "🟠", "info": "⚪", "n/a": "⚪"}
     md = f"{root}/output/logs/study_status_{stamp}.md"
     with open(md, "w") as fh:
         fh.write(f"# Study status {stamp}\n\nEpochs: " + ", ".join(f"{k}={v.isoformat(timespec='minutes')}" for k, v in epochs.items()) + "\n\n")
-        fh.write("cut = NHits/OpHits/AdjCl. DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
-                 "Sensitivity: Δχ² solar-fit-at-reactor / reactor-fit-at-solar (full profile unless a nuisance study).\n\n")
+        fh.write("cut = NHits/OpHits/AdjCl. fiducial = FiducialX/Y/Z (cm) from BestFiducials*.json for that "
+                 "config/folder/analysis/energy (- if no record). DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
+                 "Sensitivity: Δχ² solar-fit-at-reactor / reactor-fit-at-solar (full profile unless a nuisance study).\n\n"
+                 "trend: 🟢 study follows the expected relation to its reference; 🟠 it does not, but one side has a known bug "
+                 "or still awaits its rerun (re-check after the queue); 🔴 it does not and both sides are fresh -> a bug to "
+                 "evaluate; ⚪ informational or no "
+                 f"reference. Relations use {REL_TOL:.0%} slack for >=/<= and {EQ_TOL:.0%} for ==; the reference for a scan is the "
+                 "neighbouring variant (unc_sig0 vs unc_sig2, charge_Q100 vs charge_Q50, ...). See EXPECTED_TRENDS in "
+                 "src/tools/study_status.py.\n\n")
+        n_bad = int((table.verdict == "unexpected").sum()); n_good = int((table.verdict == "expected").sum())
+        n_wait = int((table.verdict == "unexpected_stale").sum())
+        fh.write(f"Trend summary: 🟢 {n_good} expected, 🟠 {n_wait} unexpected but rerun pending, 🔴 {n_bad} unexpected on fresh results.\n\n")
+        fresh_bad = table[table.verdict == "unexpected"]
+        if len(fresh_bad):
+            fh.write("Rows to evaluate (unexpected, both sides fresh):\n\n")
+            for _, r in fresh_bad.iterrows():
+                fh.write(f"- {r.config} / {r.folder} / {r.analysis} / {r.study}: {r.trend}\n")
+            fh.write("\n")
         for cfg in configs:
             fh.write(f"\n## {cfg}\n\n| " + " | ".join(cols[1:]) + " |\n|" + "---|" * (len(cols) - 1) + "\n")
             for _, r in table[table.config == cfg].iterrows():
-                fh.write("| " + " | ".join(str(r[c]) for c in cols[1:]) + " |\n")
+                cells = [str(r[c]) for c in cols[1:]]
+                cells[-1] = f"{badge[r.verdict]} {r.trend}" if r.trend != "-" else "-"
+                if r.verdict in ("unexpected", "unexpected_stale"):
+                    cells[-1] = f"**{cells[-1]}**"
+                fh.write("| " + " | ".join(cells) + " |\n")
     table[cols].to_csv(md.replace(".md", ".csv"), index=False)
 
     # ── queue ──────────────────────────────────────────────────────────────────────────
@@ -323,7 +525,7 @@ def main() -> None:
                          f"# stale: {'; '.join(sorted(set(d.status)))}\n")
             # studies: one run_studies call per (group, variant, analyses)
             seen = set()
-            for _, r in sub[sub.study != "default"].iterrows():
+            for _, r in sub[(sub.study != "default") & ~sub.study.isin(OPTIONAL_STUDIES)].iterrows():
                 key = (r.study,)
                 if key in seen:
                     continue
@@ -342,8 +544,25 @@ def main() -> None:
     if args.per_config:
         rprint(f"[cyan][INFO][/cyan] Per-config queues + launcher: {root}/output/logs/study_queue_stale_{stamp}_launch_all.sh")
 
-    pd.set_option("display.width", 250); pd.set_option("display.max_rows", 1000)
-    print(table[cols].to_string(index=False))
+    from rich.console import Console
+    from rich.table import Table as RichTable
+    console = Console(width=220)
+    colour = {"expected": "green", "unexpected": "bold red", "unexpected_stale": "bold dark_orange", "info": "dim", "n/a": "dim"}
+    for cfg in configs:
+        rt = RichTable(title=cfg, show_lines=False, pad_edge=False)
+        for c in cols[1:]:
+            rt.add_column(c, overflow="fold")
+        for _, r in table[table.config == cfg].iterrows():
+            st = f"[green]{r.status}[/green]" if r.status == "ok" else f"[yellow]{r.status}[/yellow]"
+            tr = f"[{colour[r.verdict]}]{r.trend}[/{colour[r.verdict]}]"
+            rt.add_row(*[str(r[c]) for c in cols[1:-2]], st, tr)
+        console.print(rt)
+    n_bad = int((table.verdict == "unexpected").sum()); n_good = int((table.verdict == "expected").sum())
+    n_wait = int((table.verdict == "unexpected_stale").sum())
+    rprint(f"[cyan][INFO][/cyan] trend: [green]{n_good} expected[/green], [dark_orange]{n_wait} unexpected but rerun pending[/dark_orange], "
+           f"[bold red]{n_bad} unexpected on fresh results (evaluate)[/bold red]")
+    for _, r in table[table.verdict == "unexpected"].iterrows():
+        rprint(f"  [bold red]EVALUATE[/bold red] {r.config} / {r.folder} / {r.analysis} / {r.study}: {r.trend}")
     rprint(f"\n[cyan][INFO][/cyan] {len(table)} rows, {len(stale)} stale. Table: {md} (+ .csv). Queue: {q}")
 
 

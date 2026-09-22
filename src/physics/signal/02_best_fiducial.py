@@ -340,6 +340,17 @@ parser.add_argument(
     ),
 )
 
+parser.add_argument(
+    "--reference_energy",
+    type=str,
+    default=None,
+    help=(
+        "Hold the fiducial volume of this energy variable (e.g. SolarEnergy) from BestFiducials.json instead of "
+        "scanning. For the energy-estimator study: the volume is spatial, and an un-cut scan on a truth-energy "
+        "variable (SignalParticleK/MainK) is background-dominated (~0.02 sigma everywhere), so its argmax is noise."
+    ),
+)
+
 args = parser.parse_args()
 config = args.config
 name = args.signal
@@ -351,10 +362,10 @@ for path in [save_path, data_path]:
 
 _best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
 filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
-if os.path.exists(filename):
-    best_fiducials = json.loads(open(filename, "r").read())
-else:
-    best_fiducials = {}
+# Only this run's entries are collected here; _merge_and_write_json merges them into the shared file
+# under a lock. Seeding this dict from the file at start-up would write every other config's entries
+# back as they were when this process started, undoing whatever a concurrent run stored meanwhile.
+best_fiducials = {}
 
 _scan_suffix = "_fiduc_truth" if args.truth_fiducial else ""
 
@@ -403,16 +414,25 @@ for config in configs:
                 analysis_config = dict(analysis_config)
                 analysis_config.pop("energy_min", None)
                 analysis_config.pop("energy_max", None)
-            gated_plot_df = apply_fiducial_mc_threshold(
-                plot_df,
-                analysis_config,
-                args.mc_threshold,
-                str(root),
-            )
             smoothing_config = get_smoothing_config(
                 str(root), analysis_name=analysis_key, dimensions="1d", stage="fiducial"
             )
 
+            if args.reference_energy:
+                ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                ref_entry = None
+                if os.path.exists(ref_file):
+                    ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(args.reference_energy)
+                if ref_entry is None:
+                    raise SystemExit(f"[ERROR] --reference_energy {args.reference_energy}: no {analysis_key} entry for {config} in {ref_file}")
+                best_fiducials[config].setdefault(analysis_key, {})[energy_label] = {**ref_entry, "Fallback": f"reference_energy:{args.reference_energy}"}
+                rprint(
+                    f"{analysis_name} {energy_label}: holding {args.reference_energy} volume "
+                    f"X={ref_entry['FiducialX']} Y={ref_entry['FiducialY']} Z={ref_entry['FiducialZ']}"
+                )
+                continue
+
+            gated_plot_df = apply_fiducial_mc_threshold(plot_df, analysis_config, args.mc_threshold, str(root))
             merged_df, significance_df = select_best_fiducial(
                 gated_plot_df, analysis_config, smoothing_config, args.exposure
             )
@@ -421,6 +441,17 @@ for config in configs:
                     f"[yellow]No fiducial significance points found for {analysis_name} {energy_label} "
                     f"after essential-component MC threshold {args.mc_threshold}[/yellow]"
                 )
+                # A truth scan thinned by the purity cut can leave no volume with enough MC (VD HEP). Keeping
+                # the previous run's entry was silent staleness and a lower threshold picked a volume that did
+                # not survive the analysis cuts, so the truth study inherits the reference volume instead.
+                if args.truth_fiducial:
+                    ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                    ref_entry = None
+                    if os.path.exists(ref_file):
+                        ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(energy_label)
+                    if ref_entry is not None:
+                        best_fiducials[config].setdefault(analysis_key, {})[energy_label] = {**ref_entry, "Fallback": "reference"}
+                        rprint(f"[yellow]{analysis_name} {energy_label}: using the reference volume from BestFiducials.json[/yellow]")
                 continue
 
             max_row = significance_df.loc[significance_df["SmoothedSignificance"].idxmax()]

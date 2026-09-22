@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial import truth_match_purity_mask
 
 save_path   = f"{root}/output/images/solar/results"
 export_path = f"{root}/output/data/results"
@@ -172,6 +173,19 @@ parser.add_argument(
     ),
 )
 
+parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, default=True,
+                    help="With --truth_fiducial: also require a pure, position-consistent flash match "
+                         "(lib.fiducial.truth_match_purity_mask, BACKGROUND_SAMPLES.truth_match_purity). --no-truth_purity disables it.")
+parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
+parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
+parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal"],
+                    help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
+
+parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
+                    help="With --truth_fiducial: keep the reference (reco-optimised) fiducial VOLUMES from BestFiducials.json and only swap "
+                         "the position estimate to truth (fiduc_truth_refvol study). Default: read BestFiducials_fiduc_truth.json.")
+
 args = parser.parse_args()
 _ctx = study_context(args)
 # Event-level exports (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts) are labeled
@@ -268,8 +282,8 @@ if args.charge_threshold > 0:
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    _best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
-    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{_best_fiducials_stem}.json").read())
+    _best_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+    fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_best_fiducials_stem}.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 
@@ -345,8 +359,20 @@ for config in configs:
                 "  does not match this production's geometry."
             )
 
+        if args.truth_fiducial and args.truth_purity:
+            # Truth study: pure, position-consistent flash match is part of the fiducialization
+            # stage (same cut 01_fiducialize.py applied when the volume was chosen).
+            _purity_mask = truth_match_purity_mask(
+                run, str(root), name, args.truth_min_purity, args.truth_drift_tol, args.truth_transverse_tol
+            )
+            rprint(
+                f"[cyan][INFO][/cyan] Truth match purity cut keeps {int((_surface_mask & _purity_mask).sum())} of "
+                f"{int(_surface_mask.sum())} events for {name}."
+            )
+            _surface_mask = _surface_mask & _purity_mask
+
         # ── First-pass export: FiducializationMask per analysis ──────────────
-        # Surface + spatial mask at best fiducial; no quality cuts applied.
+        # Surface + spatial mask at best fiducial (and the truth purity cut); no quality cuts applied.
         if args.export_fiducial:
             for _an in args.analysis:
                 _fid_mask = _surface_mask & _spatial_masks[_an]
@@ -362,6 +388,7 @@ for config in configs:
         _reco_nhits    = run["Reco"]["NHits"]
         _reco_adjcl    = run["Reco"]["AdjClNum"]
         _reco_op_plane = run["Reco"]["MatchedOpFlashPlane"]
+        _reco_plane_ok = np.asarray(accepted_flash_planes(_reco_op_plane, str(root), args.membrane_veto), dtype=bool)
         _reco_op_pe    = run["Reco"]["MatchedOpFlashPE"]
         _reco_op_nhits = run["Reco"]["MatchedOpFlashNHits"]
         _reco_energy_arr = run["Reco"][energy]
@@ -440,7 +467,7 @@ for config in configs:
                     _surface_mask
                     & (_reco_nhits    > this_nhit - 1)
                     & (_reco_adjcl    < this_adjcl)
-                    & (_reco_op_plane == 0)
+                    & _reco_plane_ok
                     & (_reco_op_pe    > 0)
                     & (_reco_op_nhits > this_ophit - 1)
                 )

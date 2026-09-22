@@ -75,6 +75,7 @@ parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
+parser.add_argument("--dm2", type=float, default=None, help="Override the Δm²₂₁ (eV²) of the plotted best-fit point (oscpoint_reactor study); default SOLAR_DM2.")
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant: read the labeled Ref pkls written by 03_analysis.py --truth_fiducial.")
 parser.add_argument("--study", nargs="+", type=str, default=None, help="Study labels to iterate over in sequence; supersedes --study_label. 'all' expands to every label in lib/study.py STUDY_VARIANTS applicable to --analysis (nominal run included); 'default' names the unlabeled nominal run.")
 
@@ -111,7 +112,7 @@ for _key in ("SOLAR_DM2", "SIN13", "SIN12"):
     if _key not in _analysis_info:
         raise SystemExit(f"[oscillogram] '{_key}' missing from physics.json.")
 
-dm2   = float(_analysis_info["SOLAR_DM2"])
+dm2   = float(args.dm2) if args.dm2 is not None else float(_analysis_info["SOLAR_DM2"])
 sin13 = float(_analysis_info["SIN13"])
 sin12 = float(_analysis_info["SIN12"])
 

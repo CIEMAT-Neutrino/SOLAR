@@ -34,7 +34,6 @@ def get_ophit_positions(run, tree, idx, filter=None, debug=False):
     ophits = [[], [], []]
     # If filter is not None, then we filter the ophits by the filter array
     if filter is not None:
-        flash_time = get_flash_time(run, tree, idx, filter, debug=debug)
         ophits[0] = [run[tree]["OpHitX"][idx][x] for x in filter]
         ophits[1] = [run[tree]["OpHitY"][idx][x] for x in filter]
         ophits[2] = [run[tree]["OpHitZ"][idx][x] for x in filter]
@@ -393,7 +392,6 @@ def plot_edep_event(run, configs, idx=None, tracked="Truth", zoom=True, debug=Fa
             fig, figsize=(None, 600), tickformat=(".1f", ".1f"), add_watermark=False
         )
 
-        particle = Particle.from_pdgid(run[tracked]["TSignalPDG"][:, 0][idx]).name
         fig.update_layout(
             title_text="Neutrino <b>%.2f MeV</b> Cluster: %i"
             % (run[tracked]["SignalParticleE"][idx], idx),

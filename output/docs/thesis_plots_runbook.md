@@ -472,14 +472,14 @@ python3 scripts/script_iterable_scan.py \
 ## §9.2.2–9.2.3 — Energy Reconstruction / Photon Detection (truth fiducialisation)
 
 *Figures: `fig:study_fiducialisation_dn`, `fig:study_fiducialisation_hep`, `fig:study_fiducialisation_sens`*
-*Status: DN + HEP + Sensitivity present all 4 configs (completed 2026-09-04)*
-*Validity: `RERUN-B` — ran with re-optimised cuts. Rerun `--study fiduc_truth` before plotting.*
+*Status: superseded 2026-09-20. `fiduc_truth` was re-run after the truth-containment cut, the reference-volume fallback and the stale-JSON fixes (see [solar_analyses.md §5.13](solar_analyses.md)); the 2026-09-04 products below predate that. Re-sync the `Study = fiduc_truth` DayNight, HEP and Sensitivity products before plotting.*
+*Validity: the numbers quoted here are not the 2026-09-04 ones. At the analysis run-to exposure (30 yr, highest-cut JSONs) DayNight default → fiduc_truth (σ): HD central 5.468 → 5.470, HD lateral 1.537 → 2.113, VD nominal 0.857 → 0.860, VD shielded 1.910 → 1.944; HEP: 12.181 → 12.178, 5.672 → 5.833, 2.755 → 2.754, 3.663 → 3.660; Sensitivity Score (Δχ²): 5.73 → 7.54, 0.41 → 0.55, 0.08 → 0.87, 0.40 → 0.91. The 20 kt·yr evaluation values plotted in the thesis come from the exposure curves, not from these JSONs.*
 
-> **Verify VDN first.** VDN `fiduc_truth` reports DN 0.500 / EG 0.357 / HEP 2.886 — identical
-> to VDN default on all three metrics. VDS HEP (3.129) also matches its default. Confirm these
-> are real before they reach a figure. The gamma/neutron *"zero MCCounts — refusing to
-> overwrite"* messages in `fiduc_truth.log` are the guard working as designed (backgrounds stay
-> in nominal coordinates), not the cause.
+> **The old "Verify VDN first" note is resolved.** The near-identical VD DayNight/HEP results are real: on VD the radiological
+> component is about 99% or more of the raw background weight at the analysis cut, and it is not affected by the truth position of gamma and
+> neutron, so DayNight and HEP do not move even though truth X would remove most VD gamma+neutron. The mechanism, the tables and the
+> caveats are in [fiducialisation_and_truth_position.md](fiducialisation_and_truth_position.md). The Sensitivity leg is no longer
+> bit-identical to the default; that the contour product `Sensitivity_Contours_fiduc_truth` was regenerated is not verified.
 
 ```bash
 # fig:study_fiducialisation_dn  [present all 4 — RERUN-B]

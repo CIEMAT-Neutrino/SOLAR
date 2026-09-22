@@ -67,7 +67,6 @@ def write_template_normalization(template_dir: str, detector_mass_kT: float) -> 
         rprint(f"[yellow][WARNING][/yellow] Could not stamp {template_dir}: {exc}")
         _NORMALIZATION_STAMPED.add(template_dir)
 
-from lib.root import Sensitivity_Fitter
 from lib.oscillation import get_oscillation_datafiles
 from lib.oscillation_backends import get_nadir_pdf_nufast
 from lib.template_guards import clean_and_validate_template
@@ -204,6 +203,13 @@ parser.add_argument(
         "overwriting the nominal ones."
     ),
 )
+
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal"],
+                    help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
+
+parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
+                    help="With --truth_fiducial: keep the reference (reco-optimised) fiducial VOLUMES from BestFiducials.json and only swap "
+                         "the position estimate to truth (fiduc_truth_refvol study). Default: read BestFiducials_fiduc_truth.json.")
 
 args = parser.parse_args()
 _ctx = study_context(args, analysis="Sensitivity")
@@ -356,8 +362,8 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
-fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{_fiducials_stem}.json").read())
+_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_fiducials_stem}.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)
 

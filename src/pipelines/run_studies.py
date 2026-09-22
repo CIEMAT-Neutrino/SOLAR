@@ -7,15 +7,15 @@ touching intermediate or final files from the main analysis.
 
 Study groups
 ------------
-  metric        9.1.1  Raw/Smoothed histogram metric comparison
-  unc           9.1.2  Signal/background uncertainty impacts
-  oscpoint      9.1.3  Oscillation parameter choice (solar vs reactor Δm²₂₁)
-  fiduc_truth   9.2.1  Truth x-fiducialisation (SignalParticleX/Y/Z and MainX/Y/Z and EndX/Y/Z vs RecoX/Y/Z)
-  energy        9.2.2  Energy variable (SignalParticleK, MainK)
-  bkg_gamma     9.2.3  Background gamma model (ClusterEnergy and TotalEnergy as calorimetric proxy)
-  charge        9.2.4  Charge threshold scan (uses SelectedEnergy for different charge thresholds)
-  bkgmodel      9.2.5  Background model normalization (Nominal/Reduced folders)
-  membrane_veto 9.2.6  Membrane/endcap optical matches (VD planes 1-4) on vs off
+  metric        Ch.8   Raw/Smoothed histogram metric comparison (grouped with unc, oscpoint in the main-results chapter)
+  unc           Ch.8   Signal/background uncertainty impacts
+  oscpoint      Ch.8   Oscillation parameter choice (solar vs reactor Δm²₂₁)
+  fiduc_truth   9.1    Truth x-fiducialisation (SignalParticleX/Y/Z and MainX/Y/Z and EndX/Y/Z vs RecoX/Y/Z)
+  energy        9.2    Energy variable (SignalParticleK, MainK)
+  bkg_gamma     9.3    Background gamma model (ClusterEnergy and TotalEnergy as calorimetric proxy)
+  charge        9.4    Charge threshold scan (uses SelectedEnergy for different charge thresholds)
+  bkgmodel      9.5    Background model normalization (Nominal/Reduced folders)
+  membrane_veto 9.6    Membrane/endcap optical matches (VD planes 1-4) on vs off
   nuisance             Nuisance-profile decomposition (Sensitivity)
   legacy_fit           Legacy nested-minimiser fit on the default templates (Sensitivity)
 
@@ -41,12 +41,11 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import IO, List, Optional
-from typing_extensions import TypedDict, NotRequired
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from lib import root, load_analysis_info
-from lib.study import ALL_GROUPS, STUDY_VARIANTS, StudyVariant, study_context
+from lib.study import ALL_GROUPS, DEFAULT_GROUPS, OPTIONAL_GROUPS, STUDY_VARIANTS, StudyVariant, study_context
 from lib.template_guards import check_template_sampling_marker
 from rich import print as rprint
 
@@ -128,7 +127,7 @@ if args.quiet:
     from rich.console import Console
     rprint = Console(file=io.StringIO(), force_terminal=False, width=120).print
 
-selected_groups: list[str] = ALL_GROUPS if args.all else args.study
+selected_groups: list[str] = DEFAULT_GROUPS if args.all else args.study
 
 _variant_filter: Optional[set] = set(args.variant) if args.variant else None
 
@@ -324,12 +323,14 @@ def _base_pipeline_args(
     folder: Optional[str],
     energy: List[str],
     analysis: Optional[List[str]] = None,
+    config: Optional[List[str]] = None,
 ) -> List[str]:
     """Config/name/analysis/folder/energy/backend args shared across all variants."""
     effective_folder   = [folder] if folder is not None else args.folder
     effective_analysis = analysis if analysis is not None else list(args.analysis)
+    effective_config   = config if config is not None else args.config
     base = [
-        "--config",              *args.config,
+        "--config",              *effective_config,
         "--signals",             *args.signals,
         "--analysis",            *effective_analysis,
         "--folder",              *effective_folder,
@@ -356,14 +357,6 @@ def _base_pipeline_args(
     return base
 
 
-def _run_variant(group: str, variant: StudyVariant) -> None:
-    """Run a single variant (sequential execution)."""
-    variant_id = variant.get("label") or f"folder={variant.get('folder')}"
-    rprint(f"  [bold]→[/bold] [{group}] {variant_id}")
-    cmd = _build_variant_command(group, variant)
-    _run_command(cmd, log=_log)
-
-
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
@@ -388,8 +381,11 @@ if _log:
     _log.write(f"{'='*72}\n")
     _log.flush()
 
-def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
-    """Build the command list for a variant without executing it. Used for parallel execution."""
+def _build_variant_command(group: str, variant: StudyVariant) -> Optional[List[str]]:
+    """Build the command list for a variant without executing it. Used for parallel execution.
+
+    Returns None when every requested --config is in the variant's excluded_configs (nothing to run).
+    """
     label                = variant.get("label")
     folder               = variant.get("folder")
     energy_override      = variant.get("energy_override")
@@ -408,11 +404,16 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
     folders           = [folder] if folder is not None else args.folder
     effective_analysis = analysis_override if analysis_override is not None else list(args.analysis)
 
+    excluded_configs = set(variant.get("excluded_configs", ()))
+    effective_config = [c for c in args.config if c not in excluded_configs]
+    if not effective_config:
+        return None
+
     # Check prerequisites - return None if we need to enable stages
-    if not fiducialization and not _all_fiducial_exist(args.config, folders, args.signals, energy):
+    if not fiducialization and not _all_fiducial_exist(effective_config, folders, args.signals, energy):
         fiducialization = True
 
-    if skip_rebin and not _all_rebin_exist(args.config, folders, list(args.signals) + _background_components, energy, effective_analysis):
+    if skip_rebin and not _all_rebin_exist(effective_config, folders, list(args.signals) + _background_components, energy, effective_analysis):
         skip_rebin = False
 
     # Templates: --skip-templates is only honoured when this variant's templates really exist
@@ -426,7 +427,7 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
 
     cmd: List[str] = [
         "python3", f"{root}/{PIPELINE_SCRIPT}",
-        *_base_pipeline_args(folder, energy, analysis=effective_analysis),
+        *_base_pipeline_args(folder, energy, analysis=effective_analysis, config=effective_config),
     ]
 
     if not fiducialization:
@@ -441,6 +442,8 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
         cmd += ["--study_label", label]
     if ignore_energy_window:
         cmd.append("--ignore_energy_window")
+    if variant.get("reference_energy"):
+        cmd += ["--reference_energy", variant["reference_energy"]]
     if skip_best_sigmas:
         cmd.append("--skip_best_sigmas")
     cmd.append("--flyweight" if args.flyweight else "--no-flyweight")
@@ -455,8 +458,11 @@ def _build_variant_command(group: str, variant: StudyVariant) -> List[str]:
 def _run_single_variant(group: str, variant: StudyVariant) -> None:
     """Run a single variant with logging."""
     variant_id = variant.get("label") or f"folder={variant.get('folder')}"
-    rprint(f"  [bold]→[/bold] [{group}] {variant_id}")
     cmd = _build_variant_command(group, variant)
+    if cmd is None:
+        rprint(f"  [dim]→[/dim] [{group}] {variant_id} — skipped (excluded_configs covers every requested --config)")
+        return
+    rprint(f"  [bold]→[/bold] [{group}] {variant_id}")
     _run_command(cmd, log=_log)
 
 
@@ -504,7 +510,7 @@ try:
                 f"\n[bold cyan]══ Study group: {group}  ({len(active)} variant{'s' if len(active) != 1 else ''}{suffix}) ══[/bold cyan]"
             )
             for variant in active:
-                _run_variant(group, variant)
+                _run_single_variant(group, variant)
 finally:
     if _log:
         _log.close()

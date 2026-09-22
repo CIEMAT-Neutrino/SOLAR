@@ -1,7 +1,7 @@
 import numpy as np
 
 from typing import Optional
-from lib.formatting import remove_branches, get_param_dict
+from lib.formatting import get_param_dict
 
 from src.utils import get_project_root
 

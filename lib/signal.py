@@ -3,7 +3,6 @@ import numpy as np
 from typing import Optional
 from itertools import product
 from rich import print as rprint
-from particle import Particle
 
 from lib.formatting import get_param_dict, remove_branches
 
@@ -23,7 +22,6 @@ def compute_marley_particle(
     """
     Compute the Signal particle type for the events in the run.
     """
-    signal = "Signal"
     if output is None:
         output = ""
     required_branches = ["Generator", f"TSignalFrac"]
@@ -183,7 +181,6 @@ def compute_signal_energies(
         )
 
         pdg_list = pdg_list[pdg_list != 0]
-        mass_list = [Particle.from_pdgid(pdg).mass for pdg in pdg_list]
         run[tree][new_branches[0]] = np.zeros(
             (len(run[tree]["Event"]), len(pdg_list)), dtype=np.float32
         )

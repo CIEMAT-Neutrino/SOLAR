@@ -342,7 +342,6 @@ def _load_osc_pkl_as_pee(
     Dividing out the nadir_pdf recovers the plain P_ee matrix consumed by
     _compute_osc_kde_and_exposure — identical path to prob3/nufast backends.
     """
-    import pickle
     import pandas as pd
     from lib.oscillation_backends import get_nadir_pdf_file, get_nadir_pdf_nufast
 

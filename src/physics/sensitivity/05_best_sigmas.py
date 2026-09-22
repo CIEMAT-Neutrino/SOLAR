@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -188,6 +187,14 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--reference_folder",
+    type=str,
+    default=None,
+    choices=["Reduced", "Truncated", "Nominal"],
+    help="Folder whose highest pkl supplies the reference cuts for --reference_study_label "
+         "(default: --folder). bkgmodel studies hold the Truncated cuts in the Nominal/Reduced folders.",
+)
+parser.add_argument(
     "--max_pl_jump",
     type=float,
     default=1.0,
@@ -341,7 +348,7 @@ for config, name, energy_label in product(args.config, args.signal, args.energy)
     _ref_nhits = _ref_ophits = _ref_adjcl = None
     if args.reference_study_label is not None:
         _ref_pkl_path = (
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/{args.analysis.upper()}/{args.folder.lower()}/"
+            f"{analysis_info['PATH']}/{args.analysis.upper()}/{(args.reference_folder or args.folder).lower()}/"
             f"{config}/{name}/{config}_{name}_highest_{args.analysis}{_ref_suffix}.pkl"
         )
         if os.path.exists(_ref_pkl_path):

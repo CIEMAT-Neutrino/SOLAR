@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial import truth_containment_mask, truth_match_purity_mask
 
 analysis_info = load_analysis_info(str(root))
 
@@ -84,6 +85,13 @@ parser.add_argument(
         "by the MatchedOpFlashPE > 0 requirement either way. Used by the membrane_veto study."
     ),
 )
+
+parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, default=True,
+                    help="With --truth_fiducial: also require a pure, position-consistent flash match "
+                         "(lib.fiducial.truth_match_purity_mask, BACKGROUND_SAMPLES.truth_match_purity). --no-truth_purity disables it.")
+parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
+parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
+parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
 
 args = parser.parse_args()
 config = args.config
@@ -220,6 +228,26 @@ for config in configs:
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
             & (_op_pe_arr > 0)
         )
+        if args.truth_fiducial and args.truth_purity:
+            # Truth study: the flash match must be pure and agree with the true position, so the
+            # background rejection the reco fiducial cut gets from wrong matches stays explicit.
+            _purity_mask = truth_match_purity_mask(
+                run, str(root), sample_key, args.truth_min_purity, args.truth_drift_tol, args.truth_transverse_tol
+            )
+            rprint(
+                f"[cyan][INFO][/cyan] Truth match purity cut keeps {int((_quality_mask & _purity_mask).sum())} of "
+                f"{int(_quality_mask.sum())} quality events for {name}."
+            )
+            _quality_mask = _quality_mask & _purity_mask
+        if args.truth_fiducial:
+            # A truth position can lie outside the active volume (reco never does); drop those events at every scan
+            # point including the no-fiducial baseline (lib.fiducial.truth_containment_mask).
+            _contained = truth_containment_mask(run, info, (_xkey, _ykey, _zkey))
+            rprint(
+                f"[cyan][INFO][/cyan] Truth containment cut keeps {int((_quality_mask & _contained).sum())} of "
+                f"{int(_quality_mask.sum())} events for {name}."
+            )
+            _quality_mask = _quality_mask & _contained
 
         # Single-entry cache: weights are innermost in product(), so consecutive
         # iterations with the same (fid_x, fid_y, fid_z) share mask and bin indices.

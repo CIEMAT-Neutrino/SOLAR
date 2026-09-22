@@ -376,8 +376,6 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     _mc_counts, _ = np.histogram(reco[full_mask], bins=_edges)
     _mc_filter     = (_mc_counts >= args.mc_filter_threshold).astype(float)
 
-    h_full = _histogram(reco, weights, full_mask) * _mc_filter
-
     def _h_and_err(mask, mc_filter=None):
         h = _histogram(reco, weights, mask)
         w2, _ = np.histogram(reco[mask], bins=_edges, weights=weights[mask] ** 2)

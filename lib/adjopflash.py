@@ -3,7 +3,7 @@ import numpy as np
 
 from typing import Optional
 from itertools import product
-from lib.formatting import remove_branches, get_param_dict, reshape_array
+from lib.formatting import remove_branches, get_param_dict
 
 from src.utils import get_project_root
 

@@ -105,6 +105,19 @@ parser.add_argument(
     ),
 )
 
+parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, default=True,
+                    help="With --truth_fiducial: also require a pure, position-consistent flash match "
+                         "(lib.fiducial.truth_match_purity_mask, BACKGROUND_SAMPLES.truth_match_purity). --no-truth_purity disables it.")
+parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
+parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
+parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal"],
+                    help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
+
+parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
+                    help="With --truth_fiducial: keep the reference (reco-optimised) fiducial VOLUMES from BestFiducials.json and only swap "
+                         "the position estimate to truth (fiduc_truth_refvol study). Default: read BestFiducials_fiduc_truth.json.")
+
 args = parser.parse_args()
 
 
@@ -143,7 +156,19 @@ def build_common_args() -> List[str]:
         common.append("--no-membrane_veto")
     if args.study_label:
         common.extend(["--study_label", args.study_label])
+    if args.fiducial_folder:
+        common.extend(["--fiducial_folder", args.fiducial_folder])
+    if args.fiducial_from_reco:
+        common.append("--fiducial_from_reco")
     return common
+
+
+def truth_purity_args() -> List[str]:
+    out = ["--truth_purity" if args.truth_purity else "--no-truth_purity"]
+    for flag in ("truth_min_purity", "truth_drift_tol", "truth_transverse_tol"):
+        if getattr(args, flag) is not None:
+            out += [f"--{flag}", str(getattr(args, flag))]
+    return out
 
 
 def run_macro(script_name: str, extra_args: Optional[List[str]] = None):
@@ -168,4 +193,4 @@ if args.template in ["background", "all"]:
 if args.template in ["signal", "all"]:
     flyweight_args = ["--flyweight"] if args.flyweight else []
     truth_fiducial_args = ["--truth_fiducial"] if args.truth_fiducial else []
-    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"] + flyweight_args + truth_fiducial_args)
+    run_macro("src/physics/sensitivity/02_signal_template.py", extra_args=["--no-test"] + flyweight_args + truth_fiducial_args + (truth_purity_args() if args.truth_fiducial else []))

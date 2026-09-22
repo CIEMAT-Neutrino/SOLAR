@@ -81,15 +81,6 @@ def gauss(x, coefficients, debug=False):
     return a * np.exp(-0.5 * np.power((x - x0) / sigma, 2))
 
 
-def quadratic(x, coefficients, debug=False):
-    """
-    Quadratic function.
-    """
-    a = coefficients[0]
-    n = coefficients[1]
-    return a * np.power(x, 2) + n
-
-
 def slope1(x, coefficients, debug=False):
     """
     Linear function.
@@ -308,9 +299,6 @@ def plot_hist1d_signal(x, y, signal, fig, idx, debug: bool = False):
         print("x and signal arrays are not the same length!")
         print("x: ", len(x), "\nsignal: ", len(signal))
         raise ValueError
-
-    x_array = generate_bins(100, x, debug=debug)
-    y_array = generate_bins(100, y, debug=debug)
 
     if debug and output != None and output != "":
         rprint(output)

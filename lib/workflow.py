@@ -1,7 +1,6 @@
 import json
 import pickle
 import numpy as np
-import pandas as pd
 
 from ROOT import RDataFrame, TFile
 from rich.progress import track

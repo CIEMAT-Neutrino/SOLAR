@@ -55,7 +55,7 @@ Run examples
 import os
 import sys
 import subprocess
-from typing import List, Optional
+from typing import List
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 

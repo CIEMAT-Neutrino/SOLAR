@@ -1,4 +1,3 @@
-import json
 import pandas as pd
 import plotly.io as pio
 import plotly.express as px
@@ -8,7 +7,6 @@ import numpy as np
 
 # import matplotlib.colors as colors
 import matplotlib.cm as cm
-import plotly.graph_objects as go
 
 from typing import Optional
 from rich import print as rprint

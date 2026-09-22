@@ -339,11 +339,28 @@ exceeds 2σ. Default and truth runs therefore share it while `Values` differ.
 
 ## 5. Caveats and open points
 
-- **Z margin.** `01_fiducialize.py` applies the $F_Z$ cut unconditionally in the scan, whereas
-  `lib/fiducial.py: build_fiducial_spatial_mask` applies it only for `folder == "Nominal"` (hard-coded, not read from
-  the `z_endcap_rejection` folder flag). For `Truncated` and `Reduced` the $F_Z$ stored in `BestFiducials.json` is
-  therefore optimised with a cut that the analysis later drops. This was read from the code, not tested by a run;
-  it should be resolved or stated in the text (my scans use $F_Z=0$ for this reason).
+- **Z margin (partially resolved 2026-09-22, no rerun).** `build_fiducial_spatial_mask` used to hard-code `folder == "Nominal"`;
+  it now reads `folder_applies_z_fiducial(root, folder)` (the `z_endcap_rejection` flag), which returns the same True/False for
+  every folder configured today (Nominal only), so this is behaviour-identical and needed no rerun. The scan
+  (`01_fiducialize.py`) still applies $F_Z$ unconditionally for every folder. For `Truncated` and `Reduced` the stored $F_Z$ is therefore optimised with a cut that the analysis
+  later drops. Measured with [check_fiducial_z_margin.py](../../src/tools/check_fiducial_z_margin.py) on the stored Truncated volumes:
+  - Scan significance (the metric `02_best_fiducial.py` maximises, 100 yr) at the stored $(F_X,F_Y,F_Z)$ against the same $(F_X,F_Y)$ with $F_Z=0$:
+    DayNight 3.86 → 1.08 (HD central), 4.69 → 0.64 (HD lateral); Sensitivity 5.34 → 3.05 (HD central), 3.75 → 3.44 (HD lateral);
+    HEP and VD change by 0–0.1σ except VD DayNight (0.06 → 0.04 nominal, 0.07 → 0.00 shielded). The best volume that has $F_Z=0$ differs from the
+    stored one for DayNight (HD central (20,180,0) at 1.37σ against the stored (20,100,320); HD lateral (40,200,0) at 1.60σ).
+  - What the Z margin removes (10–20 MeV, weight retained with Z / with $F_Z=0$), HD central DayNight $(20,100,320)$: signal 42% / 76%,
+    gamma 0.9% / 1.5%, neutron 37% / 63%, radiological 9.7% / 61% (3 / 19 MC events). The gain in the scan therefore comes largely
+    from the radiological component, which has no MC-support requirement in the fiducial gate (`apply_fiducial_mc_threshold` only
+    counts the essential components), so the Z optimum on HD is probably an artefact of a few radiological MC events.
+    VD is barely affected (retention differs by at most about 9 percentage points between the two cases).
+  - Consequence: the downstream analysis does not use $F_Z$ for Truncated and Reduced, so the analysed volume is not the one that was
+    optimised; the effect on the final numbers is bounded by that scan difference (largest for DayNight on HD) and has not been measured
+    end to end.
+  - Options: (a) scan $F_Z$ only where the folder flag `z_endcap_rejection` is `"fiducial"` (Nominal), so the scan uses the same mask as the
+    analysis (matches the folder's documented intent) and re-optimise $F_X,F_Y$ (DayNight changes, see above); (b) apply the stored $F_Z$ downstream for
+    every folder, which changes the analysed volume and would need the radiological support gate first; (c) leave the scan and gate the
+    radiological component in the fiducial selection. Either (a) or (b) requires re-running the scan, best-fiducial selection and all
+    downstream stages for Truncated and Reduced, and changes thesis numbers; none has been applied.
 - Radiological has 1–65 MC events, so its fractions are not statistical statements; in particular the 0% share on HD
   central under the truth pipeline means all events were rejected.
 - The purity checks use MC truth (`MatchedOpFlashPur`); absent or NaN purity is counted as 0.
@@ -352,9 +369,11 @@ exceeds 2σ. Default and truth runs therefore share it while `Values` differ.
 
 ## 6. Section numbering
 
-`run_studies.py` numbers `fiduc_truth` 9.2.1; [solar_analyses.md](solar_analyses.md) numbers it 9.2.2; the
-runbook ([thesis_plots_runbook.md](thesis_plots_runbook.md)) calls 9.2.2–9.2.3 "Energy Reconstruction / Photon
-Detection". These should be reconciled before the section is written.
+Resolved 2026-09-22 by the user: chapter 9 order is `fiduc_truth` (9.1), `energy` (9.2), `bkg_gamma` (9.3), `charge` (9.4),
+`bkgmodel` (9.5), `membrane_veto` (9.6). `metric`, `unc` and `oscpoint` are not in Chapter 9 at all: they are grouped together in
+Chapter 8 (main results); no per-study subsection number was given for them. `run_studies.py`, `lib/study.py` and
+`solar_analyses.md` use this mapping; `thesis_plots_runbook.md`'s `## §9.x.y` headings (written for the old numbering) were not
+renumbered and should be treated as stale labels, not the current thesis structure, until it is next edited.
 
 ## 7. Reproduction
 

@@ -4,7 +4,6 @@ import numpy as np
 
 from typing import Optional
 from itertools import product
-from rich import print as rprint
 from .formatting import remove_branches, get_param_dict, reshape_array
 from .defaults import get_default_info, load_analysis_info
 from .fitting import calibration_func
