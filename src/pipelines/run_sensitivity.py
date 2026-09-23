@@ -1321,8 +1321,10 @@ def run_hep_stage(config: str, folder: str, name: str):
         candidate_thresholds = [10, 5, 2, 1, 0]
         selected_by_energy = []
 
-        # Use labeled Rebin pkls for charge variants — no fallback to nominal.
-        _rebin_study_label = args.study_label if args.charge_threshold > 0 else None
+        # Labeled Rebin pkls (no fallback to nominal) whenever the variant changes the event
+        # selection — the same rule 01_hep.py applies, so the threshold is chosen on the data it fits.
+        _selection_changed = args.charge_threshold > 0 or args.truth_fiducial or not args.membrane_veto
+        _rebin_study_label = args.study_label if _selection_changed else None
         for energy in energies:
             _rebin_suffix = f"_{_rebin_study_label}" if _rebin_study_label else ""
             signal_path = (

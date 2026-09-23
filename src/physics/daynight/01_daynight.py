@@ -235,9 +235,15 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             "Run 03_analysis.py for this config/folder/study first."
         )
     plot_df = pd.read_pickle(_rebin_path)
-    # Background Rebin pkls are labeled only for charge variants — charge filtering modifies
-    # the background spectrum.  dm2/unc_bkg/unc_sig variants leave backgrounds unchanged.
-    _bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
+    # Read the labeled background Rebin whenever the variant changes the background event
+    # selection (charge cut, truth-position fiducial, membrane veto off) — same rule as
+    # 01_background_template.py / 04_best_cuts.py. dm2/unc variants leave backgrounds unchanged.
+    _bkg_selection_changed = (
+        getattr(args, "charge_threshold", 0) > 0
+        or getattr(args, "truth_fiducial", False)
+        or not getattr(args, "membrane_veto", True)
+    )
+    _bkg_study_label = args.study_label if _bkg_selection_changed else None
     configured_backgrounds = get_background_samples(str(root), "DAYNIGHT")
     loaded_backgrounds = []
     for bkg, filepath in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy, study_label=_bkg_study_label):

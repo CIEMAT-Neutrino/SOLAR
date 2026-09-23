@@ -152,16 +152,27 @@ for label, params in zip(
                 # for a near-perfect match (e.g. MainK vs SignalParticleK on the
                 # mono-energetic gamma sample) most residuals are exactly 0, so the
                 # data range can collapse to zero width and break auto-ranging.
-                res_edges = hist_y = res_centers = hist_sigma = None
+                res_edges = hist_y = hist_counts = res_centers = hist_sigma = None
                 if len(residual) > 0:
                     lo, hi = np.percentile(residual, [1, 99])
                     if hi <= lo:
                         pad = max(abs(lo), abs(hi), 1e-3) * 0.1
                         lo, hi = lo - pad, hi + pad
                     res_edges = np.linspace(lo, hi, 61)
-                    hist_y, _ = np.histogram(residual, bins=res_edges)
-                    hist_sigma = np.where(hist_y > 0, 1 / np.sqrt(hist_y), np.inf)
+                    hist_counts, _ = np.histogram(residual, bins=res_edges)
                     res_centers = 0.5 * (res_edges[:-1] + res_edges[1:])
+
+                    # Normalize to a probability density (area = 1) so the marley
+                    # (n~10^5) and gamma (n~10^5, but ~all in one bin) distributions,
+                    # and different NHit cuts, sit on a common y-scale.
+                    bin_width = res_edges[1] - res_edges[0]
+                    n_total = np.sum(hist_counts)
+                    hist_y = hist_counts / (n_total * bin_width)
+                    hist_sigma = np.where(
+                        hist_counts > 0,
+                        np.sqrt(hist_counts) / (n_total * bin_width),
+                        np.inf,
+                    )
 
                 fig3 = make_subplots(rows=1, cols=1)
                 if res_centers is not None:
@@ -237,15 +248,27 @@ for label, params in zip(
                             "Values": res_centers,
                             "ValuesUnit": "(Truth - Reco) / Truth",
                             "Counts": hist_y,
-                            # gauss() is lib.fitting.gauss, called as gauss(x, [a, mu, sigma]);
-                            # the local curve_fit wrapper closure isn't picklable, so we store
-                            # the module-level function it wraps instead.
-                            "FitFunction": gauss,
+                            "CountsUnit": "Probability density (area = 1)",
+                            "RawCounts": hist_counts,
+                            # No live callable is stored here (unlike lib.fitting.gauss
+                            # itself) so this pkl can be unpickled outside this repo --
+                            # a function object pickles by module reference, which an
+                            # external reader can't resolve. FitFunctionFormula is the
+                            # portable description of the fit: gauss(x) = a * exp(...).
                             "FitFunctionLabel": "Gaussian",
                             "FitFunctionFormula": "a * exp(-0.5 * ((x - mu) / sigma)^2)",
                             "Params": popt,
                             "ParamsLabel": fit_labels,
+                            "ParamsFormat": [".1f", ".3f", ".3f"],
                             "ParamsError": perr,
+                            "ParamsUnit": [
+                                "Probability density",
+                                "(Truth - Reco) / Truth",
+                                "(Truth - Reco) / Truth",
+                            ],
+                            "p0": popt[0],
+                            "p1": popt[1],
+                            "p2": popt[2],
                             "Amplitude": popt[0],
                             "Mean": popt[1],
                             "MeanError": perr[1],
@@ -271,12 +294,23 @@ for label, params in zip(
                             "Values": res_centers,
                             "ValuesUnit": "(Truth - Reco) / Truth",
                             "Counts": hist_y,
+                            "CountsUnit": "Probability density (area = 1)",
+                            "RawCounts": hist_counts,
                             "FitFunction": None,
                             "FitFunctionLabel": "None (too few populated bins)",
                             "FitFunctionFormula": None,
                             "Params": None,
                             "ParamsLabel": ["Amplitude", "Mean", "Sigma"],
+                            "ParamsFormat": [".1f", ".3f", ".3f"],
                             "ParamsError": None,
+                            "ParamsUnit": [
+                                "Probability density",
+                                "(Truth - Reco) / Truth",
+                                "(Truth - Reco) / Truth",
+                            ],
+                            "p0": None,
+                            "p1": float(np.mean(residual)),
+                            "p2": float(np.std(residual)),
                             "Amplitude": None,
                             "Mean": float(np.mean(residual)),
                             "MeanError": float(

@@ -405,7 +405,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             "Run 03_analysis.py for this config/folder/study first."
         )
     plot_df = pd.read_pickle(_rebin_path)
-    _bkg_study_label = args.study_label if getattr(args, "charge_threshold", 0) > 0 else None
+    # Labeled background Rebin whenever the variant changes the background event selection
+    # (charge cut, truth-position fiducial, membrane veto off) — same rule as the Sensitivity stages.
+    _bkg_selection_changed = (
+        getattr(args, "charge_threshold", 0) > 0
+        or getattr(args, "truth_fiducial", False)
+        or not getattr(args, "membrane_veto", True)
+    )
+    _bkg_study_label = args.study_label if _bkg_selection_changed else None
     for bkg, filepath in load_available_background_dataframes(str(root), "HEP", args.folder, config, energy, study_label=_bkg_study_label):
         bkg_df = pd.read_pickle(filepath)
         plot_df = pd.concat([plot_df, bkg_df], ignore_index=True)

@@ -90,6 +90,7 @@ for config in configs:
         ):
             df_corrected = []
             corrected_list = []
+            gauss_rows = []
             reco_valid[variable] = []
             reco_nhit[variable] = []
             reco_popt[variable] = {}
@@ -237,6 +238,119 @@ for config in configs:
                     )
                     if output is not None or output != "":
                         rprint(output)
+
+            # Resolution vs NHit threshold: for each cumulative NHits >= n cut, fit a
+            # single Gaussian to the fractional (True - Calibrated{variable}Energy) /
+            # True residual and keep its width as the resolution at that threshold.
+            # Fractional (not absolute True - Reco in MeV) is used because the true
+            # energy scale sampled shifts with the NHit cut (more hits <-> longer,
+            # higher-energy tracks), so only a fractional residual gives sigma values
+            # that are actually comparable across thresholds; per-NHit std(residual)
+            # is unreliable near threshold (occasional near-zero True energies blow up
+            # the ratio), so the histogram + Gaussian fit is preferred over a raw RMS.
+            def _gauss_model(x, a, mu, sigma):
+                return gauss(x, [a, mu, sigma])
+
+            truth_full = np.asarray(data["ElectronK"])
+            reco_full = np.asarray(data[f"Calibrated{variable}Energy"])
+            for nhit in sorted(set(nhits)):
+                cut = (
+                    (data["NHits"] >= nhit) & (truth_full != 0) & (reco_full != 0)
+                )
+                n_cut = int(np.count_nonzero(cut))
+                if n_cut < 200:
+                    continue
+
+                residual = (truth_full[cut] - reco_full[cut]) / truth_full[cut]
+                residual = residual[np.isfinite(residual)]
+                if len(residual) < 200:
+                    continue
+
+                lo, hi = np.percentile(residual, [1, 99])
+                if hi <= lo:
+                    continue
+                res_edges_g = np.linspace(lo, hi, 61)
+                hist_counts_g, _ = np.histogram(residual, bins=res_edges_g)
+                res_centers_g = 0.5 * (res_edges_g[:-1] + res_edges_g[1:])
+                if np.count_nonzero(hist_counts_g) < 4:
+                    continue
+
+                # Normalize to a probability density (area = 1) so distributions from
+                # very different-sized NHit-threshold cuts (n=264174 down to n=1389)
+                # sit on the same y-scale and can be overlaid/compared directly.
+                bin_width_g = res_edges_g[1] - res_edges_g[0]
+                n_total_g = np.sum(hist_counts_g)
+                hist_y_g = hist_counts_g / (n_total_g * bin_width_g)
+                sigma_w = np.where(
+                    hist_counts_g > 0,
+                    np.sqrt(hist_counts_g) / (n_total_g * bin_width_g),
+                    np.inf,
+                )
+
+                p0 = [np.max(hist_y_g), np.mean(residual), max(np.std(residual), 1e-3)]
+                bounds = ([0, -np.inf, 1e-6], [np.inf, np.inf, np.inf])
+                try:
+                    popt, pcov = curve_fit(
+                        _gauss_model,
+                        res_centers_g,
+                        hist_y_g,
+                        p0=p0,
+                        sigma=sigma_w,
+                        bounds=bounds,
+                        maxfev=20000,
+                    )
+                except (RuntimeError, ValueError):
+                    popt, pcov = curve_fit(
+                        _gauss_model,
+                        res_centers_g,
+                        hist_y_g,
+                        p0=p0,
+                        bounds=bounds,
+                        maxfev=20000,
+                    )
+                perr = np.sqrt(np.diag(pcov))
+
+                gauss_rows.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Variable": variable_label,
+                        "Energy": f"Calibrated{variable}Energy",
+                        "Truth": "ElectronK",
+                        "#HitsThreshold": int(nhit),
+                        "NEvents": n_cut,
+                        "Values": res_centers_g,
+                        "ValuesUnit": "(True - Reco) / True",
+                        "Counts": hist_y_g,
+                        "CountsUnit": "Probability density (area = 1)",
+                        "RawCounts": hist_counts_g,
+                        # No live callable stored here -- a function object pickles by
+                        # module reference (lib.fitting.gauss), which breaks when this
+                        # pkl is opened outside this repo (see the external plotting
+                        # repo's ModuleNotFoundError: No module named 'lib.fitting').
+                        # FitFunctionFormula is the portable description of the fit.
+                        "FitFunctionLabel": "Gaussian",
+                        "FitFunctionFormula": "a * exp(-0.5 * ((x - mu) / sigma)^2)",
+                        "Params": popt,
+                        "ParamsLabel": ["Amplitude", "Mean", "Sigma"],
+                        "ParamsFormat": [".1f", ".3f", ".3f"],
+                        "ParamsError": perr,
+                        "ParamsUnit": [
+                            "Probability density",
+                            "(True - Reco) / True",
+                            "(True - Reco) / True",
+                        ],
+                        "p0": popt[0],
+                        "p1": popt[1],
+                        "p2": popt[2],
+                        "Amplitude": popt[0],
+                        "Mean": popt[1],
+                        "MeanError": perr[1],
+                        "Resolution": popt[2],
+                        "ResolutionError": perr[2],
+                    }
+                )
 
             for nhit, (energy, label) in product(
                 np.arange(1, 9),
@@ -411,10 +525,11 @@ for config in configs:
             )
 
             for df_list, df_filename in zip(
-                [corrected_list, df_corrected],
+                [corrected_list, df_corrected, gauss_rows],
                 [
                     f"{variable_label}_Calibration_Fit",
                     f"{variable_label}Energy_Electron_Calibration",
+                    f"{variable_label}_Resolution_GaussianFit",
                 ],
             ):
                 df = pd.DataFrame(df_list)

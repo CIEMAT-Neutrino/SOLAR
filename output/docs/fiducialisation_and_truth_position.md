@@ -320,6 +320,11 @@ exceeds 2σ. Default and truth runs therefore share it while `Values` differ.
 
 ## 4. Conclusions for the text
 
+> **Superseded 2026-09-23 for DayNight and HEP.** These conclusions were drawn from DayNight/HEP numbers that fitted the
+> truth signal against the default background (§9.7). With that fixed, truth position raises VD DayNight ×2.3–3.8 and HEP
+> ×1.5–1.9; the per-detector argument is in §9.8. Points 1, 2 and 5 below still hold; point 3's "it does not move DayNight
+> or HEP" and its radiological explanation do not.
+
 1. Y and Z are wire-based and already accurate; the drift coordinate is where reco and truth differ, and the
    volume cut removes the Y-face gamma background in both.
 2. **HD lateral:** the surviving background enters through the $x=0$ plane and reco localises it (median
@@ -411,7 +416,7 @@ All commands run under the container described in the repository (`containers/so
 
 ---
 
-## 9. Update 2026-09-22: radiological's truth-position key was wrong, plus two related bugs
+## 9. Update 2026-09-22/23: three bugs, and what actually limits the truth-position gain
 
 Triggered by re-examining why `fiduc_truth` was not helping HD lateral/VD as much as expected. Two independent bugs were
 found and fixed, one methodological pitfall was hit and corrected, and the root physics question ("is it radiological
@@ -540,32 +545,102 @@ original, correct 5.83σ exactly.
 components after the stored best-fiducial volume changes — every sample sharing that volume must be regenerated
 together, or downstream numbers silently mix inconsistent volumes.
 
-### 9.6 Final confirmed numbers (Truncated folder, `fiduc_truth`, full clean rerun — all fixes applied)
+### 9.6 Numbers after the full clean rerun of 2026-09-22 (superseded for DayNight/HEP by §9.7)
 
-| Config | Analysis | Volume X/Y/Z | Result | vs default |
-|---|---|---|---|---|
-| HD central | DayNight | 100/80/320 | 5.47σ | = default (5.47) |
-| HD central | HEP | 0/80/0 | 12.18σ | = default (12.18) |
-| HD central | Sensitivity | 0/100/20 | Δχ² 7.33 | ≥ default (5.79) |
-| HD lateral | DayNight | 60/80/0 | 1.75σ | ≥ default (1.54) |
-| HD lateral | HEP | 0/80/100 | **5.83σ** | ≥ default (5.67) — confirmed win, §9.5's 4.84σ retracted |
-| HD lateral | Sensitivity | 60/60/0 | Δχ² 0.62 | ≥ default (0.41) |
-| VD nominal | DayNight | 80/180/480 | 0.80σ | slightly below default (0.86) |
-| VD nominal | HEP | 0/0/40 | 2.75σ | ≈ default (2.76) |
-| VD nominal | Sensitivity | 100/80/0 | Δχ² 0.91 | ≥ default (0.08) |
-| VD shielded | DayNight | 100/80/0 | 1.87σ | slightly below default (1.91) |
-| VD shielded | HEP | 0/0/20 | 3.66σ | = default (3.66) |
-| VD shielded | Sensitivity | 100/80/140 | Δχ² 0.92 | ≥ default (0.40) |
+The Sensitivity column below is final. The DayNight/HEP entries of this table were computed with the background-label
+bug of §9.7 (truth signal fitted against the default reco-fiducialised background) and are **not valid**; see §9.7.
 
-VD shielded's first clean-rerun attempt hung ~7 h in a known kaleido/headless-Chrome plot-export issue (the same
-failure mode noted in the 2026-09-21 session on the full study queue); killed and relaunched, completed cleanly
-2026-09-23 00:22. Its numbers match the earlier (methodologically sound, since its HEP volume never moved during any
-of the bug-fix iterations) targeted rerun to within rounding, confirming §9.5's staleness pitfall did not affect this
-config.
+| Config | Sensitivity (Δχ², 30 yr) | vs default |
+|---|---|---|
+| HD central | 7.33 | 5.79 |
+| HD lateral | 0.62 | 0.41 |
+| VD nominal | 0.91 | 0.08 |
+| VD shielded | 0.92 | 0.40 |
 
-**Overall verdict:** with both bugs (§9.1, §9.2) fixed, `fiduc_truth` is now a clean win over the default reco
-fiducialisation for DayNight and Sensitivity on 3/4 configs, and for HEP on 2/4 (HD central, HD lateral); VD nominal
-and VD shielded's DayNight sit slightly below default (0.80 vs 0.86, 1.87 vs 1.91) and their HEP results are
-statistical ties with default (2.75 vs 2.76, 3.66 vs 3.66) — i.e. truth fiducialisation never loses meaningfully to
-the default, and wins outright everywhere the surviving background is gamma/neutron rather than a geometry where
-radiological's rejection was already near-complete under the default reco cut too.
+VD shielded's first clean-rerun attempt hung ~7 h in a kaleido/headless-Chrome plot export (same failure mode as on
+2026-09-21); killed and relaunched, completed 2026-09-23 00:22.
+
+### 9.7 Bug 3 — `01_daynight.py` / `01_hep.py` fitted the truth signal against the default background
+
+`load_available_background_dataframes(..., study_label=...)` was given the study label in `01_daynight.py` and
+`01_hep.py` **only when `charge_threshold > 0`** (the comment still said "background Rebin pkls are labeled only for
+charge variants"). Since the truth-fiducial and membrane-veto variants started writing labeled background Rebins
+(`{config}_{sample}_{energy}_Rebin_{label}.pkl`, see `lib/study.py::study_context`), those two readers kept loading the
+**default** `_Rebin.pkl` — reco positions at the default volume — while the signal came from the labeled file. Every
+DayNight and HEP number of `fiduc_truth`, `fiduc_truth_refvol` and `membrane_veto_off` therefore compared a
+truth-selected (or veto-off) signal with the default background. The Sensitivity stages (`01_background_template.py`,
+`04_best_cuts.py`) and `significance_plot.py` already loaded the labeled background, which is why only Sensitivity showed
+a consistent `fiduc_truth` gain. The same charge-only rule sat in `run_sensitivity.py`'s automatic HEP MC-threshold
+choice.
+
+**Verification before the fix.** The HEP profile likelihood was recomputed outside the pipeline with the library function
+`01_hep.py` uses (`evaluate_profile_likelihood_discovery`: raw rates, `min_mc_per_bin` mask, 2% background
+normalisation, conservative signal offset, 30 yr) at each study's best cut. With the default background it reproduces
+the stored `PreIsotonicProfileLikelihood` exactly (e.g. VD shielded 3.9097); with the labeled truth background it gives
+VD nominal 2.94 → 5.58, VD shielded 3.91 → 5.60, HD lateral 6.22 → 6.47, HD central unchanged (pre-isotonic values; the
+reported value is this curve after the monotone smoothing over exposure, ~6% lower).
+
+**Fix (2026-09-23).** All three readers use the rule of the Sensitivity stages: labeled background whenever the variant
+changes the background event selection — `charge_threshold > 0 or truth_fiducial or not membrane_veto`. dm2/uncertainty
+variants keep reading the default background (their backgrounds are identical). DayNight and HEP were rerun for all
+three affected studies (`--no-rebin`: the labeled Rebins were already correct; `fiduc_truth` volumes re-derived and
+checked identical). Results, `study_status_20260923_bkgfix.csv`, 30 yr:
+
+| Config | Analysis | default | `fiduc_truth_refvol` (truth pos., reco vol.) | `fiduc_truth` (truth pos., truth vol.) | before fix |
+|---|---|---|---|---|---|
+| HD central | DayNight | 5.47 | 6.04 | **6.14** | 5.47 |
+| HD central | HEP | 12.18 | 11.39 | **12.06** | 12.18 |
+| HD lateral | DayNight | 1.54 | 1.70 | **2.06** | 1.75 |
+| HD lateral | HEP | 5.67 | 7.18 | **6.62** | 5.83 |
+| VD nominal | DayNight | 0.86 | 2.56 | **3.27** | 0.80 |
+| VD nominal | HEP | 2.76 | 5.35 | **5.37** | 2.75 |
+| VD shielded | DayNight | 1.91 | 4.33 | **4.34** | 1.87 |
+| VD shielded | HEP | 3.66 | 5.62 | **5.62** | 3.66 |
+
+`membrane_veto_off` (VD, held default cut) falls back onto the default within 1–2% (VD nominal DayNight 0.86, HEP 2.75;
+VD shielded DayNight 1.90, HEP 3.61): its earlier small gains came from the veto-off signal against the veto-on
+background. Lifting the membrane veto does not change the result.
+
+Two consequences worth stating: (i) at the reco volume, truth positions already give most of the gain
+(`fiduc_truth_refvol` ≈ `fiduc_truth` on VD), so the gain is position knowledge rather than volume choice; (ii) on HD
+lateral HEP the truth-volume scan picks a worse volume (0/80/100, 6.62σ) than the reco reference (60/80/20, 7.18σ at
+truth positions) — consistent with the scan-metric artefact in the HEP high band noted in §9.4.
+
+### 9.8 What limits the gain — the argument and its figures
+
+Figures from `src/physics/signal/fiduc_truth_limits.py` (reads existing outputs only), in
+`output/images/solar/truth_position/`:
+
+- `limits_summary` — the table of §9.7 as bars.
+- `limits_composition_hep` — HEP background composition per energy bin at each study's own working point, default vs
+  `fiduc_truth`, from the analysis's own `HEP_Counts.pkl` (Raw spectra, as fitted).
+- `limits_migration_hep` — reconstructed `SolarEnergy` vs `MainK` of the gamma and neutron that survive the default HEP
+  cut and volume.
+
+**The argument, per detector.**
+
+1. **VD (nominal, shielded): position was the limit, and truth position lifts it.** In the bins that carry the HEP and
+   DayNight significance the default background is gamma + neutron; reco puts them inside the volume because their
+   drift coordinate is wrong by hundreds of cm (§3.2, §3.4). With truth positions they essentially vanish from the signal
+   bins (`limits_composition_hep`), the optimiser can loosen the topological cut (VD nominal DayNight: NHits 6/OpHits 13 →
+   2/4, signal ×3–4 per bin at a lower background), and DayNight rises ×2.3–3.8, HEP ×1.5–1.9. Radiological is exactly 0 in
+   the significance-carrying DayNight bins (10.5–15.5 MeV) in both pipelines, so the gain is not a few rejected
+   radiological MC events.
+2. **What remains after perfect position is ⁸B.** In `limits_composition_hep` the `fiduc_truth` VD panels, like both HD
+   central panels, have an almost pure ⁸B background above 16 MeV. ⁸B is spatially identical to the hep signal, so no
+   fiducial cut can remove it; it is separated from hep only by how sharply the ⁸B spectral endpoint is reconstructed.
+   This is where energy resolution becomes the limit: on HD central from the start (HEP unchanged, 12.18 → 12.06), on
+   VD once truth position has removed gamma and neutron.
+3. **HD lateral: reco already localises the background.** It enters through the x = 0 plane where reco X is good
+   (median |ΔX| 4–6 cm, §3.4); truth position removes part of the gamma/neutron but not all, hence the moderate gain.
+
+**Two claims that do not hold and should not be made.**
+
+- *"Truth energy would gain 1.7–4.6× on HEP"* (from `energy_maink`/`energy_spk`): not usable. With `MainK` as the energy
+  variable the hep signal in the fixed 14–30 MeV window drops from ~225 to ~3 events (MainK is the electron only, ~5 MeV
+  below `SolarEnergy`) and the raw background there is ~1e-13 — the significance comes from empty-background bins.
+- *"The harmful gammas are energy-mismeasured"*: the in-window gammas have true energies of 11–14 MeV (generator
+  endpoint) and `SolarEnergy` sits ~+5 MeV above `MainK` for the signal as well — it is a neutrino-energy estimator. In
+  the analysis variable these gammas are genuinely signal-like; they are separable by position (and topology), not by
+  better energy resolution. Neutron `MainK` shows capture lines at ~7.6–10.8 MeV from captures outside the argon, so
+  the 6.1 MeV ⁴⁰Ar capture energy is not a bound for this sample.
