@@ -661,6 +661,8 @@ Figures from `src/physics/signal/fiduc_truth_limits.py` (reads existing outputs 
 
 ### 9.9 `membrane_veto_off` — why lifting the VD membrane veto changes nothing (2026-09-23)
 
+Full account, including the PDS-plane decomposition of every sample and the plot-repo pickles: [membrane_veto.md](membrane_veto.md).
+
 The quality mask (§1.2) accepts only optical matches on plane 0 (the cathode for VD). `membrane_veto_off` also accepts
 planes 1–4 (membrane and end-cap photon detectors) at the default cut and volume (`skip_best_cuts`, VD only). Its DayNight and
 HEP results equal the default within 1–2% (§9.7). This is a physics result, not an artefact:
