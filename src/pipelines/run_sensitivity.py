@@ -1131,7 +1131,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     run_analysis_script(
         "src/physics/common/significance_plot.py",
         plot_base_args + energy_args_for(args.energy) + exposure_arg_for()
-        + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis] + truth_fiducial_args_for(),
+        + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis] + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
 
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
@@ -1270,11 +1270,11 @@ def run_daynight_stage(config: str, folder: str, name: str):
             "src/physics/sensitivity/05_best_sigmas.py",
             plot_base_args + selector_args + ["--analysis", "DayNight", "--reference", reference] + skip_best_sigmas_args_for() + reference_folder_args_for(),
         )
-    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"] + truth_fiducial_args_for(),
+    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "DayNight"] + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
-        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"] + ["--day_fraction", str(args.day_fraction)] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+        analysis_base_args + common_args + uncertainty_args + stacked_args_for() + ["--analysis", "DayNight"] + ["--day_fraction", str(args.day_fraction)] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
 
 
@@ -1427,11 +1427,11 @@ def run_hep_stage(config: str, folder: str, name: str):
         )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--pkl_label", "highest_spiked"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "exposure", "--pkl_label", "highest_spiked"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -1440,7 +1440,7 @@ def run_hep_stage(config: str, folder: str, name: str):
         + uncertainty_args
         + stacked_args_for()
         + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both"]
-        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/common/significance_plot.py",
@@ -1449,14 +1449,14 @@ def run_hep_stage(config: str, folder: str, name: str):
         + uncertainty_args
         + stacked_args_for()
         + ["--analysis", "HEP", "--reference", hep_significance_reference, "--bottom-panel-mode", "both", "--pkl-label", "highest_spiked"]
-        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+        + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script("src/physics/hep/significance_comparison.py", analysis_base_args + common_args + uncertainty_args)
-    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"] + truth_fiducial_args_for(),
+    run_analysis_script("src/physics/common/exposure_plot.py", analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "comparison"] + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/common/exposure_plot.py",
-        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for(),
+        analysis_base_args + common_args + uncertainty_args + ["--analysis", "HEP", "--mode", "rebin"] + reference_args_for(hep_significance_reference) + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
     run_analysis_script(
         "src/physics/hep/exposure_plot.py",
@@ -1558,11 +1558,11 @@ def run_sensitivity_stage(config: str, folder: str, name: str):
             )
             run_analysis_script(
                 "src/physics/common/exposure_plot.py",
-                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for() + fit_method_args_for(),
+                background_base_args + energy_args + uncertainty_args + ["--analysis", "Sensitivity", "--compare"] + nuisance_profile_args_for(profile_name) + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for() + fit_method_args_for(),
     )
         run_analysis_script(
             "src/physics/common/significance_plot.py",
-            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for(),
+            plot_base_args + energy_args + uncertainty_args + stacked_args_for() + ["--analysis", "Sensitivity"] + daynight_oscillation_args_for() + charge_threshold_only_args_for() + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
 
 

@@ -92,8 +92,8 @@ meta = json.loads((NEW / "meta.json").read_text())
 ck = meta["checks"]
 wc = ck["WallCdf_HD_central_truth_20cm"]
 check(abs(wc["gamma"] - 0.46) < 0.01 and abs(wc["marley"] - 0.10) < 0.01 and abs(wc["neutron"] - 0.08) < 0.01, f"WallCdf reference {wc}")
-sg = ck["Significance_HD_lateral_DayNight"]
-check(abs(sg["default"] - 1.537) < 5e-4 and abs(sg["fiduc_truth"] - 2.113) < 5e-4 and abs(sg["fiduc_truth_refvol"] - 1.517) < 5e-4, f"Significance reference {sg}")
+sg = ck["Significance_HD_lateral_DayNight"]   # values after the 2026-09-23 DayNight/HEP background-label fix
+check(abs(sg["default"] - 1.537) < 5e-4 and abs(sg["fiduc_truth"] - 2.057) < 5e-4 and abs(sg["fiduc_truth_refvol"] - 1.701) < 5e-4, f"Significance reference {sg}")
 pf = ck["PassFractions_DayNight_HD_central_neutron_disagree"]
 check(np.allclose(pf["PassFraction"], [0.011, 0.995, 0.0066, 0.0066], atol=6e-4) and pf["NMC"] == 12, f"PassFractions reference {pf}")
 print("reference numbers:", json.dumps(ck))

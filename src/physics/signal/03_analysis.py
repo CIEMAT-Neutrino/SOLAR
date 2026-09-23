@@ -20,16 +20,24 @@ _ANALYSIS_LOCAL_DIR = {
     "HEP": "hep-json",
     "Sensitivity": "sensitivity-json",
 }
-def _load_best_cuts(analysis, folder, config):
+def _load_best_cuts(analysis, folder, config, study_label=None):
     """Load best cuts. Returns dict: {energy: {NHits, AdjCl, OpHits, Score, ...}}
 
-    All analyses use the same JSON structure: {config: {energy: {...}}}
+    All analyses use the same JSON structure: {config: {energy: {...}}}. A study reads its own best cut: the labeled JSON is
+    {config}_highest_{label}_{analysis}.json for DayNight/HEP and {config}_highest_{analysis}_{label}.json for Sensitivity.
     """
     dir_name = _ANALYSIS_LOCAL_DIR.get(analysis)
     if not dir_name:
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: unknown analysis '{analysis}' — no best cuts loaded")
         return {}
-    path = f"{root}/config/{config}/{dir_name}/{folder.lower()}/{config}_highest_{analysis}.json"
+    base = f"{root}/config/{config}/{dir_name}/{folder.lower()}/{config}_highest"
+    path = f"{base}_{analysis}.json"
+    if study_label:
+        labeled = [p for p in (f"{base}_{study_label}_{analysis}.json", f"{base}_{analysis}_{study_label}.json") if os.path.exists(p)]
+        if labeled:
+            path = labeled[0]
+        else:
+            rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: no '{study_label}' best-cut JSON for {config} {analysis}; using the default cut")
     if not os.path.exists(path):
         rprint(f"[yellow][WARNING][/yellow] _load_best_cuts: file not found — {path}")
         return {}
@@ -205,6 +213,9 @@ _ctx = study_context(args)
 # Event-level exports (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts) are labeled
 # for truth-fiducial variants, which share energy and folder with the nominal run.
 _ref_sfx = _ctx.ref_suffix
+# AnalysisMask also applies the optical-plane (membrane) veto, so a veto-off run must not write it under the default
+# name: membrane_veto_off holds the default cut and would overwrite the default masks.
+_mask_sfx = _ref_sfx or (_ctx.study_suffix if not args.membrane_veto else "")
 config = args.config
 name = args.signal
 configs = {config: [name]}
@@ -425,7 +436,7 @@ for config in configs:
         best_cuts_by_analysis = {}
         if args.nhits is None and args.ophits is None and args.adjcls is None and (args.export_raw or args.best_cuts_only):
             for analysis in args.analysis:
-                cuts = _load_best_cuts(analysis, args.folder, config)
+                cuts = _load_best_cuts(analysis, args.folder, config, getattr(args, "study_label", None))
                 best_cuts_by_analysis[analysis] = cuts.get(energy, {})
         elif args.best_cuts_only and None not in (args.nhits, args.ophits, args.adjcls):
             # Explicit cut (e.g. study variants run with --skip_best_cuts): export the masks at that
@@ -639,10 +650,10 @@ for config in configs:
                 if (args.minimal_cuts or (this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls)) and weight == "SignalParticleWeight":
                     analysis_key = analysis.upper()
                     if args.export_raw:
-                        save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
 
                     cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name, pos_keys=_pos_keys)
                     cut_dir = f"{export_path}/{config}/{name}/{args.folder.lower()}"
@@ -655,10 +666,10 @@ for config in configs:
                     bc = best_cuts_by_analysis.get(analysis, {})
                     if bc and int(bc.get("NHits", -1)) == this_nhit and int(bc.get("OpHits", -1)) == this_ophit and int(bc.get("AdjCl", -1)) == this_adjcl:
                         analysis_key = analysis.upper()
-                        save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_ref_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
 
         if _prev_cut is not None:
             for _a in args.analysis:

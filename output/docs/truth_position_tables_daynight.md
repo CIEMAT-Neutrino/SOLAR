@@ -28,25 +28,25 @@ Fraction of the DAYNIGHT window+cut sample kept by the fiducial cut. 'Fiducial o
 | HD central APA | neutron | 36 | 35.8 | 99.0 | 35.1 | 35.5 |
 | HD central APA | neutron_agree | 24 | 99.3 | 98.2 | 98.2 | 99.3 |
 | HD central APA | neutron_disagree | 12 | 1.1 | 99.5 | 0.7 | 0.7 |
-| HD central APA | radiological | 2 | 50.0 | 0.0 | 0.0 | 0.0 |
-| HD lateral APA | marley | 12890 | 58.9 | 59.6 | 59.6 | 86.7 |
-| HD lateral APA | gamma | 75268 | 1.5 | 1.3 | 1.1 | 38.3 |
-| HD lateral APA | neutron | 2862 | 35.6 | 37.7 | 24.4 | 46.0 |
-| HD lateral APA | neutron_agree | 858 | 41.8 | 40.8 | 38.9 | 78.9 |
-| HD lateral APA | neutron_disagree | 2004 | 30.3 | 35.0 | 12.0 | 17.7 |
+| HD central APA | radiological | 2 | 50.0 | 100.0 | 100.0 | 0.0 |
+| HD lateral APA | marley | 12890 | 58.9 | 59.6 | 59.6 | 72.5 |
+| HD lateral APA | gamma | 75268 | 1.5 | 1.3 | 1.1 | 3.7 |
+| HD lateral APA | neutron | 2862 | 35.6 | 37.7 | 24.4 | 31.4 |
+| HD lateral APA | neutron_agree | 858 | 41.8 | 40.8 | 38.9 | 52.9 |
+| HD lateral APA | neutron_disagree | 2004 | 30.3 | 35.0 | 12.0 | 12.9 |
 | HD lateral APA | radiological | 4 | 100.0 | 100.0 | 75.0 | 75.0 |
-| VD nominal | marley | 3513 | 99.5 | 99.5 | 99.5 | 99.9 |
-| VD nominal | gamma | 443 | 98.9 | 97.7 | 23.2 | 21.5 |
-| VD nominal | neutron | 128 | 91.5 | 53.6 | 2.7 | 11.0 |
-| VD nominal | neutron_agree | 66 | 21.6 | 21.6 | 21.6 | 99.7 |
-| VD nominal | neutron_disagree | 62 | 99.9 | 57.5 | 0.4 | 0.3 |
-| VD nominal | radiological | 2 | 100.0 | 50.0 | 50.0 | 50.0 |
-| VD shielded | marley | 4312 | 94.3 | 94.4 | 94.4 | 96.4 |
-| VD shielded | gamma | 473 | 94.0 | 64.3 | 13.9 | 3.1 |
-| VD shielded | neutron | 191 | 75.0 | 35.0 | 19.4 | 31.9 |
-| VD shielded | neutron_agree | 111 | 43.5 | 43.6 | 43.6 | 72.1 |
+| VD nominal | marley | 3513 | 99.5 | 99.5 | 99.5 | 82.7 |
+| VD nominal | gamma | 443 | 98.9 | 97.7 | 23.2 | 0.1 |
+| VD nominal | neutron | 128 | 91.5 | 53.6 | 2.7 | 1.4 |
+| VD nominal | neutron_agree | 66 | 21.6 | 21.6 | 21.6 | 12.4 |
+| VD nominal | neutron_disagree | 62 | 99.9 | 57.5 | 0.4 | 0.1 |
+| VD nominal | radiological | 2 | 100.0 | 100.0 | 100.0 | 100.0 |
+| VD shielded | marley | 4312 | 94.3 | 94.4 | 94.4 | 92.6 |
+| VD shielded | gamma | 473 | 94.0 | 64.3 | 13.9 | 0.8 |
+| VD shielded | neutron | 191 | 75.0 | 35.0 | 19.4 | 19.5 |
+| VD shielded | neutron_agree | 111 | 43.5 | 43.6 | 43.6 | 43.8 |
 | VD shielded | neutron_disagree | 80 | 99.7 | 28.2 | 0.5 | 0.5 |
-| VD shielded | radiological | 3 | 66.7 | 66.7 | 33.3 | 33.3 |
+| VD shielded | radiological | 3 | 66.7 | 100.0 | 66.7 | 33.3 |
 
 ## Table 3 — Default vs fiduc_truth volumes and significances
 
@@ -54,18 +54,18 @@ Fraction of the DAYNIGHT window+cut sample kept by the fiducial cut. 'Fiducial o
 
 | Config | Analysis | Default volume X/Y/Z [cm] | significance default (σ; Sensitivity: Δχ²) | Truth volume X/Y/Z [cm] | significance fiduc_truth | significance fiduc_truth_refvol (truth pos., default volume) | Δ fiduc_truth | Δ refvol |
 |---|---|---|---|---|---|---|---|---|
-| HD central APA | DayNight | 20/100/320 | 5.468 | 100/80/320 | 5.470 | 5.454 | +0.002 | -0.014 |
-| HD central APA | HEP | 0/80/0 | 12.181 | 0/80/0 | 12.178 | 12.178 | -0.003 | -0.003 |
-| HD central APA | Sensitivity | 0/80/100 | 5.728 | 0/100/20 | 7.539 | 7.616 | +1.811 | +1.888 |
-| HD lateral APA | DayNight | 80/140/240 | 1.537 | 0/80/100 | 2.113 | 1.517 | +0.576 | -0.019 |
-| HD lateral APA | HEP | 60/80/20 | 5.672 | 0/80/100 | 5.833 | 5.451 | +0.161 | -0.221 |
-| HD lateral APA | Sensitivity | 60/260/200 | 0.405 | 60/60/0 | 0.547 | 0.528 | +0.142 | +0.123 |
-| VD nominal | DayNight | 0/20/60 | 0.857 | 20/0/400 | 0.860 | 0.857 | +0.003 | -0.000 |
-| VD nominal | HEP | 0/0/40 | 2.755 | 0/0/40 | 2.754 | 2.754 | -0.001 | -0.001 |
-| VD nominal | Sensitivity | 0/0/20 | 0.080 | 100/80/60 | 0.865 | 0.751 | +0.786 | +0.671 |
-| VD shielded | DayNight | 20/100/20 | 1.910 | 100/20/480 | 1.944 | 1.896 | +0.034 | -0.013 |
-| VD shielded | HEP | 0/0/20 | 3.663 | 0/0/20 | 3.660 | 3.660 | -0.003 | -0.003 |
-| VD shielded | Sensitivity | 0/0/20 | 0.396 | 100/80/140 | 0.906 | 1.025 | +0.510 | +0.628 |
+| HD central APA | DayNight | 20/100/320 | 5.468 | 100/80/320 | 6.143 | 6.035 | +0.675 | +0.567 |
+| HD central APA | HEP | 0/80/0 | 12.181 | 0/80/0 | 12.063 | 11.387 | -0.118 | -0.794 |
+| HD central APA | Sensitivity | 0/80/100 | 5.728 | 0/100/20 | 7.252 | 7.616 | +1.524 | +1.888 |
+| HD lateral APA | DayNight | 80/140/240 | 1.537 | 60/80/0 | 2.057 | 1.701 | +0.520 | +0.164 |
+| HD lateral APA | HEP | 60/80/20 | 5.672 | 0/80/100 | 6.620 | 7.181 | +0.947 | +1.509 |
+| HD lateral APA | Sensitivity | 60/260/200 | 0.405 | 60/60/0 | 0.615 | 0.528 | +0.209 | +0.123 |
+| VD nominal | DayNight | 0/20/60 | 0.857 | 80/180/480 | 3.274 | 2.565 | +2.417 | +1.707 |
+| VD nominal | HEP | 0/0/40 | 2.755 | 0/0/40 | 5.365 | 5.352 | +2.610 | +2.597 |
+| VD nominal | Sensitivity | 0/0/20 | 0.080 | 100/80/0 | 0.902 | 0.751 | +0.822 | +0.671 |
+| VD shielded | DayNight | 20/100/20 | 1.910 | 100/80/0 | 4.335 | 4.329 | +2.426 | +2.420 |
+| VD shielded | HEP | 0/0/20 | 3.663 | 0/0/20 | 5.617 | 5.617 | +1.953 | +1.953 |
+| VD shielded | Sensitivity | 0/0/20 | 0.396 | 100/80/140 | 0.914 | 1.025 | +0.518 | +0.628 |
 
 ## Table 4 — Surviving MC statistics at the analysis cut
 
@@ -77,15 +77,15 @@ N_MC at the default DAYNIGHT best cut. The weight per event and the share of the
 | HD central APA | gamma | 286 | 48 | 82 | 1.15 | 0.02396 | 15.2 | 14% | 26% | 0% | 7% |
 | HD central APA | neutron | 36 | 27 | 23 | 52.38 | 1.94 | 1.2 | 91% | 91% | 0% | 93% |
 | HD central APA | radiological | 2 | 1 | 0 | 5.344e+04 | 5.344e+04 | 1.0 | 100% | 100% | 100% | 0% |
-| HD lateral APA | marley | 12890 | 7740 | 11331 | 797.7 | 0.1031 | 1403.8 | 0% | 3% | – | – |
-| HD lateral APA | gamma | 75268 | 1541 | 42869 | 424.8 | 0.2757 | 94.7 | 2% | 10% | 0% | 3% |
-| HD lateral APA | neutron | 2862 | 1171 | 738 | 8388 | 7.163 | 57.1 | 3% | 13% | 2% | 3% |
-| HD lateral APA | radiological | 4 | 4 | 3 | 4.273e+05 | 1.068e+05 | 4.0 | 25% | 50% | 98% | 94% |
-| VD nominal | marley | 3513 | 3476 | 3507 | 104 | 0.02993 | 394.7 | 0% | 5% | – | – |
-| VD nominal | gamma | 443 | 419 | 100 | 299 | 0.7137 | 14.1 | 15% | 27% | 0% | 0% |
-| VD nominal | neutron | 128 | 124 | 71 | 1064 | 8.584 | 5.3 | 22% | 43% | 0% | 0% |
-| VD nominal | radiological | 2 | 2 | 1 | 2.422e+05 | 1.211e+05 | 2.0 | 50% | 71% | 99% | 100% |
-| VD shielded | marley | 4312 | 3866 | 4196 | 115.3 | 0.02982 | 435.2 | 0% | 5% | – | – |
-| VD shielded | gamma | 473 | 379 | 42 | 50.5 | 0.1332 | 52.0 | 6% | 14% | 0% | 0% |
-| VD shielded | neutron | 191 | 151 | 113 | 34.51 | 0.2285 | 9.0 | 14% | 33% | 0% | 0% |
+| HD lateral APA | marley | 12890 | 7740 | 9516 | 797.7 | 0.1031 | 1403.8 | 0% | 3% | – | – |
+| HD lateral APA | gamma | 75268 | 1541 | 4095 | 424.8 | 0.2757 | 94.7 | 2% | 10% | 0% | 0% |
+| HD lateral APA | neutron | 2862 | 1171 | 545 | 8388 | 7.163 | 57.1 | 3% | 13% | 2% | 2% |
+| HD lateral APA | radiological | 4 | 4 | 3 | 4.273e+05 | 1.068e+05 | 4.0 | 25% | 50% | 98% | 97% |
+| VD nominal | marley | 3513 | 3476 | 2615 | 104 | 0.02993 | 394.7 | 0% | 5% | – | – |
+| VD nominal | gamma | 443 | 419 | 3 | 299 | 0.7137 | 14.1 | 15% | 27% | 0% | 0% |
+| VD nominal | neutron | 128 | 124 | 36 | 1064 | 8.584 | 5.3 | 22% | 43% | 0% | 0% |
+| VD nominal | radiological | 2 | 2 | 2 | 2.422e+05 | 1.211e+05 | 2.0 | 50% | 71% | 99% | 100% |
+| VD shielded | marley | 4312 | 3866 | 3920 | 115.3 | 0.02982 | 435.2 | 0% | 5% | – | – |
+| VD shielded | gamma | 473 | 379 | 5 | 50.5 | 0.1332 | 52.0 | 6% | 14% | 0% | 0% |
+| VD shielded | neutron | 191 | 151 | 97 | 34.51 | 0.2285 | 9.0 | 14% | 33% | 0% | 0% |
 | VD shielded | radiological | 3 | 2 | 1 | 2.422e+05 | 1.211e+05 | 2.0 | 50% | 71% | 100% | 100% |

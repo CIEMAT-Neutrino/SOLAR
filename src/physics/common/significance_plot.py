@@ -461,6 +461,7 @@ parser.add_argument("--study", nargs="+", type=str, default=None, help="Study la
 parser.add_argument("--charge_threshold", type=float, default=0,
                     help="Charge threshold Q (ADC). When >0, study_context marks this a template variant so the labeled signal AND background Rebin pkls are read.")
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
+parser.add_argument("--membrane_veto", action=argparse.BooleanOptionalAction, default=True, help="Membrane-veto variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled (veto-off) Rebin pkls.")
 parser.add_argument(
     "--dm2",
     type=float,

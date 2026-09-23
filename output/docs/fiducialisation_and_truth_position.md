@@ -617,6 +617,20 @@ Figures from `src/physics/signal/fiduc_truth_limits.py` (reads existing outputs 
 - `limits_migration_hep` — reconstructed `SolarEnergy` vs `MainK` of the gamma and neutron that survive the default HEP
   cut and volume.
 
+**Pickles for the plot repository** (LOWE_RECONSTRUCTION_PUBLICATION). `scripts/sync_solar_data.sh` pulls every `*.pkl` under
+`output/data/analysis/{day-night|hep|sensitivity}/{config}/marley/truncated/{label}/` for labels registered in its
+`src/lib/solar_studies.py`; the macros load `{config}_{name}_{datafile}.pkl` and filter on `Name`. Written under label `fiduc_truth`:
+
+| file (`{config}_marley_…`) | written by | content |
+|---|---|---|
+| `{DayNight,HEP}_FiducTruthSummary.pkl` | `fiduc_truth_limits.py --stage export` | significance per `Variant` (default / `fiduc_truth_refvol` / `fiduc_truth`), `RatioToDefault`, cut, volume |
+| `{DayNight,HEP}_FiducTruthComposition.pkl` | same | the three variants' `{Analysis}_Counts` spectra in one file (`Variant`, `Component`, `SpectrumType`) |
+| `HEP_FiducTruthMigration.pkl` | same | per-event `TrueEnergy` (MainK), `RecoEnergy`, `Weight`, `InWindow` for gamma and neutron at the default HEP cut and volume |
+| `{DayNight,HEP,Sensitivity}_TruthPosition{Kind}.pkl` | `src/tools/export_truth_position_repo.py` | the truth-position checks of §3 (kinds in `output/data/solar/truth_position/export_repo/README.md`) |
+
+`fiduc_truth_refvol` is not a registered label in the plot repo, so its own folder is not synced; its numbers are in
+`FiducTruthSummary`.
+
 **The argument, per detector.**
 
 1. **VD (nominal, shielded): position was the limit, and truth position lifts it.** In the bins that carry the HEP and
@@ -644,3 +658,30 @@ Figures from `src/physics/signal/fiduc_truth_limits.py` (reads existing outputs 
   the analysis variable these gammas are genuinely signal-like; they are separable by position (and topology), not by
   better energy resolution. Neutron `MainK` shows capture lines at ~7.6–10.8 MeV from captures outside the argon, so
   the 6.1 MeV ⁴⁰Ar capture energy is not a bound for this sample.
+
+### 9.9 `membrane_veto_off` — why lifting the VD membrane veto changes nothing (2026-09-23)
+
+The quality mask (§1.2) accepts only optical matches on plane 0 (the cathode for VD). `membrane_veto_off` also accepts
+planes 1–4 (membrane and end-cap photon detectors) at the default cut and volume (`skip_best_cuts`, VD only). Its DayNight and
+HEP results equal the default within 1–2% (§9.7). This is a physics result, not an artefact:
+
+- **Event level** (truth-position caches, default HEP cut and volume, 14–30 MeV): lifting the veto adds signal +24.5% (VD nominal) /
+  +20.8% (VD shielded), but gamma +63% / +131% and neutron +67% / +155%. Membrane-matched clusters are background-enriched:
+  external gammas and neutrons interact near the membranes and are matched to the membrane photon detectors, which is what the veto
+  exists to reject.
+- **Per bin, as fitted** (`{Analysis}_Counts.pkl`, significance-weighted over the bins that carry the test statistic): DayNight
+  S ×1.02–1.03 against B ×1.08; HEP S ×1.20–1.26 against B ×3.2–7.2 (neutron ×37–40 in single bins), so S/√B is flat or lower.
+- **Fit**: an independent evaluation of the HEP profile likelihood (same function, raw rates, MC-support mask, 2% normalisation)
+  with veto-off signal and background at the default cut gives VD nominal 2.944 → 2.943 and VD shielded 3.910 → 3.856
+  (pre-isotonic), for +45% and +41% more signal events over the full spectrum. The extra signal is cancelled by the extra
+  background.
+
+Two bookkeeping bugs were found while checking this, neither of which changed a reported significance:
+
+1. `significance_plot.py` and `exposure_plot.py` had no `--membrane_veto` argument and `run_sensitivity.py` did not forward it, so
+   the synced `membrane_veto_off/*_{Counts,Significance,Exposure}.pkl` were built from the default (veto-on) Rebins and were
+   bit-identical to the default ones. Fixed (argument added; forwarded in all 11 calls); the VD plots were regenerated.
+2. `03_analysis.py` labeled the best-cut exports (`AnalysisMask`/`AnalysisData`/`AnalysisEnergy`/`AnalysisWeights_*_NHits*`) only for
+   truth-fiducial variants. `membrane_veto_off` holds the default cut, so its export overwrote the default-named VD files with veto-off
+   content. No SOLAR script reads them and they are not synced; they are labeled for veto-off runs now (`_mask_sfx`) and the
+   default VD files were rewritten (verified: 0 selected events on planes 1–4).

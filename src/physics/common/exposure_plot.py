@@ -266,6 +266,7 @@ parser.add_argument("--smooth_window", type=int, default=11)
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to image subdirectory to isolate study outputs.")
 parser.add_argument("--study", nargs="+", type=str, default=None, help="Study labels to iterate over in sequence; supersedes --study_label. 'all' expands to every label in lib/study.py STUDY_VARIANTS applicable to --analysis (nominal run included); 'default' names the unlabeled nominal run.")
 parser.add_argument("--truth_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Truth-position fiducialisation variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled Rebin pkl.")
+parser.add_argument("--membrane_veto", action=argparse.BooleanOptionalAction, default=True, help="Membrane-veto variant. Must match the flag passed to 03_analysis.py so study_context selects the labeled (veto-off) Rebin pkls.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, reads Sensitivity chi2 grids from labeled template subfolders.")
 
 args = parser.parse_args()

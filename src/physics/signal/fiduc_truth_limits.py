@@ -15,11 +15,18 @@ Figures for the fiduc_truth discussion. Reads only existing outputs (no analysis
   summary      DayNight / HEP significance: default, fiduc_truth_refvol (truth position at the reco volume) and
                fiduc_truth (truth position, truth volume), read from the highest_* JSONs.
 
+  export       Pickles for the plot repo in the synced analysis tree (see stage_export):
+               output/data/analysis/{day-night|hep}/{config}/marley/truncated/fiduc_truth/
+                 {config}_marley_{DayNight|HEP}_FiducTruthSummary.pkl      default / refvol / truth significance, cut, volume
+                 {config}_marley_{DayNight|HEP}_FiducTruthComposition.pkl  the three variants' Counts spectra (Variant column)
+                 {config}_marley_HEP_FiducTruthMigration.pkl              per-event SolarEnergy vs MainK, gamma and neutron
+
 Output: output/images/solar/truth_position/limits_{stage}.{png,pdf}
 
 Usage
 -----
-  python3 src/physics/signal/fiduc_truth_limits.py --stage composition migration summary
+  python3 src/physics/signal/fiduc_truth_limits.py                     # all stages
+  python3 src/physics/signal/fiduc_truth_limits.py --stage export
 """
 import argparse
 import json
@@ -40,7 +47,7 @@ from lib.fiducial import accepted_flash_planes, build_fiducial_spatial_mask, get
 from lib.background import is_surface_background  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-parser.add_argument("--stage", nargs="+", choices=["composition", "migration", "summary"], default=["composition", "migration", "summary"])
+parser.add_argument("--stage", nargs="+", choices=["composition", "migration", "summary", "export"], default=["composition", "migration", "summary", "export"])
 parser.add_argument("--config", nargs="+", default=[
     "hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"])
 parser.add_argument("--folder", default="Truncated")
@@ -138,28 +145,40 @@ def stage_composition():
 
 
 # ==========================================================================================
-def stage_migration():
-    comps = ["gamma", "neutron"]
-    fig, axes = plt.subplots(len(comps), len(args.config), figsize=(2.6 * len(args.config), 2.6 * len(comps)), sharex=True, sharey=True, squeeze=False)
+MIGRATION_COMPONENTS = ["gamma", "neutron"]
+
+
+def migration_events(config):
+    """Gamma/neutron events passing quality, the default HEP cut and the default (reco) HEP volume, all energies."""
+    info = json.load(open(f"{ROOT}/config/{config}/{config}_config.json"))
+    cut = json.load(open(f"{ROOT}/config/{config}/hep-json/{args.folder.lower()}/{config}_highest_HEP.json"))[config][args.energy]
     fids = json.load(open(f"{ROOT}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json"))
+    fid = get_best_fiducial(fids, config, args.energy, "HEP")
+    dx = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
+    dy = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
+    events = {}
+    for comp in MIGRATION_COMPONENTS:
+        d = dict(np.load(CACHE / config / f"{config}_{comp}.npz", allow_pickle=True))
+        a = dict(np.load(CACHE / config / f"{config}_{comp}_aux.npz", allow_pickle=True))
+        q = accepted_flash_planes(d["plane"], ROOT, True) & (d["pe"] > 0)
+        if is_surface_background(ROOT, comp):
+            q &= (d["surface"] >= 0) & (d["surface"] < 3)
+        sel = q & (d["NHits"] >= cut["NHits"]) & (d["AdjClNum"] < cut["AdjCl"]) & (d["OpHits"] >= cut["OpHits"])
+        run = {"Reco": {"RecoX": d["reco_x"], "RecoY": d["reco_y"], "RecoZ": d["reco_z"]}}
+        sel &= build_fiducial_spatial_mask(run, config, dx, dy, info, args.folder, fid)
+        events[comp] = (d["energy"][sel], a["MainK"][sel], d["w"][sel])
+    return {"NHits": int(cut["NHits"]), "OpHits": int(cut["OpHits"]), "AdjCl": int(cut["AdjCl"])}, fid, events
+
+
+def stage_migration():
+    comps = MIGRATION_COMPONENTS
+    fig, axes = plt.subplots(len(comps), len(args.config), figsize=(2.6 * len(args.config), 2.6 * len(comps)), sharex=True, sharey=True, squeeze=False)
     lo, hi = args.hep_window
     rows = []
     for j, config in enumerate(args.config):
-        info = json.load(open(f"{ROOT}/config/{config}/{config}_config.json"))
-        cut = json.load(open(f"{ROOT}/config/{config}/hep-json/{args.folder.lower()}/{config}_highest_HEP.json"))[config][args.energy]
-        fid = get_best_fiducial(fids, config, args.energy, "HEP")
-        dx = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
-        dy = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
+        _, _, events = migration_events(config)
         for i, comp in enumerate(comps):
-            d = dict(np.load(CACHE / config / f"{config}_{comp}.npz", allow_pickle=True))
-            a = dict(np.load(CACHE / config / f"{config}_{comp}_aux.npz", allow_pickle=True))
-            q = accepted_flash_planes(d["plane"], ROOT, True) & (d["pe"] > 0)
-            if is_surface_background(ROOT, comp):
-                q &= (d["surface"] >= 0) & (d["surface"] < 3)
-            sel = q & (d["NHits"] >= cut["NHits"]) & (d["AdjClNum"] < cut["AdjCl"]) & (d["OpHits"] >= cut["OpHits"])
-            run = {"Reco": {"RecoX": d["reco_x"], "RecoY": d["reco_y"], "RecoZ": d["reco_z"]}}
-            sel &= build_fiducial_spatial_mask(run, config, dx, dy, info, args.folder, fid)
-            reco, true, w = d["energy"][sel], a["MainK"][sel], d["w"][sel]
+            reco, true, w = events[comp]
             ax = axes[i, j]
             inwin = (reco >= lo) & (reco <= hi)
             ax.axhspan(lo, 25, color=COLORS["hep"], alpha=0.08, lw=0)
@@ -191,11 +210,19 @@ def stage_migration():
 
 
 # ==========================================================================================
+VARIANTS = {"default": "", "fiduc_truth_refvol": "_fiduc_truth_refvol", "fiduc_truth": "_fiduc_truth"}
+
+
+def highest_entry(config, analysis, label):
+    """Best-cut entry (Values = significance at the analysis exposure, NHits/OpHits/AdjCl) of one study."""
+    sub = {"HEP": "hep-json", "DayNight": "daynight-json"}[analysis]
+    p = f"{ROOT}/config/{config}/{sub}/{args.folder.lower()}/{config}_highest{label}_{analysis}.json"
+    return json.load(open(p))[config][args.energy]
+
+
 def stage_summary():
     def value(config, analysis, label):
-        sub = {"HEP": "hep-json", "DayNight": "daynight-json"}[analysis]
-        p = f"{ROOT}/config/{config}/{sub}/{args.folder.lower()}/{config}_highest{label}_{analysis}.json"
-        return float(json.load(open(p))[config][args.energy]["Values"])
+        return float(highest_entry(config, analysis, label)["Values"])
 
     analyses = ["DayNight", "HEP"]
     fig, axes = plt.subplots(1, len(analyses), figsize=(9.0, 3.0), squeeze=False)
@@ -228,5 +255,82 @@ def stage_summary():
     print(table.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 
+# ==========================================================================================
+# export: pickles in the synced analysis tree, one file per (analysis, config, kind), for the plot repo
+# (LOWE_RECONSTRUCTION_PUBLICATION: sync_solar_data.sh pulls analysis/{analysis}/{config}/marley/{folder}/{label}/*.pkl
+#  for registered labels; its macros load {config}_{name}_{datafile}.pkl and filter on Name).
+SYNC_ROOT = Path(ROOT) / "output/data/analysis"
+ANALYSIS_DIR = {"DayNight": "day-night", "HEP": "hep"}
+SYNC_LABEL = "fiduc_truth"
+
+
+def sync_path(analysis, config, kind):
+    d = SYNC_ROOT / ANALYSIS_DIR[analysis] / config / "marley" / args.folder.lower() / SYNC_LABEL
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{config}_marley_{analysis}_{kind}.pkl"
+
+
+def write_sync(df, analysis, config, kind):
+    lead = ["Config", "Name", "EnergyLabel", "Variable", "Analysis", "Geometry", "Variant", "Component"]
+    df = df[[c for c in lead if c in df.columns] + [c for c in df.columns if c not in lead]]
+    p = sync_path(analysis, config, kind)
+    df.reset_index(drop=True).to_pickle(p, protocol=4)
+    print(f"[sync] {p.relative_to(ROOT)}  ({len(df)} rows)")
+
+
+def base_row(config, analysis, variable):
+    return {"Config": config, "Name": "marley", "EnergyLabel": args.energy, "Variable": variable, "Analysis": analysis,
+            "Geometry": config.split("_")[0], "Study": SYNC_LABEL}
+
+
+def stage_export():
+    from lib import get_analysis_exposure
+    fids = {"default": json.load(open(f"{ROOT}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials.json")),
+            "fiduc_truth": json.load(open(f"{ROOT}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials_fiduc_truth.json"))}
+    for config in args.config:
+        for analysis in ("DayNight", "HEP"):
+            # FiducTruthSummary: one row per variant; refvol holds the reco (default) volume by construction.
+            exposure = float(get_analysis_exposure(ROOT, analysis.upper()))
+            rows, reference = [], None
+            for variant, label in VARIANTS.items():
+                e = highest_entry(config, analysis, label)
+                vol = get_best_fiducial(fids["fiduc_truth" if variant == "fiduc_truth" else "default"], config, args.energy, analysis.upper())
+                reference = reference or float(e["Values"])
+                rows.append({**base_row(config, analysis, "Significance"), "Variant": variant,
+                             "Position": "reco" if variant == "default" else "truth", "Volume": "truth" if variant == "fiduc_truth" else "reco",
+                             "Significance": float(e["Values"]), "SignificanceUnit": r"\sigma", "RatioToDefault": float(e["Values"]) / reference,
+                             "NHits": int(e["NHits"]), "OpHits": int(e["OpHits"]), "AdjCl": int(e["AdjCl"]),
+                             "FiducialX": vol["FiducialX"], "FiducialY": vol["FiducialY"], "FiducialZ": vol["FiducialZ"], "FiducialUnit": "cm",
+                             "Exposure": exposure, "ExposureUnit": "year"})
+            write_sync(pd.DataFrame(rows), analysis, config, "FiducTruthSummary")
+
+            # FiducTruthComposition: the synced {Analysis}_Counts spectra of the three variants in one file.
+            frames = []
+            for variant in VARIANTS:
+                p = SYNC_ROOT / ANALYSIS_DIR[analysis] / config / "marley" / args.folder.lower() / variant / f"{config}_marley_{analysis}_Counts.pkl"
+                df = pd.read_pickle(p).copy()
+                df["Variant"] = variant
+                df["Study"] = SYNC_LABEL
+                frames.append(df.drop(columns=[c for c in ("Significance", "SignificanceUnit", "SignificanceLabel", "Metric", "MetricError", "MetricUnit", "MetricLabel") if c in df.columns]))
+            write_sync(pd.concat(frames, ignore_index=True), analysis, config, "FiducTruthComposition")
+
+        # FiducTruthMigration (HEP): per-event reco energy vs MainK of the gamma/neutron that pass the default cut and volume.
+        cut, fid, events = migration_events(config)
+        lo, hi = args.hep_window
+        rows = []
+        for comp, (reco, true, w) in events.items():
+            inwin = (reco >= lo) & (reco <= hi)
+            wi = w[inwin]
+            rows.append({**base_row(config, "HEP", "MainK"), "Component": comp, "Variant": "default",
+                         "TrueEnergy": [float(x) for x in true], "RecoEnergy": [float(x) for x in reco], "Weight": [float(x) for x in w],
+                         "InWindow": [int(x) for x in inwin], "NMC": int(len(w)), "NMCInWindow": int(inwin.sum()),
+                         "NEffInWindow": float(wi.sum() ** 2 / (wi ** 2).sum()) if wi.sum() > 0 else 0.0,
+                         "WeightFractionTrueBelowWindow": float(w[inwin & (true < lo)].sum() / wi.sum()) if wi.sum() > 0 else np.nan,
+                         "MedianRecoMinusTrue": float(np.median(reco[inwin] - true[inwin])) if inwin.any() else np.nan,
+                         "WindowLow": lo, "WindowHigh": hi, "EnergyUnit": "MeV", "WeightLabel": "SignalParticleWeight",
+                         **cut, "FiducialX": fid["FiducialX"], "FiducialY": fid["FiducialY"], "FiducialZ": fid["FiducialZ"], "FiducialUnit": "cm"})
+        write_sync(pd.DataFrame(rows), "HEP", config, "FiducTruthMigration")
+
+
 for stage in args.stage:
-    {"composition": stage_composition, "migration": stage_migration, "summary": stage_summary}[stage]()
+    {"composition": stage_composition, "migration": stage_migration, "summary": stage_summary, "export": stage_export}[stage]()
