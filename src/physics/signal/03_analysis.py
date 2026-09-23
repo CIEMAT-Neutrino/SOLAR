@@ -112,7 +112,19 @@ parser.add_argument("--config", type=str, help="The configuration to load", defa
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
 parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
-parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument(
+    "--electron_energy",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Build the calorimetric ElectronEnergy branch (compute_electron_cluster + "
+        "compute_cluster_energy/compute_cluster_calibration with clusters=['','Electron']) "
+        "regardless of --workflow, so it can be exported for any sample (signal or "
+        "background) via --energy ElectronEnergy. Samples without their own calibration "
+        "files fall back to marley_official's, same as the CALIBRATION workflow does."
+    ),
+)
 parser.add_argument("--nhits", type=int, help="The nhits cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
@@ -187,6 +199,8 @@ parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalActio
                          "the position estimate to truth (fiduc_truth_refvol study). Default: read BestFiducials_fiduc_truth.json.")
 
 args = parser.parse_args()
+if "ElectronEnergy" in args.energy and not args.electron_energy:
+    parser.error("--energy ElectronEnergy requires --electron_energy (builds the branch).")
 _ctx = study_context(args)
 # Event-level exports (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts) are labeled
 # for truth-fiducial variants, which share energy and folder with the nominal run.
@@ -272,6 +286,7 @@ run = compute_reco_workflow(
     workflow=user_input["workflow"],
     rm_branches=False,
     debug=args.debug,
+    electron_energy=args.electron_energy,
 )
 
 if args.charge_threshold > 0:

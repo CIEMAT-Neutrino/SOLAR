@@ -230,6 +230,26 @@ def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing
     return merged_df, pd.DataFrame(significance_rows)
 
 
+# Components to drop from the truth-fiducial scan's significance sum via
+# --exclude_radiological_from_scan. Historically justified as "radiological has no
+# reconstructable truth position" (its configured key was MainX/Y/Z, the decay's
+# bookkeeping site) -- but truth_key_check_{daynight,sensitivity}.csv
+# (src/physics/signal/truth_position_study.py) showed EndX/Y/Z tracks the reconstructed
+# cluster much better (e.g. VD nominal, N=1293: 69% in-box vs Main's 19%), so
+# config/analysis/backgrounds.json now configures radiological's truth_position_keys as
+# EndX/Y/Z (2026-09-22) and this exclusion is a separate, weaker empirical knob, not a
+# "can't be fiducialized" claim. Do NOT reuse the ESSENTIAL map here
+# (get_essential_background_components, below) -- it drives the unrelated MC-support gate
+# and has no entry for every real background component (e.g. HEP's "8B", a genuine
+# solar-8B physics background with a legitimate truth position), so treating "not
+# essential" as "not fiducializable" silently drops components it was never meant to.
+NON_FIDUCIALIZABLE_TRUTH_COMPONENTS = {"radiological"}
+
+
+def filter_fiducializable_components(components: List[str]) -> List[str]:
+    return [c for c in components if str(c).lower() not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
+
+
 def get_essential_background_components(root_path: str, components: List[str]) -> Set[str]:
     background_cfg = get_background_config(root_path)
     essential_map = {
@@ -308,7 +328,7 @@ parser.add_argument("--config", type=str, help="The configuration to load", defa
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
 parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The analyses to optimize fiducials for", choices=ANALYSIS_CHOICES, default=ANALYSIS_CHOICES)
-parser.add_argument("--energy", nargs="+", type=str, help="The energy for the analysis", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument("--energy", nargs="+", type=str, help="The energy for the analysis", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--exposure", type=float, help="The exposure in years.", default=100)
 parser.add_argument("--stacked", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
@@ -341,6 +361,20 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--exclude_radiological_from_scan",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+    help=(
+        "Drop radiological from background_components before the significance scan (both the "
+        "MC-support gate and the significance-payload sum) -- every other configured background "
+        "(gamma, neutron, and HEP's 8B) is kept. Radiological's truth position (MainX/Y/Z) is the "
+        "decay's bookkeeping location, not a reconstructable cluster position, so at --truth_fiducial "
+        "it dominates the scan with a background that cannot actually be fiducialized and drives the "
+        "optimizer toward volumes that do not help the topological/energy cuts that follow. Default: "
+        "on when --truth_fiducial is set, off otherwise; pass explicitly to override either way."
+    ),
+)
+parser.add_argument(
     "--reference_energy",
     type=str,
     default=None,
@@ -352,6 +386,8 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+if args.exclude_radiological_from_scan is None:
+    args.exclude_radiological_from_scan = bool(args.truth_fiducial)
 config = args.config
 name = args.signal
 configs = {config: [name]}
@@ -414,6 +450,21 @@ for config in configs:
                 analysis_config = dict(analysis_config)
                 analysis_config.pop("energy_min", None)
                 analysis_config.pop("energy_max", None)
+            if args.exclude_radiological_from_scan:
+                # Radiological's truth position is bookkeeping (the decay site, not a
+                # reconstructable cluster position), so it cannot actually be fiducialized;
+                # left in, it dominates the truth scan's background sum and the optimizer
+                # picks a volume that chases an uncontrollable background instead of the
+                # ones (gamma, neutron, 8B, ...) the fiducial cut can genuinely suppress.
+                # Only radiological is dropped -- NOT every "non-essential" component, which
+                # would also catch real backgrounds like HEP's 8B that simply have no entry
+                # in the ESSENTIAL map (get_essential_background_components is for the
+                # unrelated MC-support gate and must not be reused for this).
+                fiducializable_components = filter_fiducializable_components(
+                    list(analysis_config.get("background_components", []))
+                )
+                analysis_config = dict(analysis_config)
+                analysis_config["background_components"] = fiducializable_components
             smoothing_config = get_smoothing_config(
                 str(root), analysis_name=analysis_key, dimensions="1d", stage="fiducial"
             )

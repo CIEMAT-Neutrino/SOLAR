@@ -362,7 +362,10 @@ exceeds 2σ. Default and truth runs therefore share it while `Values` differ.
     radiological component in the fiducial selection. Either (a) or (b) requires re-running the scan, best-fiducial selection and all
     downstream stages for Truncated and Reduced, and changes thesis numbers; none has been applied.
 - Radiological has 1–65 MC events, so its fractions are not statistical statements; in particular the 0% share on HD
-  central under the truth pipeline means all events were rejected.
+  central under the truth pipeline means all events were rejected. **Superseded 2026-09-22: see §9 — radiological's
+  configured truth-position key was wrong (`Main`, not `End`), which is the root cause of most of the "radiological is
+  unassessable / dominates everything" statements below and in §3.7. With the fix, radiological is measurable and, at
+  the truth-optimal fiducial volume, is largely rejected rather than dominant — see §9.3.**
 - The purity checks use MC truth (`MatchedOpFlashPur`); absent or NaN purity is counted as 0.
 - VD background truth X can lie outside the active box while `RecoX` is confined to it.
 - Only DayNight and Sensitivity cuts were used for the event-level checks; HEP enters through the export tables.
@@ -404,4 +407,165 @@ All commands run under the container described in the repository (`containers/so
 | scan | [src/physics/signal/01_fiducialize.py](../../src/physics/signal/01_fiducialize.py) |
 | selection | [src/physics/signal/02_best_fiducial.py](../../src/physics/signal/02_best_fiducial.py) |
 | best volumes | [config/analysis/fiducial/truncated/](../../config/analysis/fiducial/truncated/) |
-| generated tables | [DayNight](truth_position_tables_daynight.md), [Sensitivity](truth_position_tables_sensitivity.md), [faces DayNight](truth_position_faces_daynight.md), [faces Sensitivity](truth_position_faces_sensitivity.md) |
+| generated tables | [DayNight](truth_position_tables_daynight.md), [Sensitivity](truth_position_tables_sensitivity.md), [HEP](truth_position_tables_hep.md), [faces DayNight](truth_position_faces_daynight.md), [faces Sensitivity](truth_position_faces_sensitivity.md) |
+
+---
+
+## 9. Update 2026-09-22: radiological's truth-position key was wrong, plus two related bugs
+
+Triggered by re-examining why `fiduc_truth` was not helping HD lateral/VD as much as expected. Two independent bugs were
+found and fixed, one methodological pitfall was hit and corrected, and the root physics question ("is it radiological
+or gamma/neutron that actually leaks into the analysed region?") was resolved by looking at per-energy-bin spectra
+rather than integrated background weight.
+
+### 9.1 Bug 1 — radiological's configured truth-position key (`Main` → `End`)
+
+`config/analysis/backgrounds.json`'s `BACKGROUND_SAMPLES.truth_position_keys.radiological` was `MainX/Y/Z` (the
+decay's bookkeeping site — for radiological `SignalParticleSurface == -1` for every event, so `Main*` was chosen as
+the fallback, same as neutron). This is why §3.7 and the old caveat above describe radiological as "unassessable" and
+"99–100% of the background weight, 0% surviving the truth pipeline on HD central": `Main*` does not describe the
+reconstructed cluster position for a decay product, so the truth pipeline was rejecting almost everything as a
+position mismatch, and the few events with `SmoothedSignificance` computed on them were essentially noise.
+
+`src/physics/signal/truth_position_study.py`'s existing `truth_key_check` diagnostic (already implemented for
+marley/gamma/neutron, just never run for radiological) settles which key is right, using the *cached* per-event data
+(`--stage extract_aux`, already run; no new heavy computation needed) — fraction of weight whose reco Y/Z lands within
+30 cm of each candidate key (`Main`, `MainParent`, `End`, `SignalParticle`):
+
+| Config | N (window) | `Main` (Y/Z match, in-box) | `End` (Y/Z match, in-box) |
+|---|---|---|---|
+| HD central | 31 | 29%, 58% | 65%, 90% |
+| HD lateral | 14 | 71%, 93% | 86%, 100% |
+| VD nominal | 1293 (largest sample) | 27%, 19% | 37%, 69% |
+| VD shielded | 747 | 37%, 34% | 46%, 77% |
+
+`End` (the decay product's actual stopping/energy-deposit point) wins at every config, most convincingly at VD nominal
+(the only sample with real statistics): in-box fraction 69% vs 19%. **Fix:** `truth_position_keys.radiological` is now
+`EndX/Y/Z`, same reasoning as gamma. This is a real, physically-motivated correction, not a tuning choice — see the
+CSV: `output/data/solar/truth_position/tables/truth_key_check_{daynight,sensitivity}.csv`.
+
+### 9.2 Bug 2 — the `--exclude_radiological_from_scan` scan-exclusion flag dropped 8B too
+
+Before fixing 9.1, the working hypothesis was that radiological should be dropped from the `02_best_fiducial.py`
+significance sum entirely (its position wasn't fiducializable, so summing it into the scan just adds noise). A flag
+(`--exclude_radiological_from_scan`, default on with `--truth_fiducial`) was added to do this — implemented by
+filtering `background_components` down to components marked `ESSENTIAL: true` in
+`config/analysis/backgrounds.json` (`{gamma: true, alpha: false, neutron: true, radiological: false}`). Bug: **`8B`
+has no entry in `ESSENTIAL` at all**, and `HEP`'s `background_components` is `[gamma, neutron, radiological, 8B]` —
+the essential-only filter silently dropped `8B` (a real solar-8B physics background with a legitimate truth position,
+nothing like radiological) alongside radiological. This confounded every HEP scan result computed under the first
+version of the fix.
+
+**Fix:** `02_best_fiducial.py` no longer reuses the `ESSENTIAL` map (which drives the unrelated MC-support gate) for
+this purpose. A dedicated `NON_FIDUCIALIZABLE_TRUTH_COMPONENTS = {"radiological"}` set / `filter_fiducializable_components()`
+helper drops only radiological by name; every other configured background (including `8B`) is kept. Verified by
+rerunning the HEP scan alone: with `8B` restored, HD lateral's HEP scan re-converges to the exact same volume
+(0/80/100) it had before either bug — confirming the apparent HEP regression seen right after bug 2 was introduced
+was 100% attributable to losing `8B`, not to anything about radiological.
+
+### 9.3 Was excluding radiological from the scan actually a good idea? Yes — tested explicitly, unanimous
+
+With 9.1 and 9.2 both fixed, radiological is a *correctly measurable* background — so the question "should the
+truth-fiducial volume scan sum it in or not?" became testable rather than assumed. Ran the scan (not the full
+downstream chain) both ways, same units/exposure, for all 3 analyses on 3 configs (HD central, HD lateral, VD
+nominal):
+
+| Config | Analysis | Exclude radiological | Include radiological |
+|---|---|---|---|
+| HD central | DayNight | 4.428 | 4.42 |
+| HD central | HEP | 2.021 | 2.02 |
+| HD central | Sensitivity | 3.21 | 2.99 |
+| HD lateral | DayNight | 0.967 | 0.75 |
+| HD lateral | HEP | 2.016 | 2.02 |
+| HD lateral | Sensitivity | 3.21 | 3.09 |
+| VD nominal | DayNight | 15.11 | 1.43 |
+| VD nominal | HEP | 1.04 | **no admissible volume** (MC-support gate rejects every candidate; falls back to the plain reco-default volume) |
+| VD nominal | Sensitivity | 40.24 | 38.70 |
+
+Every comparison favours excluding radiological from the scan; several (VD nominal DayNight, VD nominal HEP) are not
+close. Kept `--exclude_radiological_from_scan` default-on with `--truth_fiducial`. Not run downstream (the scan-level
+signal was one-sided enough not to justify ~1.5 h/config of compute to confirm it); revisit if that assumption is
+ever challenged.
+
+### 9.4 Is radiological or gamma/neutron actually leaking into the analysed region? Per-bin spectra, not integrated weight
+
+§3.7's "radiological is 94–100% of the background weight, gamma is 0–2%" is true only *before any position cut* — it
+describes the raw simulated sample, not what survives at the fiducial volume the analysis actually uses. Checked
+directly with the raw per-bin `Fiducial_Scan_fiduc_truth.pkl` counts (HD lateral, HEP truth-optimal volume
+X=0/Y=80/Z=100, 1 MeV bins):
+
+| Energy (MeV) | hep signal | gamma | neutron | radiological |
+|---|---|---|---|---|
+| 14.5 | 0.84 | 238.9 | 1034.0 | 0 |
+| 15.5 | 0.64 | 89.4 | 6.9 | 0 |
+| 16.5 | 0.43 | 22.8 | 208.2 | 0 |
+| 17.5 | 0.25 | 5.5 | 1.6 | 0 |
+| 18.5–19.5 | ~0.1 | ~0.6 | ~0.2 | 0 |
+| 20.5–29.5 | ~0 | ~0 | ~0 | 0 |
+
+At this volume the position + containment + consistency mask rejects **every** radiological event outright (0 counts
+across the whole 14–30 MeV window), while gamma and neutron survive and are the entire surviving background,
+concentrated in **14–20 MeV**. Radiological dominates the raw sample (§3.7) precisely because it is the easiest
+component to remove completely with the right position cut; gamma/neutron survive the same cut and are what is
+actually left in the region that matters. High-energy (20–30 MeV) gamma is not a real effect here: its raw count is
+~1e-13, i.e. gamma does not populate the high sub-band at all at this working point.
+
+**Open finding, not yet resolved:** the scan itself reports the *entire* HEP significance for this volume (2.02) as
+coming from the 20–30 MeV sub-band, despite raw signal and background both being ~0 there. Traced to
+`smooth_histogram_with_config`'s data-driven Gaussian smoothing: in this deep zero-count tail it leaves smoothed
+signal (~1e-3–1e-4, from the `hep` flux's true-energy endpoint at ~18.8 MeV smearing into the reco tail) and smoothed
+background residuals that fall off at different rates, so the Asimov formula computes a non-trivial but likely
+meaningless significance from the smoothing kernel's interaction with a hard kinematic cutoff, not real
+signal/background separation. This may mean the HEP high sub-band's contribution to volume selection is partly
+artifact-driven; not yet checked whether this changed which volume `02_best_fiducial.py` picked for any config.
+
+### 9.5 Methodological pitfall: partial reruns of fiducial-volume-dependent data silently mix volumes
+
+After fixing 9.1/9.2, a "targeted" rerun was used to save compute: only `01_fiducialize.py`/`03_analysis.py` for
+`radiological` were rerun (its truth key changed), while `marley`/`gamma`/`neutron`/`8B`'s existing `Ref`/`Rebin` pkls
+were reused on the assumption they were "unaffected." This produced a spurious result: HD lateral's HEP dropped from
+5.83σ to 4.84σ, appearing to show that the corrected (honest) radiological modelling made truth-fiducialisation a
+genuine loss for this config/analysis.
+
+**This was wrong.** Every sample's `Ref`/`Rebin` data (built by `03_analysis.py --export_fiducial`) is built against
+*whichever fiducial volume was current in `BestFiducials_fiduc_truth.json` at the time it was generated* — not
+against the sample's own properties. `marley`'s data had last been built while `BestFiducials_fiduc_truth.json` held
+a transient, bug-affected HEP volume (20/20/100, from bug 2 above) from an earlier pass; only `radiological` was
+refreshed at the newly-corrected volume (0/80/100). The downstream significance was therefore computed from a
+mismatched mix of per-component fiducial volumes — a real bug in the shortcut, not a physics result. A full clean
+rerun (`run_studies.py --study fiduc_truth`, every sample refreshed together at the same final volume) reproduces the
+original, correct 5.83σ exactly.
+
+**Lesson:** fiducial-volume-dependent per-sample data (`Ref`/`Rebin` pkls) cannot be partially refreshed across
+components after the stored best-fiducial volume changes — every sample sharing that volume must be regenerated
+together, or downstream numbers silently mix inconsistent volumes.
+
+### 9.6 Final confirmed numbers (Truncated folder, `fiduc_truth`, full clean rerun — all fixes applied)
+
+| Config | Analysis | Volume X/Y/Z | Result | vs default |
+|---|---|---|---|---|
+| HD central | DayNight | 100/80/320 | 5.47σ | = default (5.47) |
+| HD central | HEP | 0/80/0 | 12.18σ | = default (12.18) |
+| HD central | Sensitivity | 0/100/20 | Δχ² 7.33 | ≥ default (5.79) |
+| HD lateral | DayNight | 60/80/0 | 1.75σ | ≥ default (1.54) |
+| HD lateral | HEP | 0/80/100 | **5.83σ** | ≥ default (5.67) — confirmed win, §9.5's 4.84σ retracted |
+| HD lateral | Sensitivity | 60/60/0 | Δχ² 0.62 | ≥ default (0.41) |
+| VD nominal | DayNight | 80/180/480 | 0.80σ | slightly below default (0.86) |
+| VD nominal | HEP | 0/0/40 | 2.75σ | ≈ default (2.76) |
+| VD nominal | Sensitivity | 100/80/0 | Δχ² 0.91 | ≥ default (0.08) |
+| VD shielded | DayNight | 100/80/0 | 1.87σ | slightly below default (1.91) |
+| VD shielded | HEP | 0/0/20 | 3.66σ | = default (3.66) |
+| VD shielded | Sensitivity | 100/80/140 | Δχ² 0.92 | ≥ default (0.40) |
+
+VD shielded's first clean-rerun attempt hung ~7 h in a known kaleido/headless-Chrome plot-export issue (the same
+failure mode noted in the 2026-09-21 session on the full study queue); killed and relaunched, completed cleanly
+2026-09-23 00:22. Its numbers match the earlier (methodologically sound, since its HEP volume never moved during any
+of the bug-fix iterations) targeted rerun to within rounding, confirming §9.5's staleness pitfall did not affect this
+config.
+
+**Overall verdict:** with both bugs (§9.1, §9.2) fixed, `fiduc_truth` is now a clean win over the default reco
+fiducialisation for DayNight and Sensitivity on 3/4 configs, and for HEP on 2/4 (HD central, HD lateral); VD nominal
+and VD shielded's DayNight sit slightly below default (0.80 vs 0.86, 1.87 vs 1.91) and their HEP results are
+statistical ties with default (2.75 vs 2.76, 3.66 vs 3.66) — i.e. truth fiducialisation never loses meaningfully to
+the default, and wins outright everywhere the surviving background is gamma/neutron rather than a geometry where
+radiological's rejection was already near-complete under the default reco cut too.

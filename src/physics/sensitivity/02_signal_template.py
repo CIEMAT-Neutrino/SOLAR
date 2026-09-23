@@ -207,8 +207,8 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help=(
-        "Use true MC particle coordinates (SignalParticleX/Y/Z for marley, EndX/Y/Z for gamma, "
-        "MainX/Y/Z for neutron/radiological) instead of reco flash-matched coordinates (RecoX/Y/Z). "
+        "Use true MC particle coordinates (SignalParticleX/Y/Z for marley, EndX/Y/Z for gamma/radiological, "
+        "MainX/Y/Z for neutron) instead of reco flash-matched coordinates (RecoX/Y/Z). "
         "Output templates are saved with a '_fiduc_truth' suffix."
     ),
 )

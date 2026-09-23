@@ -365,9 +365,14 @@ def main() -> None:
                         row["cut"] = f"{cut[0]}/{cut[1]}/{cut[2]}" if cut else "-"
                         row["metric"] = rec["solar"]
                         row["value"] = f"Δχ² {rec['solar']:.2f}/{rec['react']:.2f}@30y"
-                        # Sensitivity is quoted at its primary 30-yr exposure (EVALUATION_EXPOSURE_YEARS); the 10-yr
-                        # secondary pass stays available as c10 but is no longer what at_eval reports.
-                        row["at_eval"] = row["value"]
+                        # "value" is the quoted 30-yr number (EVALUATION_EXPOSURE_YEARS for Sensitivity).
+                        # at_eval reports the 10-yr SECONDARY pass (10Y_Contours), same convention as the
+                        # DayNight/HEP branch above reporting its own secondary read (S20 there, S10 here).
+                        # 2026-09-21 briefly duplicated "value" into at_eval on the theory that Sensitivity
+                        # is "quoted at 30 yr so at_eval should say 30 yr too" -- reverted 2026-09-23: it
+                        # silently dropped the 10-yr column every downstream consumer of this table (and at
+                        # least one external checker validating against *_10Y_Contours.pkl) expected there.
+                        row["at_eval"] = f"Δχ² {c10['solar']:.2f}/{c10['react']:.2f}@10y" if c10 else "-"
                         if rec["fit"] != "pull" and label != "legacy_fit":   # legacy_fit is the non-pull fit by design
                             row["reasons"].append("fit!=pull")
                         if label and e["held_cut"] and ref_cut and cut != ref_cut:

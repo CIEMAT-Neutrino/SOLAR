@@ -647,6 +647,19 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--exclude_radiological_from_scan",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+    help=(
+        "Forwarded to signal/02_best_fiducial.py: drop radiological from the fiducial-volume scan's "
+        "significance sum (every other configured background, e.g. gamma/neutron/8B, is kept). "
+        "Radiological's truth position is bookkeeping, not a reconstructable position, so at "
+        "--truth_fiducial it otherwise dominates and steers the scan toward a volume that cannot help "
+        "the cuts that follow. Default: on when --truth_fiducial is set, off otherwise "
+        "(02_best_fiducial.py's own default); pass explicitly to override."
+    ),
+)
+parser.add_argument(
     "--reference_folder",
     type=str,
     default=None,
@@ -892,6 +905,14 @@ def truth_fiducial_args_for() -> List[str]:
     return ["--truth_fiducial"] if args.truth_fiducial else []
 
 
+def exclude_radiological_from_scan_args_for() -> List[str]:
+    # None (unset) is left unforwarded so 02_best_fiducial.py's own default (on with
+    # --truth_fiducial, off otherwise) applies; only an explicit choice overrides it.
+    if args.exclude_radiological_from_scan is None:
+        return []
+    return ["--exclude_radiological_from_scan" if args.exclude_radiological_from_scan else "--no-exclude_radiological_from_scan"]
+
+
 def truth_purity_args_for() -> List[str]:
     """Purity-cut flags for the event-level stages (fiducialize, analysis, templates) only."""
     if not args.truth_fiducial:
@@ -1099,7 +1120,8 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
                 + ["--mc_threshold", str(args.fiducial_mc_threshold)]
                 + ignore_energy_window_args_for()
                 + reference_energy_args_for()
-                + truth_fiducial_args_for(),
+                + truth_fiducial_args_for()
+                + exclude_radiological_from_scan_args_for(),
             )
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/02_best_fiducial.py (--no-fiducialization).")

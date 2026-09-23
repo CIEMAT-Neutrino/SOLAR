@@ -343,7 +343,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     ],
     # 9.1 — truth x-fiducialisation vs reco flash-matching
     # Runs full fiducialization with per-sample truth positions instead of RecoX/Y/Z:
-    #   marley → SignalParticleX/Y/Z, gamma → EndX/Y/Z, neutron/radiological → MainX/Y/Z
+    #   marley → SignalParticleX/Y/Z, gamma/radiological → EndX/Y/Z, neutron → MainX/Y/Z
     # Produces BestFiducials_fiduc_truth.json and labeled Rebin pkls.
     # Truth is used for everything position related: the fiducial cut runs on the true
     # position, and the matched flash must be pure and agree with it (truth_match_purity in

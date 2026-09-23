@@ -44,6 +44,7 @@ parser.add_argument(
         "TotalEnergy",
         "SelectedEnergy",
         "SolarEnergy",
+        "ElectronEnergy",
     ],
     default=[
         "SignalParticleK",
@@ -52,6 +53,16 @@ parser.add_argument(
         "SelectedEnergy",
         "SolarEnergy",
     ],
+)
+parser.add_argument(
+    "--electron_energy",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Build the calorimetric ElectronEnergy branch regardless of --workflow, so a "
+        "FiducializationMask can be exported for it via --energy ElectronEnergy. See "
+        "03_analysis.py --electron_energy for the full explanation."
+    ),
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
@@ -63,7 +74,7 @@ parser.add_argument(
     help=(
         "Use true MC particle coordinates instead of reco flash-matched coordinates "
         "(RecoX/Y/Z) for the fiducial volume scan. Mapping: marley→SignalParticleX/Y/Z, "
-        "gamma→EndX/Y/Z, neutron/radiological→MainX/Y/Z. "
+        "gamma/radiological→EndX/Y/Z, neutron→MainX/Y/Z. "
         "Output pkl is saved with a '_fiduc_truth' suffix to avoid overwriting the nominal scan."
     ),
 )
@@ -94,6 +105,8 @@ parser.add_argument("--truth_drift_tol", type=float, default=None, help="Overrid
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
 
 args = parser.parse_args()
+if "ElectronEnergy" in args.energy and not args.electron_energy:
+    parser.error("--energy ElectronEnergy requires --electron_energy (builds the branch).")
 config = args.config
 name = args.signal
 configs = {config: [name]}
@@ -168,6 +181,7 @@ run = compute_reco_workflow(
     rm_branches=False,
     workflow=user_input["workflow"],
     debug=args.debug,
+    electron_energy=args.electron_energy,
 )
 
 for config in configs:

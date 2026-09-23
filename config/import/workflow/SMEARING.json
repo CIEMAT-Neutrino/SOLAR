@@ -60,6 +60,7 @@
             "SignalParticleY": 1,
             "SignalParticleZ": 1,
             "MainE": 1,
+            "MainK": 1,
             "MainParentE": 1,
             "ElectronE": 0,
             "GammaE": 0,

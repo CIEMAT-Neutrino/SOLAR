@@ -22,7 +22,7 @@ Two stages
                 output/docs/truth_position_tables_{analysis}.md  (+ CSV in output/data/solar/truth_position/tables/)
 
 Truth position keys are those of lib.fiducial.get_truth_pos_keys: SignalParticleX/Y/Z for marley,
-EndX/Y/Z for gamma, MainX/Y/Z for neutron and radiological.
+EndX/Y/Z for gamma and radiological, MainX/Y/Z for neutron.
 
 Selection used by the diagnostics (mirrors 01_fiducialize.py / 03_analysis.py)
 ------------------------------------------------------------------------------

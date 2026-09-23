@@ -45,6 +45,7 @@ def compute_reco_workflow(
     debug: bool = False,
     verbose: Optional[Union[int, str]] = None,
     max_log_lines: Optional[int] = None,
+    electron_energy: bool = False,
 ) -> dict[str, dict]:
     """
     Compute the reco variables for the events in the run.
@@ -60,6 +61,11 @@ def compute_reco_workflow(
         debug: print debug information.
         verbose: global verbosity for workflow logs (0=warnings/errors, 1=log, 2=info).
         max_log_lines: maximum number of log lines to keep in terminal output.
+        electron_energy: also build the ElectronCharge/ElectronEnergy branches (normally only
+            computed for CORRECTION/CALIBRATION/DISCRIMINATION workflows) regardless of the
+            requested workflow preset. Lets ANALYSIS/SIGNIFICANCE runs (used for background
+            samples too) reuse the marley-calibrated electron energy reconstruction, falling
+            back to marley_official calibration files as usual when a sample has none of its own.
 
     Returns:
         run (dict): dictionary containing the TTree with the new branches.
@@ -386,8 +392,10 @@ def compute_reco_workflow(
     ### CALIBRATION AND RECONSTRUCTION WORKFLOWS
     elif is_corr_chain:
         trees = ["Reco"]
+        build_electron_cluster = is_corr_or_calib_or_disc or electron_energy
         if is_corr_or_calib_or_disc:
             trees = ["Truth", "Reco"]
+        if build_electron_cluster:
             run, output, this_new_branches = compute_adjcl_basics(
                 run,
                 configs,
@@ -435,7 +443,7 @@ def compute_reco_workflow(
                 params,
                 clusters=(
                     ["", "Electron"]
-                    if is_corr_or_calib_or_disc
+                    if build_electron_cluster
                     else [""]
                 ),
                 rm_branches=rm_branches,
@@ -451,7 +459,7 @@ def compute_reco_workflow(
                 params,
                 clusters=(
                     ["", "Electron"]
-                    if is_corr_or_calib_or_disc
+                    if build_electron_cluster
                     else [""]
                 ),
                 rm_branches=rm_branches,
