@@ -248,7 +248,7 @@ for label, params in zip(
                             "Values": res_centers,
                             "ValuesUnit": "(Truth - Reco) / Truth",
                             "Counts": hist_y,
-                            "CountsUnit": "Probability density (area = 1)",
+                            "CountsUnit": "",
                             "RawCounts": hist_counts,
                             # No live callable is stored here (unlike lib.fitting.gauss
                             # itself) so this pkl can be unpickled outside this repo --
@@ -262,9 +262,9 @@ for label, params in zip(
                             "ParamsFormat": [".1f", ".3f", ".3f"],
                             "ParamsError": perr,
                             "ParamsUnit": [
-                                "Probability density",
-                                "(Truth - Reco) / Truth",
-                                "(Truth - Reco) / Truth",
+                                "",
+                                "",
+                                "",
                             ],
                             "p0": popt[0],
                             "p1": popt[1],
@@ -294,7 +294,7 @@ for label, params in zip(
                             "Values": res_centers,
                             "ValuesUnit": "(Truth - Reco) / Truth",
                             "Counts": hist_y,
-                            "CountsUnit": "Probability density (area = 1)",
+                            "CountsUnit": "",
                             "RawCounts": hist_counts,
                             "FitFunction": None,
                             "FitFunctionLabel": "None (too few populated bins)",
@@ -304,9 +304,9 @@ for label, params in zip(
                             "ParamsFormat": [".1f", ".3f", ".3f"],
                             "ParamsError": None,
                             "ParamsUnit": [
-                                "Probability density",
-                                "(Truth - Reco) / Truth",
-                                "(Truth - Reco) / Truth",
+                                "",
+                                "",
+                                "",
                             ],
                             "p0": None,
                             "p1": float(np.mean(residual)),

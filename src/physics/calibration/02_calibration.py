@@ -323,7 +323,7 @@ for config in configs:
                         "Values": res_centers_g,
                         "ValuesUnit": "(True - Reco) / True",
                         "Counts": hist_y_g,
-                        "CountsUnit": "Probability density (area = 1)",
+                        "CountsUnit": "",
                         "RawCounts": hist_counts_g,
                         # No live callable stored here -- a function object pickles by
                         # module reference (lib.fitting.gauss), which breaks when this
@@ -337,9 +337,9 @@ for config in configs:
                         "ParamsFormat": [".1f", ".3f", ".3f"],
                         "ParamsError": perr,
                         "ParamsUnit": [
-                            "Probability density",
-                            "(True - Reco) / True",
-                            "(True - Reco) / True",
+                            "",
+                            "",
+                            "",
                         ],
                         "p0": popt[0],
                         "p1": popt[1],

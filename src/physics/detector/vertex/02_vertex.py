@@ -5,6 +5,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from scipy.optimize import minimize
+from scipy.special import erf
 
 save_path = f"{root}/output/images/vertex/resolution"
 data_path = f"{root}/output/data/vertex/resolution"
@@ -30,33 +32,137 @@ def gaussian_plus_sym_exp(x, a, mu, sigma, b, tau):
     return a * np.exp(-0.5 * ((x - mu) / abs(sigma)) ** 2) + b * np.exp(-abs(x - mu) / abs(tau))
 
 
-def _fit_resolution(hx, edges, name, p0_sigma=5, label=None):
-    """Fit resolution histogram; returns (fit_function_label, popt, perr, bin_centers)."""
-    _xc = 0.5 * (edges[1:] + edges[:-1])
-    _w = np.where(hx > 0, 1.0 / np.sqrt(hx), np.inf)
-    if "marley" in name.lower():
-        try:
-            ff = "DoubleGaussian"
-            popt, pcov = curve_fit(
-                double_gaussian, _xc, hx,
-                p0=[np.max(hx), 0, p0_sigma, np.max(hx) * 0.2, 4 * p0_sigma],
-                sigma=_w,
-                bounds=([0, -20, 0.1, 0, 0.1], [np.max(hx) * 2, 20, 20, np.max(hx), 100]),
-            )
-            if abs(popt[2]) > abs(popt[4]):
-                popt[0], popt[2], popt[3], popt[4] = popt[3], popt[4], popt[0], popt[2]
-                _pe = np.sqrt(np.diag(pcov))
-                _pe[0], _pe[2], _pe[3], _pe[4] = _pe[3], _pe[4], _pe[0], _pe[2]
-                pcov = np.diag(_pe ** 2)
-        except Exception:
-            ff = "Gaussian"
-            popt, pcov = curve_fit(gaussian, _xc, hx, p0=[np.max(hx), 0, p0_sigma], sigma=_w)
+# Half-width (cm) of the error window used by the resolution fit: the region shaped by
+# the resolution peak. Errors beyond it come from degraded or broken reconstructions
+# and are not fitted.
+RESOLUTION_FIT_RANGE = 5
+RESOLUTION_BOOTSTRAP = 30          # resamplings used for the core-width uncertainty
+RESOLUTION_BOOTSTRAP_MAX_N = 20000  # above this size the MINUIT error is used
+
+
+def _truncated_gaussian_pdf(x, mu, sigma, lim):
+    norm = 0.5 * (erf((lim - mu) / (np.sqrt(2) * sigma)) - erf((-lim - mu) / (np.sqrt(2) * sigma)))
+    return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (np.sqrt(2 * np.pi) * sigma * np.maximum(norm, 1e-300)), norm
+
+
+def _unbinned_fit(values, double, lim):
+    """Unbinned maximum-likelihood fit of a (double) Gaussian truncated to [-lim, lim].
+
+    Returns the shape parameters, (f, mu, s_core, s_tail) or (mu, s), and their covariance.
+    A binned fit evaluates the model at bin centres only, so a core narrower than a bin
+    is not constrained by the bins that contain it; the unbinned likelihood uses every
+    event's error and has no such degeneracy.
+    """
+    x = np.asarray(values, dtype=float)
+    if double:
+        def nll(p):
+            f, mu, s, t = p
+            g1, _ = _truncated_gaussian_pdf(x, mu, s, lim)
+            g2, _ = _truncated_gaussian_pdf(x, mu, t, lim)
+            return -np.sum(np.log(np.maximum(f * g1 + (1 - f) * g2, 1e-300)))
+        starts = [[f0, 0, s0, k * s0] for s0 in (0.2, 0.4, 0.8, 1.5) for f0 in (0.2, 0.5, 0.8) for k in (3, 8)]
+        # f >= 0.05 and sigma >= 0.1 cm keep low-statistics fits (fixed-energy bins, ~100 events)
+        # from collapsing onto a spike of a few events; the tail cannot exceed ~20 cm inside the window.
+        bounds = [(0.05, 0.999), (-2, 2), (0.1, 5), (0.1, 20)]
     else:
-        ff = "Gaussian"
-        popt, pcov = curve_fit(gaussian, _xc, hx, p0=[np.max(hx), 0, p0_sigma], sigma=_w)
+        def nll(p):
+            g, _ = _truncated_gaussian_pdf(x, p[0], p[1], lim)
+            return -np.sum(np.log(np.maximum(g, 1e-300)))
+        starts = [[0, s0] for s0 in (0.3, 1, 3)]
+        bounds = [(-2, 2), (0.1, 20)]
+
+    best = None
+    for p0 in starts:
+        try:
+            r = minimize(nll, p0, bounds=bounds, method="L-BFGS-B")
+        except Exception:
+            continue
+        if np.isfinite(r.fun) and (best is None or r.fun < best.fun):
+            best = r
+    if best is None:
+        raise RuntimeError("unbinned fit failed from every start")
+    popt, pcov = best.x, np.asarray(best.hess_inv.todense())
+    try:
+        from iminuit import Minuit
+
+        m = Minuit(nll, best.x)
+        m.errordef = Minuit.LIKELIHOOD
+        m.limits = bounds
+        m.migrad()
+        m.hesse()
+        if m.valid and m.fval <= best.fun + 1e-6:
+            popt, pcov = np.array(m.values), np.array(m.covariance)
+    except Exception:
+        pass
+    if double and popt[2] > popt[3]:
+        popt = np.array([1 - popt[0], popt[1], popt[3], popt[2]])
+        pcov = pcov[np.ix_([0, 1, 3, 2], [0, 1, 3, 2])]
+    return popt, pcov
+
+
+def _fit_resolution(values, edges, name, p0_sigma=5, label=None, density=False, bootstrap=False, fallback=False):
+    """Fit the vertex errors `values`; returns (fit_function_label, popt, perr, bin_centres).
+
+    Unbinned likelihood inside +-RESOLUTION_FIT_RANGE. popt follows the plotting
+    convention of the fit functions (amplitude, mean, sigma[, amplitude, sigma]) with
+    amplitudes in counts per bin of `edges` (or in density units when density=True),
+    so the curve overlays the histogram of all `values`. With bootstrap=True the core
+    width error is the spread over RESOLUTION_BOOTSTRAP resamplings (small samples only).
+    With fallback=True a degenerate double Gaussian (core fraction or width at its
+    bound, or both widths equal) is replaced by a single Gaussian: small fixed-energy
+    samples do not resolve two components.
+    """
+    _xc = 0.5 * (edges[1:] + edges[:-1])
+    bw = edges[1] - edges[0]
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    lim = RESOLUTION_FIT_RANGE
+    w = v[np.abs(v) <= lim]
+    if len(w) < 20:
+        raise RuntimeError("too few events in the fit window")
+    scale = len(w) / len(v) if density else len(w) * bw
+    double = "marley" in name.lower()
+    ff = "DoubleGaussian" if double else "Gaussian"
+    shape, cov = _unbinned_fit(w, double, lim)
+    if double and fallback and (
+        shape[0] <= 0.051 or shape[2] <= 0.101 or abs(shape[3] - shape[2]) < 0.02 * shape[2]
+    ):
+        double, ff = False, "Gaussian"
+        shape, cov = _unbinned_fit(w, double, lim)
+
+    def amplitudes(q):
+        if double:
+            f, mu, s, t = q
+            _, n1 = _truncated_gaussian_pdf(0.0, mu, s, lim)
+            _, n2 = _truncated_gaussian_pdf(0.0, mu, t, lim)
+            return np.array([scale * f / (np.sqrt(2 * np.pi) * s * n1), mu, s,
+                             scale * (1 - f) / (np.sqrt(2 * np.pi) * t * n2), t])
+        mu, s = q
+        _, n1 = _truncated_gaussian_pdf(0.0, mu, s, lim)
+        return np.array([scale / (np.sqrt(2 * np.pi) * s * n1), mu, s])
+
+    popt = amplitudes(shape)
+    # Propagate the shape covariance to the plotting parameters (numerical Jacobian)
+    jac = np.zeros((len(popt), len(shape)))
+    for i in range(len(shape)):
+        h = 1e-6 * max(abs(shape[i]), 1e-3)
+        dq = np.array(shape, dtype=float)
+        dq[i] += h
+        jac[:, i] = (amplitudes(dq) - popt) / h
+    perr = np.sqrt(np.abs(np.diag(jac @ cov @ jac.T)))
+    if bootstrap and len(w) <= RESOLUTION_BOOTSTRAP_MAX_N:
+        rng = np.random.default_rng(12345)
+        widths = []
+        for _ in range(RESOLUTION_BOOTSTRAP):
+            try:
+                widths.append(_unbinned_fit(rng.choice(w, len(w)), double, lim)[0][2 if double else 1])
+            except Exception:
+                continue
+        if len(widths) > 2:
+            perr[2] = max(perr[2], float(np.std(widths)))
     if label:
-        rprint(f"[cyan][Fit] {label}: {ff}  σ_core = {popt[2]:.2f} cm[/cyan]")
-    return ff, popt, np.sqrt(np.diag(pcov)), _xc
+        rprint(f"[cyan][Fit] {label}: {ff}  σ_core = {popt[2]:.2f} ± {perr[2]:.2f} cm[/cyan]")
+    return ff, popt, perr, _xc
 
 
 def _get_fit_meta(fit_function):
@@ -198,7 +304,10 @@ for config in configs:
                 bins=np.arange(-20, 20.5, 0.5),
                 density=False,
             )
-            fit_function, popt, perr_tmp, _ = _fit_resolution(hx, edges, name, p0_sigma=2, label=f"{coord} overall")
+            fit_function, popt, perr_tmp, _ = _fit_resolution(
+                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > purity_threshold],
+                edges, name, label=f"{coord} overall", bootstrap=True,
+            )
 
             perr = perr_tmp
             popt_overall, perr_overall = popt, perr
@@ -335,11 +444,12 @@ for config in configs:
                 if len(_edf) < 50:
                     continue
                 _evals = _edf[error][_purity_mask[_emask]] if coord == "X" else _edf[error]
-                hx, edges = np.histogram(_evals, bins=_res_edges, density=True)
-                if np.sum(hx) == 0:
+                hc, edges = np.histogram(_evals, bins=_res_edges)
+                if np.sum(hc) == 0:
                     continue
+                hx = hc / np.sum(hc) / np.diff(edges)
                 try:
-                    fit_function, popt, perr, _xc = _fit_resolution(hx, edges, name)
+                    fit_function, popt, perr, _xc = _fit_resolution(_evals, edges, name, density=True, fallback=True)
                 except Exception:
                     continue
                 _es_energies.append(energy)
@@ -387,11 +497,12 @@ for config in configs:
                 _cdf = this_reco_df[_cmask]
                 if len(_cdf) < 50:
                     continue
-                hx, edges = np.histogram(_cdf[error], bins=_res_edges, density=True)
-                if np.sum(hx) == 0:
+                hc, edges = np.histogram(_cdf[error], bins=_res_edges)
+                if np.sum(hc) == 0:
                     continue
+                hx = hc / np.sum(hc) / np.diff(edges)
                 try:
-                    fit_function, popt, perr, _xc = _fit_resolution(hx, edges, name)
+                    fit_function, popt, perr, _xc = _fit_resolution(_cdf[error], edges, name, density=True, fallback=True)
                 except Exception:
                     continue
                 _cs_bins.append(coord_bin)
