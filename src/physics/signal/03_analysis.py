@@ -718,4 +718,4 @@ for config in configs:
                         f"— allowing to pass (non-essential)."
                     )
 
-                save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name]}/{analysis.upper()}", config=config, name=name, filename=_rebin_label, rm=user_input['rewrite'], debug=user_input['debug'])
+                save_df(rebin_df, f"{info['PATH']}/{user_input['directory'][name.split("_")[0]]}/{analysis.upper()}", config=config, name=name, filename=_rebin_label, rm=user_input['rewrite'], debug=user_input['debug'])
