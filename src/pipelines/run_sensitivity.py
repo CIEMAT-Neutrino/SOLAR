@@ -1625,7 +1625,10 @@ for config, folder in product(args.config, args.folder):
     for name in list(args.signals) + _background_component_names:
         sample_key = name.split("_")[0].lower()
         component_is_essential = is_essential_component(sample_key, analysis_info)
-        is_explicitly_in_analysis = sample_key in selected_background_components
+        is_explicitly_in_analysis = (
+            sample_key in selected_background_components
+            or str(name).lower() in selected_background_components
+        )
 
         if sample_key not in _signal_keys and not component_is_essential and not is_explicitly_in_analysis:
             skipped_by_policy.append(name)
