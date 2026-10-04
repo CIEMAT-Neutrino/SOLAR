@@ -481,7 +481,7 @@ for config in configs:
                 _nhits_scan,
                 _ophits_scan,
                 _adjcls_scan,
-                zip(user_input["weights"][name.split("_")[0]], user_input["weight_labels"][name.split("_")[0]], user_input["colors"][name.split("_")[0]]),
+                zip(user_input["weights"][name.split("_")[0]], (user_input["weight_labels"][name.split("_")[0]] if "marley" in name else [name]), user_input["colors"][name.split("_")[0]]),
             ),
             total=_scan_total,
             description=f"Cut 1/{_scan_total} for {energy}...",
