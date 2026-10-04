@@ -438,6 +438,9 @@ for config in configs:
             os.makedirs(_model_dir)
         _model_path = f"{_model_dir}/{config}_{name}_random_forest_discriminant.pkl"
         # Save the trained classifier to a file
+        # pnfs (dCache) files cannot be overwritten in place: remove first, as lib.io.save2pnfs does.
+        if os.path.isfile(_model_path):
+            os.remove(_model_path)
         with open(_model_path, "wb") as model_file:
             pickle.dump(rf_classifier, model_file)
 
