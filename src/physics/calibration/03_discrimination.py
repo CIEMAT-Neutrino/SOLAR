@@ -39,6 +39,26 @@ _models_base = analysis_info.get("DATA_PATHS", {}).get(
 
 configs = {config: [name]}
 
+
+# 2026-10-04: solar-spectrum weighting of the branch classifier.
+# The marley productions are generated flat in neutrino energy, so an unweighted fit (and the ROC
+# threshold) optimise the upper/lower branch choice for energies that carry little solar flux.
+# Training events are weighted with the 8B+hep interaction spectrum (truth KDE used by the analysis
+# weights) and the branch threshold minimises the weighted energy resolution instead.
+def solar_spectrum_weights(info, name, energies):
+    kde_path = f"{info['PATH']}/signal/truth/{config}/{config}_{name.split('_')[0]}_comb_kde_p.pkl"
+    kde = pickle.load(open(kde_path, "rb"))
+    w = np.exp(kde.score_samples(np.asarray(energies, dtype=float)[:, None]))
+    w = np.where(np.isfinite(w) & (np.asarray(energies) > 0), w, 0.0)
+    return w / np.mean(w[w > 0]) if np.any(w > 0) else np.ones_like(w)
+
+
+def weighted_core_width(x, w):
+    """Half of the weighted 16-84 % interval of x."""
+    order = np.argsort(x)
+    cw = np.cumsum(w[order]) / np.sum(w)
+    return 0.5 * (np.interp(0.84, cw, x[order]) - np.interp(0.16, cw, x[order]))
+
 user_input = {
     "workflow": "DISCRIMINATION",
     "rewrite": True,
@@ -396,7 +416,14 @@ for config in configs:
         )
 
         # Train the classifier on the training data
-        rf_classifier.fit(train_df[features], train_df["Label"])
+        # Solar-spectrum weights for the signal clusters; clusters from other generators keep weight 1.
+        train_w = np.where(
+            train_df["Generator"].to_numpy() == 1,
+            solar_spectrum_weights(info, name, train_df["SignalParticleK"].to_numpy(float)),
+            1.0,
+        )
+        rprint(f"Training weights: 8B+hep spectrum for {np.sum(train_df['Generator'] == 1)} signal clusters")
+        rf_classifier.fit(train_df[features], train_df["Label"], sample_weight=train_w)
         # Use the trained classifier to predict the labels for the test data
         test_df["ML"] = rf_classifier.predict(test_df[features])
 
@@ -566,6 +593,25 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        # Branch threshold: minimise the 8B+hep-weighted core width of (E_reco - E_true)/E_true on the
+        # test signal clusters, instead of the ROC optimum (kept in the json as ML_THRESHOLD_ROC).
+        roc_threshold = float(threshold)
+        _sig = (test_df["Generator"] == 1) & (test_df["SignalParticleK"] > 0)
+        _true = test_df.loc[_sig, "SignalParticleK"].to_numpy(float)
+        _energy = test_df.loc[_sig, "Energy"].to_numpy(float)
+        _score = rf_classifier.predict_proba(test_df.loc[_sig, features])[:, 1]
+        _w = solar_spectrum_weights(info, name, _true)
+        _scan = []
+        for _thr in np.linspace(0.02, 0.98, 97):
+            _reco = np.where(_score >= _thr, upper_func(_energy), lower_func(_energy))
+            _scan.append((weighted_core_width((_reco - _true) / _true, _w), _thr))
+        _roc_reco = np.where(_score >= roc_threshold, upper_func(_energy), lower_func(_energy))
+        _roc_width = weighted_core_width((_roc_reco - _true) / _true, _w)
+        best_width, threshold = min(_scan)
+        rprint(
+            f"Branch threshold: ROC {roc_threshold:.3f} (weighted core width {_roc_width:.4f}) -> "
+            f"resolution-optimal {threshold:.3f} (weighted core width {best_width:.4f})"
+        )
         df["ML"] = rf_classifier.predict(df[features])
         df["Discriminant"] = rf_classifier.predict_proba(df[features])[:, 1]
         # Compute reco energy
@@ -698,6 +744,8 @@ for config in configs:
                 {
                     "DISCRIMINANT_THRESHOLD": mid_popt[1],
                     "ML_THRESHOLD": threshold,
+                    "ML_THRESHOLD_ROC": roc_threshold,
+                    "ML_TRAINING_WEIGHTS": "comb_kde_p (8B+hep)",
                     "UPPER": {
                         "OFFSET": popt_int[0],
                         "ENERGY_AMP": popt_corr["Upper"][0],

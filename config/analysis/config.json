@@ -40,7 +40,7 @@
   },
   "ANALYSIS_UNCERTAINTIES": {
     "DAYNIGHT": {
-      "signal_uncertainty": 0.00,
+      "signal_uncertainty": 0.0,
       "background_uncertainty": 0.02
     },
     "HEP": {
@@ -120,7 +120,6 @@
   "QUALITY_CUTS": {
     "OPFLASH_PLANE": 0
   },
-
   "ADAPTIVE_REBIN": {
     "ANALYSES": {
       "HEP": {
@@ -134,5 +133,8 @@
         "report": false
       }
     }
+  },
+  "DATA_PATHS": {
+    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_final_20261004"
   }
 }
