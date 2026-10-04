@@ -445,8 +445,14 @@ def save_figure(
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
-        fig.write_image(f"{filepath}")
-        output += f"Saved figure in: {filepath}"
+        # A failed image export (e.g. kaleido cannot scale the axes of an empty
+        # spectrum) must not abort the analysis that produced the figure.
+        try:
+            fig.write_image(f"{filepath}")
+            output += f"Saved figure in: {filepath}"
+        except Exception as exc:
+            rprint(f"[yellow][WARNING][/yellow] Could not export {filepath}: {type(exc).__name__}: {exc}")
+            return
 
     elif type(fig) == plt.Figure:
         fig.savefig(f"{filepath}")
