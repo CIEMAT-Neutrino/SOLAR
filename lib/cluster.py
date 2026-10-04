@@ -52,12 +52,15 @@ def _signal_background_flags(run, config, name, idx, this_params):
         if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
             break
     else:
+        rprint(f"[red][WARNING][/red] SIGNAL_BACKGROUND_CLASSIFIER is on but no classifier was found for {config} {name}: "
+               "SolarEnergy keeps the offset for every cluster of this sample.")
         return None
     info = json.load(open(jpath))
     models = [pickle.load(open(p, "rb")) for p in mpaths]
     reco = run["Reco"]
-    if any(feat not in reco for feat in info["FEATURES"]):
-        return None
+    missing = [feat for feat in info["FEATURES"] if feat not in reco]
+    if missing:
+        raise KeyError(f"Signal/background classifier for {config} {name}: features {missing} not computed by this workflow")
     X = np.column_stack([np.asarray(reco[feat])[idx].astype(float) for feat in info["FEATURES"]])
     X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
     fold = ((np.asarray(reco["Flag"])[idx].astype(np.int64) + np.asarray(reco["Event"])[idx].astype(np.int64)) % 2).astype(int)
@@ -601,11 +604,8 @@ def compute_reco_energy(
 
             df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
             df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
-            # First stage: background-like clusters keep their cluster energy (no de-excitation offset).
-            signal_like = _signal_background_flags(run, config, name, idx, this_params)
-            if signal_like is not None:
-                df.loc[~signal_like, "SolarEnergy"] = df.loc[~signal_like, "Energy"].values
-                output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
+            # The signal/background first stage is applied in compute_energy_calibration, once
+            # TotalEnergy/SelectedEnergy carry their final calibration (the values it was trained on).
             run["Reco"]["SolarEnergy"][idx] = df["SolarEnergy"].values
 
     run = remove_branches(run, rm_branches, [], debug=debug)
@@ -680,6 +680,24 @@ def compute_energy_calibration(
                         reco_info[energy.upper()]["INTERSECTION"],
                     )
                     output += f"\t\t[cyan][INFO][/cyan] Applying quadratic energy calibration for {energy}Energy\n"
+
+            # First SolarEnergy stage: clusters the signal/background classifier calls background-like
+            # get the SolarEnergy calibration applied to their cluster energy, i.e. no de-excitation offset.
+            # Applied here because the classifier was trained on these end-of-workflow features.
+            signal_like = _signal_background_flags(run, config, name, idx, this_params)
+            if signal_like is not None:
+                rows = np.asarray(idx[0])[~signal_like]
+                if this_params["SAMPLE_FIT"]["SolarEnergy"] == "linear":
+                    no_offset = (np.asarray(run["Reco"]["Energy"])[rows] - reco_info["SOLAR"]["INTERSECTION"]) / reco_info["SOLAR"]["ENERGY_AMP"]
+                else:
+                    no_offset = inverse_quadratic(
+                        np.asarray(run["Reco"]["Energy"])[rows],
+                        reco_info["SOLAR"]["ENERGY_CURVATURE"],
+                        reco_info["SOLAR"]["ENERGY_AMP"],
+                        reco_info["SOLAR"]["INTERSECTION"],
+                    )
+                run["Reco"]["SolarEnergy"][rows] = no_offset
+                output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tEvent energy calibration \t-> Done!\n\n"
