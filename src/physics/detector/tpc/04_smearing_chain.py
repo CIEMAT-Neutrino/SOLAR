@@ -331,7 +331,12 @@ for energy_name in args.energy:
         offset_step = final * solar["ENERGY_AMP"] + solar["INTERSECTION"]
         applied = energy[mask] - offset_step
         lower = np.abs(applied - discriminant_info["LOWER"]["OFFSET"]) < np.abs(applied - discriminant_info["UPPER"]["OFFSET"])
-        branches = {"UpperBranch": ~lower, "LowerBranch": lower}
+        # Clusters the signal/background first stage calls background-like receive no offset.
+        no_offset = np.abs(applied) < np.minimum(np.abs(applied - discriminant_info["LOWER"]["OFFSET"]),
+                                                 np.abs(applied - discriminant_info["UPPER"]["OFFSET"]))
+        branches = {"UpperBranch": ~lower & ~no_offset, "LowerBranch": lower & ~no_offset}
+        if no_offset.any():
+            branches["NoOffset"] = no_offset
         progression["Offset"] = offset_step
         labels["Offset"] = (f"+ Discriminant offset (+{-discriminant_info['UPPER']['OFFSET']:.2f} / "
                             f"+{-discriminant_info['LOWER']['OFFSET']:.2f} MeV)")
