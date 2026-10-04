@@ -1,3 +1,4 @@
+import os
 import json
 import pickle
 import numpy as np
@@ -27,6 +28,27 @@ def _calib_fallback(name: str, default: str) -> str:
     """
     return "marley_final" if str(name).endswith("_final") and str(name) != "marley_final" else default
 
+
+
+def _selected_limit_arrays(run, config, info, names, idx, this_params):
+    """Per-row adjacent-cluster selection limits (MIN_BKG_R, MAX_BKG_CHARGE).
+
+    Each sample uses config/{config}/{sample}/{config}_calib/{config}_selected_limits.json written by
+    03_discrimination.py (falling back to the calibration sample of _calib_fallback, then to the
+    per-config params.json), so the limits no longer depend on which sample was calibrated last.
+    """
+    rows = np.asarray(run["Reco"]["Name"])[idx]
+    rlim = np.full(len(rows), float(this_params["MIN_BKG_R"]))
+    qlim = np.full(len(rows), float(this_params["MAX_BKG_CHARGE"]))
+    for name in names:
+        for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+            path = f"{root}/config/{config}/{sample}/{config}_calib/{config}_selected_limits.json"
+            if sample and os.path.isfile(path):
+                lim = json.load(open(path))
+                rlim[rows == name] = float(lim["MIN_BKG_R"])
+                qlim[rows == name] = float(lim["MAX_BKG_CHARGE"])
+                break
+    return rlim, qlim
 
 def compute_electron_cluster(
     run: dict,
@@ -320,13 +342,14 @@ def compute_total_energy(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
+        _rlim, _qlim = _selected_limit_arrays(run, config, info, configs[config], idx, this_params)
 
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
-        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
-            run["Reco"]["AdjClCharge"][idx] > this_params["MAX_BKG_CHARGE"]
+        selected_filter = (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (
+            run["Reco"]["AdjClCharge"][idx] > _qlim[:, None]
         )
 
         if debug:
@@ -390,6 +413,7 @@ def recompute_reco_energy_with_charge_threshold(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
+        _rlim, _qlim = _selected_limit_arrays(run, config, info, configs[config], idx, this_params)
 
         adj_charge = run["Reco"]["AdjClCharge"][idx]
         adj_energy = run["Reco"]["AdjClEnergy"][idx]
@@ -401,8 +425,8 @@ def recompute_reco_energy_with_charge_threshold(
         run["Reco"]["TotalEnergy"][idx]      = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx]
 
         # Selected* features: existing R + MAX_BKG_CHARGE filter, then charge floor.
-        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
-            adj_charge > this_params["MAX_BKG_CHARGE"]
+        selected_filter = (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (
+            adj_charge > _qlim[:, None]
         )
         selected_filter_Q = selected_filter & charge_floor
 

@@ -28,6 +28,8 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
+parser.add_argument("--merge_sparse_nhits", action=argparse.BooleanOptionalAction, default=False,
+    help="Merge sparse high-NHits bins (>= 1000 clusters per group) instead of skipping and extrapolating them.")
 args = parser.parse_args()
 config = args.config
 name = args.name
@@ -97,14 +99,36 @@ for config in configs:
             reco_perr[variable] = {}
             fig = make_subplots(rows=1, cols=1)
 
-            for nhit in nhits:
-                acc = get_default_acc(len(data["ElectronK"][data["NHits"] == nhit]))
+            # 2026-10-04: sparse high-NHits bins are merged (consecutive, until >= MIN_CLUSTERS)
+            # instead of being skipped and extrapolated from the last three slopes; a merged group
+            # is keyed by its count-weighted mean NHits for the slope/intercept interpolation.
+            _min_clusters = 1000
+            _counts = {n: int(np.sum(data["NHits"] == n)) for n in sorted(set(nhits))}
+            _groups, _cur = [], []
+            _first_ok = next((n for n in sorted(_counts) if _counts[n] >= _min_clusters), None) if args.merge_sparse_nhits else None
+            for n in sorted(_counts):
+                if _first_ok is None or n < _first_ok:
+                    _groups.append((n, [n]))  # low end: unchanged (skipped below if sparse)
+                    continue
+                _cur.append(n)
+                if sum(_counts[m] for m in _cur) >= _min_clusters:
+                    _w = np.array([_counts[m] for m in _cur], float)
+                    _key = _cur[0] if len(_cur) == 1 else float(np.sum(np.array(_cur) * _w) / np.sum(_w))
+                    _groups.append((_key, list(_cur)))
+                    _cur = []
+            if _cur and _groups:  # leftover sparse tail joins the last group
+                _key0, _mem0 = _groups[-1]
+                _mem = _mem0 + _cur
+                _w = np.array([_counts[m] for m in _mem], float)
+                _groups[-1] = (float(np.sum(np.array(_mem) * _w) / np.sum(_w)), _mem)
+            for nhit, _members in _groups:
+                acc = get_default_acc(len(data["ElectronK"][np.isin(data["NHits"], _members)]))
                 fit["threshold"] = (
-                    len(data["ElectronK"][data["NHits"] == nhit])
+                    len(data["ElectronK"][np.isin(data["NHits"], _members)])
                     * params["CALIBRATION_THRESHOLD"]
                 )
 
-                if len(data["ElectronK"][data["NHits"] == nhit]) < 1000:
+                if len(data["ElectronK"][np.isin(data["NHits"], _members)]) < 1000:
                     rprint(
                         f"Skipping NHit {nhit} due to low statistics ({len(data['ElectronK'][data['NHits'] == nhit])})"
                     )
@@ -121,8 +145,8 @@ for config in configs:
                 )
 
                 x, y, z = get_hist2d(
-                    data["ElectronK"][data["NHits"] == nhit],
-                    data[f"Corrected{variable}Charge"][data["NHits"] == nhit],
+                    data["ElectronK"][np.isin(data["NHits"], _members)],
+                    data[f"Corrected{variable}Charge"][np.isin(data["NHits"], _members)],
                     acc=acc,
                 )
 
@@ -146,8 +170,8 @@ for config in configs:
 
                 this_fig, reco_popt[variable][nhit], reco_perr[variable][nhit] = (
                     get_hist2d_fit(
-                        data["ElectronK"][data["NHits"] == nhit],
-                        data[f"{variable}Energy"][data["NHits"] == nhit],
+                        data["ElectronK"][np.isin(data["NHits"], _members)],
+                        data[f"{variable}Energy"][np.isin(data["NHits"], _members)],
                         this_fig,
                         idx=(1, 2),
                         per=per,
@@ -167,8 +191,8 @@ for config in configs:
                 else:
                     reco_valid[variable].append(True)
 
-                data[f"Calibrated{variable}Energy"][data["NHits"] == nhit] = (
-                    data[f"{variable}Energy"][data["NHits"] == nhit]
+                data[f"Calibrated{variable}Energy"][np.isin(data["NHits"], _members)] = (
+                    data[f"{variable}Energy"][np.isin(data["NHits"], _members)]
                     - reco_popt[variable][nhit][1]
                 ) / reco_popt[variable][nhit][0]
 
@@ -177,8 +201,8 @@ for config in configs:
                     ["Corrected", "Calibrated"],
                 ):
                     res = (
-                        data["ElectronK"][data["NHits"] == nhit]
-                        - data[energy][data["NHits"] == nhit]
+                        data["ElectronK"][np.isin(data["NHits"], _members)]
+                        - data[energy][np.isin(data["NHits"], _members)]
                     )
                     # Find the resolution
                     rms = np.sqrt(np.mean(np.power(res, 2)))
@@ -450,14 +474,14 @@ for config in configs:
                 reco_popt_slope,
                 kind="slinear",
                 bounds_error=False,
-                fill_value=(reco_popt_slope[0], np.mean(reco_popt_slope[-3:])),
+                fill_value=(reco_popt_slope[0], reco_popt_slope[-1] if args.merge_sparse_nhits else np.mean(reco_popt_slope[-3:])),
             )
             intercept = interp1d(
                 reco_popt_nhit,
                 reco_popt_intercept,
                 kind="slinear",
                 bounds_error=False,
-                fill_value=(reco_popt_intercept[0], np.mean(reco_popt_intercept[-3:])),
+                fill_value=(reco_popt_intercept[0], reco_popt_intercept[-1] if args.merge_sparse_nhits else np.mean(reco_popt_intercept[-3:])),
             )
 
             # Add extrapolated slope and intercept to the figure
