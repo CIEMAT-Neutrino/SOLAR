@@ -1153,11 +1153,11 @@ for _sl in _study_labels_to_run:
                 ("hep", "HEP", "Osc", "Mean", "signal", "Signal", "rgb(204,80,62)"),
             ]
             for bkg, oscillation, color in [
-                ("gamma", "Truth", get_background_style(str(root), "gamma").get("color", "black")),
-                ("neutron", "Truth", get_background_style(str(root), "neutron").get("color", "rgb(15,133,84)")),
-                ("radiological", "Truth", get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)")),
-                ("8B", "Osc", "rgb(225,124,5)"),
-            ]:
+                # Background samples by their analysis name (gamma_final, ...): the HEP rebin Component
+                # labels carry the full sample name, so hard-coded base names dropped every *_final sample.
+                (b, "Truth", get_background_style(str(root), b).get("color", {"gamma": "black", "neutron": "rgb(15,133,84)"}.get(b.split("_")[0], "rgb(120, 94, 240)")))
+                for b in get_background_samples(str(root), "HEP")
+            ] + [("8B", "Osc", "rgb(225,124,5)")]:
                 style = get_background_style(str(root), bkg)
                 hep_component_specs.append(
                     (bkg, style.get("label", bkg), oscillation, "Mean", "background", "Background", color)
