@@ -274,6 +274,18 @@ def apply_fiducial_mc_threshold(
     if not essential_components:
         return plot_df
 
+    # Always include the no-fiducial baseline (0,0,0) regardless of MC threshold.
+    # It is the reference point: any tighter fiducial must improve over it.
+    # Configs with suppressed backgrounds have fewer MC events by physics, not by
+    # poor statistics — excluding (0,0,0) forces the optimizer into spuriously tight cuts.
+    # When no volume passes the gate the baseline is returned alone (the early returns
+    # below used to drop it, and the caller then kept a stale volume from a previous run).
+    no_fid = plot_df.loc[
+        (plot_df["FiducializedX"] == 0)
+        & (plot_df["FiducializedY"] == 0)
+        & (plot_df["FiducializedZ"] == 0)
+    ]
+
     filtered = plot_df.copy()
     energy_min = analysis_config.get("energy_min")
     energy_max = analysis_config.get("energy_max")
@@ -289,7 +301,7 @@ def apply_fiducial_mc_threshold(
         .reset_index()
     )
     if component_mc.empty:
-        return filtered.iloc[0:0]
+        return no_fid.copy()
 
     component_mc["Pass"] = component_mc["MCCounts"] >= float(mc_threshold)
     pass_counts = (
@@ -303,19 +315,9 @@ def apply_fiducial_mc_threshold(
         FIDUCIAL_COLUMNS,
     ]
     if pass_counts.empty:
-        return filtered.iloc[0:0]
+        return no_fid.copy()
 
     result = plot_df.merge(pass_counts, on=FIDUCIAL_COLUMNS, how="inner")
-
-    # Always include the no-fiducial baseline (0,0,0) regardless of MC threshold.
-    # It is the reference point: any tighter fiducial must improve over it.
-    # Configs with suppressed backgrounds have fewer MC events by physics, not by
-    # poor statistics — excluding (0,0,0) forces the optimizer into spuriously tight cuts.
-    no_fid = plot_df.loc[
-        (plot_df["FiducializedX"] == 0)
-        & (plot_df["FiducializedY"] == 0)
-        & (plot_df["FiducializedZ"] == 0)
-    ]
     if not no_fid.empty:
         result = pd.concat([result, no_fid]).drop_duplicates(
             subset=GROUP_COLUMNS + ["Component"], keep="first"
