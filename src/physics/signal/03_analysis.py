@@ -473,7 +473,7 @@ for config in configs:
 
         _scan_total = (
             len(_nhits_scan) * len(_ophits_scan) * len(_adjcls_scan)
-            * len(user_input["weights"][name])
+            * len(user_input["weights"][name.split("_")[0]])
         )
 
         for _cut_idx, (this_nhit, this_ophit, this_adjcl, (weight, weight_labels, color)) in enumerate(track(
@@ -481,7 +481,7 @@ for config in configs:
                 _nhits_scan,
                 _ophits_scan,
                 _adjcls_scan,
-                zip(user_input["weights"][name], user_input["weight_labels"][name], user_input["colors"][name]),
+                zip(user_input["weights"][name.split("_")[0]], user_input["weight_labels"][name.split("_")[0]], user_input["colors"][name.split("_")[0]]),
             ),
             total=_scan_total,
             description=f"Cut 1/{_scan_total} for {energy}...",

@@ -283,7 +283,7 @@ parser.add_argument(
     type=str,
     help="Signal source name(s) to process (e.g. marley, marley_official). "
          "Background components (gamma, neutron, radiological) are auto-discovered from analysis config.",
-    default=["marley"],
+    default=["marley_final"],
 )
 parser.add_argument(
     "--analysis",
