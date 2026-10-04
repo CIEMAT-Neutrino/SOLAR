@@ -311,12 +311,97 @@ def compute_particle_weights(
     run, output, new_weights = normalize_true_weights(
         run, configs, params, trees, output, exposure, debug=debug
     )
+    if "Reco" in trees and "Truth" in trees:
+        run, output = assign_signal_event_weights(run, configs, output, debug=debug)
     # output += f"\t\t[cyan][INFO][/cyan] Computing reco particle weights...\n"
     # run, output = compute_reco_weights(run, configs, params, new_weights, output, debug)
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tParticle weights computation \t-> Done!\n\n"
     return run, output, new_branches
+
+
+def assign_signal_event_weights(
+    run: dict[str, dict],
+    configs: dict[str, list[str]],
+    output: str = "",
+    debug: bool = False,
+):
+    """One candidate per signal interaction, carrying the truth weight of its event.
+
+    The Reco weights are normalised over clusters (sum over clusters = expected interactions), so a
+    neutrino event with n reconstructed clusters spreads its weight over n entries and the fragments
+    (de-excitation gammas beyond the adjacency radius, split tracks) sit at the wrong energy, while
+    events without any cluster still count. Here every signal cluster is aligned to its truth event
+    (consecutive clusters with the same Flag and Event form one event; events appear in the same
+    order in both trees), the leading cluster (largest Charge) gets the normalised Truth-tree weight
+    of its event and the other clusters get zero; the sum over reco entries keeps its previous value.
+    Backgrounds keep per-cluster weights (independent candidates; conservative).
+    Controlled by config/analysis/config.json SIGNAL_CANDIDATE: "leading_cluster" | "per_cluster".
+    """
+    if output is None:
+        output = ""
+    mode = load_analysis_info(str(root)).get("SIGNAL_CANDIDATE", "per_cluster")
+    if mode != "leading_cluster":
+        return run, output
+    weight_branches = [
+        b for b in run["Reco"] if str(b).startswith("SignalParticleWeight") and b in run["Truth"]
+    ]
+    for config in configs:
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
+        for name in configs[config]:
+            if not str(name).lower().startswith("marley"):
+                continue
+            sel = lambda tree: np.where(
+                (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
+                & (np.asarray(run[tree]["Version"]) == info["VERSION"])
+                & (np.asarray(run[tree]["Name"]) == name)
+            )[0]
+            ridx, tidx = sel("Reco"), sel("Truth")
+            if len(ridx) == 0 or len(tidx) == 0:
+                continue
+            rf = np.asarray(run["Reco"]["Flag"])[ridx].astype(np.int64)
+            re = np.asarray(run["Reco"]["Event"])[ridx].astype(np.int64)
+            tf = np.asarray(run["Truth"]["Flag"])[tidx].astype(np.int64)
+            te = np.asarray(run["Truth"]["Event"])[tidx].astype(np.int64)
+            new_seg = np.r_[True, (rf[1:] != rf[:-1]) | (re[1:] != re[:-1])]
+            seg = np.cumsum(new_seg) - 1
+            starts = np.where(new_seg)[0]
+            # Forward alignment of reco events to truth events.
+            truth_of_seg = np.full(len(starts), -1, dtype=np.int64)
+            p = 0
+            for s, i in enumerate(starts):
+                while p < len(tf) and (tf[p] != rf[i] or te[p] != re[i]):
+                    p += 1
+                if p == len(tf):
+                    break
+                truth_of_seg[s] = p
+                p += 1
+            if np.any(truth_of_seg < 0):
+                output += (
+                    f"\t\t[yellow][WARNING][/yellow] {config}/{name}: {np.sum(truth_of_seg < 0)} of "
+                    f"{len(starts)} reco events not aligned to the Truth tree; per-cluster weights kept.\n"
+                )
+                continue
+            charge = np.asarray(run["Reco"]["Charge"])[ridx].astype(float)
+            order = np.lexsort((-charge, seg))
+            leading = np.zeros(len(ridx), dtype=bool)
+            leading[order[np.r_[True, seg[order][1:] != seg[order][:-1]]]] = True
+            truth_row = tidx[truth_of_seg[seg]]
+            for b in weight_branches:
+                w = np.where(leading, np.asarray(run["Truth"][b])[truth_row].astype(np.float64), 0.0)
+                # Keep the existing overall normalisation (sum over reco = expected interactions in the
+                # detector mass). Rescaling instead of using the Truth sum avoids counting events
+                # generated outside the active volume (VD Top production) as reconstruction losses;
+                # the genuine ~2-3 % inefficiency stays unaccounted for, as before (open item).
+                total, new_total = np.sum(np.asarray(run["Reco"][b])[ridx]), np.sum(w)
+                run["Reco"][b][ridx] = w * (total / new_total) if new_total > 0 else w
+            output += (
+                f"\t\t[cyan][INFO][/cyan] {config}/{name}: one candidate per event — {len(starts)} reco "
+                f"events of {len(tidx)} truth events ({len(ridx) / len(starts):.3f} clusters/event); "
+                f"Truth-tree event weights on the leading cluster, sum preserved.\n"
+            )
+    return run, output
 
 
 def compute_particle_surface(

@@ -133,5 +133,7 @@
         "report": false
       }
     }
-  }
+  },
+  "SIGNAL_CANDIDATE": "leading_cluster",
+  "_SIGNAL_CANDIDATE_comment": "leading_cluster: one candidate per signal interaction (largest-Charge cluster) carrying the Truth-tree event weight, sum preserved; per_cluster: legacy, every cluster weighted (fragments dilute the event weight). lib/weights.py assign_signal_event_weights."
 }
