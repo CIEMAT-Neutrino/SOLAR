@@ -150,18 +150,23 @@ data_path = f"{root}/output/data/workflow/discrimination"
 info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
 label = lambda n: "CC Neutrino" if n == args.name else n.split("_")[0].capitalize()
 common = {"Geometry": info["GEOMETRY"], "Config": config, "Name": args.name}
-disc_rows, eff_rows = [], []
+disc_rows, eff_rows, sel_rows = [], [], []
 energy_edges = np.arange(3, 31, 1.0)
-for n in [args.name] + args.backgrounds:
-    m = data["Sample"] == n
-    disc_rows.append({**common, "Label": label(n), "Discriminant": data.loc[m, "Score"].reset_index(drop=True),
-                      "Efficiency": float(np.mean(data.loc[m, "Score"] >= threshold)), "Threshold": threshold})
-    e = data.loc[m, "Energy"].to_numpy()
-    keep = (data.loc[m, "Score"] >= threshold).to_numpy()
-    idx = np.digitize(e, energy_edges) - 1
-    frac = [float(np.mean(keep[idx == i])) if np.sum(idx == i) >= 20 else np.nan for i in range(len(energy_edges) - 1)]
-    eff_rows.append({**common, "Label": label(n), "Variable": "Energy",
-                     "Values": 0.5 * (energy_edges[1:] + energy_edges[:-1]), "Efficiency": frac})
+matched_all = (data["MatchedOpFlashPE"] > 0) if "MatchedOpFlashPE" in data else pd.Series(True, index=data.index)
+for population, pmask in [("All", pd.Series(True, index=data.index)), ("Matched", matched_all)]:
+    for n in [args.name] + args.backgrounds:
+        m = (data["Sample"] == n) & pmask
+        keep = (data.loc[m, "Score"] >= threshold).to_numpy()
+        p, nn = (float(np.mean(keep)), int(m.sum())) if m.sum() else (np.nan, 0)
+        disc_rows.append({**common, "Population": population, "Label": label(n),
+                          "Discriminant": data.loc[m, "Score"].reset_index(drop=True), "Efficiency": 100 * p, "Threshold": threshold})
+        sel_rows.append({**common, "Population": population, "Label": label(n), "Percentage": 100 * p,
+                         "PercentageError": 100 * np.sqrt(p * (1 - p) / nn) if nn else np.nan, "Clusters": nn, "Threshold": threshold})
+        idx = np.digitize(data.loc[m, "Energy"].to_numpy(), energy_edges) - 1
+        frac = [100 * float(np.mean(keep[idx == i])) if np.sum(idx == i) >= 20 else np.nan for i in range(len(energy_edges) - 1)]
+        eff_rows.append({**common, "Population": population, "Label": label(n), "Variable": "Energy",
+                         "Values": 0.5 * (energy_edges[1:] + energy_edges[:-1]), "Efficiency": frac})
+save_df(pd.DataFrame(sel_rows), data_path, config, args.name, filename="Signal_Background_Selection", rm=args.rewrite, debug=args.debug)
 save_df(pd.DataFrame(disc_rows), data_path, config, args.name, filename="Signal_Background_Discriminant", rm=args.rewrite, debug=args.debug)
 save_df(pd.DataFrame(eff_rows), data_path, config, args.name, filename="Signal_Background_Efficiency", rm=args.rewrite, debug=args.debug)
 importance = np.mean([m.feature_importances_ for m in models.values()], axis=0)
