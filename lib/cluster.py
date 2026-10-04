@@ -17,6 +17,17 @@ _pnfs_calib = load_analysis_info(str(root)).get("DATA_PATHS", {}).get(
 )
 
 
+def _calib_fallback(name: str, default: str) -> str:
+    """Calibration sample used when `name` has no calibration of its own.
+
+    Samples of the final-defaults production (gamma_final, neutron_final, radiological_final, ...)
+    share the reconstruction configuration of marley_final, so their charge correction, cluster
+    calibration, discriminant model and energy calibration must come from marley_final, not from
+    the legacy marley_official default.
+    """
+    return "marley_final" if str(name).endswith("_final") and str(name) != "marley_final" else default
+
+
 def compute_electron_cluster(
     run: dict,
     configs: dict[str, list[str]],
@@ -126,10 +137,10 @@ def compute_cluster_energy(
                 )
 
             except FileNotFoundError:
-                output += f"\t\t[yellow][WARNING][/yellow] Correction file not found for {name}. Defaulting to {default_sample}!\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Correction file not found for {name}. Defaulting to {_calib_fallback(name, default_sample)}!\n"
                 corr_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_electroncharge_correction.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_electroncharge_correction.json",
                         "r",
                     )
                 )
@@ -239,17 +250,17 @@ def compute_cluster_calibration(
                     )
 
                 except FileNotFoundError:
-                    output += f"\t\t[yellow][WARNING][/yellow] Calibration file not found. Defaulting to {default_sample}!\n"
+                    output += f"\t\t[yellow][WARNING][/yellow] Calibration file not found. Defaulting to {_calib_fallback(name, default_sample)}!\n"
 
                     corr_slope = pickle.load(
                         open(
-                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
                             "rb",
                         )
                     )
                     corr_intercept = pickle.load(
                         open(
-                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
@@ -448,8 +459,8 @@ def compute_reco_energy(
                     rf_classifier = pickle.load(model_file)
 
             except FileNotFoundError:
-                output += f"\t\t[yellow][WARNING][/yellow] ML model file not found. Defaulting to {default_sample}!\n"
-                path = f"{_pnfs_calib}/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
+                output += f"\t\t[yellow][WARNING][/yellow] ML model file not found. Defaulting to {_calib_fallback(name, default_sample)}!\n"
+                path = f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/models/{config}_{_calib_fallback(name, default_sample)}_random_forest_discriminant.pkl"
 
                 with open(path, "rb") as model_file:
                     rf_classifier = pickle.load(model_file)
@@ -466,11 +477,11 @@ def compute_reco_energy(
             except FileNotFoundError:
                 discriminant_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_discriminant_calibration.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_discriminant_calibration.json",
                         "r",
                     )
                 )
-                output += f"\t\t[yellow][WARNING][/yellow] Loading model for {default_sample}\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Loading model for {_calib_fallback(name, default_sample)}\n"
 
             def upper_func(x):
                 return x - discriminant_info["UPPER"]["OFFSET"]
@@ -572,11 +583,11 @@ def compute_energy_calibration(
             except FileNotFoundError:
                 reco_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{default_sample}_energy_calibration.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_{_calib_fallback(name, default_sample)}_energy_calibration.json",
                         "r",
                     )
                 )
-                output += f"\t\t[yellow][WARNING][/yellow] Applying default energy calibration from {default_sample}\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Applying default energy calibration from {_calib_fallback(name, default_sample)}\n"
 
             for energy, ref_energy in zip(
                 ["Solar", "Selected", "Total", "Cluster"],
