@@ -132,7 +132,7 @@
   "DATA_PATHS": {
     "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth",
     "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
-    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_calib_20261004"
+    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_sb_20261004"
   },
   "DEFAULT_CONFIGS": [
     "hd_1x2x6_centralAPA",
