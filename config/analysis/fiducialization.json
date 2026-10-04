@@ -11,7 +11,7 @@
           {"label": "high", "energy_min": 12, "energy_max": 18}
         ],
         "signal_components":     ["8B", "hep"],
-        "background_components": ["gamma_final", "neutron_final", "radiological_final"]
+        "background_components": ["gamma", "neutron", "radiological"]
       },
       "HEP": {
         "significance_type": "asimov",
@@ -22,7 +22,7 @@
           {"label": "high", "energy_min": 20, "energy_max": 30}
         ],
         "signal_components":     ["hep"],
-        "background_components": ["gamma_final", "neutron_final", "radiological_final", "8B"]
+        "background_components": ["gamma", "neutron", "radiological", "8B"]
       },
       "SENSITIVITY": {
         "significance_type": "asimov",
@@ -33,7 +33,7 @@
           {"label": "high", "energy_min": 20, "energy_max": 30}
         ],
         "signal_components":     ["hep", "8B"],
-        "background_components": ["gamma_final", "neutron_final", "radiological_final"]
+        "background_components": ["gamma", "neutron", "radiological"]
       }
     }
   }

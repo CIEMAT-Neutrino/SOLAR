@@ -1853,10 +1853,10 @@ for _sl in _study_labels_to_run:
                 rprint(f"[yellow][WARNING][/yellow] Missing fiducial scan pkl: {signal_pkl}")
                 continue
             df_list = [pd.read_pickle(signal_pkl)]
-            needed_bkg = set()
-            for an in args.fiducial_analyses:
-                needed_bkg.update(get_fiducialization_config(str(root), an.upper()).get("background_components", []))
-            for bkg_label in sorted(needed_bkg):
+            # Scan files live under the sample name (backgrounds.json, e.g. gamma_final) while their
+            # Component column holds the base label that fiducialization.json background_components
+            # selects (gamma): load by sample name, as 02_best_fiducial.py does.
+            for bkg_label in get_background_samples(str(root)):
                 bkg_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
                 if os.path.exists(bkg_pkl):
                     df_list.append(pd.read_pickle(bkg_pkl))
