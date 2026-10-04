@@ -144,6 +144,30 @@ for lo, hi in [(6, 8), (8, 10), (10, 14), (14, 20)]:
     summary["FLAGGED_SIGNAL_LIKE"][f"{args.name}_Enu_{lo}_{hi}"] = float(np.mean(data.loc[m, "Score"] >= threshold))
 rprint(json.dumps(summary, indent=2))
 
+# Exports for the plotting repository (same layout as 03_discrimination.py: Cluster_Discriminant /
+# Random_Forest_Importance), plus the signal-like fraction versus reconstructed energy.
+data_path = f"{root}/output/data/workflow/discrimination"
+info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
+label = lambda n: "CC Neutrino" if n == args.name else n.split("_")[0].capitalize()
+common = {"Geometry": info["GEOMETRY"], "Config": config, "Name": args.name}
+disc_rows, eff_rows = [], []
+energy_edges = np.arange(3, 31, 1.0)
+for n in [args.name] + args.backgrounds:
+    m = data["Sample"] == n
+    disc_rows.append({**common, "Label": label(n), "Discriminant": data.loc[m, "Score"].reset_index(drop=True),
+                      "Efficiency": float(np.mean(data.loc[m, "Score"] >= threshold)), "Threshold": threshold})
+    e = data.loc[m, "Energy"].to_numpy()
+    keep = (data.loc[m, "Score"] >= threshold).to_numpy()
+    idx = np.digitize(e, energy_edges) - 1
+    frac = [float(np.mean(keep[idx == i])) if np.sum(idx == i) >= 20 else np.nan for i in range(len(energy_edges) - 1)]
+    eff_rows.append({**common, "Label": label(n), "Variable": "Energy",
+                     "Values": 0.5 * (energy_edges[1:] + energy_edges[:-1]), "Efficiency": frac})
+save_df(pd.DataFrame(disc_rows), data_path, config, args.name, filename="Signal_Background_Discriminant", rm=args.rewrite, debug=args.debug)
+save_df(pd.DataFrame(eff_rows), data_path, config, args.name, filename="Signal_Background_Efficiency", rm=args.rewrite, debug=args.debug)
+importance = np.mean([m.feature_importances_ for m in models.values()], axis=0)
+save_df(pd.DataFrame([{**common, "Feature": features, "Importance": list(importance)}]), data_path, config, args.name,
+        filename="Signal_Background_Importance", rm=args.rewrite, debug=args.debug)
+
 model_dir = f"{_models_base}/{config}/{args.name}/models"
 os.makedirs(model_dir, exist_ok=True)
 for fold, model in models.items():
