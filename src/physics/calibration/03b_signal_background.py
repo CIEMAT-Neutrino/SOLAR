@@ -17,7 +17,7 @@ discriminant. In the analysis (lib/cluster.compute_reco_energy) clusters scored 
 threshold keep their cluster energy (no de-excitation offset), the others go through the
 upper/lower branch classifier as before.
 
-- Clusters are loaded with the analysis chain (ANALYSIS workflow, SIGNIFICANCE filter), so the
+- Clusters are loaded with the analysis chain (ANALYSIS workflow, no preset filter, as 03_analysis), so the
   features are exactly those seen by the analysis; only reconstructed Energy >= --min_energy enters.
 - Two folds by event ((Flag + Event) % 2): the model of fold k is trained on fold k and applied to
   fold 1-k, so no background (or signal) cluster is ever scored by a model that saw it.
@@ -62,7 +62,8 @@ def load_sample(name):
         else {"PARTICLE_TYPE": "background", "SB_CLASSIFIER": False}
     )
     run = compute_reco_workflow(run, configs, params=params, workflow="ANALYSIS", rm_branches=False, debug=args.debug)
-    run, mask, output = compute_filtered_run(run, configs, presets=["SIGNIFICANCE"], debug=args.debug)
+    # No preset filter: 03_analysis.py applies none (the VD SIGNIFICANCE filter would drop every
+    # surface-generated gamma/neutron); only the analysed energy range is kept below.
     reco = run["Reco"]
     features = base_features + [f for f in optional_features if f in reco]
     df = pd.DataFrame({f: np.asarray(reco[f], dtype=float) for f in features})
@@ -71,7 +72,7 @@ def load_sample(name):
     df["SignalParticleK"] = np.asarray(reco["SignalParticleK"], dtype=float)
     df["Generator"] = np.asarray(reco["Generator"])
     df["Sample"] = name
-    df = df[df["Energy"] >= args.min_energy]
+    df = df[(df["Energy"] >= args.min_energy) & (df["SignalParticleK"].abs() <= 30)]
     if name.startswith("marley"):
         df = df[df["Generator"] == 1]
     if len(df) > args.max_per_sample:
