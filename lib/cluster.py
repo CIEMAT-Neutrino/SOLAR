@@ -30,6 +30,49 @@ def _calib_fallback(name: str, default: str) -> str:
 
 
 
+
+def _signal_background_flags(run, config, name, idx, this_params):
+    """First SolarEnergy stage: True for clusters the signal/background classifier calls signal-like.
+
+    Uses the two fold models of 03b_signal_background.py for the calibration sample of `name`
+    (`name` itself or _calib_fallback). A cluster in fold f = (Flag + Event) % 2 is scored by the
+    model trained on the other fold, so training clusters are never scored by their own model.
+    Clusters below the training MIN_ENERGY are left signal-like. Returns None (no change) if the
+    classifier is switched off (config.json SIGNAL_BACKGROUND_CLASSIFIER, params SB_CLASSIFIER) or absent.
+    """
+    if not load_analysis_info(str(root)).get("SIGNAL_BACKGROUND_CLASSIFIER", False):
+        return None
+    if this_params is not None and this_params.get("SB_CLASSIFIER", True) is False:
+        return None
+    for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+        if not sample:
+            continue
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_signal_background.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_signal_background_fold{k}.pkl" for k in (0, 1)]
+        if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
+            break
+    else:
+        return None
+    info = json.load(open(jpath))
+    models = [pickle.load(open(p, "rb")) for p in mpaths]
+    reco = run["Reco"]
+    if any(feat not in reco for feat in info["FEATURES"]):
+        return None
+    X = np.column_stack([np.asarray(reco[feat])[idx].astype(float) for feat in info["FEATURES"]])
+    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+    fold = ((np.asarray(reco["Flag"])[idx].astype(np.int64) + np.asarray(reco["Event"])[idx].astype(np.int64)) % 2).astype(int)
+    score = np.ones(len(fold))
+    for k in (0, 1):
+        m = fold == 1 - k  # model k was trained on fold k
+        if np.any(m):
+            score[m] = models[k].predict_proba(X[m])[:, 1]
+    energy = np.asarray(reco["Energy"])[idx].astype(float)
+    score = np.where(energy >= info.get("MIN_ENERGY", 0.0), score, 1.0)
+    if "SignalBackgroundScore" not in reco:
+        reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
+    reco["SignalBackgroundScore"][idx] = score
+    return score >= info["SB_THRESHOLD"]
+
 def _selected_limit_arrays(run, config, info, names, idx, this_params):
     """Per-row adjacent-cluster selection limits (MIN_BKG_R, MAX_BKG_CHARGE).
 
@@ -558,6 +601,11 @@ def compute_reco_energy(
 
             df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
             df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
+            # First stage: background-like clusters keep their cluster energy (no de-excitation offset).
+            signal_like = _signal_background_flags(run, config, name, idx, this_params)
+            if signal_like is not None:
+                df.loc[~signal_like, "SolarEnergy"] = df.loc[~signal_like, "Energy"].values
+                output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
             run["Reco"]["SolarEnergy"][idx] = df["SolarEnergy"].values
 
     run = remove_branches(run, rm_branches, [], debug=debug)
