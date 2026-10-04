@@ -802,6 +802,47 @@ def add_reference_pair_traces(
     return fig
 
 
+def fit_y_ranges(
+    fig: go.Figure,
+    log_axes: tuple = (),
+    reference_groups: tuple = (),
+    max_decades: float = 6.0,
+    headroom: float = 1.15,
+    reference_limit: float = 1.5,
+) -> go.Figure:
+    """Fit every y axis of a figure to the data it shows.
+
+    Linear axes run from 0 to the tallest trace (times headroom). Traces whose legendgroup is in
+    reference_groups (e.g. a truth delta peak) only set the top when they are at most
+    reference_limit times taller than the rest, so a spike does not flatten the other curves.
+    Log axes (layout keys in log_axes, e.g. "yaxis2") run from the smallest positive value --
+    one MC event of the finest-populated trace -- up to the peak, but never span more than
+    max_decades.
+    """
+    by_axis: dict = {}
+    for trace in fig.data:
+        y = np.asarray(trace.y if trace.y is not None else [], dtype=float)
+        y = y[np.isfinite(y) & (y > 0)]
+        if len(y) == 0:
+            continue
+        key = "yaxis" + (trace.yaxis[1:] if trace.yaxis and trace.yaxis != "y" else "")
+        is_reference = trace.legendgroup in reference_groups
+        by_axis.setdefault(key, []).append((y, is_reference))
+    for key, entries in by_axis.items():
+        peak_all = max(y.max() for y, _ in entries)
+        if key in log_axes:
+            low = max(min(y.min() for y, _ in entries), peak_all * 10 ** (-max_decades))
+            fig.update_layout({key: dict(type="log", range=[np.log10(low) - 0.15, np.log10(peak_all) + 0.15])})
+        else:
+            main = [y.max() for y, ref in entries if not ref]
+            reference = [y.max() for y, ref in entries if ref]
+            top = max(main) if main else peak_all
+            if reference and max(reference) <= reference_limit * top:
+                top = max(top, max(reference))
+            fig.update_layout({key: dict(range=[0, top * headroom])})
+    return fig
+
+
 def format_coustom_plotly(
     fig: go.Figure,
     add_units: bool = True,

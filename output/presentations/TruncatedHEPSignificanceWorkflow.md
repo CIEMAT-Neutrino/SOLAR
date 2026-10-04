@@ -190,7 +190,7 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 0 | 80 | 0 | 0.494 | 2.174 | 5.85 |
-| HD Lateral | 60 | 80 | 20 | 0.172 | 1.485 | 4.74 |
+| HD Lateral | 60 | 80 | 20 | 0.167 | 1.478 | 4.74 |
 | VD Top | 0 | 0 | 40 | 1.001 | 1.045 | 7.54 |
 | VD Bottom Shielded | 0 | 0 | 20 | 1.413 | 1.413 | 7.69 |
 

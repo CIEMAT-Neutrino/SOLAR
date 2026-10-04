@@ -1244,10 +1244,7 @@ def run_export():
             if s is None:
                 continue
             # all = whole truncated cache, quality = s.quality, window = quality + SolarEnergy window
-            # contained = quality + truth-containment cut: the event set of the fiducial scan (truth_position_scan_fom.py),
-            # without placeholder RecoX of unmatched events and without truth positions clipped to the wall
-            for sel, m in (("all", np.ones_like(s.window, bool)), ("quality", s.quality), ("window", s.window),
-                           ("contained", s.quality & s.d["contained"].astype(bool))):
+            for sel, m in (("all", np.ones_like(s.window, bool)), ("quality", s.quality), ("window", s.window)):
                 if not m.any():
                     continue
                 for kind in ("truth", "reco"):

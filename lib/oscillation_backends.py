@@ -25,6 +25,21 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from scipy import interpolate
+import warnings
+
+
+def warn_file_backend_deprecated(what: str) -> None:
+    """Flag use of the legacy file-based oscillation inputs (nadir.root, pre-computed osc pkls).
+
+    NuFast-Earth is the standard oscillation calculation since 2026-09-28; results that still
+    depend on the file-based inputs are deprecated.
+    """
+    warnings.warn(
+        f"DEPRECATED: {what} comes from the legacy file-based oscillation data; "
+        "NuFast (get_nadir_pdf_nufast / --oscillation_backend nufast) is the standard.",
+        FutureWarning,
+        stacklevel=3,
+    )
 
 # Locate compiled binding modules
 _PROB3_DIR   = os.path.join(os.path.dirname(__file__), '..', 'external', 'Prob3plusplus',  'python')
@@ -206,8 +221,11 @@ def get_nadir_pdf_file(
     """
     Load nadir angle PDF from nadir.root and interpolate to nadir_centers.
 
-    Used by 'file' and 'prob3' backends.
+    DEPRECATED (2026-09-28): legacy file-based input, superseded by get_nadir_pdf_nufast.
+    Still reached from lib/oscillation.py _get_oscillation_map_computed, so the Sensitivity
+    signal templates currently carry this PDF while the background templates use NuFast.
     """
+    warn_file_backend_deprecated("the nadir exposure PDF (nadir.root)")
     import uproot
     with uproot.open(path + "nadir.root") as f:
         pdf = f["nadir;1"]

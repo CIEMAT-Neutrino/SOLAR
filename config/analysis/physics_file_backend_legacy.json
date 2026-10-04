@@ -12,5 +12,6 @@
   "SIN12": 0.303,
   "DUNE_LATITUDE_DEG": 44.35,
   "OSCILLATION_BACKEND": "file",
+  "_DEPRECATED": "2026-09-28: the file backend is deprecated; NuFast is the standard. Results from these files are deprecated.",
   "_COMMENT": "File backend legacy parameters. These are the values used to generate pre-computed oscillation templates. Do NOT change without regenerating all oscillation pkl files."
 }

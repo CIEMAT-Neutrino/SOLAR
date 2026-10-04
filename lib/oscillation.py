@@ -386,6 +386,9 @@ def _get_oscillation_map_computed(
 
     latitude_deg = analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
 
+    # DEPRECATED (2026-09-28): the ROOT file nadir PDF is legacy file-based data; NuFast is the
+    # standard and 01_background_template.py already uses get_nadir_pdf_nufast. Kept only for
+    # backward compatibility of the existing Sensitivity signal templates (warns when used).
     # Use ROOT file nadir PDF for all backends to maintain backward compatibility
     # File backend interpolates 2000-bin ROOT histogram; nufast direct computation differs
     try:
@@ -490,6 +493,9 @@ def get_oscillation_map(
             debug=debug,
             nadir_oversample=nadir_oversample,
         )
+
+    from lib.oscillation_backends import warn_file_backend_deprecated
+    warn_file_backend_deprecated("oscillation map (backend='file')")
 
     df_dict = {}
     interp_dict = {}

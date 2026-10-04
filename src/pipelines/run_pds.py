@@ -98,5 +98,9 @@ for config, name in product(args.config, args.name):
     run_python_command(build_command("src/physics/detector/pds/02_adj_opflash.py",    base_args))
     run_python_command(build_command("src/physics/detector/pds/03_matched_opflash.py", base_args))
     run_python_command(build_command("src/physics/detector/pds/04_matched_efficiency.py", base_args))
+    run_python_command(build_command("src/physics/detector/pds/05_flash_distributions.py", base_args))
+    if "waveform" in name or "flash" in name:
+        run_python_command(build_command("src/physics/detector/pds/06_waveforms.py", base_args))
+        run_python_command(build_command("src/physics/detector/pds/07_waveform_profiles.py", base_args))
 
 rprint(f"\n[bold green]PDS pipeline complete.[/bold green]")

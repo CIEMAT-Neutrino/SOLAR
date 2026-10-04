@@ -314,15 +314,12 @@ def compute_total_energy(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
-        selected_filter = np.where(
-            (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"])
-            + (run["Reco"]["AdjClCharge"][idx] > this_params["MAX_BKG_CHARGE"]),
-            False,
-            True,
+        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
+            run["Reco"]["AdjClCharge"][idx] > this_params["MAX_BKG_CHARGE"]
         )
 
         if debug:
-            output += f"\t\t[cyan][INFO][/cyan] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters\n"
+            output += f"\t\t[cyan][INFO][/cyan] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters\n"
 
         run["Reco"]["SelectedAdjClNum"][idx] = np.sum(selected_filter, axis=1)
 
@@ -393,11 +390,8 @@ def recompute_reco_energy_with_charge_threshold(
         run["Reco"]["TotalEnergy"][idx]      = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx]
 
         # Selected* features: existing R + MAX_BKG_CHARGE filter, then charge floor.
-        selected_filter = np.where(
-            (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"])
-            + (adj_charge > this_params["MAX_BKG_CHARGE"]),
-            False,
-            True,
+        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
+            adj_charge > this_params["MAX_BKG_CHARGE"]
         )
         selected_filter_Q = selected_filter & charge_floor
 

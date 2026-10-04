@@ -214,7 +214,7 @@ $$
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 20 | 100 | 320 | 0.431 | 3.856 | 2.89 |
-| HD Lateral | 80 | 140 | 240 | 0.094 | 4.685 | 2.65 |
+| HD Lateral | 80 | 140 | 200 | 0.075 | 2.546 | 2.88 |
 | VD Top | 0 | 20 | 60 | 0.032 | 0.059 | 7.17 |
 | VD Bottom Shielded | 20 | 100 | 20 | 0.018 | 0.070 | 6.35 |
 

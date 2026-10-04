@@ -64,6 +64,8 @@ for config in configs:
         branches.append(f"TotalAdjClSameGenNum{limit}")
         branches.append(f"TotalAdjClExternalBkgNum{limit}")
         branches.append(f"TotalAdjClIntrinsicBkgNum{limit}")
+        branches.append(f"TotalAdjClAllExternalBkgNum{limit}")
+        branches.append(f"TotalAdjClNonExternalBkgNum{limit}")
         branches.append(f"TotalAdjClSameGenCharge{limit}")
         branches.append(f"TotalAdjClBkgCharge{limit}")
     branches.append(f"SignalParticleX")
@@ -72,6 +74,23 @@ for config in configs:
     for name in configs[config]:
         fig = make_subplots(rows=1, cols=1)
         table_list = []
+        # radiological* primaries are themselves background decays (intrinsic
+        # isotopes and external cavern/foam gammas). For those samples the
+        # Intrinsic column holds ALL non-external adjacent clusters and the
+        # External column holds ALL external-origin adjacent clusters, both
+        # without the same-gen exclusion used by the other rows. Signal keeps
+        # the same-generator part, so the three columns do not partition the
+        # total for radiological rows.
+        intrinsic_branch = (
+            "TotalAdjClNonExternalBkgNum"
+            if name.startswith("radiological")
+            else "TotalAdjClIntrinsicBkgNum"
+        )
+        external_branch = (
+            "TotalAdjClAllExternalBkgNum"
+            if name.startswith("radiological")
+            else "TotalAdjClExternalBkgNum"
+        )
         for (jdx, limit), (idx, (label, variable)) in product(
             enumerate(info["CLUSTER_RADIUS"]),
             enumerate(
@@ -79,8 +98,8 @@ for config in configs:
                     ["Signal", "Intrinsic", "External"],
                     [
                         "TotalAdjClSameGenNum",
-                        "TotalAdjClIntrinsicBkgNum",
-                        "TotalAdjClExternalBkgNum",
+                        intrinsic_branch,
+                        external_branch,
                     ],
                 )
             ),

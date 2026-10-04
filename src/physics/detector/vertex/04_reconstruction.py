@@ -258,7 +258,9 @@ for config in configs:
         df = df.fillna(np.nan)
 
         # Pre-compute 3D quantile thresholds from high-purity matched sample.
-        # threshold(n) = quantile(r_hp, erf(n/√2)) — e.g. n=3 → 99.73% coverage.
+        # threshold(n) = n * quantile(r_hp, erf(1/√2)): n times the 68.27% radius.
+        # Anchored on the core, so it is insensitive to the sparse tail of
+        # drift-time mis-assignments (a high-coverage quantile is not).
         from scipy.special import erf as _erf
         _reco = run["Reco"]
         _purity_base = (
@@ -283,8 +285,9 @@ for config in configs:
             if len(_r_hp) < 10:
                 _3d_quantile_thresholds[_eq] = None
                 continue
+            _r_core = float(np.quantile(_r_hp, _erf(1 / np.sqrt(2))))
             _3d_quantile_thresholds[_eq] = {
-                s: float(np.quantile(_r_hp, _erf(s / np.sqrt(2))))
+                s: s * _r_core
                 for s in analysis_info["VERTEX_RESOLUTION_SIGMAS"]
             }
         rprint(

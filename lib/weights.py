@@ -42,18 +42,153 @@ def compute_detector_time_exposure(info: dict, event_count: int) -> dict[str, fl
     }
 
 
+GENERATED_COUNT_SOURCES = ("SelectedEvents", "AnalyzedEvents", "Truth")
+DEFAULT_GENERATED_COUNT_SOURCE = "SelectedEvents"
+_config_npy_cache: dict[str, Optional[np.ndarray]] = {}
+_generated_count_reported: set = set()
+
+
+def load_config_counts(info: Optional[dict], name: str, branch: str) -> Optional[np.ndarray]:
+    """Per-job event counts from the sample's npy Config folder (one entry per SolarNuAna job).
+
+    branch "AnalyzedEvents": Config/AnalyzedEvents.npy (lib.io, or src/tools/backfill_analyzed_events.py).
+    branch "SelectedEvents": row sums of Config/SelectedEvents.npy. The zero padding added at
+    conversion does not change the sum, so this works for every converted sample.
+    The SIGNIFICANCE preset does not load Config branches, so the files are read directly.
+    """
+    if info is None:
+        return None
+    path = (
+        f"{info['PATH']}/data/{info['GEOMETRY']}/{info['VERSION']}/"
+        f"{info['NAME']}{name}/Config/{branch}.npy"
+    )
+    if path not in _config_npy_cache:
+        try:
+            arr = np.asarray(np.load(path, allow_pickle=True))
+            if branch == "SelectedEvents":
+                arr = arr.reshape(len(arr), -1).astype(np.int64).sum(axis=1)
+            _config_npy_cache[path] = np.asarray(arr, dtype=np.int64).ravel()
+        except FileNotFoundError:
+            _config_npy_cache[path] = None
+    return _config_npy_cache[path]
+
+
+def _truth_entry_count(run: dict, info: Optional[dict], name: str) -> Optional[float]:
+    """MCTruthTree entries of the sample: SolarNuAna fills one per selected event."""
+    if info is None or "Truth" not in run or "Name" not in run["Truth"]:
+        return None
+    mask = (
+        (np.asarray(run["Truth"]["Geometry"]) == info["GEOMETRY"])
+        & (np.asarray(run["Truth"]["Version"]) == info["VERSION"])
+        & (np.asarray(run["Truth"]["Name"]) == name)
+    )
+    return float(np.sum(mask))
+
+
+def _report_once(key, message: str) -> None:
+    if key not in _generated_count_reported:
+        _generated_count_reported.add(key)
+        rprint(message)
+
+
 def resolve_generated_event_count(
     run: dict[str, dict],
     config_tree_weight: dict,
     config: str,
     name: str,
     jdx: np.ndarray,
+    info: Optional[dict] = None,
 ) -> float:
-    if config in config_tree_weight and name in config_tree_weight[config]:
-        return config_tree_weight[config][name] * len(run["Config"]["Geometry"][jdx])
-    if "AnalyzedEvents" in run["Config"]:
-        return np.sum(run["Config"]["AnalyzedEvents"][jdx])
-    return len(run["Config"]["Geometry"][jdx])
+    """Number of generated events behind the (config, name) sample, used as N_gen in
+    weight = counts * N_tree / N_gen * pdf / sum(pdf).
+
+    productions.json entries (config -> sample name -> spec), spec is one of:
+      int                          events per ConfigTree entry (job), times the number of jobs;
+      {"events_per_job": int}      same as the int form;
+      {"generated": int}           total generated events, independent of the job count;
+      "SelectedEvents"             events the analyzer selected (signal energy < MaxSignalK);
+      "AnalyzedEvents"             every event the analyzer saw, selected or not;
+      "Truth"                      MCTruthTree entries of the loaded sample;
+      {"source": <one of those three>}.
+    A sample with no entry uses SelectedEvents.
+
+    Why SelectedEvents and not AnalyzedEvents: official marley productions are generated flat
+    up to ~70 MeV and SolarNuAna drops E_nu >= MaxSignalK (30 MeV), so 60% of the analysed
+    events lie outside the solar spectrum. They carry zero flux, not an inefficiency, and
+    counting them lowers the weights by AnalyzedEvents / SelectedEvents (2.5x). Events that are
+    selected but leave no reco entry are in SelectedEvents and in the Truth tree, so they do
+    count as inefficiency. Events removed before the analyzer (upstream filters, failed jobs)
+    are in none of the three sources: such samples need an explicit productions.json entry.
+
+    Cross-checks, printed once per sample: SelectedEvents vs the Truth-tree entries (a
+    mismatch means ConfigTree entries were lost in the merge; the Truth count is then used),
+    and a fixed spec that is below the selected count or, for signal samples, differs from it
+    by more than 1%.
+    """
+    n_jobs = len(run["Config"]["Geometry"][jdx])
+    key = (config, name)
+    counts = {}
+    for branch in ("SelectedEvents", "AnalyzedEvents"):
+        arr = load_config_counts(info, name, branch)
+        if arr is None:
+            continue
+        if len(arr) == n_jobs:
+            counts[branch] = float(np.sum(arr))
+        else:
+            _report_once(
+                (key, branch),
+                f"[yellow][WARNING][/yellow] {config}/{name}: Config/{branch}.npy has {len(arr)} "
+                f"entries but the Config tree has {n_jobs} jobs; ignoring it.",
+            )
+    truth = _truth_entry_count(run, info, name)
+    if truth is not None and truth > 0:
+        counts["Truth"] = truth
+    if "SelectedEvents" in counts and "Truth" in counts and abs(counts["SelectedEvents"] - counts["Truth"]) > 0.5:
+        _report_once(
+            (key, "truth"),
+            f"[yellow][WARNING][/yellow] {config}/{name}: SelectedEvents sums to {counts['SelectedEvents']:.0f} "
+            f"but the Truth tree has {counts['Truth']:.0f} entries (ConfigTree entries lost in the merge?); "
+            f"the SelectedEvents source uses the Truth count.",
+        )
+        counts["SelectedEvents"] = counts["Truth"]
+    elif "SelectedEvents" not in counts and "Truth" in counts:
+        counts["SelectedEvents"] = counts["Truth"]
+
+    spec = config_tree_weight.get(config, {}).get(name, DEFAULT_GENERATED_COUNT_SOURCE)
+    spec_total, spec_label = None, None
+    if isinstance(spec, dict):
+        if "generated" in spec:
+            spec_total, spec_label = float(spec["generated"]), f"generated={spec['generated']}"
+        elif "events_per_job" in spec:
+            spec_total, spec_label = float(spec["events_per_job"]) * n_jobs, f"{spec['events_per_job']}/job"
+        else:
+            spec = spec.get("source", DEFAULT_GENERATED_COUNT_SOURCE)
+    elif isinstance(spec, (int, float)) and not isinstance(spec, bool):
+        spec_total, spec_label = float(spec) * n_jobs, f"{spec}/job"
+
+    if spec_total is None:
+        if spec not in GENERATED_COUNT_SOURCES:
+            raise ValueError(f"productions.json: unknown spec {spec!r} for {config}/{name}")
+        if spec not in counts:
+            raise ValueError(
+                f"{config}/{name}: productions.json asks for {spec} (or has no entry) but it is not "
+                f"available (Config/{spec}.npy missing or inconsistent, Truth tree not loaded). Run "
+                f"src/tools/backfill_analyzed_events.py or add an explicit productions.json entry."
+            )
+        return counts[spec]
+
+    selected = counts.get("SelectedEvents")
+    if selected is not None and selected > 0:
+        ratio = spec_total / selected
+        if ratio < 0.99 or (name.lower().startswith("marley") and ratio > 1.01):
+            _report_once(
+                key,
+                f"[yellow][WARNING][/yellow] {config}/{name}: productions.json ({spec_label}) gives "
+                f"{spec_total:.0f} generated events; the analyzer selected {selected:.0f}"
+                + (f" (analysed {counts['AnalyzedEvents']:.0f})" if "AnalyzedEvents" in counts else "")
+                + f" over {n_jobs} jobs (ratio {ratio:.3f}). Using productions.json.",
+            )
+    return spec_total
 
 
 def evaluate_1d_pdf(kde, values):
@@ -793,15 +928,8 @@ def normalize_true_weights(
                                 this_exposure = exposure[(weight, "osc")][
                                     osc_names[osc_name]
                                 ]
-                                this_event_count = (
-                                    config_tree_weight[config][name]
-                                    * len(run["Config"]["Geometry"][jdx])
-                                    if (
-                                        config in config_tree_weight
-                                        and name in config_tree_weight[config]
-                                    )
-                                    else np.sum(run["Config"]["AnalyzedEvents"][jdx])
-                                )
+                                # Osc weights are normalised to the tree's weight sum, so the
+                                # generated-event count only enters the debug message.
                                 run[tree][this_weight_name][idx] = (
                                     this_exposure["counts"]
                                     * run[tree][this_weight_name][idx]
@@ -809,6 +937,9 @@ def normalize_true_weights(
                                     / this_exposure["exposure"]
                                 )
                                 if debug:
+                                    this_event_count = resolve_generated_event_count(
+                                        run, config_tree_weight, config, name, jdx, info
+                                    )
                                     output += f"\t\t[cyan][INFO][/cyan] Normalized {this_weight_name}\twith {this_exposure['counts']:.0f} / {this_exposure['exposure']:.0f} counts / kT·y for {this_event_count} / {len(run[tree]['Event'][idx])} Produced / {tree} events...\n"
                         else:
                             this_weight_name = None
@@ -858,7 +989,7 @@ def normalize_true_weights(
                                 this_weight_name = f"SignalParticleWeight{weight}"
                                 this_exposure = exposure[surface_id]
                                 this_event_count = resolve_generated_event_count(
-                                    run, config_tree_weight, config, name, jdx
+                                    run, config_tree_weight, config, name, jdx, info
                                 )
 
                                 mask = (
@@ -868,13 +999,20 @@ def normalize_true_weights(
                                 this_surface_sum = np.sum(
                                     run[tree][this_weight_name][idx[0][mask]]
                                 )
+                                # Per-config surface correction (SURFACE_RATE_FACTORS in
+                                # {config}_config.json, default 1). Used by hd_1x2x6_lateralAPA
+                                # only, see that config's _SURFACE_RATE_FACTORS_comment.
+                                this_rate_factor = float(
+                                    info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
+                                )
                                 if (
                                     this_event_count > 0
                                     and this_exposure["exposure"] > 0
                                     and this_surface_sum > 0
                                 ):
                                     run[tree][this_weight_name][idx[0][mask]] = (
-                                        this_exposure["counts"]
+                                        this_rate_factor
+                                        * this_exposure["counts"]
                                         * len(run[tree]["Event"][idx[0][mask]])
                                         * run[tree][this_weight_name][idx[0][mask]]
                                         / this_event_count
@@ -888,7 +1026,7 @@ def normalize_true_weights(
                             this_weight_name = f"SignalParticleWeight{weight}"
                             this_exposure = exposure[(weight, "truth")]["truth"]
                             this_event_count = resolve_generated_event_count(
-                                run, config_tree_weight, config, name, jdx
+                                run, config_tree_weight, config, name, jdx, info
                             )
                             this_weight_sum = np.sum(run[tree][this_weight_name][idx])
                             if (

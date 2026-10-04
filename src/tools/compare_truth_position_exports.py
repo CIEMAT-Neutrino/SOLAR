@@ -101,7 +101,8 @@ print("reference numbers:", json.dumps(ck))
 # ---- 3. number for number ------------------------------------------------------------------------
 K5 = ["Analysis", "Config"]
 w = expand(load("WallCdf"), ["Distance", "CDF"]).rename(columns={"Sample": "species", "Position": "position", "Distance": "distance_cm", "CDF": "cdf", "Config": "config"})
-same(w[w.Analysis == "DayNight"], old("wall_cdf"), ["config", "species", "position", "distance_cm"], {"cdf": "cdf", "NMC": "n_mc"}, "WallCdf")
+w = w.rename(columns={"Selection": "selection"})
+same(w[w.Analysis == "DayNight"], old("wall_cdf"), ["config", "species", "selection", "position", "distance_cm"], {"cdf": "cdf", "NMC": "n_mc"}, "WallCdf")
 for kind, src in (("Residuals", "residual_hist"), ("ResidualsWide", "residual_hist_wide")):
     r = expand(load(kind), ["Residual", "WeightFraction", "NMCPerBin"])
     r = r.rename(columns={"Sample": "species", "Config": "config", "Residual": "bin_lo_cm", "WeightFraction": "weight_fraction", "NMCPerBin": "n_mc"})

@@ -1177,10 +1177,12 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             )
 
     if args.weighted:
+        # 04_weighted.py has no --plot/--no-plot flag.
+        weighted_base_args = [a for a in base_args_for(config, folder, include_background=False) if a not in ("--plot", "--no-plot")]
         for name in available_names:
             run_analysis_script(
                 "src/physics/signal/04_weighted.py",
-                base_args_for(config, folder, include_background=False) + ["--signal", name] + oscillation_args_for() + membrane_veto_args_for(),
+                weighted_base_args + ["--signal", name] + oscillation_args_for() + membrane_veto_args_for(),
             )
 
 

@@ -180,6 +180,22 @@ def compute_adjcl_basics(
             - run["Reco"][f"TotalAdjClSameGenNum{limit}"]
             - run["Reco"][f"TotalAdjClExternalBkgNum{limit}"]
         )
+        # All external-origin adjacent clusters (no same-gen exclusion) and the
+        # complementary all-non-external count. Used by tpc/02_adj_clusters for
+        # radiological* samples, whose primaries are themselves background decays
+        # (e.g. external cavern/foam gammas): their same-generator neighbours are
+        # still external-origin, so the same-gen exclusion would remove the bulk
+        # of the external contribution from those rows.
+        run["Reco"][f"TotalAdjClAllExternalBkgNum{limit}"] = np.sum(
+            np.isin(run["Reco"]["AdjClGen"], info["EXTERNAL_BACKGROUNDS"])
+            & (run["Reco"]["AdjClR"] < limit)
+            & (run["Reco"]["AdjClR"] > 0),
+            axis=1,
+        )
+        run["Reco"][f"TotalAdjClNonExternalBkgNum{limit}"] = (
+            run["Reco"][f"TotalAdjClNum{limit}"]
+            - run["Reco"][f"TotalAdjClAllExternalBkgNum{limit}"]
+        )
         run["Reco"][f"TotalAdjClBkgCharge{limit}"] = (
             run["Reco"][f"TotalAdjClCharge{limit}"]
             - run["Reco"][f"TotalAdjClSameGenCharge{limit}"]

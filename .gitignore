@@ -361,3 +361,6 @@ ehthumbs_vista.db
 # =============================================================================
 # END OF FILE
 # =============================================================================
+# FNAL Kerberos helper (contains a password)
+kinit_fnal.py
+.krb5_fnal.conf

@@ -45,6 +45,25 @@ def _safe_mean(arr):
     return np.mean(arr) if len(arr) > 0 else np.nan
 
 
+def _spread_stats(arr):
+    """Asymmetric 68% spread of a per-event distribution.
+
+    MeanError (std) is symmetric, so for counts piled up at 0 it extends
+    below 0; the 16th/84th percentiles stay inside the physical range.
+    """
+    arr = np.asarray(arr, dtype=float)
+    q16, q50, q84 = np.percentile(arr, [15.865, 50, 84.135])
+    return {
+        "Median": q50,
+        "Q16": q16,
+        "Q84": q84,
+        "Entries": len(arr),
+        # Fallback descriptor when the percentile band collapses (Q16 == Q84,
+        # e.g. most events without any flash): share of events with at least one.
+        "NonZeroPercent": 100 * np.mean(arr > 0),
+    }
+
+
 run, output = load_multi(
     configs, preset=user_input["workflow"], debug=user_input["debug"]
 )
@@ -163,6 +182,7 @@ for config in configs:
                         "Radius": f"{limit}",
                         "Mean": np.mean(arr_r),
                         "MeanError": np.std(arr_r),
+                        **_spread_stats(arr_r),
                     }
                 )
             fig = format_coustom_plotly(
@@ -253,6 +273,7 @@ for config in configs:
                         "Plane": plane,
                         "Mean": np.mean(arr),
                         "MeanError": np.std(arr),
+                        **_spread_stats(arr),
                     }
                 )
             fig = format_coustom_plotly(

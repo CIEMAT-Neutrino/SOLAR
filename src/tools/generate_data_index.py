@@ -42,6 +42,8 @@ _PUBLICATION_EXPORT_DIRS = {
     "analysis/sensitivity",
     "event",
     "common",
+    "PDS/waveform",
+    "TPC/smearing",
 }
 
 

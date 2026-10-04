@@ -18,7 +18,8 @@ Trend check
 Staleness rules (each row lists the reasons that apply)
   missing          no record on disk for a (config, folder, analysis, label) the registry expects
   epoch            record older than the last statistic change for that analysis (--epoch), or older than the
-                   last code change that touches that particular study (STUDY_EPOCHS)
+                   last code change that touches that particular study (STUDY_EPOCHS), or older than the
+                   last code change that touches that particular config (CONFIG_EPOCHS)
   values_bug       DayNight/HEP map 'Values' does not match the exposure curve at 30 yr
                    (05_best_sigmas read the 0.1-yr row for held cuts before 2026-09-17)
   cut!=ref         Sensitivity study that is meant to HOLD the nominal Truncated cut (skip_best_cuts in
@@ -76,6 +77,11 @@ STUDY_EPOCHS = {
     # energy studies rerun with the fiducial volume held at the SolarEnergy reference (lib/study.py, 2026-09-21)
     "energy_spk": "2026-09-21T11:13",
     "energy_maink": "2026-09-21T11:13",
+}
+# Code changes that only touch one config: every record of that config is stale when older than its epoch.
+CONFIG_EPOCHS = {
+    # lateral-only SURFACE_RATE_FACTORS in normalize_true_weights (lib/weights.py) -- see [[hd-lateral-external-bkg-normalisation]]
+    "hd_1x2x6_lateralAPA": "2026-09-23T17:39",
 }
 # Studies that do not apply to a geometry (label -> config-name prefix): the veto only acts on VD planes;
 # bkgmodel is not run on vd_1x8x14_3view_30deg_shielded (2026-09-22, by request; also lib.study excluded_configs).
@@ -383,6 +389,8 @@ def main() -> None:
                 ep = epochs.get(an, dt.datetime.min)
                 if label in STUDY_EPOCHS:
                     ep = max(ep, dt.datetime.fromisoformat(STUDY_EPOCHS[label]))
+                if cfg in CONFIG_EPOCHS:
+                    ep = max(ep, dt.datetime.fromisoformat(CONFIG_EPOCHS[cfg]))
                 if t is not None and t < ep:
                     row["reasons"].append("epoch")
                 rows.append(row)

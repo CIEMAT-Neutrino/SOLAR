@@ -819,6 +819,70 @@
       ],
       "publication_export": false
     },
+    "PDS_FLASH": {
+      "description": "OpFlash distributions of the 2026-09 flash productions: per-event flash counts and per-flash histograms (truth OpFlash vectors), adjacent-flash counts/histograms per cluster, matched-flash histograms and summary. Signal = flash Pur > 0.",
+      "base": "{root}/output/data/PDS/flash/{config}/{name}",
+      "filenames": {
+        "counts": "{config}_{name}_OpFlash_Counts.pkl",
+        "counts_slim": "{config}_{name}_OpFlash_Counts_Slim.pkl",
+        "distributions": "{config}_{name}_OpFlash_Distributions.pkl",
+        "adj_counts": "{config}_{name}_AdjOpFlash_Counts.pkl",
+        "adj_counts_slim": "{config}_{name}_AdjOpFlash_Counts_Slim.pkl",
+        "adj_distributions": "{config}_{name}_AdjOpFlash_Distributions.pkl",
+        "matched_distributions": "{config}_{name}_MatchedOpFlash_Distributions.pkl",
+        "matched_summary": "{config}_{name}_MatchedOpFlash_Summary.pkl"
+      },
+      "written_by": "src/physics/detector/pds/05_flash_distributions.py (save_df)",
+      "read_by": [],
+      "in_pnfs": false,
+      "themes": [
+        "detector"
+      ],
+      "publication_export": false
+    },
+    "PDS_WAVEFORM_EXPORT": {
+      "description": "Bundle of the waveform characterisation for the plot/thesis repos: all samples in one file per kind (Total plane, all generators), SPE responses, README.md, meta.json and THESIS_AGENT_PROMPT.md.",
+      "base": "{root}/output/data/PDS/waveform/export",
+      "filenames": {
+        "templates": "waveform_templates.pkl",
+        "features": "waveform_features.pkl",
+        "summary": "waveform_summary.pkl",
+        "template_summary": "waveform_template_summary.pkl",
+        "profiles": "waveform_profiles.pkl",
+        "profile_summary": "waveform_profile_summary.pkl",
+        "examples": "waveform_examples.pkl",
+        "spe": "spe_responses.pkl"
+      },
+      "written_by": "src/tools/export_waveform_repo.py",
+      "read_by": [],
+      "in_pnfs": false,
+      "themes": [
+        "detector",
+        "publication"
+      ],
+      "publication_export": true
+    },
+    "PDS_WAVEFORM": {
+      "description": "PDS waveform characterisation (main-channel waveform of each flash; VD raw DAPHNE ADC from opdigi10ppm, 16 ns ticks): peak-aligned templates, two-exponential tail fits, feature histograms (F_prompt, rise/fall times, ADC/PE, ...), summaries, a slim per-waveform table and example waveforms. Low weight, for the plotting repo and the thesis.",
+      "base": "{root}/output/data/PDS/waveform/{config}/{name}",
+      "filenames": {
+        "templates": "{config}_{name}_Waveform_Templates.pkl",
+        "fits": "{config}_{name}_Waveform_Fits.pkl",
+        "features": "{config}_{name}_Waveform_Features.pkl",
+        "summary": "{config}_{name}_Waveform_Summary.pkl",
+        "table_slim": "{config}_{name}_Waveform_Table_Slim.pkl",
+        "examples": "{config}_{name}_Waveform_Examples.pkl",
+        "profiles": "{config}_{name}_Waveform_Profiles.pkl",
+        "profile_summary": "{config}_{name}_Waveform_Profile_Summary.pkl"
+      },
+      "written_by": "src/physics/detector/pds/06_waveforms.py, 07_waveform_profiles.py (profiles: templates unfolded with the SPE response) (save_df)",
+      "read_by": [],
+      "in_pnfs": false,
+      "themes": [
+        "detector"
+      ],
+      "publication_export": true
+    },
     "PRESELECTION_PRODUCTION": {
       "description": "Production distribution and limits DataFrames from the preselection production stage. One pair of files per (config, name).",
       "base": "{root}/output/data/preselection/production/{config}/{name}",
@@ -911,6 +975,29 @@
         "detector"
       ],
       "publication_export": false
+    },
+    "TPC_SMEARING_CHAIN": {
+      "description": "Primary-cluster energy smearing chain (analysis-independent, every primary cluster). Per sample: per-step spectra, share above the true endpoint split by flash category, one-at-a-time counterfactuals, E_step/E_true response, summary JSON, and a cutflow_plot.py-format pkl (one Stage per step: True energy, Charge response, Pile-up, Lifetime correction, NHits gain, Electron calibration, Discriminant offset, SolarEnergy; 1 MeV bins, events/MeV at 20 yr; the SolarEnergy row equals the cutflow 'Raw' stage). {sample} is 'full' (analysis weights) or 'true9.5-10.5_unweighted' (10 MeV gamma slice, MC counts).",
+      "base": "{root}/output/data/TPC/smearing/{config}/{name}/{sample}",
+      "filenames": {
+        "cutflow": "{config}_{name}_{energy}_Chain_Cutflow.pkl",
+        "spectra": "{config}_{name}_Chain_Spectra.pkl",
+        "endpoint": "{config}_{name}_Chain_Endpoint.pkl",
+        "counterfactuals": "{config}_{name}_Chain_Counterfactuals.pkl",
+        "response": "{config}_{name}_Chain_Response.pkl",
+        "summary": "{config}_{name}_Chain_Summary.json",
+        "combined_cutflow": "../../samples/{sample}/{config}_{energy}_Chain_Cutflow.pkl"
+      },
+      "written_by": "src/physics/detector/tpc/04_smearing_chain.py (save_df); combined by 05_smearing_chain_samples.py",
+      "read_by": [
+        "src/physics/detector/tpc/05_smearing_chain_samples.py"
+      ],
+      "in_pnfs": false,
+      "themes": [
+        "detector",
+        "publication"
+      ],
+      "publication_export": true
     },
     "VERTEX_SMEARING": {
       "description": "Cumulative vertex error and vertex smearing DataFrames plus per-component smearing entries.",
@@ -1063,8 +1150,16 @@
     "PDS": [
       "detector"
     ],
+    "PDS/waveform": [
+      "detector",
+      "publication"
+    ],
     "TPC": [
       "detector"
+    ],
+    "TPC/smearing": [
+      "detector",
+      "publication"
     ],
     "vertex": [
       "detector"

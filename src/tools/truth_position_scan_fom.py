@@ -1,0 +1,198 @@
+"""
+truth_position_scan_fom.py — Analysis-independent fiducial-scan figure of merit.
+
+    Z_A(F) = sqrt( sum_i Z_{A,i}^2 ),   Z_{A,i} = sqrt( 2 [ (S_i + B_i) ln(1 + S_i/B_i) - S_i ] )
+
+S_i and B_i are the weighted CC-signal (marley) and background contents of the i-th
+reconstructed-energy (SolarEnergy) bin over the FULL simulated energy range, after the
+fiducial cut defined by the margin F and the flash-quality selection only: no analysis
+window and no analysis topological cut enters, so the same curve applies to the
+Day-Night, hep and Sensitivity analyses. Z_{A,i} is the per-bin Asimov significance of
+the solar-neutrino analyses (eq:asimov_simple); unlike S_i/sqrt(B_i) it stays bounded
+when a bin's background weight collapses at tight margins.
+
+Two background variants:
+  ScanCurvesFid    B = external gamma+neutron (the FoM background of the truth-position study)
+  ScanCurvesFidRad B = external gamma+neutron + intrinsic radiological
+Bins whose background MC support is below MIN_MC (the export's FoM support rule) are
+left out of the sum.
+
+Positions follow the truth-position scan modes of truth_position_study.py ('reco' =
+reconstructed X/Y/Z, 'truth' = truth X/Y/Z), margins on the same 20 cm grid, the same
+lib.fiducial spatial mask and the same flash-quality selection. Both modes are evaluated on
+the same events: the truth-containment cut (truth position inside the active box +- the
+containment margin) is applied in every mode, not only in
+'truth'. Otherwise only the truth curve loses the background whose truth key (gamma End*,
+neutron Main*) lies outside the active volume, and reco and truth differ already at zero
+margin. The zero-margin difference that remains is real: the reco mask rejects events whose
+RecoX was clipped to the drift boundary (flash match beyond the drift volume).
+
+Output, in output/data/solar/truth_position/export_repo/ (ScanCurves schema, Analysis='All',
+one row per (Variable, Mode)):
+    {config}_all_ScanCurvesFid.pkl      FiducialCut, SignalEfficiency, SumWGammaNeutron, FoM, NMCGammaNeutron
+    {config}_all_ScanCurvesFidRad.pkl   FiducialCut, SignalEfficiency, SumWBackground,  FoM, NMCBackground
+plus scan_curves_fid.json (definition, bins, margins, git head) next to meta.json.
+
+Run (inside the container, as src/tools/run_truth_position.sh does):
+    apptainer exec -B /pnfs,/afs,/pc,/cvmfs --home=$SOLAR/ --pwd $SOLAR/ \
+        $SOLAR/containers/solar_v1.0.sif python3 src/tools/truth_position_scan_fom.py
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+from lib import root, load_analysis_info                                    # noqa: E402
+from lib.fiducial import accepted_flash_planes, build_fiducial_spatial_mask  # noqa: E402
+from lib.background import is_surface_background                            # noqa: E402
+
+ROOT = str(root)
+CACHE = Path(ROOT) / "output/data/solar/truth_position"
+OUT = CACHE / "export_repo"
+FOLDER = "Truncated"
+CONFIGS = ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA",
+           "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"]
+SAMPLES = ("marley", "gamma", "neutron", "radiological")
+MODES = (("reco", "rrr", "reco X, reco Y/Z"), ("truth", "ttt", "truth X, truth Y/Z"))
+MARGINS = np.arange(0, 341, 20.0)                  # the scan grid of truth_position_study.py
+ENERGY_EDGES = np.arange(0.0, 50.0 + 1e-9, 1.0)    # 1 MeV bins over the full simulated range
+MIN_MC = 5                                         # per-bin background MC support (min_mc_for_fom)
+MARGIN_CM = float(load_analysis_info(ROOT).get("BACKGROUND_SAMPLES", {}).get("truth_containment_margin_cm", 10.0))
+
+
+def config_info(config):
+    return json.loads(open(f"{ROOT}/config/{config}/{config}_config.json").read())
+
+
+class Sample:
+    """One (config, sample) cache with the flash-quality selection of truth_position_study.py."""
+
+    def __init__(self, config, name, info):
+        self.config, self.name, self.info = config, name, info
+        self.d = dict(np.load(CACHE / config / f"{config}_{name}.npz", allow_pickle=True))
+        self.w = self.d["w"]
+        self.energy = self.d["energy"]
+        quality = accepted_flash_planes(self.d["plane"], ROOT, True) & (self.d["pe"] > 0)
+        if is_surface_background(ROOT, name):
+            quality &= self.d["surface"] >= 0
+            if FOLDER in ("Reduced", "Truncated"):
+                quality &= self.d["surface"] < 3
+        self.quality = quality
+        # truth position inside the active box +- MARGIN_CM, from the current geometry config (the cache's 'contained'
+        # flag was written at extraction and does not follow later changes of the box)
+        lo = np.array([info[f"DETECTOR_MIN_{a}"] for a in "XYZ"], float)
+        hi = np.array([info[f"DETECTOR_MAX_{a}"] for a in "XYZ"], float)
+        t = np.stack([self.d[f"truth_{a}"] for a in "xyz"], 1)
+        self.contained = ((t >= lo - MARGIN_CM) & (t <= hi + MARGIN_CM)).all(axis=1)
+
+
+def scan_mask(s, fid, src):
+    """Spatial fiducial mask on the mode's positions, plus the truth-containment cut in every
+    mode, so that reco and truth are evaluated on the same events."""
+    pos = [s.d[f"{'truth' if c == 't' else 'reco'}_{a}"] for c, a in zip(src, "xyz")]
+    info = s.info
+    dx = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
+    dy = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
+    m = build_fiducial_spatial_mask({"Reco": {"RecoX": pos[0], "RecoY": pos[1], "RecoZ": pos[2]}},
+                                    s.config, dx, dy, info, FOLDER, fid)
+    return m & s.contained
+
+
+def hist_weights(s, m):
+    return np.histogram(s.energy[m], bins=ENERGY_EDGES, weights=s.w[m])[0]
+
+
+def hist_counts(s, m):
+    return np.histogram(s.energy[m], bins=ENERGY_EDGES)[0]
+
+
+def asimov_quadrature(s_hist, b_hist, adm):
+    """sqrt(sum_i Z_{A,i}^2) over the admitted bins, with the per-bin Asimov significance
+    Z_{A,i} = sqrt(2 [(s+b) ln(1+s/b) - s]) (eq:asimov_simple); s = 0 gives 0."""
+    s, b = s_hist[adm], b_hist[adm]
+    z2 = np.zeros_like(s)
+    m = s > 0
+    z2[m] = 2.0 * ((s[m] + b[m]) * np.log1p(s[m] / b[m]) - s[m])
+    return float(np.sqrt(np.maximum(z2, 0.0).sum()))
+
+
+rows_fid, rows_rad = [], []
+for config in CONFIGS:
+    info = config_info(config)
+    S = {name: Sample(config, name, info) for name in SAMPLES
+         if (CACHE / config / f"{config}_{name}.npz").exists()}
+    if "marley" not in S:
+        sys.exit(f"no marley cache for {config}")
+    tot_s = float(S["marley"].w[S["marley"].quality & S["marley"].contained].sum())
+    for mode, src, mlabel in MODES:
+        for var in ("X only", "Y only"):
+            per = {"FiducialCut": [], "SignalEfficiency": [], "SumWGammaNeutron": [], "FoM": [], "NMCGammaNeutron": []}
+            rad = {"FiducialCut": [], "SignalEfficiency": [], "SumWBackground": [], "FoM": [], "NMCBackground": []}
+            for f in MARGINS:
+                fid = {"FiducialX": float(f), "FiducialY": 0.0, "FiducialZ": 0.0} if var == "X only" \
+                    else {"FiducialX": 0.0, "FiducialY": float(f), "FiducialZ": 0.0}
+                ms = S["marley"].quality & scan_mask(S["marley"], fid, src)
+                s_hist = hist_weights(S["marley"], ms)
+                b_hist = np.zeros_like(s_hist)
+                n_hist = np.zeros_like(s_hist, dtype=int)
+                r_hist = np.zeros_like(s_hist) if "radiological" in S else None
+                for name in ("gamma", "neutron"):
+                    if name in S:
+                        mb = S[name].quality & scan_mask(S[name], fid, src)
+                        b_hist += hist_weights(S[name], mb)
+                        n_hist += hist_counts(S[name], mb)
+                if r_hist is not None:
+                    mr = S["radiological"].quality & scan_mask(S["radiological"], fid, src)
+                    r_hist = hist_weights(S["radiological"], mr)
+                    n_rad = n_hist + hist_counts(S["radiological"], mr)
+                adm = (n_hist >= MIN_MC) & (b_hist > 0)
+                per["FiducialCut"].append(float(f))
+                per["SignalEfficiency"].append(float(s_hist.sum() / tot_s) if tot_s > 0 else float("nan"))
+                per["SumWGammaNeutron"].append(float(b_hist.sum()))
+                per["FoM"].append(asimov_quadrature(s_hist, b_hist, adm))
+                per["NMCGammaNeutron"].append(int(n_hist.sum()))
+                if r_hist is not None:
+                    b_tot = b_hist + r_hist
+                    adm_tot = (n_rad >= MIN_MC) & (b_tot > 0)
+                    rad["FiducialCut"].append(float(f))
+                    rad["SignalEfficiency"].append(per["SignalEfficiency"][-1])
+                    rad["SumWBackground"].append(float(b_tot.sum()))
+                    rad["FoM"].append(asimov_quadrature(s_hist, b_tot, adm_tot))
+                    rad["NMCBackground"].append(int(n_rad.sum()))
+            rows_fid.append({"Analysis": "All", "Geometry": config.split("_")[0], "Config": config,
+                             "Name": "all", "Study": "default", "Variable": var, "Mode": mode,
+                             "ModeLabel": mlabel, "FiducialCutUnit": "cm", **per})
+            if r_hist is not None:
+                rows_rad.append({"Analysis": "All", "Geometry": config.split("_")[0], "Config": config,
+                                 "Name": "all", "Study": "default", "Variable": var, "Mode": mode,
+                                 "ModeLabel": mlabel, "FiducialCutUnit": "cm", **rad})
+    print(f"[ok] {config}")
+
+for name, rows in (("ScanCurvesFid", rows_fid), ("ScanCurvesFidRad", rows_rad)):
+    df = pd.DataFrame(rows)
+    OUT.mkdir(parents=True, exist_ok=True)
+    for config in CONFIGS:
+        sub = df[df.Config == config]
+        sub.to_pickle(OUT / f"{config}_all_{name}.pkl", protocol=4)
+        print(f"[export] {config}_all_{name}.pkl  {len(sub)} rows")
+
+rev = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"],
+                     capture_output=True, text=True).stdout.strip()
+meta = {"kind": ["ScanCurvesFid", "ScanCurvesFidRad"], "script": "src/tools/truth_position_scan_fom.py",
+        "git_head": rev, "folder": FOLDER,
+        "definition": "Z_A = sqrt(sum_i Z_{A,i}^2) with the per-bin Asimov significance "
+                      "Z_{A,i} = sqrt(2[(S_i+B_i) ln(1+S_i/B_i) - S_i]) (eq:asimov_simple) over 1 MeV SolarEnergy "
+                      "bins of the full simulated range; flash-quality selection only (no analysis window, "
+                      "no topological cut); truth-containment cut in both modes; ScanCurvesFid: B = external gamma+neutron, ScanCurvesFidRad: "
+                      "B = gamma+neutron+radiological; bins with background MC < 5 excluded",
+        "energy_edges_mev": [float(ENERGY_EDGES[0]), float(ENERGY_EDGES[-1])], "bin_width_mev": 1.0,
+        "margins_cm": [float(MARGINS[0]), float(MARGINS[-1]), 20.0], "modes": [m[0] for m in MODES],
+        "min_mc_per_bin": MIN_MC, "truth_containment_margin_cm": MARGIN_CM}
+(OUT / "scan_curves_fid.json").write_text(json.dumps(meta, indent=2))
+print(f"[export] {OUT / 'scan_curves_fid.json'}")

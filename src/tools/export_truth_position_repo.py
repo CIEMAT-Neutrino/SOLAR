@@ -77,9 +77,9 @@ def fl(a):
 
 
 # ---- analysis-independent -------------------------------------------------------------------------
-for (c, sp, pos), g in old("wall_cdf").groupby(["config", "species", "position"]):
+for (c, sp, sel, pos), g in old("wall_cdf").groupby(["config", "species", "selection", "position"]):
     g = g.sort_values("distance_cm")
-    add_all_analyses("WallCdf", c, sp, {"Position": pos, "Distance": fl(g.distance_cm), "CDF": fl(g.cdf), "NMC": int(g.n_mc.iloc[0]), "DistanceUnit": "cm"})
+    add_all_analyses("WallCdf", c, sp, {"Selection": sel, "Position": pos, "Distance": fl(g.distance_cm), "CDF": fl(g.cdf), "NMC": int(g.n_mc.iloc[0]), "DistanceUnit": "cm"})
 
 for r in old("shell_ratio").itertuples():
     add_all_analyses("ShellRatio", r.config, r.species, {"Shell": f"{r.shell_lo_cm:g}-{r.shell_hi_cm:g} cm", "ShellLow": float(r.shell_lo_cm), "ShellHigh": float(r.shell_hi_cm),
@@ -206,7 +206,7 @@ for (an, c, sp, ag), g in old("survivors_events").groupby(["analysis", "config",
 
 # ---- write ---------------------------------------------------------------------------------------
 FEEDS = {
-    "WallCdf": "fig 1 wall proximity (cumulative fraction vs distance; Position = truth/reco, one panel per config)",
+    "WallCdf": "fig 1 wall proximity (cumulative fraction vs distance; Selection = all / quality / window, Position = truth/reco, one panel per config; window = the original figure)",
     "ShellRatio": "fig 2 wall enhancement per shell (Shell x Ratio, error RatioError; a table column pivot works too)",
     "Residuals": "fig 3 top row: reco - truth histograms per axis (panel = Variable); bin lower edges in Residual, 5 cm bins, outer bins hold overflow",
     "ResidualsWide": "fig 3 for panels whose median is off scale in Residuals (VD gamma / neutron X); 20 cm bins over +-700 cm",
@@ -260,7 +260,7 @@ def one(kind, **kw):
         df = df[df[k] == v]
     return df
 
-wc = one("WallCdf", Config="hd_1x2x6_centralAPA", Position="truth", Analysis="DayNight")
+wc = one("WallCdf", Config="hd_1x2x6_centralAPA", Selection="window", Position="truth", Analysis="DayNight")
 checks = {"WallCdf_HD_central_truth_20cm": {r.Sample: float(np.interp(20.0, r.Distance, r.CDF)) for r in wc.itertuples() if r.Sample in ("gamma", "marley", "neutron")}}
 sg_ = one("Significance", Config="hd_1x2x6_lateralAPA", Analysis="DayNight")
 checks["Significance_HD_lateral_DayNight"] = {r.Variant: float(r.Significance) for r in sg_.itertuples()}

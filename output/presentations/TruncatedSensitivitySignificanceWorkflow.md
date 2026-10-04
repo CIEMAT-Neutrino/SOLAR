@@ -241,7 +241,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 0 | 80 | 100 | 0.549 | 5.342 | 5.02 |
-| HD Lateral | 60 | 260 | 200 | 0.171 | 3.754 | 2.28 |
+| HD Lateral | 60 | 220 | 0 | 0.164 | 2.743 | 3.56 |
 | VD Top | 0 | 0 | 20 | 1.057 | 1.072 | 7.69 |
 | VD Bottom Shielded | 0 | 0 | 20 | 1.000 | 1.001 | 7.69 |
 

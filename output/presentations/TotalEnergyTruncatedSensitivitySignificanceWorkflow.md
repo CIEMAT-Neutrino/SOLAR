@@ -196,7 +196,7 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | 100 | 280 | 120 | 0.045 | 0.247 | 2.16 |
-| HD Lateral | 0 | 0 | 40 | 0.016 | 0.073 | 6.37 |
+| HD Lateral | 40 | 20 | 20 | 0.002 | 0.057 | 5.64 |
 | VD Top | 0 | 0 | 0 | 0.097 | 0.097 | 7.84 |
 | VD Bottom Shielded | 60 | 80 | 0 | 0.061 | 0.101 | 6.28 |
 
@@ -301,7 +301,7 @@ No significance plot found for VD Bottom Shielded.
 ### HD Lateral Templates
 
 <div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_TotalEnergy_NHits6_AdjCl3_OpHits14.png">
+  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_TotalEnergy_NHits4_AdjCl4_OpHits4.png">
 </div>
 
 ---
