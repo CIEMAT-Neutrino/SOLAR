@@ -27,6 +27,13 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--solar_weights",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Weight the branch-classifier training and the threshold metric with the 8B+hep spectrum "
+    "(tested 2026-10-04: worse SolarEnergy resolution than flat weighting, hence off by default).",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -417,12 +424,16 @@ for config in configs:
 
         # Train the classifier on the training data
         # Solar-spectrum weights for the signal clusters; clusters from other generators keep weight 1.
-        train_w = np.where(
-            train_df["Generator"].to_numpy() == 1,
-            solar_spectrum_weights(info, name, train_df["SignalParticleK"].to_numpy(float)),
-            1.0,
-        )
-        rprint(f"Training weights: 8B+hep spectrum for {np.sum(train_df['Generator'] == 1)} signal clusters")
+        if args.solar_weights:
+            train_w = np.where(
+                train_df["Generator"].to_numpy() == 1,
+                solar_spectrum_weights(info, name, train_df["SignalParticleK"].to_numpy(float)),
+                1.0,
+            )
+            rprint(f"Training weights: 8B+hep spectrum for {np.sum(train_df['Generator'] == 1)} signal clusters")
+        else:
+            train_w = np.ones(len(train_df))
+            rprint("Training weights: flat")
         rf_classifier.fit(train_df[features], train_df["Label"], sample_weight=train_w)
         # Use the trained classifier to predict the labels for the test data
         test_df["ML"] = rf_classifier.predict(test_df[features])
@@ -596,14 +607,14 @@ for config in configs:
             debug=user_input["debug"],
         )
 
-        # Branch threshold: minimise the 8B+hep-weighted core width of (E_reco - E_true)/E_true on the
+        # Branch threshold: minimise the (flat or, with --solar_weights, 8B+hep-weighted) core width of (E_reco - E_true)/E_true on the
         # test signal clusters, instead of the ROC optimum (kept in the json as ML_THRESHOLD_ROC).
         roc_threshold = float(threshold)
         _sig = (test_df["Generator"] == 1) & (test_df["SignalParticleK"] > 0)
         _true = test_df.loc[_sig, "SignalParticleK"].to_numpy(float)
         _energy = test_df.loc[_sig, "Energy"].to_numpy(float)
         _score = rf_classifier.predict_proba(test_df.loc[_sig, features])[:, 1]
-        _w = solar_spectrum_weights(info, name, _true)
+        _w = solar_spectrum_weights(info, name, _true) if args.solar_weights else np.ones_like(_true)
         _scan = []
         for _thr in np.linspace(0.02, 0.98, 97):
             _reco = np.where(_score >= _thr, upper_func(_energy), lower_func(_energy))
@@ -748,7 +759,7 @@ for config in configs:
                     "DISCRIMINANT_THRESHOLD": mid_popt[1],
                     "ML_THRESHOLD": threshold,
                     "ML_THRESHOLD_ROC": roc_threshold,
-                    "ML_TRAINING_WEIGHTS": "comb_kde_p (8B+hep)",
+                    "ML_TRAINING_WEIGHTS": "comb_kde_p (8B+hep)" if args.solar_weights else "flat",
                     "UPPER": {
                         "OFFSET": popt_int[0],
                         "ENERGY_AMP": popt_corr["Upper"][0],
