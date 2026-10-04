@@ -133,8 +133,5 @@
         "report": false
       }
     }
-  },
-  "DATA_PATHS": {
-    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_final_20261004"
   }
 }
