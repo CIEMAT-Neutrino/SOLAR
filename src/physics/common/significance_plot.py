@@ -1194,7 +1194,7 @@ for _sl in _study_labels_to_run:
                 if comp_df.empty:
                     continue
 
-                if component == "radiological":
+                if str(component).split("_")[0] == "radiological":
                     radiological_present = True
 
                 cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)

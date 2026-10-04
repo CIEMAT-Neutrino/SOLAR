@@ -1,23 +1,35 @@
 {
     "hd_1x2x6": {
-        "marley": 500, 
+        "marley": 500,
         "alpha": 500
     },
-    "vd_1x8x14_3view_30deg": {"marley": 1000},
+    "vd_1x8x14_3view_30deg": {
+        "marley": 1000
+    },
     "hd_1x2x6_centralAPA": {
         "marley": 50,
         "neutron": 3600,
-        "gamma": 3600
+        "gamma": 3600,
+        "gamma_final": {
+            "events_per_job": 900
+        },
+        "neutron_final": {
+            "events_per_job": 900
+        }
     },
     "hd_1x2x6_lateralAPA": {
         "marley": 50,
         "neutron": 2000,
-        "gamma": 2000
+        "gamma": 2000,
+        "gamma_final": "AnalyzedEvents",
+        "neutron_final": "AnalyzedEvents"
     },
     "vd_1x8x14_3view_30deg_nominal": {
         "marley": 100,
         "neutron": 2000,
-        "gamma": 2000
+        "gamma": 2000,
+        "gamma_final": "AnalyzedEvents",
+        "neutron_final": "AnalyzedEvents"
     },
     "vd_1x8x14_3view_30deg_optimistic": {
         "marley": 40,
@@ -27,6 +39,8 @@
     "vd_1x8x14_3view_30deg_shielded": {
         "marley": 100,
         "neutron": 2000,
-        "gamma": 2000
+        "gamma": 2000,
+        "gamma_final": "AnalyzedEvents",
+        "neutron_final": "AnalyzedEvents"
     }
 }

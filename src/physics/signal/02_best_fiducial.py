@@ -247,7 +247,7 @@ NON_FIDUCIALIZABLE_TRUTH_COMPONENTS = {"radiological"}
 
 
 def filter_fiducializable_components(components: List[str]) -> List[str]:
-    return [c for c in components if str(c).lower() not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
+    return [c for c in components if str(c).lower().split("_")[0] not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
 
 
 def get_essential_background_components(root_path: str, components: List[str]) -> Set[str]:

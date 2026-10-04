@@ -416,7 +416,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             if comp_df.empty:
                 continue
 
-            if component == "radiological":
+            if str(component).split("_")[0] == "radiological":
                 radiological_present = True
 
             counts = _safe_array(comp_df["Counts"].values[0])
