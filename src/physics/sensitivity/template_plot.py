@@ -27,7 +27,7 @@ parser.add_argument(
 parser.add_argument(
     "--folder",
     type=str,
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Test"],
     default="Nominal",
 )
 parser.add_argument(

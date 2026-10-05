@@ -1,6 +1,11 @@
 {
   "DEFAULT_FOLDER": "Truncated",
-  "FOLDER_CHOICES": ["Nominal", "Reduced", "Truncated"],
+  "FOLDER_CHOICES": [
+    "Nominal",
+    "Reduced",
+    "Truncated",
+    "Test"
+  ],
   "FOLDERS": {
     "Nominal": {
       "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction.",
@@ -40,6 +45,26 @@
         "marley": 1,
         "gamma": 1,
         "neutron": 1,
+        "alpha": 1,
+        "radiological": 1
+      }
+    },
+    "Test": {
+      "description": "Test scenario (2026-10-05): Truncated selection with the external gamma and neutron rates divided by the factors of the thesis runs (per-job N_gen bug): 4 for HD, 10 for VD, at all energies. Per-geometry factors: {geometry prefix or config name: factor}.",
+      "z_endcap_rejection": "surface",
+      "apply_reduction": true,
+      "path_key": "test",
+      "reduction_threshold_mev": 0.0,
+      "reduction_factors": {
+        "marley": 1,
+        "gamma": {
+          "hd": 4,
+          "vd": 10
+        },
+        "neutron": {
+          "hd": 4,
+          "vd": 10
+        },
         "alpha": 1,
         "radiological": 1
       }

@@ -32,7 +32,7 @@ parser.add_argument(
     type=str,
     help="The name of the results folder",
     default="Nominal",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Test"],
 )
 parser.add_argument(
     "--signal_uncertainty",

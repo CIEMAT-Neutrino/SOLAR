@@ -118,7 +118,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
-parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
+parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Test"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
 parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument(
@@ -199,7 +199,7 @@ parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
 parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Test"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
@@ -594,7 +594,7 @@ for config in configs:
                     
                     # Apply energy-dependent reduction for background gammas
                     if _apply_energy_reduction:
-                        _factor = get_component_reduction_factor(str(root), args.folder, name)
+                        _factor = get_component_reduction_factor(str(root), args.folder, name, config=config)
                         if "gamma" in name.lower() and _threshold > 0:
                             # For gammas: apply reduction only above threshold
                             _true_energies_sel = _true_energies_masked[_reco_bvalid]
@@ -610,7 +610,7 @@ for config in configs:
                     # For h_true, apply the same energy-dependent reduction logic
                     _sel_w_true = selected_weights[_true_bvalid]
                     if _apply_energy_reduction:
-                        _factor = get_component_reduction_factor(str(root), args.folder, name)
+                        _factor = get_component_reduction_factor(str(root), args.folder, name, config=config)
                         if "gamma" in name.lower() and _threshold > 0:
                             _true_energies_true = _true_energies_masked[_true_bvalid]
                             _sel_w_true = _sel_w_true.copy()

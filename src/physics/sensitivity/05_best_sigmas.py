@@ -190,7 +190,7 @@ parser.add_argument(
     "--reference_folder",
     type=str,
     default=None,
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Test"],
     help="Folder whose highest pkl supplies the reference cuts for --reference_study_label "
          "(default: --folder). bkgmodel studies hold the Truncated cuts in the Nominal/Reduced folders.",
 )

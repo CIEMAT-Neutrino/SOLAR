@@ -28,7 +28,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Test"],
     default="Nominal",
 )
 parser.add_argument(

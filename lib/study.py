@@ -328,6 +328,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
         {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
+        # Test (2026-10-05): external gamma/neutron rates divided by the thesis-run factors (x4 HD, x10 VD).
+        # Deliberately not one-knob: the full chain (fiducial volume, cuts, sigmas) is re-optimised, as in
+        # the thesis runs, so the numbers reproduce the thesis background level with the current code.
+        {"label": "bkgmodel_test", "folder": "Test", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
+         "skip_best_sigmas": False, "skip_templates": False},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
     # Solar variant reuses nominal Rebin pkls (skip_rebin=True); reactor variant regenerates

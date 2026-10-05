@@ -29,7 +29,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Test"],
     default="Nominal",
 )
 parser.add_argument(
@@ -233,7 +233,7 @@ for config in configs:
         _is_surface = is_surface_background(str(root), sample_key)
         if _is_surface:
             _surface_ok = _surface_arr >= 0
-            if args.folder in ["Reduced", "Truncated"]:
+            if args.folder in ["Reduced", "Truncated", "Test"]:
                 _surface_ok = _surface_ok & (_surface_arr < 3)
         else:
             _surface_ok = np.ones(len(_surface_arr), dtype=bool)

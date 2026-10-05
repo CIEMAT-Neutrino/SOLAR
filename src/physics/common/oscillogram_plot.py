@@ -54,7 +54,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="Sensitivity")
 parser.add_argument("--config",   nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal",   nargs="+", type=str, default=["marley"])
-parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal"], default="Truncated")
+parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal", "Test"], default="Truncated")
 parser.add_argument("--energy",   nargs="+", type=str, default=["SolarEnergy"],
     choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--exposure", type=float, default=None,

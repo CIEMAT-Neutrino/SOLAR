@@ -68,7 +68,7 @@ parser.add_argument("--true_range_variable", type=str, default=None,
 parser.add_argument("--weight", type=str, choices=["analysis", "truth"], default="analysis",
                     help="analysis: the weights 03_analysis.py exports (marley: oscillated day+night mean, the "
                          "'Solar' component of cutflow_plot.py); truth: unoscillated truth-flux weights")
-parser.add_argument("--reference_folder", type=str, choices=["Nominal", "Reduced", "Truncated"], default="Truncated",
+parser.add_argument("--reference_folder", type=str, choices=["Nominal", "Reduced", "Truncated", "Test"], default="Truncated",
                     help="Where to find the 03_analysis.py --export_raw Ref pkls used for the cutflow_plot.py closure "
                          "check (their content does not depend on the folder)")
 parser.add_argument("--unweighted", action=argparse.BooleanOptionalAction, default=False,

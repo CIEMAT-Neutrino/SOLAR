@@ -64,11 +64,20 @@ def get_folder_reduction_factors(root: str, folder: str) -> Dict[str, float]:
     return dict(get_folder_flags(root, folder).get("reduction_factors", {}))
 
 
-def get_component_reduction_factor(root: str, folder: str, component: str) -> float:
-    """Return the reduction factor for a single component (by base name). Defaults to 1.0 if not listed."""
+def get_component_reduction_factor(root: str, folder: str, component: str, config: Optional[str] = None) -> float:
+    """Return the reduction factor for a single component (by base name). Defaults to 1.0 if not listed.
+
+    A factor can also be a dict keyed by config name or geometry prefix (e.g. {"hd": 4, "vd": 10});
+    the config name takes precedence, then its geometry prefix (text before the first underscore).
+    """
     factors = get_folder_reduction_factors(root, folder)
     key = component.split("_")[0].lower()
-    return float(factors.get(key, 1.0))
+    value = factors.get(key, 1.0)
+    if isinstance(value, dict):
+        if config is None:
+            raise ValueError(f"Folder {folder}: the {key} reduction factor depends on the configuration; pass config")
+        value = value.get(config, value.get(config.split("_")[0], 1.0))
+    return float(value)
 
 
 def get_folder_reduction_threshold(root: str, folder: str) -> float:
