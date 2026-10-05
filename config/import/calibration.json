@@ -37,6 +37,8 @@
         "SelectedAdjClEnergyRatio",
         "SelectedMaxAdjClEnergy",
         "TotalAdjClEnergy",
-        "MaxAdjClEnergy"
+        "MaxAdjClEnergy",
+        "MatchedOpFlashPE",
+        "MatchedOpFlashNHits"
     ]
 }

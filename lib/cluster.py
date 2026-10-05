@@ -574,10 +574,14 @@ def compute_reco_energy(
             except KeyError:
                 pass
 
+            model_features = list(getattr(rf_classifier, "feature_names_in_", features))
+            missing = [feat for feat in model_features if feat not in run["Reco"]]
+            if missing:
+                raise KeyError(f"Offset classifier for {config} {name}: features {missing} not loaded by this workflow")
             df = npy2df(
                 run,
                 "Reco",
-                branches=features
+                branches=model_features
                 + [
                     "Primary",
                     "Generator",
@@ -590,14 +594,14 @@ def compute_reco_energy(
             )
 
             try:
-                df[features] = df[features].replace([np.inf, -np.inf], np.nan).fillna(0)
-                df[features] = np.clip(
-                    df[features], a_min=-1e6, a_max=1e6
+                df[model_features] = df[model_features].replace([np.inf, -np.inf], np.nan).fillna(0)
+                df[model_features] = np.clip(
+                    df[model_features], a_min=-1e6, a_max=1e6
                 )  # Adjust the clipping values as necessary
-                df["ML"] = rf_classifier.predict(df[features])
-                df["Discriminant"] = rf_classifier.predict_proba(df[features])[:, 1]
+                df["ML"] = rf_classifier.predict(df[model_features])
+                df["Discriminant"] = rf_classifier.predict_proba(df[model_features])[:, 1]
             except ValueError:
-                print(df[features])
+                print(df[model_features])
 
             upper_idx = df["Discriminant"] >= discriminant_info["ML_THRESHOLD"]
             lower_idx = df["Discriminant"] < discriminant_info["ML_THRESHOLD"]

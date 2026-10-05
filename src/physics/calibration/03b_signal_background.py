@@ -65,7 +65,7 @@ def load_sample(name):
     # No preset filter: 03_analysis.py applies none (the VD SIGNIFICANCE filter would drop every
     # surface-generated gamma/neutron); only the analysed energy range is kept below.
     reco = run["Reco"]
-    features = base_features + [f for f in optional_features if f in reco]
+    features = base_features + [f for f in optional_features if f in reco and f not in base_features]
     df = pd.DataFrame({f: np.asarray(reco[f], dtype=float) for f in features})
     df["Flag"] = np.asarray(reco["Flag"]).astype(np.int64)
     df["Event"] = np.asarray(reco["Event"]).astype(np.int64)
