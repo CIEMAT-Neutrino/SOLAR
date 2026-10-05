@@ -713,7 +713,7 @@ def compute_energy_calibration(
             # Applied here because the classifier was trained on these end-of-workflow features.
             signal_like = _signal_background_flags(run, config, name, idx, this_params)
             if signal_like is not None:
-                rows = np.asarray(idx[0])[~signal_like]
+                rows = np.asarray(idx[0])
                 if this_params["SAMPLE_FIT"]["SolarEnergy"] == "linear":
                     no_offset = (np.asarray(run["Reco"]["Energy"])[rows] - reco_info["SOLAR"]["INTERSECTION"]) / reco_info["SOLAR"]["ENERGY_AMP"]
                 else:
@@ -723,7 +723,14 @@ def compute_energy_calibration(
                         reco_info["SOLAR"]["ENERGY_AMP"],
                         reco_info["SOLAR"]["INTERSECTION"],
                     )
-                run["Reco"]["SolarEnergy"][rows] = no_offset
+                # Both SolarEnergy versions are kept so that the threshold scan
+                # (03d_signal_background_threshold.py) can rebuild SolarEnergy for any threshold.
+                for branch in ["SolarEnergyOffset", "SolarEnergyNoOffset"]:
+                    if branch not in run["Reco"]:
+                        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
+                run["Reco"]["SolarEnergyOffset"][rows] = run["Reco"]["SolarEnergy"][rows]
+                run["Reco"]["SolarEnergyNoOffset"][rows] = no_offset
+                run["Reco"]["SolarEnergy"][rows[~signal_like]] = no_offset[~signal_like]
                 output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)
