@@ -516,7 +516,9 @@ for config in configs:
             y,
             p0=initial_guess,
             sigma=y_error,
-            bounds=([0, 0, 0, 0], [1e3, 1, 1e3, 1]),
+            # Sigmoid rate up to 10 per hit: with the mode estimator F0 rises from ~0.83 of its plateau at
+            # NHits 1 to the plateau by NHits 3, steeper than the previous bound of 1 allowed.
+            bounds=([0, 0, 0, 0], [1e3, 1, 1e3, 10]),
         )
         perr[f"{charge}Charge"] = np.sqrt(np.diag(pcov[f"{charge}Charge"]))
 
