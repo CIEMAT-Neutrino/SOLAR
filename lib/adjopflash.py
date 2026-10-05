@@ -52,10 +52,12 @@ def compute_adjopflash_basic_variable(
     if "max" in compute:
         run["Reco"][
             f"MaxAdjOpFlash{variable_interlabel}{variable}{variable_extension}"
-        ][idx] = np.max(
+        ][idx] = np.nan_to_num(np.max(
             run["Reco"][branch][idx],
             axis=1,
-        )
+            where=reference if reference is not None else True,
+            initial=-np.inf,
+        ), neginf=0.0)
 
     if "total" in compute:
         run["Reco"][

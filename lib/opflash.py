@@ -196,7 +196,9 @@ def compute_opflash_event(
             axis=1,
             where=run["Truth"]["OpFlashPE"] > 0,
         ) / np.sum(run["Truth"]["OpFlashPE"], axis=1)
-        run["Truth"][f"MaxOpFlash{var}"] = np.max(run["Truth"][f"OpFlash{var}"], axis=1)
+        run["Truth"][f"MaxOpFlash{var}"] = np.nan_to_num(np.max(
+            run["Truth"][f"OpFlash{var}"], axis=1, where=run["Truth"]["OpFlashPE"] > 0, initial=-np.inf
+        ), neginf=0.0)
         # Find the index of the min variable where OpFlashPE > 0
         run["Truth"][f"MinOpFlash{var}"] = np.min(
             run["Truth"][f"OpFlash{var}"],

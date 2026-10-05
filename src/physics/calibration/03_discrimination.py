@@ -393,7 +393,7 @@ for config in configs:
                         "AdjClR": data["AdjClR"][idx],
                         "AdjClCharge": data["AdjClCharge"][idx],
                         "AdjClNum": np.sum(
-                            data["AdjClR"] < adjcl_radius_limit_best, axis=1
+                            (data["AdjClR"] < adjcl_radius_limit_best) & (data["AdjClCharge"] != 0), axis=1
                         ),
                         "LimitR": adjcl_radius_limit_best,
                         "LimitCharge": adjcl_energy_limit_best,
