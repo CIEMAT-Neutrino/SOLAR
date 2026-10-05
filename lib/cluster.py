@@ -76,6 +76,19 @@ def _signal_background_flags(run, config, name, idx, this_params):
     reco["SignalBackgroundScore"][idx] = score
     return score >= info["SB_THRESHOLD"]
 
+def _adjcl_slots(run, idx):
+    """Mask of the real adjacent clusters in the zero-padded AdjCl* arrays.
+
+    The per-cluster AdjCl vectors are padded with 0 to the longest vector of the loaded sample
+    (lib/io.resize_subarrays). A padded slot has AdjClR = 0 and would pass any AdjClR < limit cut,
+    so every count over these arrays must be restricted to the first AdjClNum slots.
+    """
+    width = np.asarray(run["Reco"]["AdjClR"][idx]).shape[1]
+    if "AdjClNum" in run["Reco"]:
+        num = np.asarray(run["Reco"]["AdjClNum"][idx]).astype(np.int64)
+        return np.arange(width)[None, :] < num[:, None]
+    return np.asarray(run["Reco"]["AdjClR"][idx]) > 0
+
 def _selected_limit_arrays(run, config, info, names, idx, this_params):
     """Per-row adjacent-cluster selection limits (MIN_BKG_R, MAX_BKG_CHARGE).
 
@@ -394,9 +407,10 @@ def compute_total_energy(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
-        selected_filter = (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (
-            run["Reco"]["AdjClCharge"][idx] > _qlim[:, None]
-        )
+        selected_filter = (
+            (run["Reco"]["AdjClR"][idx] < _rlim[:, None])
+            + (run["Reco"]["AdjClCharge"][idx] > _qlim[:, None])
+        ) & _adjcl_slots(run, idx)
 
         if debug:
             output += f"\t\t[cyan][INFO][/cyan] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters\n"
@@ -471,9 +485,9 @@ def recompute_reco_energy_with_charge_threshold(
         run["Reco"]["TotalEnergy"][idx]      = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx]
 
         # Selected* features: existing R + MAX_BKG_CHARGE filter, then charge floor.
-        selected_filter = (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (
-            adj_charge > _qlim[:, None]
-        )
+        selected_filter = (
+            (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (adj_charge > _qlim[:, None])
+        ) & _adjcl_slots(run, idx)
         selected_filter_Q = selected_filter & charge_floor
 
         run["Reco"]["SelectedAdjClNum"][idx]         = np.sum(selected_filter_Q, axis=1)
