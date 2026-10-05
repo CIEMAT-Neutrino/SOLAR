@@ -91,6 +91,14 @@ def _report_once(key, message: str) -> None:
         rprint(message)
 
 
+
+def _truth_path() -> str:
+    """Background truth inputs (surface rates, momentum PDFs, KDEs): DATA_PATHS.TRUTH, so a worktree
+    can use its own regenerated files without touching the shared ones."""
+    return load_analysis_info(str(root)).get("DATA_PATHS", {}).get(
+        "TRUTH", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth"
+    )
+
 def resolve_generated_event_count(
     run: dict[str, dict],
     config_tree_weight: dict,
@@ -835,7 +843,7 @@ def compute_true_weights(
                     alpha_truth = []
                     exposure = pickle.load(
                         open(
-                            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
+                            f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
                             "rb",
                         )
                     )
@@ -872,7 +880,7 @@ def compute_true_weights(
                     if params["PARTICLE_WEIGHTING"] == "histogram":
                         pdf_hist, pdf_bins = pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_pdf.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_pdf.pkl",
                                 "rb",
                             )
                         )
@@ -896,7 +904,7 @@ def compute_true_weights(
                         kdes = {
                             key: pickle.load(
                                 open(
-                                    f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
+                                    f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
                                     "rb",
                                 )
                             )
@@ -930,7 +938,7 @@ def compute_true_weights(
                     kdes = {
                         key: pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
                                 "rb",
                             )
                         )
@@ -940,7 +948,7 @@ def compute_true_weights(
                     exposure[("", "truth")] = {
                         "truth": pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
                                 "rb",
                             )
                         )
