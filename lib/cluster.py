@@ -247,9 +247,18 @@ def compute_cluster_energy(
                     np.abs(run["Reco"][default_branch][idx]) / drift_popt[1]
                 )
 
-            run["Reco"]["CorrectionFactor"][idx] = calibration_func(
-                run["Reco"]["NHits"][idx], *corr_popt
-            )
+            if "CORRECTION_TABLE_NHITS" in corr_info:
+                # Measured F0 per NHits (01_correction --f0_from table): linear between measured values,
+                # nearest measured value outside the measured range (np.interp clamps at both ends).
+                run["Reco"]["CorrectionFactor"][idx] = np.interp(
+                    np.asarray(run["Reco"]["NHits"][idx], dtype=float),
+                    np.asarray(corr_info["CORRECTION_TABLE_NHITS"], dtype=float),
+                    np.asarray(corr_info["CORRECTION_TABLE_FACTOR"], dtype=float),
+                )
+            else:
+                run["Reco"]["CorrectionFactor"][idx] = calibration_func(
+                    run["Reco"]["NHits"][idx], *corr_popt
+                )
 
             for cluster in clusters:
                 run["Reco"][f"Corrected{cluster}Charge"][idx] = (

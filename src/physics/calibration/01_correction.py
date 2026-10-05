@@ -75,6 +75,24 @@ parser.add_argument(
         "charge-binned profile, which over-weights sparse high-charge bins and biases low-NHits clusters low."
     ),
 )
+parser.add_argument(
+    "--min_clusters",
+    type=int,
+    default=200,
+    help="Minimum number of clusters for an NHits value to be measured (1000 before 2026-10-05).",
+)
+parser.add_argument(
+    "--f0_from",
+    type=str,
+    choices=["table", "fit"],
+    default="table",
+    help=(
+        "What the analysis applies for F0(NHits). 'table' (default since 2026-10-05): the measured value of each "
+        "NHits, linearly interpolated over missing values and clamped to the nearest measured value outside the "
+        "measured range (written as CORRECTION_TABLE_* in the json). 'fit': the exponential-plus-logistic fit, "
+        "which extrapolates freely outside the measured range."
+    ),
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
@@ -456,7 +474,7 @@ for config in configs:
                 rprint(f"[yellow][WARNING][/yellow] {_time_branch} or Charge not available: F0 peak taken on Corrected{charge}ChargePerMeV")
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
             this_filter_idx = np.where((data["NHits"] == nhit))[0]
-            if len(this_filter_idx) < 1000:
+            if len(this_filter_idx) < args.min_clusters:
                 continue
 
             acc = get_default_acc(len(this_filter_idx))
@@ -626,6 +644,15 @@ for config in configs:
                         "CORRECTION_CONST_ERROR": perr[f"{charge}Charge"][2],
                         "CORRECTION_SIGMOID": popt[f"{charge}Charge"][3],
                         "CORRECTION_SIGMOID_ERROR": perr[f"{charge}Charge"][3],
+                        **(
+                            {
+                                "CORRECTION_TABLE_NHITS": [int(k) for k in correction_factor[f"{charge}Charge"]],
+                                "CORRECTION_TABLE_FACTOR": [float(v) for v in correction_factor[f"{charge}Charge"].values()],
+                                "CORRECTION_TABLE_ERROR": [float(v) for v in correction_factor[f"{charge}ChargeError"].values()],
+                            }
+                            if args.f0_from == "table"
+                            else {}
+                        ),
                     },
                     f,
                 )
