@@ -230,6 +230,58 @@ def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing
     return merged_df, pd.DataFrame(significance_rows)
 
 
+def fiducial_mc_diagnostics(
+    plot_df: pd.DataFrame,
+    gated_plot_df: pd.DataFrame,
+    analysis_config: Dict,
+    mc_threshold: float,
+    root_path: str,
+    chosen: pd.Series,
+    smoothing_config: Dict,
+    exposure: float,
+) -> Dict:
+    """Record whether MC statistics decided the fiducial volume. The selection itself is unchanged.
+
+    MCLimited is set when (a) the MC gate changed the choice: without it the optimiser would pick a
+    volume where an essential background has fewer than mc_threshold MC events, or (b) an essential
+    background has fewer than 2 x mc_threshold MC events in the chosen volume (energy window).
+    Flagged volumes are candidates for re-optimisation with more background MC.
+    """
+    essential = sorted(get_essential_background_components(root_path, list(analysis_config.get("background_components", []))))
+    window = plot_df
+    if analysis_config.get("energy_min") is not None:
+        window = window.loc[window["Energy"] >= float(analysis_config["energy_min"])]
+    if analysis_config.get("energy_max") is not None:
+        window = window.loc[window["Energy"] <= float(analysis_config["energy_max"])]
+    volume = (
+        (window["FiducializedX"] == int(chosen["FiducializedX"]))
+        & (window["FiducializedY"] == int(chosen["FiducializedY"]))
+        & (window["FiducializedZ"] == int(chosen["FiducializedZ"]))
+    )
+    chosen_mc = {c: float(window.loc[volume & (window["Component"] == c), "MCCounts"].sum()) for c in essential}
+    _, ungated_df = select_best_fiducial(plot_df, analysis_config, smoothing_config, exposure)
+    ungated = {}
+    gate_changed = False
+    if not ungated_df.empty:
+        best = ungated_df.loc[ungated_df["SmoothedSignificance"].idxmax()]
+        ungated = {
+            "FiducialX": int(best["FiducializedX"]), "FiducialY": int(best["FiducializedY"]),
+            "FiducialZ": int(best["FiducializedZ"]), "SmoothedSignificance": float(best["SmoothedSignificance"]),
+        }
+        gate_changed = any(int(best[f"Fiducialized{a}"]) != int(chosen[f"Fiducialized{a}"]) for a in "XYZ")
+    near = bool(mc_threshold > 0 and any(v < 2 * float(mc_threshold) for v in chosen_mc.values()))
+    reasons = (["MC gate changed the volume"] if gate_changed else []) + (
+        [f"essential background MC below 2x{mc_threshold:g} in the chosen volume"] if near else [])
+    return {
+        "MCLimited": bool(gate_changed or near),
+        "MCLimitedReason": "; ".join(reasons),
+        "ChosenEssentialMC": chosen_mc,
+        "UngatedBest": ungated,
+        "VolumesPassingGate": int(gated_plot_df[FIDUCIAL_COLUMNS].drop_duplicates().shape[0]),
+        "VolumesScanned": int(plot_df[FIDUCIAL_COLUMNS].drop_duplicates().shape[0]),
+    }
+
+
 # Components to drop from the truth-fiducial scan's significance sum via
 # --exclude_radiological_from_scan. Historically justified as "radiological has no
 # reconstructable truth position" (its configured key was MainX/Y/Z, the decay's
@@ -538,6 +590,17 @@ for config in configs:
                 "SignificanceType": analysis_config.get("significance_type", "gaussian"),
                 **smoothing_metadata(smoothing_config),
             }
+            # Mark MC-limited choices (user decision 2026-10-05: keep the strategy, flag for re-optimisation).
+            _mc_diag = fiducial_mc_diagnostics(
+                plot_df, gated_plot_df, analysis_config, args.mc_threshold, str(root),
+                max_row, smoothing_config, args.exposure,
+            )
+            best_fiducials[config][analysis_key][energy_label].update(_mc_diag)
+            if _mc_diag["MCLimited"]:
+                rprint(
+                    f"[yellow][MC-LIMITED][/yellow] {config} {analysis_name} {energy_label}: {_mc_diag['MCLimitedReason']} "
+                    f"(essential MC {_mc_diag['ChosenEssentialMC']}, ungated best {_mc_diag['UngatedBest']})"
+                )
 
             # Per-energy-band optimization: find the best fiducial independently for
             # each band. Downstream masking applies the band-specific cut per event.
