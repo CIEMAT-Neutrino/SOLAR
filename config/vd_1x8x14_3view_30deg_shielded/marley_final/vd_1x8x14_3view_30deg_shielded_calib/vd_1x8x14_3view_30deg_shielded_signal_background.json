@@ -1,0 +1,45 @@
+{
+  "SB_THRESHOLD": 0.4031215118267436,
+  "TARGET_COMPLETENESS": 0.95,
+  "COMPLETENESS_PER_BIN": false,
+  "FEATURES": [
+    "NHits",
+    "AdjClNum",
+    "SelectedAdjClNum",
+    "Energy",
+    "TotalEnergy",
+    "SelectedEnergy",
+    "SelectedAdjClEnergy",
+    "SelectedAdjClEnergyRatio",
+    "SelectedMaxAdjClEnergy",
+    "TotalAdjClEnergy",
+    "MaxAdjClEnergy",
+    "MatchedOpFlashPE",
+    "MatchedOpFlashNHits"
+  ],
+  "MIN_ENERGY": 3.0,
+  "AUC": 0.9835310125492552,
+  "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k",
+  "SIGNAL_SAMPLE": "marley_final",
+  "BACKGROUND_SAMPLES": [
+    "gamma_final",
+    "neutron_final",
+    "radiological_final"
+  ],
+  "SEED": 12345,
+  "RF": {
+    "n_estimators": 300,
+    "max_depth": 10,
+    "min_samples_leaf": 20
+  },
+  "FLAGGED_SIGNAL_LIKE": {
+    "marley_final": 0.9626944437463876,
+    "gamma_final": 0.2693607935590054,
+    "neutron_final": 0.0423773987206823,
+    "radiological_final": 0.025582208240485866,
+    "marley_final_Enu_6_8": 0.6913884007029877,
+    "marley_final_Enu_8_10": 0.8911971830985915,
+    "marley_final_Enu_10_14": 0.9756619219706468,
+    "marley_final_Enu_14_20": 0.9842777751389351
+  }
+}
