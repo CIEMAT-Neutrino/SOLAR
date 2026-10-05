@@ -180,9 +180,10 @@ for _sl in _study_labels_to_run:
         _pee_energy = np.array([float(c) for c in oscillation_df.columns])
         _nadir_vals = np.array([float(r) for r in oscillation_df.index])
 
-        try:
+        # Undo the PDF the map was built with: nadir.root only for the legacy file backend.
+        if args.oscillation_backend == "file":
             _nadir_pdf = get_nadir_pdf_file(nadir_centers=_nadir_vals)
-        except Exception:
+        else:
             _latitude = _analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
             _nadir_pdf = get_nadir_pdf_nufast(_nadir_vals, _latitude)
 
