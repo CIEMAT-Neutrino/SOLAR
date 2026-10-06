@@ -51,12 +51,7 @@ def _load_best_cuts(analysis, folder, config, study_label=None):
 
 def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, energy=None, band_fiducials=None):
     quality_mask = (
-        (
-            (run["Reco"]["SignalParticleSurface"] >= 0)
-            * (run["Reco"]["SignalParticleSurface"] < 3)
-            if is_surface_background(str(root), sample_name)
-            else 1
-        )
+        surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"])
         * (run["Reco"]["NHits"] > this_nhit - 1)
         * (run["Reco"]["AdjClNum"] < this_adjcl)
         * accepted_flash_planes(
@@ -79,12 +74,7 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
 def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, pos_keys=("RecoX", "RecoY", "RecoZ")):
     events = len(run["Reco"]["Event"])
     xk, yk, zk = pos_keys
-    surface = (
-        (run["Reco"]["SignalParticleSurface"] >= 0)
-        * (run["Reco"]["SignalParticleSurface"] < 3)
-        if is_surface_background(str(root), sample_name)
-        else np.ones(len(run["Reco"]["Event"]), dtype=bool)
-    )
+    surface = surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"])
     fiducialx = (
         np.absolute(run["Reco"][xk]) > fiducial["FiducialX"]
         if config == "hd_1x2x6_lateralAPA"
@@ -361,12 +351,7 @@ for config in configs:
                 ), dtype=bool)
 
         # Surface cut and reco arrays extracted once to avoid per-iteration dict lookups.
-        _surface_mask = np.asarray(
-            (run["Reco"]["SignalParticleSurface"] >= 0) & (run["Reco"]["SignalParticleSurface"] < 3)
-            if is_surface_background(str(root), name)
-            else np.ones(len(run["Reco"]["Event"]), dtype=bool),
-            dtype=bool,
-        )
+        _surface_mask = surface_quality_mask(str(root), name, args.folder, run["Reco"]["SignalParticleSurface"])
         # The surface cut is the only selection applied to gamma/neutron but not to
         # radiological. An all-False surface mask silently zeroes every cut in the scan
         # (SignalParticleSurface stays at its -1 init when the Geometry/Version/Name match

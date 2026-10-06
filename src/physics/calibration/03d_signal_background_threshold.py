@@ -111,15 +111,8 @@ def load_sample(name):
     # Same selection as 01_fiducialize.py: surface filter for the surface-generated backgrounds,
     # accepted optical-match plane with PE > 0; then the analysis fiducial volume.
     sample_key = name.split("_")[0].lower()
-    surface = np.asarray(reco["SignalParticleSurface"])
-    if is_surface_background(str(root), sample_key):
-        surface_ok = surface >= 0
-        if args.folder in ["Reduced", "Truncated", "Test"]:
-            surface_ok &= surface < 3
-    else:
-        surface_ok = np.ones(len(surface), dtype=bool)
     mask = (
-        surface_ok
+        surface_quality_mask(str(root), sample_key, args.folder, reco["SignalParticleSurface"])
         & accepted_flash_planes(reco["MatchedOpFlashPlane"], str(root), True)
         & (np.asarray(reco["MatchedOpFlashPE"]) > 0)
         & np.asarray(build_fiducial_spatial_mask(run, config, detector_x, detector_y, info, args.folder, fiducial), dtype=bool)

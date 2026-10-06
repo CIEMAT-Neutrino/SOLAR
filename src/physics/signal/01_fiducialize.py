@@ -230,13 +230,7 @@ for config in configs:
         # is comparable to fid>0 points. Previously fid=(0,0,0) used
         # mask=ones, bypassing OpFlash and surface requirements and inflating
         # its significance over every non-zero fiducial value.
-        _is_surface = is_surface_background(str(root), sample_key)
-        if _is_surface:
-            _surface_ok = _surface_arr >= 0
-            if args.folder in ["Reduced", "Truncated", "Test"]:
-                _surface_ok = _surface_ok & (_surface_arr < 3)
-        else:
-            _surface_ok = np.ones(len(_surface_arr), dtype=bool)
+        _surface_ok = surface_quality_mask(str(root), sample_key, args.folder, _surface_arr)
         _quality_mask = (
             _surface_ok
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
