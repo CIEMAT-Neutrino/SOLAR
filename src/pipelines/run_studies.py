@@ -112,6 +112,8 @@ parser.add_argument("--flyweight", action=argparse.BooleanOptionalAction, defaul
                    help="Flyweight Sensitivity templates (default). --no-flyweight uses the per-point template grid.")
 parser.add_argument("--no-templates", dest="skip_templates", action="store_true",
                    help="Alias for --skip-templates: skip template computation")
+parser.add_argument("--parallel_samples", type=int, default=1,
+                   help="Passed to run_sensitivity.py: per-sample steps for this many samples at once (default 1).")
 
 args = parser.parse_args()
 
@@ -448,6 +450,7 @@ def _build_variant_command(group: str, variant: StudyVariant) -> Optional[List[s
         cmd.append("--skip_best_sigmas")
     cmd.append("--flyweight" if args.flyweight else "--no-flyweight")
     cmd += ["--fit_method", args.fit_method]        # variant "extra" below may override it
+    cmd += ["--parallel_samples", str(args.parallel_samples)]
     if args.strict_validation is not None:
         cmd.append("--strict_validation" if args.strict_validation else "--no-strict_validation")
 

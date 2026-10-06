@@ -76,6 +76,8 @@ import pickle
 import sys
 import time
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -159,9 +161,10 @@ def _subprocess_env() -> dict:
     return env
 
 
-def run_python_command(command: List[str], label: Optional[str] = None, stop_on_error: bool = True):
+def run_python_command(command: List[str], label: Optional[str] = None, stop_on_error: bool = True, capture: bool = False):
     rendered = " ".join(command)
-    rprint(f"\n[green][CMD][/green] {rendered}")
+    if not capture:
+        rprint(f"\n[green][CMD][/green] {rendered}")
     # Retry loop guards against NFS4 transient failures. On NFS4 (e.g. gaesto01.ciemat.es),
     # stat()/open() can return ESTALE mid-pipeline after heavy I/O, causing Python to emit
     # "can't find '__main__' module" instead of executing the script. We retry up to 3 times:
@@ -181,7 +184,11 @@ def run_python_command(command: List[str], label: Optional[str] = None, stop_on_
             continue  # re-check accessibility before launching
 
         t0 = time.monotonic()
-        completed = subprocess.run(command, check=False, env=_subprocess_env())
+        if capture:
+            completed = subprocess.run(command, check=False, env=_subprocess_env(),
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        else:
+            completed = subprocess.run(command, check=False, env=_subprocess_env())
         elapsed = time.monotonic() - t0
 
         if completed.returncode == 0:
@@ -198,7 +205,16 @@ def run_python_command(command: List[str], label: Optional[str] = None, stop_on_
         else:
             break
 
-    if completed is not None:
+    if capture:
+        # Parallel sample jobs: command, log and timing printed together when the job ends.
+        with _print_lock:
+            rprint(f"\n[green][CMD][/green] {rendered}")
+            if completed is not None and completed.stdout:
+                sys.stdout.write(completed.stdout)
+            if completed is not None:
+                rprint(f"[cyan][TIME][/cyan] {os.path.basename(script_path or command[0])} {elapsed:.0f} s")
+            sys.stdout.flush()
+    elif completed is not None:
         rprint(f"[cyan][TIME][/cyan] {os.path.basename(script_path or command[0])} {elapsed:.0f} s")
     if (completed is None or completed.returncode != 0) and stop_on_error:
         script_label = label or (os.path.basename(command[1]) if len(command) > 1 else "script")
@@ -216,6 +232,33 @@ def run_python_command(command: List[str], label: Optional[str] = None, stop_on_
 
 def run_analysis_script(script_name: str, additional_args: Optional[List[str]] = None):
     run_python_command(build_command(script_name, additional_args), label=script_name)
+
+
+_print_lock = threading.Lock()
+
+
+def run_sample_scripts(script_name: str, sample_args: List[List[str]]):
+    """Run one script for several samples, --parallel_samples at a time.
+
+    The per-sample steps (01_fiducialize, 03_analysis, 04_weighted) read and write only files keyed
+    by config and sample name, so the order does not matter. With --parallel_samples 1 this is the
+    sequential loop. The first failure stops the workflow after the running jobs have finished.
+    """
+    workers = max(1, min(int(args.parallel_samples), len(sample_args)))
+    if workers == 1:
+        for extra in sample_args:
+            run_analysis_script(script_name, extra)
+        return
+    failures = []
+    def _job(extra):
+        try:
+            run_python_command(build_command(script_name, extra), label=script_name, capture=True)
+        except SystemExit as exc:
+            failures.append(str(exc))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(_job, sample_args))
+    if failures:
+        raise SystemExit(failures[0])
 
 
 
@@ -363,6 +406,8 @@ parser.add_argument(
 parser.add_argument("--nhits", type=int, help="The nhit cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
+parser.add_argument("--parallel_samples", type=int, default=1,
+    help="Run the per-sample steps (01_fiducialize, 03_analysis cut scan and best-cuts pass, 04_weighted) for this many samples at once. Default 1 (sequential).")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC) passed to 03_analysis.py. Default 0 (no charge cut).")
 parser.add_argument(
     "--fiducial_mc_threshold",
@@ -1102,9 +1147,10 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     cut_args = cut_args_for()
 
     if args.fiducialization:
-        for name in available_names:
-            sample_args = base_args + ["--signal", name]
-            run_analysis_script("src/physics/signal/01_fiducialize.py", sample_args + energy_args + fiducialize_oscillation_args_for() + truth_fiducial_args_for() + truth_purity_args_for() + membrane_veto_args_for())
+        run_sample_scripts("src/physics/signal/01_fiducialize.py", [
+            base_args + ["--signal", name] + energy_args + fiducialize_oscillation_args_for() + truth_fiducial_args_for() + truth_purity_args_for() + membrane_veto_args_for()
+            for name in available_names
+        ])
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/01_fiducialize.py (--no-fiducialization).")
 
@@ -1140,52 +1186,47 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     # study_label_args_for() is included so charge/dm2 variants write labeled Rebin pkls for
     # backgrounds — prevents charge-filtered Rebins from overwriting the standard unlabeled path.
     if args.rebin:
-        for name in available_names:
-            sample_args = base_args + ["--signal", name]
-            run_analysis_script(
-                "src/physics/signal/03_analysis.py",
-                sample_args
-                + analysis_selection_args
-                + energy_args
-                + cut_args
-                + charge_scan_args_for()
-                + oscillation_args_for()
-                + study_label_args_for()
-                + truth_fiducial_args_for()
-                + truth_purity_args_for()
-                + fiducial_folder_args_for() + fiducial_from_reco_args_for()
-                + membrane_veto_args_for()
-                + ["--export_fiducial"],
-            )
+        run_sample_scripts("src/physics/signal/03_analysis.py", [
+            base_args + ["--signal", name]
+            + analysis_selection_args
+            + energy_args
+            + cut_args
+            + charge_scan_args_for()
+            + oscillation_args_for()
+            + study_label_args_for()
+            + truth_fiducial_args_for()
+            + truth_purity_args_for()
+            + fiducial_folder_args_for() + fiducial_from_reco_args_for()
+            + membrane_veto_args_for()
+            + ["--export_fiducial"]
+            for name in available_names
+        ])
     else:
         rprint("[cyan][INFO][/cyan] Skipping signal/03_analysis.py cut scan (--no-rebin).")
         # Still export raw arrays + FiducializationMask even when skipping cut scan
-        for name in available_names:
-            sample_args = base_args + ["--signal", name]
-            run_analysis_script(
-                "src/physics/signal/03_analysis.py",
-                sample_args
-                + analysis_selection_args
-                + energy_args
-                + cut_args
-                + charge_scan_args_for()
-                + oscillation_args_for()
-                + study_label_args_for()
-                + truth_fiducial_args_for()
-                + truth_purity_args_for()
-                + fiducial_folder_args_for() + fiducial_from_reco_args_for()
-                + membrane_veto_args_for()
-                + ["--export_fiducial", "--skip_scan", "--no-plot"],
-            )
+        run_sample_scripts("src/physics/signal/03_analysis.py", [
+            base_args + ["--signal", name]
+            + analysis_selection_args
+            + energy_args
+            + cut_args
+            + charge_scan_args_for()
+            + oscillation_args_for()
+            + study_label_args_for()
+            + truth_fiducial_args_for()
+            + truth_purity_args_for()
+            + fiducial_folder_args_for() + fiducial_from_reco_args_for()
+            + membrane_veto_args_for()
+            + ["--export_fiducial", "--skip_scan", "--no-plot"]
+            for name in available_names
+        ])
 
     if args.weighted:
         # 04_weighted.py has no --plot/--no-plot flag.
         weighted_base_args = [a for a in base_args_for(config, folder, include_background=False) if a not in ("--plot", "--no-plot")]
-        for name in available_names:
-            run_analysis_script(
-                "src/physics/signal/04_weighted.py",
-                weighted_base_args + ["--signal", name] + oscillation_args_for() + membrane_veto_args_for(),
-            )
+        run_sample_scripts("src/physics/signal/04_weighted.py", [
+            weighted_base_args + ["--signal", name] + oscillation_args_for() + membrane_veto_args_for()
+            for name in available_names
+        ])
 
 
 
@@ -1689,22 +1730,20 @@ for config, folder in product(args.config, args.folder):
         base_args = base_args_for(config, folder, include_background=False)
         analysis_selection_args = ["--analysis", *args.analysis]
         energy_args = energy_args_for(args.energy)
-        for name in available_names:
-            sample_args = base_args + ["--signal", name]
-            run_analysis_script(
-                "src/physics/signal/03_analysis.py",
-                sample_args
-                + analysis_selection_args
-                + energy_args
-                + oscillation_args_for()
-                + membrane_veto_args_for()
-                + study_label_args_for()
-                + truth_fiducial_args_for()
-                + truth_purity_args_for()
-                + fiducial_folder_args_for() + fiducial_from_reco_args_for()
-                + cut_args_for()
-                + ["--best_cuts_only", "--no-plot"],
-            )
+        run_sample_scripts("src/physics/signal/03_analysis.py", [
+            base_args + ["--signal", name]
+            + analysis_selection_args
+            + energy_args
+            + oscillation_args_for()
+            + membrane_veto_args_for()
+            + study_label_args_for()
+            + truth_fiducial_args_for()
+            + truth_purity_args_for()
+            + fiducial_folder_args_for() + fiducial_from_reco_args_for()
+            + cut_args_for()
+            + ["--best_cuts_only", "--no-plot"]
+            for name in available_names
+        ])
 
     # Pass 4: cutflow — one call per energy with all names and analyses dispatched at once.
     # Requires best-cuts pkls (written by 05_best_sigmas.py in per-analysis stages above).
