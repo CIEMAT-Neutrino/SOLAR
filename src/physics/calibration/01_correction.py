@@ -82,6 +82,17 @@ parser.add_argument(
     help="Minimum number of clusters for an NHits value to be measured (1000 before 2026-10-05).",
 )
 parser.add_argument(
+    "--min_clusters_nhit1",
+    type=int,
+    default=1000,
+    help=(
+        "Minimum number of clusters for NHits = 1 (2026-10-06). Single-hit clusters are mostly fragments of a "
+        "larger deposit; with few of them the mode of Q/E falls far below the plateau (VD: 28-40 vs 117 ADC x "
+        "tick/MeV in HD) and would scale their energy up x3-5. Below this count NHits = 1 is left out and the "
+        "table falls back to the NHits = 2 value."
+    ),
+)
+parser.add_argument(
     "--f0_from",
     type=str,
     choices=["table", "fit"],
@@ -474,7 +485,7 @@ for config in configs:
                 rprint(f"[yellow][WARNING][/yellow] {_time_branch} or Charge not available: F0 peak taken on Corrected{charge}ChargePerMeV")
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
             this_filter_idx = np.where((data["NHits"] == nhit))[0]
-            if len(this_filter_idx) < args.min_clusters:
+            if len(this_filter_idx) < (args.min_clusters_nhit1 if nhit == 1 else args.min_clusters):
                 continue
 
             acc = get_default_acc(len(this_filter_idx))
