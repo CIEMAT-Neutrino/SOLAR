@@ -198,6 +198,8 @@ def run_python_command(command: List[str], label: Optional[str] = None, stop_on_
         else:
             break
 
+    if completed is not None:
+        rprint(f"[cyan][TIME][/cyan] {os.path.basename(script_path or command[0])} {elapsed:.0f} s")
     if (completed is None or completed.returncode != 0) and stop_on_error:
         script_label = label or (os.path.basename(command[1]) if len(command) > 1 else "script")
         if completed is None:
