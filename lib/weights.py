@@ -975,6 +975,35 @@ def compute_true_weights(
     return run, output, exposure, new_branches
 
 
+def _generated_mean_weight(weights, momenta, name: str, config: str, surface_id: int):
+    """Mean background weight over the generated particles of one surface.
+
+    The histogram weights are c_s * h_s(p) (evaluate_background_pdf, h_s the rate per momentum bin), and the samples
+    are generated flat in momentum over GENERATED_MOMENTUM_MEV (backgrounds.json). A generated particle of momentum p
+    then carries R_s * h_s(p) / (bin width * sum(h_s)) * range / N_gen, so the normalisation divides by
+    c_s * (bin width * sum(h_s)) / range: the mean weight a flat generation would have if all of the surface rate lay
+    inside the generated range. It is not the mean over the clusters of the tree, which the detection efficiency biases
+    towards the momenta that produce clusters, and the rate outside the generated range is not reassigned to it.
+    Returns None when it cannot be evaluated (no generated range, no non-zero pdf entry).
+    """
+    from .background import get_background_config
+
+    generated = get_background_config(str(root)).get("GENERATED_MOMENTUM_MEV", {}).get(name.split("_")[0].lower())
+    if generated is None:
+        return None
+    lo, hi = float(generated[0]), float(generated[1])
+    hists, bins = pickle.load(open(f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_pdf.pkl", "rb"))
+    hist, edges = np.asarray(hists[surface_id], dtype=float), np.asarray(bins[surface_id], dtype=float)
+    if len(hist) == 0:
+        return None
+    pdf = hist[np.clip(np.digitize(momenta, edges) - 1, 0, len(hist) - 1)]
+    ok = pdf > 0
+    if not np.any(ok):
+        return None
+    scale = float(np.median(np.asarray(weights, dtype=float)[ok] / pdf[ok]))
+    return scale * float(np.sum(hist * np.diff(edges))) / (hi - lo)
+
+
 def normalize_true_weights(
     run: dict[str, dict],
     configs: dict[str, list[str]],
@@ -1098,18 +1127,31 @@ def normalize_true_weights(
                                 this_rate_factor = float(
                                     info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
                                 )
+                                # Histogram weights are normalised over the generated particles
+                                # (_generated_mean_weight); otherwise over the clusters of this tree.
+                                this_mean_weight = (
+                                    _generated_mean_weight(
+                                        run[tree][this_weight_name][idx[0][mask]],
+                                        np.asarray(run[tree]["SignalParticleP"][idx[0][mask]], dtype=float),
+                                        name, config, surface_id,
+                                    )
+                                    if params.get("PARTICLE_WEIGHTING") == "histogram" and np.any(mask)
+                                    else None
+                                )
+                                if this_mean_weight is None and np.any(mask):
+                                    this_mean_weight = this_surface_sum / len(run[tree]["Event"][idx[0][mask]])
                                 if (
                                     this_event_count > 0
                                     and this_exposure["exposure"] > 0
                                     and this_surface_sum > 0
+                                    and this_mean_weight
                                 ):
                                     run[tree][this_weight_name][idx[0][mask]] = (
                                         this_rate_factor
                                         * this_exposure["counts"]
-                                        * len(run[tree]["Event"][idx[0][mask]])
                                         * run[tree][this_weight_name][idx[0][mask]]
                                         / this_event_count
-                                        / this_surface_sum
+                                        / this_mean_weight
                                         / this_exposure["exposure"]
                                     )
                                 else:

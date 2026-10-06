@@ -103,6 +103,17 @@
         "radiological"
       ],
       "per_sample": {}
+    },
+    "_GENERATED_MOMENTUM_MEV_comment": "Momentum range [MeV/c] over which the external gamma/neutron samples are generated flat (SingleGen P0 +- SigmaP, PDist 0, in the prodgamma/prodneutron_solar_external fcls of every config). Used to normalise the spectral weights over the generated particles (lib.weights._generated_mean_weight) and, for gamma, as the lower edge above which the external gamma generators of the radiological sample overlap gamma_final (lib.background.radiological_external_overlap).",
+    "GENERATED_MOMENTUM_MEV": {
+      "gamma": [
+        4.0,
+        14.0
+      ],
+      "neutron": [
+        0.0,
+        137.2
+      ]
     }
   },
   "SPECTRA": {
