@@ -184,6 +184,22 @@ run = compute_reco_workflow(
     electron_energy=args.electron_energy,
 )
 
+# Folders with a background reduction (Reduced, Test) scale the background weights here as 03_analysis.py does
+# in its cut scan (gammas above the folder threshold, other components uniformly), so the fiducial volume is
+# optimised for the same background level the analysis uses.
+if "marley" not in args.signal and folder_applies_reduction(str(root), args.folder):
+    _factor = get_component_reduction_factor(str(root), args.folder, args.signal, config=config)
+    _threshold = get_folder_reduction_threshold(str(root), args.folder)
+    _w = np.asarray(run["Reco"]["SignalParticleWeight"], dtype=float).copy()
+    if "gamma" in args.signal.lower() and _threshold > 0:
+        _sel = np.asarray(run["Reco"]["SignalParticleK"], dtype=float) >= _threshold
+        _w[_sel] /= _factor
+    else:
+        _w /= _factor
+    run["Reco"]["SignalParticleWeight"] = _w
+    rprint(f"[cyan][INFO][/cyan] {args.folder}: {args.signal} weights divided by {_factor:g}"
+           + (f" above {_threshold:g} MeV" if "gamma" in args.signal.lower() and _threshold > 0 else ""))
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
