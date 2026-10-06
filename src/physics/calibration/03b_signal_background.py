@@ -24,9 +24,8 @@ upper/lower branch classifier as before.
 - Class weights: signal and background classes have equal total weight; each background sample
   has an equal share of the background class (uniform within a sample).
 - Threshold: the largest score cut that keeps --completeness of the signal clusters with
-  E_nu in [6, 20] MeV (completeness favoured over purity). This is the starting value:
-  03d_signal_background_threshold.py replaces it by the threshold that maximises the analysis
-  significance in the fiducial-stage energy window.
+  E_nu in [6, 20] MeV (completeness favoured over purity), over the whole range or, with
+  --completeness_per_bin, in every E_nu bin.
 """
 
 parser = argparse.ArgumentParser(description="Train the signal/background cluster classifier")
@@ -34,7 +33,7 @@ parser.add_argument("--config", type=str, required=True)
 parser.add_argument("--name", type=str, default="marley_final", help="Signal sample (calibration sample)")
 parser.add_argument("--backgrounds", nargs="+", default=["gamma_final", "neutron_final", "radiological_final"])
 parser.add_argument("--completeness", type=float, default=0.95)
-parser.add_argument("--completeness_per_bin", action=argparse.BooleanOptionalAction, default=True,
+parser.add_argument("--completeness_per_bin", action=argparse.BooleanOptionalAction, default=False,
     help="Apply the completeness target in every E_nu bin (6-8, 8-10, 10-14, 14-20 MeV) instead of 6-20 MeV overall.")
 parser.add_argument("--exclude_features", nargs="*", default=[],
     help="Inputs left out of the classifier (HD Central: the matched-flash inputs, whose gamma/neutron samples lack the light overlay).")

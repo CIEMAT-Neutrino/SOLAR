@@ -723,8 +723,8 @@ def compute_energy_calibration(
                         reco_info["SOLAR"]["ENERGY_AMP"],
                         reco_info["SOLAR"]["INTERSECTION"],
                     )
-                # Both SolarEnergy versions are kept so that the threshold scan
-                # (03d_signal_background_threshold.py) can rebuild SolarEnergy for any threshold.
+                # Both SolarEnergy versions are kept, so that SolarEnergy can be rebuilt for any threshold
+                # from SignalBackgroundScore (studies of the classifier working point).
                 for branch in ["SolarEnergyOffset", "SolarEnergyNoOffset"]:
                     if branch not in run["Reco"]:
                         run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))

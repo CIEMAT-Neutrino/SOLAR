@@ -1,8 +1,7 @@
-"""Fiducial-stage significance shared by 02_best_fiducial.py and 03d_signal_background_threshold.py.
+"""Fiducial-stage significance of 02_best_fiducial.py.
 
 The per-bin counts of the signal and background components inside an analysis energy window are
-combined, smoothed and turned into the significance used to choose the fiducial volume (and the
-signal/background classifier threshold), so both choices optimise the same quantity.
+combined, smoothed and turned into the significance used to choose the fiducial volume.
 """
 from typing import Dict, List, Optional, Set
 
