@@ -101,7 +101,7 @@ parser.add_argument(
     type=str,
     help="The name of the results folder",
     default="Nominal",
-    choices=["Reduced", "Truncated", "Nominal", "Test"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
 )
 parser.add_argument(
     "--signal_uncertainty",
@@ -219,7 +219,7 @@ parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
 parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Test"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Realistic"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,

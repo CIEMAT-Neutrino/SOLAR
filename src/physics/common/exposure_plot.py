@@ -238,7 +238,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="DayNight")
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
-parser.add_argument("--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal", "Test"])
+parser.add_argument("--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal", "Realistic"])
 parser.add_argument("--exposure", type=float, default=None,
                     help="Exposure the analysis is run to, in years. Default resolved per analysis from ANALYSIS_EXPOSURES in config/analysis/config.json (30 yr).")
 parser.add_argument("--energy", nargs="+", type=str)

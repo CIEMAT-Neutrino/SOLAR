@@ -41,8 +41,8 @@ parser = argparse.ArgumentParser(description="Choose the signal/background class
 parser.add_argument("--config", type=str, required=True)
 parser.add_argument("--name", type=str, default="marley_final", help="Signal sample (calibration sample)")
 parser.add_argument("--backgrounds", nargs="+", default=["gamma_final", "neutron_final", "radiological_final"])
-parser.add_argument("--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Test"], default="Truncated")
-parser.add_argument("--fiducial_folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Test"], default=None,
+parser.add_argument("--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Truncated")
+parser.add_argument("--fiducial_folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default=None,
     help="Read BestFiducials.json of this folder instead of --folder.")
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="Sensitivity")
 parser.add_argument("--energy", type=str, default="SolarEnergy")

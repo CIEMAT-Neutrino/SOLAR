@@ -100,7 +100,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the results folder",
-    choices=["Reduced", "Truncated", "Nominal", "Test"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     default="Nominal",
 )
 parser.add_argument(
@@ -204,7 +204,7 @@ parser.add_argument(
     ),
 )
 
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Test"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Realistic"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,

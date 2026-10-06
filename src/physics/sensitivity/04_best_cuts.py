@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal",   type=str, default="marley")
 parser.add_argument(
-    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Test"], default="Nominal"
+    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal"
 )
 parser.add_argument(
     "--energy",

@@ -350,7 +350,7 @@ parser.add_argument(
     nargs="+",
     type=str,
     help="The result folders to process",
-    choices=["Reduced", "Truncated", "Nominal", "Test"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     default=["Truncated"],
 )
 parser.add_argument(
@@ -710,7 +710,7 @@ parser.add_argument(
     "--reference_folder",
     type=str,
     default=None,
-    choices=["Reduced", "Truncated", "Nominal", "Test"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     help=(
         "Hold the fiducial volumes (BestFiducials.json) and the DayNight/HEP/Sensitivity best cuts of "
         "this folder while processing --folder. The bkgmodel studies use --reference_folder Truncated so "

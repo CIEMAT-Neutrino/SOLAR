@@ -249,8 +249,8 @@ def main():
         "--folder",
         nargs="*",
         type=str,
-        choices=["Reduced", "Truncated", "Nominal", "Test"],
-        default=["Reduced", "Truncated", "Nominal", "Test"],
+        choices=["Reduced", "Truncated", "Nominal", "Realistic"],
+        default=["Reduced", "Truncated", "Nominal", "Realistic"],
         help="Result folders to clean (default: all)"
     )
     parser.add_argument(

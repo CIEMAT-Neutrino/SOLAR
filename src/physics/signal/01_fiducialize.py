@@ -29,7 +29,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal", "Test"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     default="Nominal",
 )
 parser.add_argument(
@@ -184,21 +184,12 @@ run = compute_reco_workflow(
     electron_energy=args.electron_energy,
 )
 
-# Folders with a background reduction (Reduced, Test) scale the background weights here as 03_analysis.py does
-# in its cut scan (gammas above the folder threshold, other components uniformly), so the fiducial volume is
-# optimised for the same background level the analysis uses.
-if "marley" not in args.signal and folder_applies_reduction(str(root), args.folder):
-    _factor = get_component_reduction_factor(str(root), args.folder, args.signal, config=config)
-    _threshold = get_folder_reduction_threshold(str(root), args.folder)
-    _w = np.asarray(run["Reco"]["SignalParticleWeight"], dtype=float).copy()
-    if "gamma" in args.signal.lower() and _threshold > 0:
-        _sel = np.asarray(run["Reco"]["SignalParticleK"], dtype=float) >= _threshold
-        _w[_sel] /= _factor
-    else:
-        _w /= _factor
-    run["Reco"]["SignalParticleWeight"] = _w
-    rprint(f"[cyan][INFO][/cyan] {args.folder}: {args.signal} weights divided by {_factor:g}"
-           + (f" above {_threshold:g} MeV" if "gamma" in args.signal.lower() and _threshold > 0 else ""))
+# The folder's background model and statistical reduction scale the background weights here as in the
+# 03_analysis.py cut scan, so the fiducial volume is optimised for the background level the analysis uses.
+if "marley" not in args.signal:
+    _divisor = background_weight_divisor(str(root), args.folder, args.signal, config, run["Reco"]["SignalParticleK"])
+    run["Reco"]["SignalParticleWeight"] = np.asarray(run["Reco"]["SignalParticleWeight"], dtype=float) / _divisor
+    rprint(f"[cyan][INFO][/cyan] {args.folder}: {args.signal} weights divided by {np.min(_divisor):g}-{np.max(_divisor):g}")
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
@@ -246,7 +237,7 @@ for config in configs:
         # is comparable to fid>0 points. Previously fid=(0,0,0) used
         # mask=ones, bypassing OpFlash and surface requirements and inflating
         # its significance over every non-zero fiducial value.
-        _surface_ok = surface_quality_mask(str(root), sample_key, args.folder, _surface_arr)
+        _surface_ok = surface_quality_mask(str(root), sample_key, args.folder, _surface_arr, run["Reco"], info)
         _quality_mask = (
             _surface_ok
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)

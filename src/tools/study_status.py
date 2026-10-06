@@ -124,7 +124,7 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     # background normalisation folders vs the Truncated baseline
     "bkgmodel_nominal": {"*": ("default:Truncated", "<=")},
     "bkgmodel_reduced": {"*": ("default:Truncated", ">=")},
-    "bkgmodel_test":    {"*": ("default:Truncated", ">=")},
+    "bkgmodel_realistic": {"*": ("default:Truncated", "<=")},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
@@ -326,7 +326,7 @@ def main() -> None:
                 pass
         # default rows for every folder that has any record, then the registry variants
         entries = []
-        for folder in ("Truncated", "Nominal", "Reduced", "Test"):
+        for folder in ("Truncated", "Nominal", "Reduced", "Realistic"):
             has = any(os.path.exists(f"{P}/{an.upper()}/{folder.lower()}/{cfg}/{sig}") or
                       os.path.isdir(f"{root}/output/data/analysis/{LOCAL_DIR[an]}/{cfg}/{sig}/{folder.lower()}/default")
                       for an in ANALYSES) or folder == "Truncated"
@@ -529,7 +529,7 @@ def main() -> None:
                         _fh_all.write(text); handles[cfg].write(text)
                 fh = _Tee()
             # defaults, Truncated first
-            for folder in ("Truncated", "Nominal", "Reduced", "Test"):
+            for folder in ("Truncated", "Nominal", "Reduced", "Realistic"):
                 d = sub[(sub.study == "default") & (sub.folder == folder)]
                 if d.empty:
                     continue

@@ -51,7 +51,7 @@ def _load_best_cuts(analysis, folder, config, study_label=None):
 
 def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, energy=None, band_fiducials=None):
     quality_mask = (
-        surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"])
+        surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"], run["Reco"], info)
         * (run["Reco"]["NHits"] > this_nhit - 1)
         * (run["Reco"]["AdjClNum"] < this_adjcl)
         * accepted_flash_planes(
@@ -74,7 +74,7 @@ def build_analysis_mask(run, args, config, info, fiducial, detector_x, detector_
 def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, sample_name, pos_keys=("RecoX", "RecoY", "RecoZ")):
     events = len(run["Reco"]["Event"])
     xk, yk, zk = pos_keys
-    surface = surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"])
+    surface = surface_quality_mask(str(root), sample_name, args.folder, run["Reco"]["SignalParticleSurface"], run["Reco"], info)
     fiducialx = (
         np.absolute(run["Reco"][xk]) > fiducial["FiducialX"]
         if config == "hd_1x2x6_lateralAPA"
@@ -108,7 +108,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
-parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Test"], default="Nominal")
+parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
 parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument(
@@ -189,7 +189,7 @@ parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
 parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Test"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Realistic"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
@@ -351,7 +351,7 @@ for config in configs:
                 ), dtype=bool)
 
         # Surface cut and reco arrays extracted once to avoid per-iteration dict lookups.
-        _surface_mask = surface_quality_mask(str(root), name, args.folder, run["Reco"]["SignalParticleSurface"])
+        _surface_mask = surface_quality_mask(str(root), name, args.folder, run["Reco"]["SignalParticleSurface"], run["Reco"], info)
         # The surface cut is the only selection applied to gamma/neutron but not to
         # radiological. An all-False surface mask silently zeroes every cut in the scan
         # (SignalParticleSurface stays at its -1 init when the Geometry/Version/Name match
@@ -560,13 +560,9 @@ for config in configs:
                 _reco_bvalid = cached["reco_bin_valid"]
                 _true_bvalid = cached["true_bin_valid"]
                 
-                # Check if energy-dependent reduction should be applied for background gammas
-                _apply_energy_reduction = (
-                    folder_applies_reduction(str(root), args.folder)
-                    and workflow_params.get("PARTICLE_TYPE") == "background"
-                )
-                if _apply_energy_reduction:
-                    _threshold = get_folder_reduction_threshold(str(root), args.folder)
+                # Background model and statistical reduction of the folder (lib.background.background_weight_divisor)
+                _scale_background = workflow_params.get("PARTICLE_TYPE") == "background"
+                if _scale_background:
                     _true_energies_masked = run["Reco"]["SignalParticleK"][mask]
                 
                 for osc, mean, mean_label in zip(
@@ -577,31 +573,20 @@ for config in configs:
                     selected_weights = run["Reco"][f"{weight}{mean_label}"][mask]
                     _sel_w = selected_weights[_reco_bvalid]
                     
-                    # Apply energy-dependent reduction for background gammas
-                    if _apply_energy_reduction:
-                        _factor = get_component_reduction_factor(str(root), args.folder, name, config=config)
-                        if "gamma" in name.lower() and _threshold > 0:
-                            # For gammas: apply reduction only above threshold
-                            _true_energies_sel = _true_energies_masked[_reco_bvalid]
-                            _sel_w = _sel_w.copy()
-                            _sel_w[_true_energies_sel >= _threshold] /= _factor
-                        else:
-                            # For neutrons and other components: apply uniformly
-                            _sel_w = _sel_w / _factor
+                    if _scale_background:
+                        _sel_w = _sel_w / background_weight_divisor(
+                            str(root), args.folder, name, config, _true_energies_masked[_reco_bvalid]
+                        )
                     
                     h = np.bincount(_reco_bidx, weights=_sel_w, minlength=_n_bins).astype(float)
                     w2 = np.bincount(_reco_bidx, weights=_sel_w**2, minlength=_n_bins)
                     
                     # For h_true, apply the same energy-dependent reduction logic
                     _sel_w_true = selected_weights[_true_bvalid]
-                    if _apply_energy_reduction:
-                        _factor = get_component_reduction_factor(str(root), args.folder, name, config=config)
-                        if "gamma" in name.lower() and _threshold > 0:
-                            _true_energies_true = _true_energies_masked[_true_bvalid]
-                            _sel_w_true = _sel_w_true.copy()
-                            _sel_w_true[_true_energies_true >= _threshold] /= _factor
-                        else:
-                            _sel_w_true = _sel_w_true / _factor
+                    if _scale_background:
+                        _sel_w_true = _sel_w_true / background_weight_divisor(
+                            str(root), args.folder, name, config, _true_energies_masked[_true_bvalid]
+                        )
                     
                     h_true = np.bincount(
                         _true_bidx, weights=_sel_w_true, minlength=_n_bins
