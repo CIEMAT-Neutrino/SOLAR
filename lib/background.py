@@ -124,6 +124,21 @@ def is_surface_background(root: str, sample_name: str) -> bool:
     return sample_name.split("_")[0].lower() in set(config.get("surface_filtered", []))
 
 
+def surface_quality_mask(root: str, sample_name: str, folder: str, surface) -> "np.ndarray":
+    """Surface quality cut of the surface-generated backgrounds (gamma, neutron): an assigned generation
+    surface (SignalParticleSurface >= 0) and, in folders with z_endcap_rejection == "surface" (Reduced,
+    Truncated, Test), no end-cap surface (SignalParticleSurface < 3). Other samples pass."""
+    import numpy as np
+
+    surface = np.asarray(surface)
+    if not is_surface_background(root, sample_name):
+        return np.ones(len(surface), dtype=bool)
+    mask = surface >= 0
+    if folder_applies_surface_cut(root, folder):
+        mask &= surface < 3
+    return mask
+
+
 def get_essential_backgrounds(root: str) -> Dict[str, bool]:
     config = get_background_config(root)
     return deepcopy(config.get("ESSENTIAL", {}))

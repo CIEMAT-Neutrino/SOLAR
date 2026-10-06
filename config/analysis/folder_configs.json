@@ -22,7 +22,7 @@
       }
     },
     "Reduced": {
-      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. Statistical reduction factor applied per component above reduction_threshold_mev. Represents shielding matching vd_1x8x14_3view_30deg_shielded: ~98% neutron reduction (all energies) and ~85% gamma reduction above 3.5 MeV.",
+      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. Statistical reduction factor applied per component above reduction_threshold_mev. Represents shielding matching vd_1x8x14_3view_30deg_shielded: ~98% neutron reduction (all energies) and ~85% gamma reduction above 3.5 MeV.",
       "z_endcap_rejection": "surface",
       "apply_reduction": true,
       "path_key": "reduced",
@@ -36,7 +36,7 @@
       }
     },
     "Truncated": {
-      "description": "Truncated dataset. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter. No statistical reduction.",
+      "description": "Truncated dataset. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. No statistical reduction.",
       "z_endcap_rejection": "surface",
       "apply_reduction": false,
       "path_key": "truncated",

@@ -548,13 +548,7 @@ for config in configs:
         _pos_keys = get_truth_pos_keys(str(root), sample_key) if args.truth_fiducial else _DEFAULT_POS_KEYS
         
         quality_mask = (
-            (
-                (run["Reco"]["SignalParticleSurface"] >= 0)
-                & (run["Reco"]["SignalParticleSurface"] < 3)
-                if args.signal.split("_")[0] in ["gamma", "neutron"]
-                else np.ones(len(run["Reco"]["NHits"]), dtype=bool)
-            )
-            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated", "Test"] and args.signal.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
+            surface_quality_mask(str(root), args.signal, args.folder, run["Reco"]["SignalParticleSurface"])
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
             & accepted_flash_planes(

@@ -24,7 +24,9 @@ upper/lower branch classifier as before.
 - Class weights: signal and background classes have equal total weight; each background sample
   has an equal share of the background class (uniform within a sample).
 - Threshold: the largest score cut that keeps --completeness of the signal clusters with
-  E_nu in [6, 20] MeV (completeness favoured over purity).
+  E_nu in [6, 20] MeV (completeness favoured over purity). This is the starting value:
+  03d_signal_background_threshold.py replaces it by the threshold that maximises the analysis
+  significance in the fiducial-stage energy window.
 """
 
 parser = argparse.ArgumentParser(description="Train the signal/background cluster classifier")
@@ -34,6 +36,8 @@ parser.add_argument("--backgrounds", nargs="+", default=["gamma_final", "neutron
 parser.add_argument("--completeness", type=float, default=0.95)
 parser.add_argument("--completeness_per_bin", action=argparse.BooleanOptionalAction, default=True,
     help="Apply the completeness target in every E_nu bin (6-8, 8-10, 10-14, 14-20 MeV) instead of 6-20 MeV overall.")
+parser.add_argument("--exclude_features", nargs="*", default=[],
+    help="Inputs left out of the classifier (HD Central: the matched-flash inputs, whose gamma/neutron samples lack the light overlay).")
 parser.add_argument("--min_energy", type=float, default=3.0)
 parser.add_argument("--max_per_sample", type=int, default=300000)
 parser.add_argument("--rf_estimators", type=int, default=300)
@@ -66,6 +70,7 @@ def load_sample(name):
     # surface-generated gamma/neutron); only the analysed energy range is kept below.
     reco = run["Reco"]
     features = base_features + [f for f in optional_features if f in reco and f not in base_features]
+    features = [f for f in features if f not in args.exclude_features]
     df = pd.DataFrame({f: np.asarray(reco[f], dtype=float) for f in features})
     df["Flag"] = np.asarray(reco["Flag"]).astype(np.int64)
     df["Event"] = np.asarray(reco["Event"]).astype(np.int64)
@@ -132,6 +137,7 @@ else:
     threshold = float(np.quantile(data.loc[ref, "Score"], 1 - args.completeness))
 auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
 summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, "COMPLETENESS_PER_BIN": args.completeness_per_bin, "FEATURES": features,
+           "EXCLUDED_FEATURES": list(args.exclude_features),
            "MIN_ENERGY": args.min_energy, "AUC": float(auc), "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k",
            "SIGNAL_SAMPLE": args.name, "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
            "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},

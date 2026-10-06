@@ -335,7 +335,7 @@ for config in configs:
             description=f"Processing {name} - {config}",
         ):
             if surface is None:
-                if args.folder.lower() in ["reduced", "truncated"]:
+                if folder_applies_surface_cut(str(root), args.folder):
                     mask = _reco["SignalParticleSurface"] < 3
                 else:
                     mask = _all_mask
