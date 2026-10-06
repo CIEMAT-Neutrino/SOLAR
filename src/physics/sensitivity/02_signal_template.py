@@ -794,6 +794,12 @@ for config in configs:
 
     # ── Phase 3: format and save per-cut figures ─────────────────────────────────
     for nhits, adjcl, ophits, h_array, fig, title in cut_data:
+        positive = np.asarray(h_array[1])[np.asarray(h_array[1]) > 0]
+        if positive.size == 0:
+            # Figure only: the template of this cut is already written and stamped above.
+            rprint(f"[yellow][WARNING][/yellow] {args.config} {args.signal} NHits{nhits} AdjCl{adjcl} OpHits{ophits}: "
+                   f"weighted signal histogram empty (sum {np.nansum(h_array[1]):.3g}); figure skipped.")
+            continue
         fig = format_coustom_plotly(
             fig,
             title=title,
@@ -805,7 +811,7 @@ for config in configs:
             coloraxis=dict(
                 colorbar=dict(title="log10(Counts)"),
                 cmin=-2,  # Global lower limit for the color axis
-                cmax=float(np.nanmax(np.log10(h_array[1][h_array[1] > 0]))),  # Global upper limit for the color axis
+                cmax=float(np.nanmax(np.log10(positive))),  # Global upper limit for the color axis
             ),
         )
         fig.update_yaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=1)
