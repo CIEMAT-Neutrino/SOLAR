@@ -253,7 +253,8 @@ parser.add_argument(
     type=float,
     default=1.0,
     help=(
-        "Minimum summed background MCCounts per energy bin for inclusion in the PL sum. "
+        "Minimum summed background-sample MCCounts (gamma, neutron, radiological; not the 8B reweighting "
+        "of the signal sample) per energy bin for inclusion in the PL sum. "
         "Mirrors Barlow-Beeston: bins with insufficient MC have no reliable background model "
         "and must not contribute to the LLR. Default 1.0 (at least one MC event)."
     ),
@@ -508,7 +509,12 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             else:
                 raw_background += counts
                 smoothed_background += smoothed_counts
-                background_mc_counts += mc_counts
+                # MC support of the PL bin mask: the background samples only. The 8B component is the
+                # marley sample reweighted, so its MCCounts are the hep signal's own MC events: above the
+                # 8B endpoint a bin holding one hep event counted as supported with an 8B expectation of
+                # ~1e-13 and became a signal-only bin (VD Top rerun 11: 87% of the HEP q0 from the 28.5 MeV bin).
+                if component in _hep_bkg_components:
+                    background_mc_counts += mc_counts
                 background_statistical = np.divide(
                     errors,
                     counts,
