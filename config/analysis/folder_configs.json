@@ -8,7 +8,7 @@
   ],
   "FOLDERS": {
     "Nominal": {
-      "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction. Background model: the external gamma and neutron rates are divided by background_model_factors (4 for HD, 10 for VD) at all energies; the Realistic folder keeps the unscaled rates.",
+      "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction. Background model: the external gamma and neutron rates are divided by background_model_factors (10 for HD and VD) at all energies; the Realistic folder keeps the unscaled rates.",
       "z_endcap_rejection": "fiducial",
       "apply_reduction": false,
       "path_key": "nominal",
@@ -22,17 +22,17 @@
       },
       "background_model_factors": {
         "gamma": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         },
         "neutron": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         }
       }
     },
     "Reduced": {
-      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. Statistical reduction factor applied per component above reduction_threshold_mev. Represents shielding matching vd_1x8x14_3view_30deg_shielded: ~98% neutron reduction (all energies) and ~85% gamma reduction above 3.5 MeV. Background model: the external gamma and neutron rates are divided by background_model_factors (4 for HD, 10 for VD) at all energies; the Realistic folder keeps the unscaled rates.",
+      "description": "Relaxed geometry. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. Statistical reduction factor applied per component above reduction_threshold_mev. Represents shielding matching vd_1x8x14_3view_30deg_shielded: ~98% neutron reduction (all energies) and ~85% gamma reduction above 3.5 MeV. Background model: the external gamma and neutron rates are divided by background_model_factors (10 for HD and VD) at all energies; the Realistic folder keeps the unscaled rates.",
       "z_endcap_rejection": "surface",
       "apply_reduction": true,
       "path_key": "reduced",
@@ -46,17 +46,17 @@
       },
       "background_model_factors": {
         "gamma": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         },
         "neutron": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         }
       }
     },
     "Truncated": {
-      "description": "Truncated dataset. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. No statistical reduction. Background model: the external gamma and neutron rates are divided by background_model_factors (4 for HD, 10 for VD) at all energies; the Realistic folder keeps the unscaled rates.",
+      "description": "Truncated dataset. Z endcap backgrounds rejected via SignalParticleSurface < 3 filter (a quality cut, as the optical match); the Z fiducial cut is applied on top, as X and Y. No statistical reduction. Background model: the external gamma and neutron rates are divided by background_model_factors (10 for HD and VD) at all energies; the Realistic folder keeps the unscaled rates.",
       "z_endcap_rejection": "surface",
       "apply_reduction": false,
       "path_key": "truncated",
@@ -70,18 +70,18 @@
       },
       "background_model_factors": {
         "gamma": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         },
         "neutron": {
-          "hd": 4,
+          "hd": 10,
           "vd": 10
         }
       }
     },
     "Realistic": {
-      "description": "Realistic background scenario: the Truncated selection (end-cap backgrounds rejected via SignalParticleSurface < 3, Z fiducial cut applied as X and Y) with the unscaled external gamma and neutron rates. No statistical reduction.",
-      "z_endcap_rejection": "surface",
+      "description": "Realistic background scenario: end-cap contributions retained, subject to the standard fiducial Z cut; external gamma and neutron rates are unscaled. No statistical reduction.",
+      "z_endcap_rejection": "fiducial",
       "apply_reduction": false,
       "path_key": "realistic",
       "reduction_threshold_mev": 0.0,

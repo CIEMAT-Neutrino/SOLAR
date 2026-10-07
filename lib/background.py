@@ -67,7 +67,7 @@ def get_folder_reduction_factors(root: str, folder: str) -> Dict[str, float]:
 def _component_factor(factors: Mapping[str, Any], folder: str, component: str, config: Optional[str], what: str) -> float:
     """Factor of one component (by base name) from a {component: factor} dict; 1.0 if not listed.
 
-    A factor can also be a dict keyed by config name or geometry prefix (e.g. {"hd": 4, "vd": 10});
+    A factor can also be a dict keyed by config name or geometry prefix (e.g. {"hd": 10, "vd": 10});
     the config name takes precedence, then its geometry prefix (text before the first underscore).
     """
     key = component.split("_")[0].lower()
@@ -161,7 +161,7 @@ def surface_quality_mask(root: str, sample_name: str, folder: str, surface, reco
     """Quality cut of the background samples.
 
     Surface-generated backgrounds (gamma, neutron): an assigned generation surface (SignalParticleSurface >= 0)
-    and, in folders with z_endcap_rejection == "surface" (Reduced, Truncated, Realistic), no end-cap surface
+    and, in folders with z_endcap_rejection == "surface" (Reduced, Truncated), no end-cap surface
     (SignalParticleSurface < 3).
     Radiological, with reco and info (the config json): the clusters of the external generators that the
     gamma/neutron samples already model are removed (radiological_external_overlap).
