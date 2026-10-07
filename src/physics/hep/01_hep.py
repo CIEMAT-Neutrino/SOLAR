@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.study import variant_labels_rebin
 from typing import Optional
 from sklearn.isotonic import IsotonicRegression as _IsotonicRegression
 from scipy.ndimage import gaussian_filter1d as _gaussian_filter1d
@@ -409,6 +410,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # (charge cut, truth-position fiducial, membrane veto off) — same rule as the Sensitivity stages.
     _bkg_selection_changed = (
         getattr(args, "charge_threshold", 0) > 0
+        or variant_labels_rebin(getattr(args, "study_label", None))
         or getattr(args, "truth_fiducial", False)
         or not getattr(args, "membrane_veto", True)
     )

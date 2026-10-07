@@ -315,7 +315,7 @@ def main():
     )
     parser.add_argument(
         "--folder", type=str, default="Truncated",
-        choices=["Reduced", "Truncated", "Nominal", "Realistic"],
+        choices=["Reduced", "Truncated", "Nominal", "Pessimistic"],
     )
     parser.add_argument(
         "--analysis", nargs="+",

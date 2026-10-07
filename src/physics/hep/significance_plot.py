@@ -40,7 +40,7 @@ parser.add_argument(
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument(
-    "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal", "Realistic"]
+    "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal", "Pessimistic"]
 )
 parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "HEP"),
                     help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.")

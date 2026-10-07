@@ -145,8 +145,12 @@ if args.completeness_per_bin:
 else:
     threshold = float(np.quantile(data.loc[ref, "Score"], 1 - args.completeness))
 threshold_high, high = None, sig & (data["SolarEnergy"] >= args.gate_energy)
+thresholds_high = {}
 if args.gate_energy > 0 and high.sum() >= 100:
     threshold_high = max(threshold, float(np.quantile(data.loc[high, "Score"], 1 - args.completeness_high)))
+    # Other working points, for the studies (03_analysis.py --sb_completeness_high).
+    for c in sorted({0.80, 0.85, 0.90, 0.95, args.completeness_high}):
+        thresholds_high[f"{c:.2f}"] = max(threshold, float(np.quantile(data.loc[high, "Score"], 1 - c)))
 auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
 summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, "COMPLETENESS_PER_BIN": args.completeness_per_bin, "FEATURES": features,
            "EXCLUDED_FEATURES": list(args.exclude_features),
@@ -156,6 +160,7 @@ summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, 
            "FLAGGED_SIGNAL_LIKE": {}}
 if threshold_high is not None:
     summary.update({"SB_GATE_ENERGY": args.gate_energy, "SB_THRESHOLD_HIGH": threshold_high,
+                    "SB_THRESHOLD_HIGH_BY_COMPLETENESS": thresholds_high,
                     "TARGET_COMPLETENESS_HIGH": args.completeness_high, "FLAGGED_SIGNAL_LIKE_HIGH": {}})
     for name in [args.name] + args.backgrounds:
         m = (data["Sample"] == name) & (data["SolarEnergy"] >= args.gate_energy)
