@@ -209,7 +209,17 @@ def test_apply_energy_scale_shifts_spectrum():
     e = np.linspace(1.0, 10.0, 50)
     template = np.sin(e)[np.newaxis, :]
     shifted = _sensitivity_apply_energy_scale(template, 0.10, e)
-    # Positive delta_e shifts spectrum to lower energies (query = E/(1+delta_e) < E)
+    # Positive delta_e shifts reconstructed contents toward higher energies.
     assert not np.allclose(template, shifted), "shift had no effect"
     # Shifted values should still be in [-1, 1] (sin range)
     assert np.all(np.abs(shifted) <= 1.0 + 1e-10)
+
+
+def test_apply_energy_scale_conserves_in_range_counts():
+    e = np.arange(0.5, 10.0, 1.0)
+    template = np.zeros((2, len(e)))
+    template[:, 2:7] = np.array([[1, 2, 4, 2, 1], [3, 1, 5, 1, 3]])
+    for delta in (-0.05, 0.05):
+        shifted = _sensitivity_apply_energy_scale(template, delta, e)
+        np.testing.assert_allclose(shifted.sum(axis=1), template.sum(axis=1), atol=1e-12)
+        assert np.all(shifted >= 0)

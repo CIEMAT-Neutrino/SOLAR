@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 from lib.root import Sensitivity_Fitter
 from lib.fitting import SENSITIVITY_FIT_METHODS, sensitivity_pull_chi2
-from lib.template_guards import check_template_sampling_marker
+from lib.template_guards import check_signal_template_inputs, check_template_sampling_marker
 
 parser = argparse.ArgumentParser(
     description="Cut optimisation for Sensitivity analysis. "
@@ -210,14 +210,25 @@ def _is_valid(path: str) -> bool:
 
 
 def _sampling_current(cut) -> bool:
-    """Reference templates of this cut were built with the configured P_ee sampling."""
+    """Reference templates match both oscillation sampling and event-selection inputs."""
     ok, _ = check_template_sampling_marker(
         signal_path, args.config, args.signal, cut["NHits"], cut["AdjCl"], cut["OpHits"],
         backend=args.oscillation_backend,
         nadir_oversample=int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1)),
         scopes=("scan", "grid"),
     )
-    return ok
+    if not ok:
+        return False
+    for dm2 in (solar_dm2, react_dm2):
+        current, reason = check_signal_template_inputs(
+            _pkl_path(cut["NHits"], cut["AdjCl"], cut["OpHits"], dm2),
+            root, args.config, args.signal, args.folder,
+            truth_fiducial=args.truth_fiducial,
+        )
+        if not current:
+            rprint(f"[yellow][WARNING][/yellow] Stale signal template: {reason}")
+            return False
+    return True
 
 
 # The cut list goes to 02_signal_template.py in a file, not on the command line: a full

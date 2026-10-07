@@ -2,6 +2,7 @@ import os
 import json
 import pickle
 import numpy as np
+from rich import print as rprint
 
 from typing import Optional
 from itertools import product

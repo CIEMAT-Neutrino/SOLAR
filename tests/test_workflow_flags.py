@@ -83,7 +83,7 @@ class TestGetWorkflowFlagsReal:
 class TestGetWorkflowFlagsOverride:
     def _write_analysis_json(self, tmp_path, payload):
         # load_analysis_info reads analysis/config.json (not analysis/analysis.json)
-        analysis_dir = tmp_path / "analysis"
+        analysis_dir = tmp_path / "config" / "analysis"
         analysis_dir.mkdir(parents=True, exist_ok=True)
         with open(analysis_dir / "config.json", "w") as fh:
             json.dump(payload, fh)

@@ -434,19 +434,18 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 )
 
             # Background uncertainties (error bands) — only when explicitly enabled.
-            # Three independent sources per period: Poisson statistical, normalisation
-            # systematic, and day-fraction uncertainty, combined in quadrature.
+            # The Gaussian denominator already contains the Poisson variance through
+            # background_effective. Only additional systematic terms belong here;
+            # including the period counts would count the Poisson term twice.
             if _compute_error_bands:
                 raw_night_bkg = factor * night_fraction * raw_background
                 raw_day_bkg   = factor * day_fraction   * raw_background
                 raw_sigma_night = np.sqrt(
-                    raw_night_bkg
-                    + (args.background_uncertainty * raw_night_bkg) ** 2
+                    (args.background_uncertainty * raw_night_bkg) ** 2
                     + (args.day_fraction_band * factor * raw_background) ** 2
                 )
                 raw_sigma_day = np.sqrt(
-                    raw_day_bkg
-                    + (args.background_uncertainty * raw_day_bkg) ** 2
+                    (args.background_uncertainty * raw_day_bkg) ** 2
                     + (args.day_fraction_band * factor * raw_background) ** 2
                 )
                 raw_bkg_uncertainty_eff = np.where(
@@ -461,13 +460,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 smoothed_night_bkg = factor * night_fraction * smoothed_background
                 smoothed_day_bkg   = factor * day_fraction   * smoothed_background
                 smoothed_sigma_night = np.sqrt(
-                    smoothed_night_bkg
-                    + (args.background_uncertainty * smoothed_night_bkg) ** 2
+                    (args.background_uncertainty * smoothed_night_bkg) ** 2
                     + (args.day_fraction_band * factor * smoothed_background) ** 2
                 )
                 smoothed_sigma_day = np.sqrt(
-                    smoothed_day_bkg
-                    + (args.background_uncertainty * smoothed_day_bkg) ** 2
+                    (args.background_uncertainty * smoothed_day_bkg) ** 2
                     + (args.day_fraction_band * factor * smoothed_background) ** 2
                 )
                 smoothed_bkg_uncertainty_eff = np.where(
@@ -617,8 +614,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         _n_bins_display = len(daynight_rebin_centers) - threshold_idx
         if _compute_significance_bins:
             factor_display = args.exposure * detector_mass
-            raw_night_display   = factor_display * (night_fraction * raw_background + raw_signal_night)
-            raw_day_display     = factor_display * (day_fraction   * raw_background + raw_signal_day)
+            raw_night_display   = factor_display * night_fraction * (raw_background + raw_signal_night)
+            raw_day_display     = factor_display * day_fraction   * (raw_background + raw_signal_day)
             raw_background_effective_display = (
                 raw_night_display / night_fraction ** 2
                 + raw_day_display  / day_fraction  ** 2
@@ -630,8 +627,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 nan=0.0, posinf=0.0, neginf=0.0,
             )
 
-            smoothed_night_display = factor_display * (night_fraction * smoothed_background + smoothed_signal_night)
-            smoothed_day_display   = factor_display * (day_fraction   * smoothed_background + smoothed_signal_day)
+            smoothed_night_display = factor_display * night_fraction * (smoothed_background + smoothed_signal_night)
+            smoothed_day_display   = factor_display * day_fraction   * (smoothed_background + smoothed_signal_day)
             smoothed_background_effective_display = (
                 smoothed_night_display / night_fraction ** 2
                 + smoothed_day_display  / day_fraction  ** 2

@@ -220,7 +220,7 @@ def build_fiducial_spatial_mask(
       truth    = ("EndX", "EndY", "EndZ") for gamma/radiological backgrounds
     """
     # The Z cut is applied in every folder, as in the fiducial scan (01_fiducialize.py). Folders with
-    # z_endcap_rejection == "surface" (Reduced, Truncated, Test) also drop the endcap-generated events with the
+    # z_endcap_rejection == "surface" (Reduced, Truncated) also drop the endcap-generated events with the
     # SignalParticleSurface < 3 quality cut, applied with the optical-match cuts before the volume is chosen.
     xk, yk, zk = pos_keys
     mask = np.asarray(

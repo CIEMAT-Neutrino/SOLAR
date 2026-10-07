@@ -326,12 +326,12 @@ for config in configs:
                 h_raw     = np.bincount(_valid_bin_idx, minlength=_n_bins).astype(float)
                 mc_counts = fill_gaps(h_raw)
 
-                # 2% systematic + Poisson uncertainty; pre-compute once per fiducial triple
+                # Independent 2% systematic and Poisson terms, in quadrature.
                 _non_zero    = h_raw > 0
                 _h_rel_error = np.zeros(_n_bins)
                 _h_rel_error[_non_zero] = 1.0 / np.sqrt(h_raw[_non_zero])
                 if not _is_marley:
-                    _h_rel_error += 0.02
+                    _h_rel_error = np.sqrt(_h_rel_error**2 + 0.02**2)
 
                 _prev_fid_key  = fid_key
                 _prev_fid_data = (mask, _sel_bin_valid, _valid_bin_idx, mc_counts, _h_rel_error)

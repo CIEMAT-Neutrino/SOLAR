@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 
-from lib.template_guards import check_template_sampling_marker
+from lib.template_guards import check_signal_template_inputs, check_template_sampling_marker
 from lib.oscillation import get_oscillation_datafiles
 from lib.fitting import (
     sensitivity_chi2_worker         as _chi2_worker,
@@ -199,6 +199,16 @@ parser.add_argument(
     help="Tag appended to output pkl filenames to isolate study variants from the main analysis.",
 )
 parser.add_argument(
+    "--results_tag",
+    type=str,
+    default=None,
+    help=(
+        "Optional suffix for the results/<nuisance-profile> directory. This isolates "
+        "validation or audit fits that reuse the nominal templates and cuts without "
+        "overwriting the nominal chi2 grids."
+    ),
+)
+parser.add_argument(
     "--truth_fiducial",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -321,9 +331,17 @@ _ctx = study_context(args, analysis="Sensitivity")
 _study_suffix    = _ctx.study_suffix
 _template_suffix = _ctx.template_suffix
 
-# The default (pull) fit owns the standard results/<profile>/ grids; the legacy comparison
-# fit writes next to them in results/<profile>_legacy/ so it can never overwrite them.
-_results_tag = "_legacy" if args.fit_method == "legacy" else ""
+# The default (pull) fit owns the standard results/<profile>/ grids. Legacy and
+# explicitly tagged validation fits write beside it and cannot overwrite it.
+_result_parts = []
+if args.fit_method == "legacy":
+    _result_parts.append("legacy")
+if args.results_tag:
+    _clean_results_tag = str(args.results_tag).strip().replace(" ", "_")
+    if not _clean_results_tag or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in _clean_results_tag):
+        raise ValueError("--results_tag may contain only letters, digits, '_' and '-'")
+    _result_parts.append(_clean_results_tag)
+_results_tag = "_" + "_".join(_result_parts) if _result_parts else ""
 if args.fit_method == "legacy" and not args.study_label:
     rprint(
         "[yellow][WARNING][/yellow] --fit_method legacy without --study_label: the chi2 grids are "
@@ -702,6 +720,15 @@ def _flyweight_base_template(signal_path: str, config: str, name: str, nhits: in
             f"Flyweight mode: base template not found at {base_template_path}. "
             f"Run 02_signal_template.py with --flyweight first to generate base templates."
         )
+    current, reason = check_signal_template_inputs(
+        base_template_path, root, config, name, args.folder,
+        truth_fiducial=args.truth_fiducial,
+    )
+    if not current:
+        raise RuntimeError(
+            f"Flyweight base template is stale: {reason}. Rebuild it with "
+            "02_signal_template.py --flyweight --rewrite before fitting."
+        )
     require_per_year_templates(signal_path)
     base_template = np.nan_to_num(pd.read_pickle(base_template_path), nan=0.0)
     expected_coarse_bins = len(sensitivity_rebin_centers)
@@ -914,6 +941,20 @@ for config in configs:
                             f"{paths['signal_path']} are not current: {_sampling_reason}. Regenerate them "
                             "(03_template_compute.py --template signal --rewrite, i.e. run the pipeline "
                             "without --skip-templates) or use --flyweight."
+                        )
+                for reference_dm2 in (analysis_info["SOLAR_DM2"], analysis_info["REACT_DM2"]):
+                    reference_path = (
+                        f'{paths["signal_path"]}/{config}_{name}_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}'
+                        f'_dm2_{reference_dm2:.3e}_sin13_{analysis_info["SIN13"]:.3e}'
+                        f'_sin12_{analysis_info["SIN12"]:.3e}.pkl'
+                    )
+                    current, reason = check_signal_template_inputs(
+                        reference_path, root, config, name, args.folder,
+                        truth_fiducial=args.truth_fiducial,
+                    )
+                    if not current:
+                        raise RuntimeError(
+                            f"Signal reference template is stale: {reason}. Rebuild signal templates before fitting."
                         )
                 pred1_raw = (np.nan_to_num(
                     pd.read_pickle(

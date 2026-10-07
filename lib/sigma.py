@@ -162,11 +162,22 @@ def evaluate_significance(
             )
         elif signal_uncertainty is None:
             # Z = \sqrt{2 \left[ (s + b) \ln \left( \frac{(s + b)(b + \sigma_b^2)}{b^2 + (s + b)\sigma_b^2} \right) - \frac{b^2}{\sigma_b^2} \ln \left(1 + \frac{\sigma_b^2 s}{b(b + \sigma_b^2)} \right) \right]}
-            mask = (signal > 0) & (background > 0) & (background_uncertainty >= 0)
-            signal = signal[mask]
-            background = background[mask]
-            background_uncertainty = background_uncertainty[mask]
-            significance[mask] = np.sqrt(
+            positive_uncertainty = (
+                (signal > 0) & (background > 0) & (background_uncertainty > 0)
+            )
+            zero_uncertainty = (
+                (signal > 0) & (background > 0) & (background_uncertainty == 0)
+            )
+            if np.any(zero_uncertainty):
+                s0 = signal[zero_uncertainty]
+                b0 = background[zero_uncertainty]
+                significance[zero_uncertainty] = np.sqrt(
+                    2 * ((s0 + b0) * np.log1p(s0 / b0) - s0)
+                )
+            signal = signal[positive_uncertainty]
+            background = background[positive_uncertainty]
+            background_uncertainty = background_uncertainty[positive_uncertainty]
+            significance[positive_uncertainty] = np.sqrt(
                 2
                 * (
                     (signal + background)
