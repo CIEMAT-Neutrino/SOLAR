@@ -188,6 +188,10 @@ def radiological_external_overlap(root: str, reco, info) -> "np.ndarray":
     All neutron-generator clusters overlap neutron_final; gamma-generator clusters overlap gamma_final when the
     primary gamma (the parent of the main particle, or the main particle itself) had at least the lower edge of
     the gamma sample's generated range.
+    Clusters whose generator SolarNuAna could not match (Generator 0) are treated the same way when their main
+    particle is a gamma above that edge: no internal radiological decay emits a gamma of 4 MeV or more, so these
+    are neutron-capture gammas of the external generators (e.g. 10.83 MeV, 14N(n,g), in HD Central; 8.65 MeV in
+    VD Shielded, where a single such cluster carries a weight of 1.8e5 and sits in the HEP window).
     """
     import numpy as np
 
@@ -201,7 +205,8 @@ def radiological_external_overlap(root: str, reco, info) -> "np.ndarray":
     main_k = np.asarray(reco["MainK"], dtype=float)
     parent_k = np.asarray(reco["MainParentK"], dtype=float) if "MainParentK" in reco else main_k
     primary_k = np.maximum(main_k, parent_k)
-    return (generator == neutron_generator) | (np.isin(generator, gamma_generators) & (primary_k >= gamma_min))
+    unmatched_gamma = (generator == 0) & (np.asarray(reco["MainPDG"]) == 22) if "MainPDG" in reco else np.zeros(len(generator), dtype=bool)
+    return (generator == neutron_generator) | ((np.isin(generator, gamma_generators) | unmatched_gamma) & (primary_k >= gamma_min))
 
 
 def get_essential_backgrounds(root: str) -> Dict[str, bool]:
