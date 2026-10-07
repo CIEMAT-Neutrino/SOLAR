@@ -1,6 +1,8 @@
+import os
 import json
 import pickle
 import numpy as np
+from rich import print as rprint
 
 from typing import Optional
 from itertools import product
@@ -16,6 +18,103 @@ _pnfs_calib = load_analysis_info(str(root)).get("DATA_PATHS", {}).get(
     "CALIBRATION", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
 )
 
+
+def _calib_fallback(name: str, default: str) -> str:
+    """Calibration sample used when `name` has no calibration of its own.
+
+    Samples of the final-defaults production (gamma_final, neutron_final, radiological_final, ...)
+    share the reconstruction configuration of marley_final, so their charge correction, cluster
+    calibration, discriminant model and energy calibration must come from marley_final, not from
+    the legacy marley_official default.
+    """
+    return "marley_final" if str(name).endswith("_final") and str(name) != "marley_final" else default
+
+
+
+
+def _signal_background_flags(run, config, name, idx, this_params):
+    """First SolarEnergy stage: True for clusters the signal/background classifier calls signal-like.
+
+    Uses the two fold models of 03b_signal_background.py for the calibration sample of `name`
+    (`name` itself or _calib_fallback). A cluster in fold f = (Flag + Event) % 2 is scored by the
+    model trained on the other fold, so training clusters are never scored by their own model.
+    Clusters below the training MIN_ENERGY are left signal-like. Clusters whose SolarEnergy (still with the
+    offset when this is called) is at least SB_GATE_ENERGY use SB_THRESHOLD_HIGH when the json has it.
+    Returns None (no change) if the
+    classifier is switched off (config.json SIGNAL_BACKGROUND_CLASSIFIER, params SB_CLASSIFIER) or absent.
+    """
+    if not load_analysis_info(str(root)).get("SIGNAL_BACKGROUND_CLASSIFIER", False):
+        return None
+    if this_params is not None and this_params.get("SB_CLASSIFIER", True) is False:
+        return None
+    for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+        if not sample:
+            continue
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_signal_background.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_signal_background_fold{k}.pkl" for k in (0, 1)]
+        if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
+            break
+    else:
+        rprint(f"[red][WARNING][/red] SIGNAL_BACKGROUND_CLASSIFIER is on but no classifier was found for {config} {name}: "
+               "SolarEnergy keeps the offset for every cluster of this sample.")
+        return None
+    info = json.load(open(jpath))
+    models = [pickle.load(open(p, "rb")) for p in mpaths]
+    reco = run["Reco"]
+    missing = [feat for feat in info["FEATURES"] if feat not in reco]
+    if missing:
+        raise KeyError(f"Signal/background classifier for {config} {name}: features {missing} not computed by this workflow")
+    X = np.column_stack([np.asarray(reco[feat])[idx].astype(float) for feat in info["FEATURES"]])
+    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+    fold = ((np.asarray(reco["Flag"])[idx].astype(np.int64) + np.asarray(reco["Event"])[idx].astype(np.int64)) % 2).astype(int)
+    score = np.ones(len(fold))
+    for k in (0, 1):
+        m = fold == 1 - k  # model k was trained on fold k
+        if np.any(m):
+            score[m] = models[k].predict_proba(X[m])[:, 1]
+    energy = np.asarray(reco["Energy"])[idx].astype(float)
+    score = np.where(energy >= info.get("MIN_ENERGY", 0.0), score, 1.0)
+    if "SignalBackgroundScore" not in reco:
+        reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
+    reco["SignalBackgroundScore"][idx] = score
+    threshold = np.full(len(score), float(info["SB_THRESHOLD"]))
+    if "SB_THRESHOLD_HIGH" in info:
+        solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
+        threshold[solar >= float(info["SB_GATE_ENERGY"])] = float(info["SB_THRESHOLD_HIGH"])
+    return score >= threshold
+
+def _adjcl_slots(run, idx):
+    """Mask of the real adjacent clusters in the zero-padded AdjCl* arrays.
+
+    The per-cluster AdjCl vectors are padded with 0 to the longest vector of the loaded sample
+    (lib/io.resize_subarrays). A padded slot has AdjClR = 0 and would pass any AdjClR < limit cut,
+    so every count over these arrays must be restricted to the first AdjClNum slots.
+    """
+    width = np.asarray(run["Reco"]["AdjClR"][idx]).shape[1]
+    if "AdjClNum" in run["Reco"]:
+        num = np.asarray(run["Reco"]["AdjClNum"][idx]).astype(np.int64)
+        return np.arange(width)[None, :] < num[:, None]
+    return np.asarray(run["Reco"]["AdjClR"][idx]) > 0
+
+def _selected_limit_arrays(run, config, info, names, idx, this_params):
+    """Per-row adjacent-cluster selection limits (MIN_BKG_R, MAX_BKG_CHARGE).
+
+    Each sample uses config/{config}/{sample}/{config}_calib/{config}_selected_limits.json written by
+    03_discrimination.py (falling back to the calibration sample of _calib_fallback, then to the
+    per-config params.json), so the limits no longer depend on which sample was calibrated last.
+    """
+    rows = np.asarray(run["Reco"]["Name"])[idx]
+    rlim = np.full(len(rows), float(this_params["MIN_BKG_R"]))
+    qlim = np.full(len(rows), float(this_params["MAX_BKG_CHARGE"]))
+    for name in names:
+        for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+            path = f"{root}/config/{config}/{sample}/{config}_calib/{config}_selected_limits.json"
+            if sample and os.path.isfile(path):
+                lim = json.load(open(path))
+                rlim[rows == name] = float(lim["MIN_BKG_R"])
+                qlim[rows == name] = float(lim["MAX_BKG_CHARGE"])
+                break
+    return rlim, qlim
 
 def compute_electron_cluster(
     run: dict,
@@ -126,10 +225,10 @@ def compute_cluster_energy(
                 )
 
             except FileNotFoundError:
-                output += f"\t\t[yellow][WARNING][/yellow] Correction file not found for {name}. Defaulting to {default_sample}!\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Correction file not found for {name}. Defaulting to {_calib_fallback(name, default_sample)}!\n"
                 corr_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_electroncharge_correction.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_electroncharge_correction.json",
                         "r",
                     )
                 )
@@ -155,9 +254,18 @@ def compute_cluster_energy(
                     np.abs(run["Reco"][default_branch][idx]) / drift_popt[1]
                 )
 
-            run["Reco"]["CorrectionFactor"][idx] = calibration_func(
-                run["Reco"]["NHits"][idx], *corr_popt
-            )
+            if "CORRECTION_TABLE_NHITS" in corr_info:
+                # Measured F0 per NHits (01_correction --f0_from table): linear between measured values,
+                # nearest measured value outside the measured range (np.interp clamps at both ends).
+                run["Reco"]["CorrectionFactor"][idx] = np.interp(
+                    np.asarray(run["Reco"]["NHits"][idx], dtype=float),
+                    np.asarray(corr_info["CORRECTION_TABLE_NHITS"], dtype=float),
+                    np.asarray(corr_info["CORRECTION_TABLE_FACTOR"], dtype=float),
+                )
+            else:
+                run["Reco"]["CorrectionFactor"][idx] = calibration_func(
+                    run["Reco"]["NHits"][idx], *corr_popt
+                )
 
             for cluster in clusters:
                 run["Reco"][f"Corrected{cluster}Charge"][idx] = (
@@ -239,17 +347,17 @@ def compute_cluster_calibration(
                     )
 
                 except FileNotFoundError:
-                    output += f"\t\t[yellow][WARNING][/yellow] Calibration file not found. Defaulting to {default_sample}!\n"
+                    output += f"\t\t[yellow][WARNING][/yellow] Calibration file not found. Defaulting to {_calib_fallback(name, default_sample)}!\n"
 
                     corr_slope = pickle.load(
                         open(
-                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/calib/{config}_{cluster.lower()}charge_slope_calibration.pkl",
                             "rb",
                         )
                     )
                     corr_intercept = pickle.load(
                         open(
-                            f"{_pnfs_calib}/{config}/{default_sample}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
+                            f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/calib/{config}_{cluster.lower()}charge_intercept_calibration.pkl",
                             "rb",
                         )
                     )
@@ -309,14 +417,16 @@ def compute_total_energy(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
+        _rlim, _qlim = _selected_limit_arrays(run, config, info, configs[config], idx, this_params)
 
         run["Reco"]["TotalAdjClEnergy"][idx] = np.sum(
             run["Reco"]["AdjClEnergy"][idx], axis=1
         )
 
-        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
-            run["Reco"]["AdjClCharge"][idx] > this_params["MAX_BKG_CHARGE"]
-        )
+        selected_filter = (
+            (run["Reco"]["AdjClR"][idx] < _rlim[:, None])
+            + (run["Reco"]["AdjClCharge"][idx] > _qlim[:, None])
+        ) & _adjcl_slots(run, idx)
 
         if debug:
             output += f"\t\t[cyan][INFO][/cyan] Selected filter for energy computation excludes {100*((np.sum(run['Reco']['AdjClNum'][idx])-np.sum(~selected_filter))/np.sum(run['Reco']['AdjClNum'][idx])):.1f}% of Adj. clusters\n"
@@ -379,6 +489,7 @@ def recompute_reco_energy_with_charge_threshold(
             (np.asarray(run["Reco"]["Geometry"]) == info["GEOMETRY"])
             * (np.asarray(run["Reco"]["Version"]) == info["VERSION"])
         )
+        _rlim, _qlim = _selected_limit_arrays(run, config, info, configs[config], idx, this_params)
 
         adj_charge = run["Reco"]["AdjClCharge"][idx]
         adj_energy = run["Reco"]["AdjClEnergy"][idx]
@@ -390,9 +501,9 @@ def recompute_reco_energy_with_charge_threshold(
         run["Reco"]["TotalEnergy"][idx]      = run["Reco"]["Energy"][idx] + run["Reco"]["TotalAdjClEnergy"][idx]
 
         # Selected* features: existing R + MAX_BKG_CHARGE filter, then charge floor.
-        selected_filter = (run["Reco"]["AdjClR"][idx] < this_params["MIN_BKG_R"]) + (
-            adj_charge > this_params["MAX_BKG_CHARGE"]
-        )
+        selected_filter = (
+            (run["Reco"]["AdjClR"][idx] < _rlim[:, None]) + (adj_charge > _qlim[:, None])
+        ) & _adjcl_slots(run, idx)
         selected_filter_Q = selected_filter & charge_floor
 
         run["Reco"]["SelectedAdjClNum"][idx]         = np.sum(selected_filter_Q, axis=1)
@@ -448,8 +559,8 @@ def compute_reco_energy(
                     rf_classifier = pickle.load(model_file)
 
             except FileNotFoundError:
-                output += f"\t\t[yellow][WARNING][/yellow] ML model file not found. Defaulting to {default_sample}!\n"
-                path = f"{_pnfs_calib}/{config}/{default_sample}/models/{config}_{default_sample}_random_forest_discriminant.pkl"
+                output += f"\t\t[yellow][WARNING][/yellow] ML model file not found. Defaulting to {_calib_fallback(name, default_sample)}!\n"
+                path = f"{_pnfs_calib}/{config}/{_calib_fallback(name, default_sample)}/models/{config}_{_calib_fallback(name, default_sample)}_random_forest_discriminant.pkl"
 
                 with open(path, "rb") as model_file:
                     rf_classifier = pickle.load(model_file)
@@ -466,11 +577,11 @@ def compute_reco_energy(
             except FileNotFoundError:
                 discriminant_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_discriminant_calibration.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_discriminant_calibration.json",
                         "r",
                     )
                 )
-                output += f"\t\t[yellow][WARNING][/yellow] Loading model for {default_sample}\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Loading model for {_calib_fallback(name, default_sample)}\n"
 
             def upper_func(x):
                 return x - discriminant_info["UPPER"]["OFFSET"]
@@ -493,10 +604,14 @@ def compute_reco_energy(
             except KeyError:
                 pass
 
+            model_features = list(getattr(rf_classifier, "feature_names_in_", features))
+            missing = [feat for feat in model_features if feat not in run["Reco"]]
+            if missing:
+                raise KeyError(f"Offset classifier for {config} {name}: features {missing} not loaded by this workflow")
             df = npy2df(
                 run,
                 "Reco",
-                branches=features
+                branches=model_features
                 + [
                     "Primary",
                     "Generator",
@@ -509,20 +624,22 @@ def compute_reco_energy(
             )
 
             try:
-                df[features] = df[features].replace([np.inf, -np.inf], np.nan).fillna(0)
-                df[features] = np.clip(
-                    df[features], a_min=-1e6, a_max=1e6
+                df[model_features] = df[model_features].replace([np.inf, -np.inf], np.nan).fillna(0)
+                df[model_features] = np.clip(
+                    df[model_features], a_min=-1e6, a_max=1e6
                 )  # Adjust the clipping values as necessary
-                df["ML"] = rf_classifier.predict(df[features])
-                df["Discriminant"] = rf_classifier.predict_proba(df[features])[:, 1]
+                df["ML"] = rf_classifier.predict(df[model_features])
+                df["Discriminant"] = rf_classifier.predict_proba(df[model_features])[:, 1]
             except ValueError:
-                print(df[features])
+                print(df[model_features])
 
             upper_idx = df["Discriminant"] >= discriminant_info["ML_THRESHOLD"]
             lower_idx = df["Discriminant"] < discriminant_info["ML_THRESHOLD"]
 
             df.loc[upper_idx, "SolarEnergy"] = upper_func(df.loc[upper_idx, "Energy"])
             df.loc[lower_idx, "SolarEnergy"] = lower_func(df.loc[lower_idx, "Energy"])
+            # The signal/background first stage is applied in compute_energy_calibration, once
+            # TotalEnergy/SelectedEnergy carry their final calibration (the values it was trained on).
             run["Reco"]["SolarEnergy"][idx] = df["SolarEnergy"].values
 
     run = remove_branches(run, rm_branches, [], debug=debug)
@@ -572,11 +689,11 @@ def compute_energy_calibration(
             except FileNotFoundError:
                 reco_info = json.load(
                     open(
-                        f"{root}/config/{config}/{default_sample}/{config}_calib/{config}_{default_sample}_energy_calibration.json",
+                        f"{root}/config/{config}/{_calib_fallback(name, default_sample)}/{config}_calib/{config}_{_calib_fallback(name, default_sample)}_energy_calibration.json",
                         "r",
                     )
                 )
-                output += f"\t\t[yellow][WARNING][/yellow] Applying default energy calibration from {default_sample}\n"
+                output += f"\t\t[yellow][WARNING][/yellow] Applying default energy calibration from {_calib_fallback(name, default_sample)}\n"
 
             for energy, ref_energy in zip(
                 ["Solar", "Selected", "Total", "Cluster"],
@@ -597,6 +714,31 @@ def compute_energy_calibration(
                         reco_info[energy.upper()]["INTERSECTION"],
                     )
                     output += f"\t\t[cyan][INFO][/cyan] Applying quadratic energy calibration for {energy}Energy\n"
+
+            # First SolarEnergy stage: clusters the signal/background classifier calls background-like
+            # get the SolarEnergy calibration applied to their cluster energy, i.e. no de-excitation offset.
+            # Applied here because the classifier was trained on these end-of-workflow features.
+            signal_like = _signal_background_flags(run, config, name, idx, this_params)
+            if signal_like is not None:
+                rows = np.asarray(idx[0])
+                if this_params["SAMPLE_FIT"]["SolarEnergy"] == "linear":
+                    no_offset = (np.asarray(run["Reco"]["Energy"])[rows] - reco_info["SOLAR"]["INTERSECTION"]) / reco_info["SOLAR"]["ENERGY_AMP"]
+                else:
+                    no_offset = inverse_quadratic(
+                        np.asarray(run["Reco"]["Energy"])[rows],
+                        reco_info["SOLAR"]["ENERGY_CURVATURE"],
+                        reco_info["SOLAR"]["ENERGY_AMP"],
+                        reco_info["SOLAR"]["INTERSECTION"],
+                    )
+                # Both SolarEnergy versions are kept, so that SolarEnergy can be rebuilt for any threshold
+                # from SignalBackgroundScore (studies of the classifier working point).
+                for branch in ["SolarEnergyOffset", "SolarEnergyNoOffset"]:
+                    if branch not in run["Reco"]:
+                        run["Reco"][branch] = np.zeros(len(run["Reco"]["Event"]))
+                run["Reco"]["SolarEnergyOffset"][rows] = run["Reco"]["SolarEnergy"][rows]
+                run["Reco"]["SolarEnergyNoOffset"][rows] = no_offset
+                run["Reco"]["SolarEnergy"][rows[~signal_like]] = no_offset[~signal_like]
+                output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tEvent energy calibration \t-> Done!\n\n"

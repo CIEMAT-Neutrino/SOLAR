@@ -64,11 +64,53 @@ def get_folder_reduction_factors(root: str, folder: str) -> Dict[str, float]:
     return dict(get_folder_flags(root, folder).get("reduction_factors", {}))
 
 
-def get_component_reduction_factor(root: str, folder: str, component: str) -> float:
-    """Return the reduction factor for a single component (by base name). Defaults to 1.0 if not listed."""
-    factors = get_folder_reduction_factors(root, folder)
+def _component_factor(factors: Mapping[str, Any], folder: str, component: str, config: Optional[str], what: str) -> float:
+    """Factor of one component (by base name) from a {component: factor} dict; 1.0 if not listed.
+
+    A factor can also be a dict keyed by config name or geometry prefix (e.g. {"hd": 10, "vd": 10});
+    the config name takes precedence, then its geometry prefix (text before the first underscore).
+    """
     key = component.split("_")[0].lower()
-    return float(factors.get(key, 1.0))
+    value = factors.get(key, 1.0)
+    if isinstance(value, dict):
+        if config is None:
+            raise ValueError(f"Folder {folder}: the {key} {what} depends on the configuration; pass config")
+        value = value.get(config, value.get(config.split("_")[0], 1.0))
+    return float(value)
+
+
+def get_component_reduction_factor(root: str, folder: str, component: str, config: Optional[str] = None) -> float:
+    """Return the statistical reduction factor of a component (reduction_factors). Defaults to 1.0 if not listed."""
+    return _component_factor(get_folder_reduction_factors(root, folder), folder, component, config, "reduction factor")
+
+
+def get_component_model_factor(root: str, folder: str, component: str, config: Optional[str] = None) -> float:
+    """Return the background-model factor of a component (background_model_factors), applied at all energies
+    in every folder that lists it, independently of apply_reduction. Defaults to 1.0 if not listed."""
+    factors = dict(get_folder_flags(root, folder).get("background_model_factors", {}))
+    return _component_factor(factors, folder, component, config, "background-model factor")
+
+
+def background_weight_divisor(root: str, folder: str, sample_name: str, config: str, true_energy=None):
+    """Divisor of the weights of one background sample in a folder.
+
+    The background-model factor (background_model_factors) applies at all energies. In folders with
+    apply_reduction the statistical reduction (reduction_factors) multiplies it: for gammas only above
+    reduction_threshold_mev of true energy (true_energy, per cluster), for the other components at all energies.
+    Returns a scalar, or an array matching true_energy when the gamma threshold applies.
+    """
+    import numpy as np
+
+    divisor = get_component_model_factor(root, folder, sample_name, config=config)
+    if not folder_applies_reduction(root, folder):
+        return divisor
+    factor = get_component_reduction_factor(root, folder, sample_name, config=config)
+    threshold = get_folder_reduction_threshold(root, folder)
+    if "gamma" in sample_name.lower() and threshold > 0:
+        if true_energy is None:
+            raise ValueError(f"Folder {folder}: the {sample_name} reduction applies above {threshold} MeV; pass true_energy")
+        return divisor * np.where(np.asarray(true_energy, dtype=float) >= threshold, factor, 1.0)
+    return divisor * factor
 
 
 def get_folder_reduction_threshold(root: str, folder: str) -> float:
@@ -113,6 +155,53 @@ def get_background_style(root: str, sample_name: str) -> Dict[str, Any]:
 def is_surface_background(root: str, sample_name: str) -> bool:
     config = get_background_config(root)
     return sample_name.split("_")[0].lower() in set(config.get("surface_filtered", []))
+
+
+def surface_quality_mask(root: str, sample_name: str, folder: str, surface, reco=None, info=None) -> "np.ndarray":
+    """Quality cut of the background samples.
+
+    Surface-generated backgrounds (gamma, neutron): an assigned generation surface (SignalParticleSurface >= 0)
+    and, in folders with z_endcap_rejection == "surface" (Reduced, Truncated), no end-cap surface
+    (SignalParticleSurface < 3).
+    Radiological, with reco and info (the config json): the clusters of the external generators that the
+    gamma/neutron samples already model are removed (radiological_external_overlap).
+    Other samples pass.
+    """
+    import numpy as np
+
+    surface = np.asarray(surface)
+    mask = np.ones(len(surface), dtype=bool)
+    if is_surface_background(root, sample_name):
+        mask &= surface >= 0
+        if folder_applies_surface_cut(root, folder):
+            mask &= surface < 3
+    elif sample_name.lower().startswith("radiological") and reco is not None and info is not None:
+        mask &= ~radiological_external_overlap(root, reco, info)
+    return mask
+
+
+def radiological_external_overlap(root: str, reco, info) -> "np.ndarray":
+    """Clusters of the radiological sample that the dedicated gamma/neutron samples also model.
+
+    The external generators (config EXTERNAL_BACKGROUNDS) follow the SolarNuAna label order of
+    generator_labels.fcl: cavern-wall gammas, foam gammas, cavern-wall neutrons, cryostat n-gammas, cavern n-gammas.
+    All neutron-generator clusters overlap neutron_final; gamma-generator clusters overlap gamma_final when the
+    primary gamma (the parent of the main particle, or the main particle itself) had at least the lower edge of
+    the gamma sample's generated range.
+    """
+    import numpy as np
+
+    external = list(info.get("EXTERNAL_BACKGROUNDS", []))
+    if len(external) != 5:
+        return np.zeros(len(np.asarray(reco["Generator"])), dtype=bool)
+    generator = np.asarray(reco["Generator"])
+    neutron_generator = external[2]
+    gamma_generators = [g for g in external if g != neutron_generator]
+    gamma_min = float(get_background_config(root).get("GENERATED_MOMENTUM_MEV", {}).get("gamma", [4.0, 14.0])[0])
+    main_k = np.asarray(reco["MainK"], dtype=float)
+    parent_k = np.asarray(reco["MainParentK"], dtype=float) if "MainParentK" in reco else main_k
+    primary_k = np.maximum(main_k, parent_k)
+    return (generator == neutron_generator) | (np.isin(generator, gamma_generators) & (primary_k >= gamma_min))
 
 
 def get_essential_backgrounds(root: str) -> Dict[str, bool]:

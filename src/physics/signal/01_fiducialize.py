@@ -29,7 +29,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     default="Nominal",
 )
 parser.add_argument(
@@ -184,6 +184,13 @@ run = compute_reco_workflow(
     electron_energy=args.electron_energy,
 )
 
+# The folder's background model and statistical reduction scale the background weights here as in the
+# 03_analysis.py cut scan, so the fiducial volume is optimised for the background level the analysis uses.
+if "marley" not in args.signal:
+    _divisor = background_weight_divisor(str(root), args.folder, args.signal, config, run["Reco"]["SignalParticleK"])
+    run["Reco"]["SignalParticleWeight"] = np.asarray(run["Reco"]["SignalParticleWeight"], dtype=float) / _divisor
+    rprint(f"[cyan][INFO][/cyan] {args.folder}: {args.signal} weights divided by {np.min(_divisor):g}-{np.max(_divisor):g}")
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
@@ -230,13 +237,7 @@ for config in configs:
         # is comparable to fid>0 points. Previously fid=(0,0,0) used
         # mask=ones, bypassing OpFlash and surface requirements and inflating
         # its significance over every non-zero fiducial value.
-        _is_surface = is_surface_background(str(root), sample_key)
-        if _is_surface:
-            _surface_ok = _surface_arr >= 0
-            if args.folder in ["Reduced", "Truncated"]:
-                _surface_ok = _surface_ok & (_surface_arr < 3)
-        else:
-            _surface_ok = np.ones(len(_surface_arr), dtype=bool)
+        _surface_ok = surface_quality_mask(str(root), sample_key, args.folder, _surface_arr, run["Reco"], info)
         _quality_mask = (
             _surface_ok
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
@@ -325,12 +326,12 @@ for config in configs:
                 h_raw     = np.bincount(_valid_bin_idx, minlength=_n_bins).astype(float)
                 mc_counts = fill_gaps(h_raw)
 
-                # 2% systematic + Poisson uncertainty; pre-compute once per fiducial triple
+                # Independent 2% systematic and Poisson terms, in quadrature.
                 _non_zero    = h_raw > 0
                 _h_rel_error = np.zeros(_n_bins)
                 _h_rel_error[_non_zero] = 1.0 / np.sqrt(h_raw[_non_zero])
                 if not _is_marley:
-                    _h_rel_error += 0.02
+                    _h_rel_error = np.sqrt(_h_rel_error**2 + 0.02**2)
 
                 _prev_fid_key  = fid_key
                 _prev_fid_data = (mask, _sel_bin_valid, _valid_bin_idx, mc_counts, _h_rel_error)

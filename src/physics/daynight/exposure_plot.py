@@ -52,7 +52,7 @@ parser.add_argument(
     type=str,
     help="The name of the results folder",
     default="Nominal",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
 )
 parser.add_argument(
     "--exposure",

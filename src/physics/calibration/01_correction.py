@@ -63,6 +63,47 @@ parser.add_argument(
 parser.add_argument(
     "--name", type=str, help="The name of the configuration", default="marley_official"
 )
+parser.add_argument(
+    "--factor_estimator",
+    type=str,
+    choices=["peak", "profile"],
+    default="peak",
+    help=(
+        "How F0(NHits) is taken from the corrected charge per true MeV of each NHits value. "
+        "'peak' (default since 2026-10-05): the most probable value of Q_corr / E_true, so that the core of "
+        "E / E_true peaks at 1 in every NHits group. 'profile': the previous unweighted mean of the "
+        "charge-binned profile, which over-weights sparse high-charge bins and biases low-NHits clusters low."
+    ),
+)
+parser.add_argument(
+    "--min_clusters",
+    type=int,
+    default=200,
+    help="Minimum number of clusters for an NHits value to be measured (1000 before 2026-10-05).",
+)
+parser.add_argument(
+    "--min_clusters_nhit1",
+    type=int,
+    default=1000,
+    help=(
+        "Minimum number of clusters for NHits = 1 (2026-10-06). Single-hit clusters are mostly fragments of a "
+        "larger deposit; with few of them the mode of Q/E falls far below the plateau (VD: 28-40 vs 117 ADC x "
+        "tick/MeV in HD) and would scale their energy up x3-5. Below this count NHits = 1 is left out and the "
+        "table falls back to the NHits = 2 value."
+    ),
+)
+parser.add_argument(
+    "--f0_from",
+    type=str,
+    choices=["table", "fit"],
+    default="table",
+    help=(
+        "What the analysis applies for F0(NHits). 'table' (default since 2026-10-05): the measured value of each "
+        "NHits, linearly interpolated over missing values and clamped to the nearest measured value outside the "
+        "measured range (written as CORRECTION_TABLE_* in the json). 'fit': the exponential-plus-logistic fit, "
+        "which extrapolates freely outside the measured range."
+    ),
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 
@@ -87,6 +128,14 @@ rprint(output)
 run = compute_reco_workflow(
     run, configs, workflow=user_input["workflow"], debug=user_input["debug"]
 )
+if args.factor_estimator == "peak":
+    # The CORRECTION workflow stops before compute_cluster_time; the F0 peak needs the flash-matched
+    # drift time the analysis uses (DEFAULT_ENERGY_TIME = RecoDriftTime).
+    try:
+        from lib.cluster import compute_cluster_time
+        run, _time_output, _ = compute_cluster_time(run, configs, debug=False)
+    except Exception as exc:
+        rprint(f"[yellow][WARNING][/yellow] compute_cluster_time failed ({exc}); F0 peak falls back to Corrected<charge>ChargePerMeV")
 filtered_run, mask, output = compute_filtered_run(
     run,
     configs,
@@ -111,6 +160,38 @@ fit = {
 y_min, y_max, corr_popt, corr_perr = {}, {}, {}, {}
 corrected_popt, corrected_perr = {}, {}
 correction_factor = {}
+
+
+def most_probable_ratio(values):
+    """Most probable value of a charge-per-MeV distribution and its uncertainty.
+
+    Histogram between the 1st and 99th percentiles (Freedman-Diaconis bins, 3-bin smoothing), take the
+    maximum, then iterate the mean of the values within +-1 sigma_core of it (sigma_core from the MAD of
+    the same window) until it moves by less than 1e-4 of itself. Returns (peak, sigma_core / sqrt(n_core)).
+    """
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v) & (v > 0)]
+    lo, hi = np.percentile(v, [1, 99])
+    core = v[(v >= lo) & (v <= hi)]
+    iqr = np.subtract(*np.percentile(core, [75, 25]))
+    width = 2 * iqr / max(len(core), 1) ** (1 / 3) if iqr > 0 else (hi - lo) / 50
+    nbins = int(np.clip((hi - lo) / width, 20, 400))
+    h, edges = np.histogram(core, bins=nbins, range=(lo, hi))
+    hs = np.convolve(h, np.ones(3) / 3, mode="same")
+    peak = 0.5 * (edges[np.argmax(hs)] + edges[np.argmax(hs) + 1])
+    sigma = 1.4826 * np.median(np.abs(core - np.median(core)))
+    for _ in range(50):
+        window = core[np.abs(core - peak) <= sigma]
+        if len(window) < 20:
+            break
+        sigma = max(1.4826 * np.median(np.abs(window - np.median(window))), 1e-9)
+        new_peak = float(np.mean(window))
+        if abs(new_peak - peak) < 1e-4 * abs(peak):
+            peak = new_peak
+            break
+        peak = new_peak
+    window = core[np.abs(core - peak) <= sigma]
+    return float(peak), float(sigma / np.sqrt(max(len(window), 1)))
 
 
 def correction_func(x, a, b, c, d):
@@ -391,9 +472,20 @@ for config in configs:
 
         correction_factor[f"{charge}Charge"] = {}
         correction_factor[f"{charge}ChargeError"] = {}
+        _time_branch = json.load(open(f"{root}/config/{config}/{config}_params.json")).get("DEFAULT_ENERGY_TIME", "RecoDriftTime")
+        analysis_charge_per_mev = None
+        if args.factor_estimator == "peak":
+            if _time_branch in data and "Charge" in data:
+                analysis_charge_per_mev = (
+                    np.asarray(data["Charge"], dtype=float)
+                    * np.exp(np.abs(np.asarray(data[_time_branch], dtype=float)) / corr_popt[f"{charge}Charge"][1])
+                    / np.asarray(data["ElectronK"], dtype=float)
+                )
+            else:
+                rprint(f"[yellow][WARNING][/yellow] {_time_branch} or Charge not available: F0 peak taken on Corrected{charge}ChargePerMeV")
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
             this_filter_idx = np.where((data["NHits"] == nhit))[0]
-            if len(this_filter_idx) < 1000:
+            if len(this_filter_idx) < (args.min_clusters_nhit1 if nhit == 1 else args.min_clusters):
                 continue
 
             acc = get_default_acc(len(this_filter_idx))
@@ -410,6 +502,14 @@ for config in configs:
 
             mean_y = np.mean(y)
             std_y = np.std(y)
+            if args.factor_estimator == "peak":
+                # The analysis (lib/cluster.compute_cluster_energy) divides the primary-cluster charge,
+                # lifetime-corrected with the flash-matched drift time (DEFAULT_ENERGY_TIME), by F0(NHits).
+                # The peak is taken on exactly that quantity, so the converted energy peaks at the true one.
+                if analysis_charge_per_mev is not None:
+                    mean_y, std_y = most_probable_ratio(analysis_charge_per_mev[this_filter_idx])
+                else:
+                    mean_y, std_y = most_probable_ratio(data[f"Corrected{charge}ChargePerMeV"][this_filter_idx])
             if np.isnan(mean_y) == False and mean_y > 0:
                 correction_factor[f"{charge}Charge"][nhit] = mean_y
                 correction_factor[f"{charge}ChargeError"][nhit] = std_y
@@ -445,7 +545,9 @@ for config in configs:
             y,
             p0=initial_guess,
             sigma=y_error,
-            bounds=([0, 0, 0, 0], [1e3, 1, 1e3, 1]),
+            # Sigmoid rate up to 10 per hit: with the mode estimator F0 rises from ~0.83 of its plateau at
+            # NHits 1 to the plateau by NHits 3, steeper than the previous bound of 1 allowed.
+            bounds=([0, 0, 0, 0], [1e3, 1, 1e3, 10]),
         )
         perr[f"{charge}Charge"] = np.sqrt(np.diag(pcov[f"{charge}Charge"]))
 
@@ -553,6 +655,15 @@ for config in configs:
                         "CORRECTION_CONST_ERROR": perr[f"{charge}Charge"][2],
                         "CORRECTION_SIGMOID": popt[f"{charge}Charge"][3],
                         "CORRECTION_SIGMOID_ERROR": perr[f"{charge}Charge"][3],
+                        **(
+                            {
+                                "CORRECTION_TABLE_NHITS": [int(k) for k in correction_factor[f"{charge}Charge"]],
+                                "CORRECTION_TABLE_FACTOR": [float(v) for v in correction_factor[f"{charge}Charge"].values()],
+                                "CORRECTION_TABLE_ERROR": [float(v) for v in correction_factor[f"{charge}ChargeError"].values()],
+                            }
+                            if args.f0_from == "table"
+                            else {}
+                        ),
                     },
                     f,
                 )

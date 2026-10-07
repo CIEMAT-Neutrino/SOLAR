@@ -4,12 +4,15 @@
       "gamma": true,
       "alpha": false,
       "neutron": true,
-      "radiological": false
+      "radiological": false,
+      "gamma_final": true,
+      "neutron_final": true,
+      "radiological_final": false
     },
     "default": [
-      "gamma",
-      "neutron",
-      "radiological"
+      "gamma_final",
+      "neutron_final",
+      "radiological_final"
     ],
     "surface_filtered": [
       "gamma",
@@ -35,19 +38,19 @@
     },
     "ANALYSES": {
       "DAYNIGHT": [
-        "gamma",
-        "neutron",
-        "radiological"
+        "gamma_final",
+        "neutron_final",
+        "radiological_final"
       ],
       "HEP": [
-        "gamma",
-        "neutron",
-        "radiological"
+        "gamma_final",
+        "neutron_final",
+        "radiological_final"
       ],
       "SENSITIVITY": [
-        "gamma",
-        "neutron",
-        "radiological"
+        "gamma_final",
+        "neutron_final",
+        "radiological_final"
       ]
     },
     "STYLE": {
@@ -70,6 +73,21 @@
         "label": "radiological",
         "color": "rgb(120, 94, 240)",
         "reduction": 1
+      },
+      "gamma_final": {
+        "label": "gamma",
+        "color": "black",
+        "reduction": 3
+      },
+      "neutron_final": {
+        "label": "neutron",
+        "color": "rgb(15,133,84)",
+        "reduction": 2
+      },
+      "radiological_final": {
+        "label": "radiological",
+        "color": "rgb(120, 94, 240)",
+        "reduction": 1
       }
     },
     "truth_containment_margin_cm": 10.0,
@@ -85,6 +103,17 @@
         "radiological"
       ],
       "per_sample": {}
+    },
+    "_GENERATED_MOMENTUM_MEV_comment": "Momentum range [MeV/c] over which the external gamma/neutron samples are generated flat (SingleGen P0 +- SigmaP, PDist 0, in the prodgamma/prodneutron_solar_external fcls of every config). Used to normalise the spectral weights over the generated particles (lib.weights._generated_mean_weight) and, for gamma, as the lower edge above which the external gamma generators of the radiological sample overlap gamma_final (lib.background.radiological_external_overlap).",
+    "GENERATED_MOMENTUM_MEV": {
+      "gamma": [
+        4.0,
+        14.0
+      ],
+      "neutron": [
+        0.0,
+        137.2
+      ]
     }
   },
   "SPECTRA": {
@@ -112,9 +141,9 @@
     "VALIDATION_SCALE": 1000
   },
   "DATA_PATHS": {
-    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth",
+    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth_sb_20261005b",
     "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
-    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
+    "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_sb_20261004"
   },
   "DEFAULT_CONFIGS": [
     "hd_1x2x6_centralAPA",

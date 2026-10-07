@@ -27,6 +27,32 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--selected_limits",
+    choices=["sb", "resolution"],
+    default="sb",
+    help="Adjacent-cluster (Selected*) limits: charge-weighted S/sqrt(B) of adjacent clusters (historical) "
+    "or minimum core width of SelectedEnergy/E_nu for 6-20 MeV signal clusters.",
+)
+parser.add_argument("--update_params", action=argparse.BooleanOptionalAction, default=False,
+    help="Also write the limits into the per-config params.json shared by all samples (legacy).")
+parser.add_argument("--seed", type=int, default=12345, help="Seed of the train/test split and the random forest (reproducible models).")
+parser.add_argument("--rf_estimators", type=int, default=200)
+parser.add_argument("--rf_depth", type=int, default=5)
+parser.add_argument("--rf_min_leaf", type=int, default=1)
+parser.add_argument(
+    "--threshold_method",
+    choices=["roc", "resolution"],
+    default="roc",
+    help="Branch threshold: ROC optimum (default, historical) or minimum core width of the energy residual.",
+)
+parser.add_argument(
+    "--solar_weights",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Weight the branch-classifier training and the threshold metric with the 8B+hep spectrum "
+    "(tested 2026-10-04: worse SolarEnergy resolution than flat weighting, hence off by default).",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -38,6 +64,26 @@ _models_base = analysis_info.get("DATA_PATHS", {}).get(
 )
 
 configs = {config: [name]}
+
+
+# 2026-10-04: solar-spectrum weighting of the branch classifier.
+# The marley productions are generated flat in neutrino energy, so an unweighted fit (and the ROC
+# threshold) optimise the upper/lower branch choice for energies that carry little solar flux.
+# Training events are weighted with the 8B+hep interaction spectrum (truth KDE used by the analysis
+# weights) and the branch threshold minimises the weighted energy resolution instead.
+def solar_spectrum_weights(info, name, energies):
+    kde_path = f"{info['PATH']}/signal/truth/{config}/{config}_{name.split('_')[0]}_comb_kde_p.pkl"
+    kde = pickle.load(open(kde_path, "rb"))
+    w = np.exp(kde.score_samples(np.asarray(energies, dtype=float)[:, None]))
+    w = np.where(np.isfinite(w) & (np.asarray(energies) > 0), w, 0.0)
+    return w / np.mean(w[w > 0]) if np.any(w > 0) else np.ones_like(w)
+
+
+def weighted_core_width(x, w):
+    """Half of the weighted 16-84 % interval of x."""
+    order = np.argsort(x)
+    cw = np.cumsum(w[order]) / np.sum(w)
+    return 0.5 * (np.interp(0.84, cw, x[order]) - np.interp(0.16, cw, x[order]))
 
 user_input = {
     "workflow": "DISCRIMINATION",
@@ -269,6 +315,48 @@ for config in configs:
                     selected_signal_idx_best = selected_signal_idx
                     selected_background_idx_best = selected_background_idx
 
+            if args.selected_limits == "resolution" and "AdjClEnergy" in data:
+                # Choose the limits that minimise the relative core width of SelectedEnergy/E_nu.
+                _rng = np.random.default_rng(args.seed)
+                _sig = np.where(
+                    (np.asarray(data["Generator"]) == 1)
+                    & (data["SignalParticleK"] >= 6) & (data["SignalParticleK"] < 20) & (data["Energy"] > 0)
+                )[0]
+                _sig = _rng.choice(_sig, size=min(len(_sig), 60000), replace=False)
+                _R, _Q = data["AdjClR"][_sig], data["AdjClCharge"][_sig]
+                _AE, _E0, _K = data["AdjClEnergy"][_sig], data["Energy"][_sig], data["SignalParticleK"][_sig]
+                _valid = _Q != 0
+                _edges = np.arange(6, 21, 2)
+                _kb = np.digitize(_K, _edges)
+                def _rel_width(r_lim, q_lim):
+                    _sel = ((_R < r_lim) | (_Q > q_lim)) & _valid
+                    _ratio = (_E0 + np.sum(np.where(_sel, _AE, 0.0), axis=1)) / _K
+                    _w = []
+                    for _b in range(1, len(_edges)):
+                        _x = _ratio[_kb == _b]
+                        if len(_x) >= 200:
+                            _q16, _q50, _q84 = np.percentile(_x, [16, 50, 84])
+                            _w.append(0.5 * (_q84 - _q16) / _q50)
+                    return float(np.mean(_w)) if _w else np.inf
+                _sb_width = _rel_width(adjcl_radius_limit_best, adjcl_energy_limit_best)
+                _r_grid = np.percentile(data["AdjClR"][background_idx], np.arange(1, 100, 4))
+                _q_grid = np.percentile(data["AdjClCharge"][background_idx], np.arange(1, 100, 4))
+                _best = min((_rel_width(r, q), r, q) for r in _r_grid for q in _q_grid)
+                rprint(
+                    f"Selected* limits: S/sqrt(B) choice R<{adjcl_radius_limit_best:.2f} cm | Q>{adjcl_energy_limit_best:.1f} "
+                    f"(SelectedEnergy core width {_sb_width:.4f}) -> resolution choice R<{_best[1]:.2f} cm | Q>{_best[2]:.1f} "
+                    f"(core width {_best[0]:.4f})"
+                )
+                if _best[0] < _sb_width:
+                    adjcl_radius_limit_best, adjcl_energy_limit_best = float(_best[1]), float(_best[2])
+                    selected_signal_idx_best = np.where(
+                        (data["AdjClR"][signal_idx] < adjcl_radius_limit_best)
+                        + (data["AdjClCharge"][signal_idx] > adjcl_energy_limit_best)
+                    )
+                    selected_background_idx_best = np.where(
+                        (data["AdjClR"][background_idx] < adjcl_radius_limit_best)
+                        + (data["AdjClCharge"][background_idx] > adjcl_energy_limit_best)
+                    )
             rprint(
                 f"AdjCl Distance Limit: {adjcl_radius_limit_best:.2f} cm, AdjCl Charge Limit: {adjcl_energy_limit_best:.2f} ADC x ticks"
             )
@@ -305,7 +393,7 @@ for config in configs:
                         "AdjClR": data["AdjClR"][idx],
                         "AdjClCharge": data["AdjClCharge"][idx],
                         "AdjClNum": np.sum(
-                            data["AdjClR"] < adjcl_radius_limit_best, axis=1
+                            (data["AdjClR"] < adjcl_radius_limit_best) & (data["AdjClCharge"] != 0), axis=1
                         ),
                         "LimitR": adjcl_radius_limit_best,
                         "LimitCharge": adjcl_energy_limit_best,
@@ -349,7 +437,15 @@ for config in configs:
             new_params["MIN_BKG_R"] = adjcl_radius_limit_best
             new_params["MAX_BKG_CHARGE"] = adjcl_energy_limit_best
 
-            update_json_file(f"{root}/config/{config}/{config}_params.json", new_params)
+            # Per-sample limits (read by lib.cluster._selected_limit_arrays); the shared per-config
+            # params.json is only updated on request, so samples no longer overwrite each other.
+            _lim_dir = f"{root}/config/{config}/{name}/{config}_calib"
+            os.makedirs(_lim_dir, exist_ok=True)
+            with open(f"{_lim_dir}/{config}_selected_limits.json", "w") as _f:
+                json.dump({"MIN_BKG_R": float(adjcl_radius_limit_best), "MAX_BKG_CHARGE": float(adjcl_energy_limit_best),
+                           "METHOD": args.selected_limits}, _f, indent=2)
+            if args.update_params:
+                update_json_file(f"{root}/config/{config}/{config}_params.json", new_params)
 
         else:
             rprint(
@@ -379,9 +475,9 @@ for config in configs:
         A = df[(df["Upper"] == True) + (df["Generator"] != 1)]
         B = df[(df["Lower"] == True) & (df["Generator"] == 1)]
 
-        A_train = A.sample(frac=0.5)
+        A_train = A.sample(frac=0.5, random_state=args.seed)
         A_test = A.drop(A_train.index)
-        B_train = B.sample(frac=0.5)
+        B_train = B.sample(frac=0.5, random_state=args.seed)
         B_test = B.drop(B_train.index)
 
         train_df = pd.concat([A_train, B_train])
@@ -392,11 +488,26 @@ for config in configs:
 
         # Create a random forest classifier object
         rf_classifier = RandomForestClassifier(
-            n_estimators=200, max_depth=5, min_samples_split=2, min_samples_leaf=1
+            n_estimators=args.rf_estimators,
+            max_depth=args.rf_depth,
+            min_samples_split=2,
+            min_samples_leaf=args.rf_min_leaf,
+            random_state=args.seed,
         )
 
         # Train the classifier on the training data
-        rf_classifier.fit(train_df[features], train_df["Label"])
+        # Solar-spectrum weights for the signal clusters; clusters from other generators keep weight 1.
+        if args.solar_weights:
+            train_w = np.where(
+                train_df["Generator"].to_numpy() == 1,
+                solar_spectrum_weights(info, name, train_df["SignalParticleK"].to_numpy(float)),
+                1.0,
+            )
+            rprint(f"Training weights: 8B+hep spectrum for {np.sum(train_df['Generator'] == 1)} signal clusters")
+        else:
+            train_w = np.ones(len(train_df))
+            rprint("Training weights: flat")
+        rf_classifier.fit(train_df[features], train_df["Label"], sample_weight=train_w)
         # Use the trained classifier to predict the labels for the test data
         test_df["ML"] = rf_classifier.predict(test_df[features])
 
@@ -411,6 +522,9 @@ for config in configs:
             os.makedirs(_model_dir)
         _model_path = f"{_model_dir}/{config}_{name}_random_forest_discriminant.pkl"
         # Save the trained classifier to a file
+        # pnfs (dCache) files cannot be overwritten in place: remove first, as lib.io.save2pnfs does.
+        if os.path.isfile(_model_path):
+            os.remove(_model_path)
         with open(_model_path, "wb") as model_file:
             pickle.dump(rf_classifier, model_file)
 
@@ -566,6 +680,26 @@ for config in configs:
             debug=user_input["debug"],
         )
 
+        # Branch threshold: minimise the (flat or, with --solar_weights, 8B+hep-weighted) core width of (E_reco - E_true)/E_true on the
+        # test signal clusters, instead of the ROC optimum (kept in the json as ML_THRESHOLD_ROC).
+        roc_threshold = float(threshold)
+        _sig = (test_df["Generator"] == 1) & (test_df["SignalParticleK"] > 0)
+        _true = test_df.loc[_sig, "SignalParticleK"].to_numpy(float)
+        _energy = test_df.loc[_sig, "Energy"].to_numpy(float)
+        _score = rf_classifier.predict_proba(test_df.loc[_sig, features])[:, 1]
+        _w = solar_spectrum_weights(info, name, _true) if args.solar_weights else np.ones_like(_true)
+        _scan = []
+        for _thr in np.linspace(0.02, 0.98, 97):
+            _reco = np.where(_score >= _thr, upper_func(_energy), lower_func(_energy))
+            _scan.append((weighted_core_width((_reco - _true) / _true, _w), _thr))
+        _roc_reco = np.where(_score >= roc_threshold, upper_func(_energy), lower_func(_energy))
+        _roc_width = weighted_core_width((_roc_reco - _true) / _true, _w)
+        best_width, best_threshold = min(_scan)
+        threshold = best_threshold if args.threshold_method == "resolution" else roc_threshold
+        rprint(
+            f"Branch threshold: ROC {roc_threshold:.3f} (weighted core width {_roc_width:.4f}) -> "
+            f"resolution-optimal {best_threshold:.3f} (weighted core width {best_width:.4f}); using {args.threshold_method}: {threshold:.3f}"
+        )
         df["ML"] = rf_classifier.predict(df[features])
         df["Discriminant"] = rf_classifier.predict_proba(df[features])[:, 1]
         # Compute reco energy
@@ -698,6 +832,8 @@ for config in configs:
                 {
                     "DISCRIMINANT_THRESHOLD": mid_popt[1],
                     "ML_THRESHOLD": threshold,
+                    "ML_THRESHOLD_ROC": roc_threshold,
+                    "ML_TRAINING_WEIGHTS": "comb_kde_p (8B+hep)" if args.solar_weights else "flat",
                     "UPPER": {
                         "OFFSET": popt_int[0],
                         "ENERGY_AMP": popt_corr["Upper"][0],

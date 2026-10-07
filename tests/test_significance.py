@@ -235,6 +235,15 @@ class TestAsimovSignificance:
         assert np.all(np.isfinite(z))
         assert np.all(z >= 0.0)
 
+    def test_zero_background_uncertainty_matches_no_uncertainty(self):
+        s = np.array([1.0, 5.0, 20.0])
+        b = np.array([2.0, 20.0, 100.0])
+        expected = evaluate_significance(s, b, type="asimov")
+        actual = evaluate_significance(
+            s, b, background_uncertainty=np.zeros_like(b), type="asimov"
+        )
+        np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+
     def test_background_uncertainty_reduces_significance(self):
         s = np.array([5.0])
         b = np.array([20.0])

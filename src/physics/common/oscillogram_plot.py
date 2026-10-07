@@ -54,7 +54,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--analysis", type=str, choices=["DayNight", "HEP", "Sensitivity"], default="Sensitivity")
 parser.add_argument("--config",   nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal",   nargs="+", type=str, default=["marley"])
-parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal"], default="Truncated")
+parser.add_argument("--folder",   type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Truncated")
 parser.add_argument("--energy",   nargs="+", type=str, default=["SolarEnergy"],
     choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--exposure", type=float, default=None,
@@ -180,9 +180,10 @@ for _sl in _study_labels_to_run:
         _pee_energy = np.array([float(c) for c in oscillation_df.columns])
         _nadir_vals = np.array([float(r) for r in oscillation_df.index])
 
-        try:
+        # Undo the PDF the map was built with: nadir.root only for the legacy file backend.
+        if args.oscillation_backend == "file":
             _nadir_pdf = get_nadir_pdf_file(nadir_centers=_nadir_vals)
-        except Exception:
+        else:
             _latitude = _analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
             _nadir_pdf = get_nadir_pdf_nufast(_nadir_vals, _latitude)
 

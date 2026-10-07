@@ -26,7 +26,7 @@ def get_truth_pos_keys(root: str, sample_name: str) -> Tuple[str, str, str]:
         )
     return (keys[0], keys[1], keys[2])
 
-from .defaults import load_analysis_info, get_folder_flags
+from .defaults import load_analysis_info
 
 _TRUTH_PURITY_DEFAULTS = {
     "min_purity": 0.0,                  # MatchedOpFlashPur threshold; <= 0 disables the purity term
@@ -87,11 +87,6 @@ def truth_match_purity_mask(
             ok &= np.isfinite(delta) & (delta <= tol)
     return ok
 
-
-
-def folder_applies_z_fiducial(root: str, folder: str) -> bool:
-    """Return True if Z endcap rejection uses a geometric fiducial cut (z_endcap_rejection == 'fiducial')."""
-    return get_folder_flags(root, folder)["z_endcap_rejection"] == "fiducial"
 
 
 DEFAULT_FIDUCIALIZATION_CONFIG: Dict[str, Any] = {
@@ -224,13 +219,9 @@ def build_fiducial_spatial_mask(
       truth    = ("MainX", "MainY", "MainZ") for neutron backgrounds
       truth    = ("EndX", "EndY", "EndZ") for gamma/radiological backgrounds
     """
-    from . import root
-
-    # Z is only geometrically fiducialised for folders whose endcap rejection is "fiducial" (Nominal); Truncated/Reduced
-    # reject the Z endcaps via the SignalParticleSurface filter instead (config/analysis/folder_configs.json). This used
-    # to hard-code `folder == "Nominal"`, which happens to agree with the flag for every folder configured so far -- reading
-    # the flag instead removes that coincidence and keeps the two in sync if a folder's endcap-rejection mode ever changes.
-    _apply_z = folder_applies_z_fiducial(str(root), folder)
+    # The Z cut is applied in every folder, as in the fiducial scan (01_fiducialize.py). Folders with
+    # z_endcap_rejection == "surface" (Reduced, Truncated) also drop the endcap-generated events with the
+    # SignalParticleSurface < 3 quality cut, applied with the optical-match cuts before the volume is chosen.
     xk, yk, zk = pos_keys
     mask = np.asarray(
         (
@@ -244,8 +235,8 @@ def build_fiducial_spatial_mask(
                 )
             )
             * (np.absolute(run["Reco"][yk]) < detector_y / 2 - fiducial["FiducialY"])
-            * (((run["Reco"][zk] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])) if _apply_z else 1)
-            * (((run["Reco"][zk] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])) if _apply_z else 1)
+            * (run["Reco"][zk] > fiducial["FiducialZ"] - info["DETECTOR_GAP_Z"])
+            * (run["Reco"][zk] < info["DETECTOR_SIZE_Z"] + info["DETECTOR_GAP_Z"] - fiducial["FiducialZ"])
         ),
         dtype=bool,
     )

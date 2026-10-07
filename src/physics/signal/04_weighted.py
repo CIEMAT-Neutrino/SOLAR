@@ -28,7 +28,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     default="Nominal",
 )
 parser.add_argument(
@@ -262,6 +262,12 @@ def _mc_event_filter(energy_all, mask, rb_edges, threshold):
 nhits_list          = []   # full per-event distributions (original schema)
 nhits_fiducial_list = []   # threshold-scan summary per (stage, hit variable)
 
+
+# The folder's background model and statistical reduction scale the background weights, as in 03_analysis.py.
+if "marley" not in args.signal:
+    _divisor = background_weight_divisor(str(root), args.folder, args.signal, config, run["Reco"]["SignalParticleK"])
+    run["Reco"]["SignalParticleWeight"] = np.asarray(run["Reco"]["SignalParticleWeight"], dtype=float) / _divisor
+
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     # Counts are quoted at the evaluation livetime (EVALUATION_EXPOSURE_YEARS in
@@ -335,7 +341,7 @@ for config in configs:
             description=f"Processing {name} - {config}",
         ):
             if surface is None:
-                if args.folder.lower() in ["reduced", "truncated"]:
+                if folder_applies_surface_cut(str(root), args.folder):
                     mask = _reco["SignalParticleSurface"] < 3
                 else:
                     mask = _all_mask

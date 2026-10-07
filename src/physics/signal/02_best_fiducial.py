@@ -6,6 +6,13 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial_significance import (
+    GROUP_COLUMNS,
+    FIDUCIAL_COLUMNS,
+    combine_components,
+    build_significance_payload,
+    get_essential_background_components,
+)
 
 _analysis_info = load_analysis_info(str(root))
 
@@ -13,8 +20,6 @@ save_path = f"{root}/output/images/solar/fiducial"
 data_path = f"{root}/config/analysis/fiducial"
 
 ANALYSIS_CHOICES = ["DayNight", "HEP", "Sensitivity"]
-GROUP_COLUMNS = ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]
-FIDUCIAL_COLUMNS = ["FiducializedX", "FiducializedY", "FiducializedZ"]
 
 
 def _deep_merge_dict(base: dict, update: dict) -> dict:
@@ -32,148 +37,6 @@ def _merge_and_write_json(path: str, payload: dict) -> None:
     # serialises the read-merge-write with a file lock so parallel per-config pipelines
     # cannot drop each other's entries.
     merge_and_write_json(path, payload, indent=4)
-
-
-def combine_components(df: pd.DataFrame, components: List[str]) -> pd.DataFrame:
-    component_df = df[df["Component"].isin(components)].copy()
-    if component_df.empty:
-        return pd.DataFrame(columns=GROUP_COLUMNS + ["MCCounts", "Counts", "Error+", "Error-"])
-    return (
-        component_df.groupby(GROUP_COLUMNS)
-        .agg({
-            "MCCounts": "sum",
-            "Counts": "sum",
-            "Error+": lambda x: float(np.sqrt(np.sum(np.square(np.asarray(x, dtype=float))))),
-            "Error-": lambda x: float(np.sqrt(np.sum(np.square(np.asarray(x, dtype=float))))),
-        })
-        .reset_index()
-    )
-
-
-def aggregate_significance(significance: np.ndarray, mode: str) -> float:
-    values = np.nan_to_num(np.asarray(significance, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
-    if str(mode).lower() == "sum":
-        return float(np.sum(values))
-    return float(np.sqrt(np.sum(np.square(values))))
-
-
-def build_significance_payload(
-    merged_df: pd.DataFrame,
-    significance_type: str,
-    combine_mode: str,
-    smoothing_config: dict,
-    exposure: float,
-    energy_min=None,
-    energy_max=None,
-) -> Optional[Dict]:
-    if merged_df.empty:
-        return None
-    ordered = merged_df.sort_values("Energy").copy()
-    energy = ordered["Energy"].to_numpy(dtype=float)
-    signal_counts = np.nan_to_num(ordered["CountsSignal"].to_numpy(dtype=float), nan=0.0)
-    background_counts = np.nan_to_num(ordered["CountsBackground"].to_numpy(dtype=float), nan=0.0)
-    signal_errors = np.nan_to_num(ordered["Error+Signal"].to_numpy(dtype=float), nan=0.0)
-    background_errors = np.nan_to_num(ordered["Error+Background"].to_numpy(dtype=float), nan=0.0)
-    signal_mc = np.nan_to_num(ordered["MCCountsSignal"].to_numpy(dtype=float), nan=0.0)
-    background_mc = np.nan_to_num(ordered["MCCountsBackground"].to_numpy(dtype=float), nan=0.0)
-
-    smoothed_signal_counts = smooth_histogram_with_config(signal_counts, smoothing_config)
-    smoothed_background_counts = smooth_histogram_with_config(background_counts, smoothing_config)
-    smoothed_signal_errors = smooth_histogram_errors(
-        signal_errors, smoothing_config, counts=signal_counts, mc_counts=signal_mc
-    )
-    smoothed_background_errors = smooth_histogram_errors(
-        background_errors, smoothing_config, counts=background_counts, mc_counts=background_mc
-    )
-
-    window_mask = np.ones_like(energy, dtype=bool)
-    if energy_min is not None:
-        window_mask = window_mask & (energy >= float(energy_min))
-    if energy_max is not None:
-        window_mask = window_mask & (energy <= float(energy_max))
-
-    signal_counts_eval = signal_counts[window_mask]
-    background_counts_eval = background_counts[window_mask]
-    signal_errors_eval = signal_errors[window_mask]
-    background_errors_eval = background_errors[window_mask]
-    smoothed_signal_counts_eval = smoothed_signal_counts[window_mask]
-    smoothed_background_counts_eval = smoothed_background_counts[window_mask]
-    smoothed_signal_errors_eval = smoothed_signal_errors[window_mask]
-    smoothed_background_errors_eval = smoothed_background_errors[window_mask]
-
-    significance_kind = str(significance_type).lower()
-    if significance_kind == "asimov":
-        raw_significance_eval = evaluate_significance(
-            exposure * signal_counts_eval,
-            exposure * background_counts_eval,
-            background_uncertainty=exposure * background_errors_eval,
-            type=significance_kind,
-        )
-        smoothed_significance_eval = evaluate_significance(
-            exposure * smoothed_signal_counts_eval,
-            exposure * smoothed_background_counts_eval,
-            background_uncertainty=exposure * smoothed_background_errors_eval,
-            type=significance_kind,
-        )
-    else:
-        raw_significance_eval = evaluate_significance(
-            exposure * signal_counts_eval,
-            exposure * background_counts_eval,
-            exposure * signal_errors_eval,
-            exposure * background_errors_eval,
-            type=significance_kind,
-        )
-        smoothed_significance_eval = evaluate_significance(
-            exposure * smoothed_signal_counts_eval,
-            exposure * smoothed_background_counts_eval,
-            exposure * smoothed_signal_errors_eval,
-            exposure * smoothed_background_errors_eval,
-            type=significance_kind,
-        )
-    raw_significance_eval = np.nan_to_num(raw_significance_eval, nan=0.0, posinf=0.0, neginf=0.0)
-    smoothed_significance_eval = np.nan_to_num(smoothed_significance_eval, nan=0.0, posinf=0.0, neginf=0.0)
-
-    raw_significance = np.zeros_like(energy, dtype=float)
-    smoothed_significance = np.zeros_like(energy, dtype=float)
-    raw_significance[window_mask] = raw_significance_eval
-    smoothed_significance[window_mask] = smoothed_significance_eval
-
-    if significance_kind == "gaussian":
-        # Correct global formula: S_total / sqrt(B_total + Σσ_s² + Σσ_b²)
-        # Per-bin quadrature overestimates significance when bins differ in S/B ratio.
-        def _gaussian_global(s, b, se, be):
-            s_sum = float(np.sum(s))
-            denom_sq = float(np.sum(b) + np.sum(np.square(se)) + np.sum(np.square(be)))
-            return float(s_sum / np.sqrt(denom_sq)) if denom_sq > 0 else 0.0
-
-        raw_total = _gaussian_global(
-            exposure * signal_counts_eval,
-            exposure * background_counts_eval,
-            exposure * signal_errors_eval,
-            exposure * background_errors_eval,
-        )
-        smoothed_total = _gaussian_global(
-            exposure * smoothed_signal_counts_eval,
-            exposure * smoothed_background_counts_eval,
-            exposure * smoothed_signal_errors_eval,
-            exposure * smoothed_background_errors_eval,
-        )
-    else:
-        # Asimov: q0 is additive over independent bins → sqrt(Σz_i²) is exact.
-        raw_total = aggregate_significance(raw_significance, combine_mode)
-        smoothed_total = aggregate_significance(smoothed_significance, combine_mode)
-
-    return {
-        "Energy": energy,
-        "RawSignal": exposure * signal_counts,
-        "RawBackground": exposure * background_counts,
-        "SmoothedSignal": exposure * smoothed_signal_counts,
-        "SmoothedBackground": exposure * smoothed_background_counts,
-        "RawSignificance": raw_significance,
-        "SmoothedSignificance": smoothed_significance,
-        "RawTotal": raw_total,
-        "SmoothedTotal": smoothed_total,
-    }
 
 
 def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing_config: Dict, exposure: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -230,6 +93,58 @@ def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing
     return merged_df, pd.DataFrame(significance_rows)
 
 
+def fiducial_mc_diagnostics(
+    plot_df: pd.DataFrame,
+    gated_plot_df: pd.DataFrame,
+    analysis_config: Dict,
+    mc_threshold: float,
+    root_path: str,
+    chosen: pd.Series,
+    smoothing_config: Dict,
+    exposure: float,
+) -> Dict:
+    """Record whether MC statistics decided the fiducial volume. The selection itself is unchanged.
+
+    MCLimited is set when (a) the MC gate changed the choice: without it the optimiser would pick a
+    volume where an essential background has fewer than mc_threshold MC events, or (b) an essential
+    background has fewer than 2 x mc_threshold MC events in the chosen volume (energy window).
+    Flagged volumes are candidates for re-optimisation with more background MC.
+    """
+    essential = sorted(get_essential_background_components(root_path, list(analysis_config.get("background_components", []))))
+    window = plot_df
+    if analysis_config.get("energy_min") is not None:
+        window = window.loc[window["Energy"] >= float(analysis_config["energy_min"])]
+    if analysis_config.get("energy_max") is not None:
+        window = window.loc[window["Energy"] <= float(analysis_config["energy_max"])]
+    volume = (
+        (window["FiducializedX"] == int(chosen["FiducializedX"]))
+        & (window["FiducializedY"] == int(chosen["FiducializedY"]))
+        & (window["FiducializedZ"] == int(chosen["FiducializedZ"]))
+    )
+    chosen_mc = {c: float(window.loc[volume & (window["Component"] == c), "MCCounts"].sum()) for c in essential}
+    _, ungated_df = select_best_fiducial(plot_df, analysis_config, smoothing_config, exposure)
+    ungated = {}
+    gate_changed = False
+    if not ungated_df.empty:
+        best = ungated_df.loc[ungated_df["SmoothedSignificance"].idxmax()]
+        ungated = {
+            "FiducialX": int(best["FiducializedX"]), "FiducialY": int(best["FiducializedY"]),
+            "FiducialZ": int(best["FiducializedZ"]), "SmoothedSignificance": float(best["SmoothedSignificance"]),
+        }
+        gate_changed = any(int(best[f"Fiducialized{a}"]) != int(chosen[f"Fiducialized{a}"]) for a in "XYZ")
+    near = bool(mc_threshold > 0 and any(v < 2 * float(mc_threshold) for v in chosen_mc.values()))
+    reasons = (["MC gate changed the volume"] if gate_changed else []) + (
+        [f"essential background MC below 2x{mc_threshold:g} in the chosen volume"] if near else [])
+    return {
+        "MCLimited": bool(gate_changed or near),
+        "MCLimitedReason": "; ".join(reasons),
+        "ChosenEssentialMC": chosen_mc,
+        "UngatedBest": ungated,
+        "VolumesPassingGate": int(gated_plot_df[FIDUCIAL_COLUMNS].drop_duplicates().shape[0]),
+        "VolumesScanned": int(plot_df[FIDUCIAL_COLUMNS].drop_duplicates().shape[0]),
+    }
+
+
 # Components to drop from the truth-fiducial scan's significance sum via
 # --exclude_radiological_from_scan. Historically justified as "radiological has no
 # reconstructable truth position" (its configured key was MainX/Y/Z, the decay's
@@ -247,20 +162,7 @@ NON_FIDUCIALIZABLE_TRUTH_COMPONENTS = {"radiological"}
 
 
 def filter_fiducializable_components(components: List[str]) -> List[str]:
-    return [c for c in components if str(c).lower() not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
-
-
-def get_essential_background_components(root_path: str, components: List[str]) -> Set[str]:
-    background_cfg = get_background_config(root_path)
-    essential_map = {
-        str(component).lower(): bool(is_essential)
-        for component, is_essential in background_cfg.get("ESSENTIAL", {}).items()
-    }
-    return {
-        str(component)
-        for component in components
-        if essential_map.get(str(component).lower(), False)
-    }
+    return [c for c in components if str(c).lower().split("_")[0] not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
 
 
 def apply_fiducial_mc_threshold(
@@ -273,6 +175,18 @@ def apply_fiducial_mc_threshold(
     essential_components = get_essential_background_components(root_path, background_components)
     if not essential_components:
         return plot_df
+
+    # Always include the no-fiducial baseline (0,0,0) regardless of MC threshold.
+    # It is the reference point: any tighter fiducial must improve over it.
+    # Configs with suppressed backgrounds have fewer MC events by physics, not by
+    # poor statistics — excluding (0,0,0) forces the optimizer into spuriously tight cuts.
+    # When no volume passes the gate the baseline is returned alone (the early returns
+    # below used to drop it, and the caller then kept a stale volume from a previous run).
+    no_fid = plot_df.loc[
+        (plot_df["FiducializedX"] == 0)
+        & (plot_df["FiducializedY"] == 0)
+        & (plot_df["FiducializedZ"] == 0)
+    ]
 
     filtered = plot_df.copy()
     energy_min = analysis_config.get("energy_min")
@@ -289,7 +203,7 @@ def apply_fiducial_mc_threshold(
         .reset_index()
     )
     if component_mc.empty:
-        return filtered.iloc[0:0]
+        return no_fid.copy()
 
     component_mc["Pass"] = component_mc["MCCounts"] >= float(mc_threshold)
     pass_counts = (
@@ -303,19 +217,9 @@ def apply_fiducial_mc_threshold(
         FIDUCIAL_COLUMNS,
     ]
     if pass_counts.empty:
-        return filtered.iloc[0:0]
+        return no_fid.copy()
 
     result = plot_df.merge(pass_counts, on=FIDUCIAL_COLUMNS, how="inner")
-
-    # Always include the no-fiducial baseline (0,0,0) regardless of MC threshold.
-    # It is the reference point: any tighter fiducial must improve over it.
-    # Configs with suppressed backgrounds have fewer MC events by physics, not by
-    # poor statistics — excluding (0,0,0) forces the optimizer into spuriously tight cuts.
-    no_fid = plot_df.loc[
-        (plot_df["FiducializedX"] == 0)
-        & (plot_df["FiducializedY"] == 0)
-        & (plot_df["FiducializedZ"] == 0)
-    ]
     if not no_fid.empty:
         result = pd.concat([result, no_fid]).drop_duplicates(
             subset=GROUP_COLUMNS + ["Component"], keep="first"
@@ -326,7 +230,7 @@ def apply_fiducial_mc_threshold(
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
-parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal"], default="Nominal")
+parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The analyses to optimize fiducials for", choices=ANALYSIS_CHOICES, default=ANALYSIS_CHOICES)
 parser.add_argument("--energy", nargs="+", type=str, help="The energy for the analysis", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument("--exposure", type=float, help="The exposure in years.", default=100)
@@ -536,6 +440,17 @@ for config in configs:
                 "SignificanceType": analysis_config.get("significance_type", "gaussian"),
                 **smoothing_metadata(smoothing_config),
             }
+            # Mark MC-limited choices (user decision 2026-10-05: keep the strategy, flag for re-optimisation).
+            _mc_diag = fiducial_mc_diagnostics(
+                plot_df, gated_plot_df, analysis_config, args.mc_threshold, str(root),
+                max_row, smoothing_config, args.exposure,
+            )
+            best_fiducials[config][analysis_key][energy_label].update(_mc_diag)
+            if _mc_diag["MCLimited"]:
+                rprint(
+                    f"[yellow][MC-LIMITED][/yellow] {config} {analysis_name} {energy_label}: {_mc_diag['MCLimitedReason']} "
+                    f"(essential MC {_mc_diag['ChosenEssentialMC']}, ungated best {_mc_diag['UngatedBest']})"
+                )
 
             # Per-energy-band optimization: find the best fiducial independently for
             # each band. Downstream masking applies the band-specific cut per event.

@@ -124,6 +124,7 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     # background normalisation folders vs the Truncated baseline
     "bkgmodel_nominal": {"*": ("default:Truncated", "<=")},
     "bkgmodel_reduced": {"*": ("default:Truncated", ">=")},
+    "bkgmodel_realistic": {"*": ("default:Truncated", "<=")},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
@@ -210,7 +211,8 @@ def read_fiducial(root: str, folder: str, cfg: str, an: str, energy: str, label:
     if node is None:
         return "-"
     try:
-        return f"{int(node['FiducialX'])}/{int(node['FiducialY'])}/{int(node['FiducialZ'])}"
+        mark = "*" if node.get("MCLimited") else ""
+        return f"{int(node['FiducialX'])}/{int(node['FiducialY'])}/{int(node['FiducialZ'])}{mark}"
     except Exception:
         return "-"
 
@@ -324,7 +326,7 @@ def main() -> None:
                 pass
         # default rows for every folder that has any record, then the registry variants
         entries = []
-        for folder in ("Truncated", "Nominal", "Reduced"):
+        for folder in ("Truncated", "Nominal", "Reduced", "Realistic"):
             has = any(os.path.exists(f"{P}/{an.upper()}/{folder.lower()}/{cfg}/{sig}") or
                       os.path.isdir(f"{root}/output/data/analysis/{LOCAL_DIR[an]}/{cfg}/{sig}/{folder.lower()}/default")
                       for an in ANALYSES) or folder == "Truncated"
@@ -443,7 +445,7 @@ def main() -> None:
     with open(md, "w") as fh:
         fh.write(f"# Study status {stamp}\n\nEpochs: " + ", ".join(f"{k}={v.isoformat(timespec='minutes')}" for k, v in epochs.items()) + "\n\n")
         fh.write("cut = NHits/OpHits/AdjCl. fiducial = FiducialX/Y/Z (cm) from BestFiducials*.json for that "
-                 "config/folder/analysis/energy (- if no record). DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
+                 "config/folder/analysis/energy (- if no record; * = MC-limited choice, see MCLimitedReason). DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
                  "Sensitivity: Δχ² solar-fit-at-reactor / reactor-fit-at-solar (full profile unless a nuisance study).\n\n"
                  "trend: 🟢 study follows the expected relation to its reference; 🟠 it does not, but one side has a known bug "
                  "or still awaits its rerun (re-check after the queue); 🔴 it does not and both sides are fresh -> a bug to "
@@ -527,7 +529,7 @@ def main() -> None:
                         _fh_all.write(text); handles[cfg].write(text)
                 fh = _Tee()
             # defaults, Truncated first
-            for folder in ("Truncated", "Nominal", "Reduced"):
+            for folder in ("Truncated", "Nominal", "Reduced", "Realistic"):
                 d = sub[(sub.study == "default") & (sub.folder == folder)]
                 if d.empty:
                     continue

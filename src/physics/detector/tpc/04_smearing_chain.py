@@ -68,7 +68,7 @@ parser.add_argument("--true_range_variable", type=str, default=None,
 parser.add_argument("--weight", type=str, choices=["analysis", "truth"], default="analysis",
                     help="analysis: the weights 03_analysis.py exports (marley: oscillated day+night mean, the "
                          "'Solar' component of cutflow_plot.py); truth: unoscillated truth-flux weights")
-parser.add_argument("--reference_folder", type=str, choices=["Nominal", "Reduced", "Truncated"], default="Truncated",
+parser.add_argument("--reference_folder", type=str, choices=["Nominal", "Reduced", "Truncated", "Realistic"], default="Truncated",
                     help="Where to find the 03_analysis.py --export_raw Ref pkls used for the cutflow_plot.py closure "
                          "check (their content does not depend on the folder)")
 parser.add_argument("--unweighted", action=argparse.BooleanOptionalAction, default=False,
@@ -278,6 +278,31 @@ for step in STEPS[1:]:
         "P99": float(np.percentile(r[finite], 99)), "FracAbove1": share(finite & (r > 1)),
         "PeakMean": mu, "PeakSigma": sigma,
     })
+# Response per NHits group for the steps around the NHits-dependent conversion: Lifetime (single
+# charge-to-energy factor), Gain (F0(NHits)) and Calibration (a(NHits), b(NHits)), to see whether the
+# conversion sharpens the response or only moves it.
+NHITS_GROUPS = [(1, 3), (4, 6), (7, 10), (11, 15), (16, 25), (26, 10**6)]
+nhits_all = np.asarray(reco["NHits"], dtype=float)[mask]
+response_nhits_rows = []
+r_edges = np.arange(0.0, 2.5 + 1e-9, 0.025)
+for lo, hi in NHITS_GROUPS:
+    sel_n = (nhits_all >= lo) & (nhits_all <= hi)
+    label = f"{lo}-{hi}" if hi < 10**6 else f">{lo - 1}"
+    for step in ["Lifetime", "Gain", "Calibration"]:
+        r = electron_scale[step][mask] / true_energy[mask]
+        ok = sel_n & np.isfinite(r)
+        if ok.sum() < 20:
+            continue
+        h, _ = np.histogram(r[ok], bins=r_edges, weights=w[ok])
+        mu, sigma = ratio_peak(r[ok])
+        response_nhits_rows.append({
+            "Config": config, "Name": name, "Step": step, "Label": STEP_LABELS[step], "NHits": label,
+            "Clusters": int(ok.sum()), "Bins": 0.5 * (r_edges[1:] + r_edges[:-1]),
+            "Density": h / (h.sum() * np.diff(r_edges)) if h.sum() > 0 else h,
+            "Median": float(np.median(r[ok])), "P84": float(np.percentile(r[ok], 84)),
+            "P99": float(np.percentile(r[ok], 99)), "FracAbove1p2": float(np.sum(w[ok] * (r[ok] > 1.2)) / np.sum(w[ok])),
+            "PeakMean": mu, "PeakSigma": sigma,
+        })
 json_summary["response"] = {row["Step"]: {k: row[k] for k in ["Median", "P84", "P99", "FracAbove1", "PeakMean", "PeakSigma"]}
                             for row in response_rows}
 lifetime_ratio = reco_lifetime[mask] / true_lifetime[mask]
@@ -335,7 +360,12 @@ for energy_name in args.energy:
         offset_step = final * solar["ENERGY_AMP"] + solar["INTERSECTION"]
         applied = energy[mask] - offset_step
         lower = np.abs(applied - discriminant_info["LOWER"]["OFFSET"]) < np.abs(applied - discriminant_info["UPPER"]["OFFSET"])
-        branches = {"UpperBranch": ~lower, "LowerBranch": lower}
+        # Clusters the signal/background first stage calls background-like receive no offset.
+        no_offset = np.abs(applied) < np.minimum(np.abs(applied - discriminant_info["LOWER"]["OFFSET"]),
+                                                 np.abs(applied - discriminant_info["UPPER"]["OFFSET"]))
+        branches = {"UpperBranch": ~lower & ~no_offset, "LowerBranch": lower & ~no_offset}
+        if no_offset.any():
+            branches["NoOffset"] = no_offset
         progression["Offset"] = offset_step
         labels["Offset"] = (f"+ Discriminant offset (+{-discriminant_info['UPPER']['OFFSET']:.2f} / "
                             f"+{-discriminant_info['LOWER']['OFFSET']:.2f} MeV)")
@@ -477,7 +507,8 @@ for energy_name, rows in cutflow_rows.items():
     save_df(pd.DataFrame(rows), data_path, config, name, subfolder=subfolder, filename=f"{energy_name}_Chain_Cutflow",
             rm=args.rewrite, debug=args.debug)
 for rows, filename in [(spectra_rows, "Chain_Spectra"), (endpoint_rows, "Chain_Endpoint"),
-                       (cf_rows, "Chain_Counterfactuals"), (response_rows, "Chain_Response")]:
+                       (cf_rows, "Chain_Counterfactuals"), (response_rows, "Chain_Response"),
+                       (response_nhits_rows, "Chain_Response_NHits")]:
     save_df(pd.DataFrame(rows), data_path, config, name, subfolder=subfolder, filename=filename,
             rm=args.rewrite, debug=args.debug)
 summary_dir = f"{data_path}/{config}/{name}/{subfolder}"

@@ -1153,11 +1153,11 @@ for _sl in _study_labels_to_run:
                 ("hep", "HEP", "Osc", "Mean", "signal", "Signal", "rgb(204,80,62)"),
             ]
             for bkg, oscillation, color in [
-                ("gamma", "Truth", get_background_style(str(root), "gamma").get("color", "black")),
-                ("neutron", "Truth", get_background_style(str(root), "neutron").get("color", "rgb(15,133,84)")),
-                ("radiological", "Truth", get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)")),
-                ("8B", "Osc", "rgb(225,124,5)"),
-            ]:
+                # Background samples by their analysis name (gamma_final, ...): the HEP rebin Component
+                # labels carry the full sample name, so hard-coded base names dropped every *_final sample.
+                (b, "Truth", get_background_style(str(root), b).get("color", {"gamma": "black", "neutron": "rgb(15,133,84)"}.get(b.split("_")[0], "rgb(120, 94, 240)")))
+                for b in get_background_samples(str(root), "HEP")
+            ] + [("8B", "Osc", "rgb(225,124,5)")]:
                 style = get_background_style(str(root), bkg)
                 hep_component_specs.append(
                     (bkg, style.get("label", bkg), oscillation, "Mean", "background", "Background", color)
@@ -1194,7 +1194,7 @@ for _sl in _study_labels_to_run:
                 if comp_df.empty:
                     continue
 
-                if component == "radiological":
+                if str(component).split("_")[0] == "radiological":
                     radiological_present = True
 
                 cd = _process_component_df(comp_df, component, smoothing_config, scale=scale)
@@ -1853,10 +1853,10 @@ for _sl in _study_labels_to_run:
                 rprint(f"[yellow][WARNING][/yellow] Missing fiducial scan pkl: {signal_pkl}")
                 continue
             df_list = [pd.read_pickle(signal_pkl)]
-            needed_bkg = set()
-            for an in args.fiducial_analyses:
-                needed_bkg.update(get_fiducialization_config(str(root), an.upper()).get("background_components", []))
-            for bkg_label in sorted(needed_bkg):
+            # Scan files live under the sample name (backgrounds.json, e.g. gamma_final) while their
+            # Component column holds the base label that fiducialization.json background_components
+            # selects (gamma): load by sample name, as 02_best_fiducial.py does.
+            for bkg_label in get_background_samples(str(root)):
                 bkg_pkl = f"{analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{config}/{bkg_label}/{config}_{bkg_label}_{energy}_Fiducial_Scan.pkl"
                 if os.path.exists(bkg_pkl):
                     df_list.append(pd.read_pickle(bkg_pkl))

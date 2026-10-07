@@ -91,6 +91,14 @@ def _report_once(key, message: str) -> None:
         rprint(message)
 
 
+
+def _truth_path() -> str:
+    """Background truth inputs (surface rates, momentum PDFs, KDEs): DATA_PATHS.TRUTH, so a worktree
+    can use its own regenerated files without touching the shared ones."""
+    return load_analysis_info(str(root)).get("DATA_PATHS", {}).get(
+        "TRUTH", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth"
+    )
+
 def resolve_generated_event_count(
     run: dict[str, dict],
     config_tree_weight: dict,
@@ -311,12 +319,97 @@ def compute_particle_weights(
     run, output, new_weights = normalize_true_weights(
         run, configs, params, trees, output, exposure, debug=debug
     )
+    if "Reco" in trees and "Truth" in trees:
+        run, output = assign_signal_event_weights(run, configs, output, debug=debug)
     # output += f"\t\t[cyan][INFO][/cyan] Computing reco particle weights...\n"
     # run, output = compute_reco_weights(run, configs, params, new_weights, output, debug)
 
     run = remove_branches(run, rm_branches, [], debug=debug)
     output += f"\tParticle weights computation \t-> Done!\n\n"
     return run, output, new_branches
+
+
+def assign_signal_event_weights(
+    run: dict[str, dict],
+    configs: dict[str, list[str]],
+    output: str = "",
+    debug: bool = False,
+):
+    """One candidate per signal interaction, carrying the truth weight of its event.
+
+    The Reco weights are normalised over clusters (sum over clusters = expected interactions), so a
+    neutrino event with n reconstructed clusters spreads its weight over n entries and the fragments
+    (de-excitation gammas beyond the adjacency radius, split tracks) sit at the wrong energy, while
+    events without any cluster still count. Here every signal cluster is aligned to its truth event
+    (consecutive clusters with the same Flag and Event form one event; events appear in the same
+    order in both trees), the leading cluster (largest Charge) gets the normalised Truth-tree weight
+    of its event and the other clusters get zero; the sum over reco entries keeps its previous value.
+    Backgrounds keep per-cluster weights (independent candidates; conservative).
+    Controlled by config/analysis/config.json SIGNAL_CANDIDATE: "leading_cluster" | "per_cluster".
+    """
+    if output is None:
+        output = ""
+    mode = load_analysis_info(str(root)).get("SIGNAL_CANDIDATE", "per_cluster")
+    if mode != "leading_cluster":
+        return run, output
+    weight_branches = [
+        b for b in run["Reco"] if str(b).startswith("SignalParticleWeight") and b in run["Truth"]
+    ]
+    for config in configs:
+        info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
+        for name in configs[config]:
+            if not str(name).lower().startswith("marley"):
+                continue
+            sel = lambda tree: np.where(
+                (np.asarray(run[tree]["Geometry"]) == info["GEOMETRY"])
+                & (np.asarray(run[tree]["Version"]) == info["VERSION"])
+                & (np.asarray(run[tree]["Name"]) == name)
+            )[0]
+            ridx, tidx = sel("Reco"), sel("Truth")
+            if len(ridx) == 0 or len(tidx) == 0:
+                continue
+            rf = np.asarray(run["Reco"]["Flag"])[ridx].astype(np.int64)
+            re = np.asarray(run["Reco"]["Event"])[ridx].astype(np.int64)
+            tf = np.asarray(run["Truth"]["Flag"])[tidx].astype(np.int64)
+            te = np.asarray(run["Truth"]["Event"])[tidx].astype(np.int64)
+            new_seg = np.r_[True, (rf[1:] != rf[:-1]) | (re[1:] != re[:-1])]
+            seg = np.cumsum(new_seg) - 1
+            starts = np.where(new_seg)[0]
+            # Forward alignment of reco events to truth events.
+            truth_of_seg = np.full(len(starts), -1, dtype=np.int64)
+            p = 0
+            for s, i in enumerate(starts):
+                while p < len(tf) and (tf[p] != rf[i] or te[p] != re[i]):
+                    p += 1
+                if p == len(tf):
+                    break
+                truth_of_seg[s] = p
+                p += 1
+            if np.any(truth_of_seg < 0):
+                output += (
+                    f"\t\t[yellow][WARNING][/yellow] {config}/{name}: {np.sum(truth_of_seg < 0)} of "
+                    f"{len(starts)} reco events not aligned to the Truth tree; per-cluster weights kept.\n"
+                )
+                continue
+            charge = np.asarray(run["Reco"]["Charge"])[ridx].astype(float)
+            order = np.lexsort((-charge, seg))
+            leading = np.zeros(len(ridx), dtype=bool)
+            leading[order[np.r_[True, seg[order][1:] != seg[order][:-1]]]] = True
+            truth_row = tidx[truth_of_seg[seg]]
+            for b in weight_branches:
+                w = np.where(leading, np.asarray(run["Truth"][b])[truth_row].astype(np.float64), 0.0)
+                # Keep the existing overall normalisation (sum over reco = expected interactions in the
+                # detector mass). Rescaling instead of using the Truth sum avoids counting events
+                # generated outside the active volume (VD Top production) as reconstruction losses;
+                # the genuine ~2-3 % inefficiency stays unaccounted for, as before (open item).
+                total, new_total = np.sum(np.asarray(run["Reco"][b])[ridx]), np.sum(w)
+                run["Reco"][b][ridx] = w * (total / new_total) if new_total > 0 else w
+            output += (
+                f"\t\t[cyan][INFO][/cyan] {config}/{name}: one candidate per event — {len(starts)} reco "
+                f"events of {len(tidx)} truth events ({len(ridx) / len(starts):.3f} clusters/event); "
+                f"Truth-tree event weights on the leading cluster, sum preserved.\n"
+            )
+    return run, output
 
 
 def compute_particle_surface(
@@ -750,7 +843,7 @@ def compute_true_weights(
                     alpha_truth = []
                     exposure = pickle.load(
                         open(
-                            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
+                            f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
                             "rb",
                         )
                     )
@@ -787,7 +880,7 @@ def compute_true_weights(
                     if params["PARTICLE_WEIGHTING"] == "histogram":
                         pdf_hist, pdf_bins = pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_pdf.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_pdf.pkl",
                                 "rb",
                             )
                         )
@@ -811,7 +904,7 @@ def compute_true_weights(
                         kdes = {
                             key: pickle.load(
                                 open(
-                                    f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
+                                    f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
                                     "rb",
                                 )
                             )
@@ -845,7 +938,7 @@ def compute_true_weights(
                     kdes = {
                         key: pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_{val}.pkl",
                                 "rb",
                             )
                         )
@@ -855,7 +948,7 @@ def compute_true_weights(
                     exposure[("", "truth")] = {
                         "truth": pickle.load(
                             open(
-                                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
+                                f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_exposure.pkl",
                                 "rb",
                             )
                         )
@@ -880,6 +973,35 @@ def compute_true_weights(
                     f"[red][ERROR][/red] Particle type {params['PARTICLE_TYPE']} not recognized for weight computation..."
                 )
     return run, output, exposure, new_branches
+
+
+def _generated_mean_weight(weights, momenta, name: str, config: str, surface_id: int):
+    """Mean background weight over the generated particles of one surface.
+
+    The histogram weights are c_s * h_s(p) (evaluate_background_pdf, h_s the rate per momentum bin), and the samples
+    are generated flat in momentum over GENERATED_MOMENTUM_MEV (backgrounds.json). A generated particle of momentum p
+    then carries R_s * h_s(p) / (bin width * sum(h_s)) * range / N_gen, so the normalisation divides by
+    c_s * (bin width * sum(h_s)) / range: the mean weight a flat generation would have if all of the surface rate lay
+    inside the generated range. It is not the mean over the clusters of the tree, which the detection efficiency biases
+    towards the momenta that produce clusters, and the rate outside the generated range is not reassigned to it.
+    Returns None when it cannot be evaluated (no generated range, no non-zero pdf entry).
+    """
+    from .background import get_background_config
+
+    generated = get_background_config(str(root)).get("GENERATED_MOMENTUM_MEV", {}).get(name.split("_")[0].lower())
+    if generated is None:
+        return None
+    lo, hi = float(generated[0]), float(generated[1])
+    hists, bins = pickle.load(open(f"{_truth_path()}/{config}/{config}_{name.split('_')[0]}_pdf.pkl", "rb"))
+    hist, edges = np.asarray(hists[surface_id], dtype=float), np.asarray(bins[surface_id], dtype=float)
+    if len(hist) == 0:
+        return None
+    pdf = hist[np.clip(np.digitize(momenta, edges) - 1, 0, len(hist) - 1)]
+    ok = pdf > 0
+    if not np.any(ok):
+        return None
+    scale = float(np.median(np.asarray(weights, dtype=float)[ok] / pdf[ok]))
+    return scale * float(np.sum(hist * np.diff(edges))) / (hi - lo)
 
 
 def normalize_true_weights(
@@ -1005,18 +1127,31 @@ def normalize_true_weights(
                                 this_rate_factor = float(
                                     info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
                                 )
+                                # Histogram weights are normalised over the generated particles
+                                # (_generated_mean_weight); otherwise over the clusters of this tree.
+                                this_mean_weight = (
+                                    _generated_mean_weight(
+                                        run[tree][this_weight_name][idx[0][mask]],
+                                        np.asarray(run[tree]["SignalParticleP"][idx[0][mask]], dtype=float),
+                                        name, config, surface_id,
+                                    )
+                                    if params.get("PARTICLE_WEIGHTING") == "histogram" and np.any(mask)
+                                    else None
+                                )
+                                if this_mean_weight is None and np.any(mask):
+                                    this_mean_weight = this_surface_sum / len(run[tree]["Event"][idx[0][mask]])
                                 if (
                                     this_event_count > 0
                                     and this_exposure["exposure"] > 0
                                     and this_surface_sum > 0
+                                    and this_mean_weight
                                 ):
                                     run[tree][this_weight_name][idx[0][mask]] = (
                                         this_rate_factor
                                         * this_exposure["counts"]
-                                        * len(run[tree]["Event"][idx[0][mask]])
                                         * run[tree][this_weight_name][idx[0][mask]]
                                         / this_event_count
-                                        / this_surface_sum
+                                        / this_mean_weight
                                         / this_exposure["exposure"]
                                     )
                                 else:

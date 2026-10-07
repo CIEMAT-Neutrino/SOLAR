@@ -15,7 +15,7 @@ Coverage:
   - Non-zero asymmetry → positive significance
   - Significance grows with exposure (factor)
   - Symmetric fractions (f=g=0.5) → simplifies correctly
-  - Background uncertainty propagation (Poisson + systematic)
+  - Additional background-systematic propagation without Poisson double counting
   - ErrorGaussian formula with quadrature combination
 """
 import os
@@ -45,8 +45,8 @@ def _daynight_compute(
     """Mirror of DayNight significance computation from 01_daynight.py."""
     night_fraction = 1.0 - day_fraction
 
-    night_counts = factor * (night_fraction * background + signal_night)
-    day_counts   = factor * (day_fraction   * background + signal_day)
+    night_counts = factor * night_fraction * (background + signal_night)
+    day_counts   = factor * day_fraction   * (background + signal_day)
 
     background_effective = (
         night_counts / night_fraction ** 2
@@ -62,13 +62,11 @@ def _daynight_compute(
         night_bkg = factor * night_fraction * background
         day_bkg   = factor * day_fraction   * background
         sigma_night = np.sqrt(
-            night_bkg
-            + (background_uncertainty * night_bkg) ** 2
+            (background_uncertainty * night_bkg) ** 2
             + (day_fraction_band * factor * background) ** 2
         )
         sigma_day = np.sqrt(
-            day_bkg
-            + (background_uncertainty * day_bkg) ** 2
+            (background_uncertainty * day_bkg) ** 2
             + (day_fraction_band * factor * background) ** 2
         )
         bkg_unc = np.where(
@@ -208,8 +206,9 @@ class TestBackgroundError:
                                      background_uncertainty=0.20)
         assert z_small >= z_large
 
-    def test_poisson_only_uncertainty_finite(self):
-        # day_fraction_band=0, background_uncertainty=0 → pure Poisson uncertainty
+    def test_zero_additional_uncertainty_matches_nominal(self):
+        # Poisson variance is already in background_effective, so a zero
+        # additional systematic must reproduce the nominal Gaussian result.
         s_day   = np.ones(5) * 0.5
         s_night = np.ones(5) * 1.5
         b = np.ones(5) * 5.0
@@ -217,8 +216,8 @@ class TestBackgroundError:
             s_day, s_night, b, factor=10.0, use_background_error=True,
             background_uncertainty=0.0, day_fraction_band=0.0,
         )
-        assert np.isfinite(z)
-        assert z >= 0.0
+        nominal = _daynight_compute(s_day, s_night, b, factor=10.0)
+        assert z == pytest.approx(nominal)
 
     def test_bkg_uncertainty_sigma_is_non_negative(self):
         """Verify the uncertainty array has no negative values for valid inputs."""
@@ -228,8 +227,8 @@ class TestBackgroundError:
         bkg_unc = 0.02
         night_bkg = factor * g * b
         day_bkg   = factor * f * b
-        sigma_night = np.sqrt(night_bkg + (bkg_unc * night_bkg) ** 2)
-        sigma_day   = np.sqrt(day_bkg   + (bkg_unc * day_bkg)   ** 2)
+        sigma_night = np.abs(bkg_unc * night_bkg)
+        sigma_day   = np.abs(bkg_unc * day_bkg)
         eff_unc = np.sqrt((sigma_night / g) ** 2 + (sigma_day / f) ** 2)
         assert np.all(eff_unc >= 0.0)
 

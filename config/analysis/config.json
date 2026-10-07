@@ -40,7 +40,7 @@
   },
   "ANALYSIS_UNCERTAINTIES": {
     "DAYNIGHT": {
-      "signal_uncertainty": 0.00,
+      "signal_uncertainty": 0.0,
       "background_uncertainty": 0.02
     },
     "HEP": {
@@ -120,7 +120,6 @@
   "QUALITY_CUTS": {
     "OPFLASH_PLANE": 0
   },
-
   "ADAPTIVE_REBIN": {
     "ANALYSES": {
       "HEP": {
@@ -134,5 +133,8 @@
         "report": false
       }
     }
-  }
+  },
+  "SIGNAL_CANDIDATE": "leading_cluster",
+  "_SIGNAL_CANDIDATE_comment": "leading_cluster: one candidate per signal interaction (largest-Charge cluster) carrying the Truth-tree event weight, sum preserved; per_cluster: legacy, every cluster weighted (fragments dilute the event weight). lib/weights.py assign_signal_event_weights.",
+  "SIGNAL_BACKGROUND_CLASSIFIER": true
 }

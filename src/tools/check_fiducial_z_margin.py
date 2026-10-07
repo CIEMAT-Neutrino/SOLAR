@@ -3,6 +3,7 @@ check_fiducial_z_margin.py — what does the FiducialZ margin do in the scan, an
 ======================================================================================================
 01_fiducialize.py scans FiducialZ for every folder, but lib/fiducial.py: build_fiducial_spatial_mask applies it only for
 folder == "Nominal" (Truncated and Reduced reject the Z endcaps with the SignalParticleSurface < 3 filter instead).
+Since 2026-10-06 (branch sb-threshold) the Z cut is applied in every folder, so this tool describes the earlier runs.
 This tool measures the consequence for the stored Truncated volumes (config/analysis/fiducial/truncated/BestFiducials.json):
 
   part 1  smoothed fiducial-scan significance (the metric 02_best_fiducial.py maximises, same MC gate and smoothing) at the stored

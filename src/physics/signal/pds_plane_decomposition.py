@@ -97,7 +97,7 @@ def rows_for(config, sample, analysis, d, info):
     base = np.ones(len(d["w"]), bool)
     if is_surface_background(ROOT, sample):
         base &= (d["surface"] >= 0)
-        if args.folder in ("Truncated", "Reduced"):
+        if args.folder in ("Truncated", "Reduced", "Realistic"):
             base &= d["surface"] < 3
     masks, wp = stage_masks(d, config, analysis, info)
     good_dx = np.abs(d["reco_x"] - d["truth_x"]) < args.dx_cm

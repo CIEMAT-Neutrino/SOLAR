@@ -386,19 +386,11 @@ def _get_oscillation_map_computed(
 
     latitude_deg = analysis_info.get("DUNE_LATITUDE_DEG", 44.35)
 
-    # DEPRECATED (2026-09-28): the ROOT file nadir PDF is legacy file-based data; NuFast is the
-    # standard and 01_background_template.py already uses get_nadir_pdf_nufast. Kept only for
-    # backward compatibility of the existing Sensitivity signal templates (warns when used).
-    # Use ROOT file nadir PDF for all backends to maintain backward compatibility
-    # File backend interpolates 2000-bin ROOT histogram; nufast direct computation differs
-    try:
-        nadir_pdf = get_nadir_pdf_file(nadir_centers=nadir_centers)
-    except Exception:
-        # Fallback to nufast if ROOT not available
-        if backend == "nufast":
-            nadir_pdf = get_nadir_pdf_nufast(nadir_centers, latitude_deg)
-        else:
-            nadir_pdf = get_nadir_pdf_nufast(nadir_centers, latitude_deg)
+    # Computed backends use the computed nadir exposure PDF, the same one as the background
+    # template (01_background_template.py) and the 1D DayNight/HEP/Sensitivity weights
+    # (lib/weights.py). Until 2026-10-05 this read the legacy nadir.root PDF, so the Sensitivity
+    # signal templates and the rest of the analysis used different nadir distributions.
+    nadir_pdf = get_nadir_pdf_nufast(nadir_centers, latitude_deg)
 
     result_dict = {}
     for dm2_v, sin13_v, sin12_v in zip(dm2, sin13, sin12):

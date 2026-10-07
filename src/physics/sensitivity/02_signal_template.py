@@ -101,7 +101,7 @@ parser.add_argument(
     type=str,
     help="The name of the results folder",
     default="Nominal",
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
 )
 parser.add_argument(
     "--signal_uncertainty",
@@ -219,7 +219,7 @@ parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
 parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Realistic"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
@@ -548,13 +548,7 @@ for config in configs:
         _pos_keys = get_truth_pos_keys(str(root), sample_key) if args.truth_fiducial else _DEFAULT_POS_KEYS
         
         quality_mask = (
-            (
-                (run["Reco"]["SignalParticleSurface"] >= 0)
-                & (run["Reco"]["SignalParticleSurface"] < 3)
-                if args.signal.split("_")[0] in ["gamma", "neutron"]
-                else np.ones(len(run["Reco"]["NHits"]), dtype=bool)
-            )
-            & ((run["Reco"]["SignalParticleSurface"] < 3) if (args.folder in ["Reduced", "Truncated"] and args.signal.split("_")[0] in ["gamma", "neutron"]) else np.ones(len(run["Reco"]["NHits"]), dtype=bool))
+            surface_quality_mask(str(root), args.signal, args.folder, run["Reco"]["SignalParticleSurface"])
             & (run["Reco"]["NHits"] > nhits - 1)
             & (run["Reco"]["AdjClNum"] < adjcl)
             & accepted_flash_planes(
@@ -800,6 +794,12 @@ for config in configs:
 
     # ── Phase 3: format and save per-cut figures ─────────────────────────────────
     for nhits, adjcl, ophits, h_array, fig, title in cut_data:
+        positive = np.asarray(h_array[1])[np.asarray(h_array[1]) > 0]
+        if positive.size == 0:
+            # Figure only: the template of this cut is already written and stamped above.
+            rprint(f"[yellow][WARNING][/yellow] {args.config} {args.signal} NHits{nhits} AdjCl{adjcl} OpHits{ophits}: "
+                   f"weighted signal histogram empty (sum {np.nansum(h_array[1]):.3g}); figure skipped.")
+            continue
         fig = format_coustom_plotly(
             fig,
             title=title,
@@ -811,7 +811,7 @@ for config in configs:
             coloraxis=dict(
                 colorbar=dict(title="log10(Counts)"),
                 cmin=-2,  # Global lower limit for the color axis
-                cmax=float(np.nanmax(np.log10(h_array[1][h_array[1] > 0]))),  # Global upper limit for the color axis
+                cmax=float(np.nanmax(np.log10(positive))),  # Global upper limit for the color axis
             ),
         )
         fig.update_yaxes(title="Reconstructed Neutrino Energy (MeV)", row=1, col=1)

@@ -40,7 +40,7 @@ parser.add_argument(
 parser.add_argument("--config", nargs="+", type=str, default=["hd_1x2x6_centralAPA"])
 parser.add_argument("--signal", nargs="+", type=str, default=["marley"])
 parser.add_argument(
-    "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal"]
+    "--folder", type=str, default="Nominal", choices=["Reduced", "Truncated", "Nominal", "Realistic"]
 )
 parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "HEP"),
                     help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.")
@@ -352,15 +352,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         ("hep", "HEP", "Osc", "Mean", "signal", "Signal", "rgb(204,80,62)"),
     ]
     for bkg, oscillation, color in [
-        ("gamma", "Truth", get_background_style(str(root), "gamma").get("color", "black")),
-        ("neutron", "Truth", get_background_style(str(root), "neutron").get("color", "rgb(15,133,84)")),
-        (
-            "radiological",
-            "Truth",
-            get_background_style(str(root), "radiological").get("color", "rgb(120, 94, 240)"),
-        ),
-        ("8B", "Osc", "rgb(225,124,5)"),
-    ]:
+        # Background samples by their analysis name (gamma_final, ...): the HEP rebin Component
+        # labels carry the full sample name, so hard-coded base names dropped every *_final sample.
+        (b, "Truth", get_background_style(str(root), b).get("color", {"gamma": "black", "neutron": "rgb(15,133,84)"}.get(b.split("_")[0], "rgb(120, 94, 240)")))
+        for b in get_background_samples(str(root), "HEP")
+    ] + [("8B", "Osc", "rgb(225,124,5)")]:
         style = get_background_style(str(root), bkg)
         component_specs.append(
             (bkg, style.get("label", bkg), oscillation, "Mean", "background", "Background", color)
@@ -416,7 +412,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             if comp_df.empty:
                 continue
 
-            if component == "radiological":
+            if str(component).split("_")[0] == "radiological":
                 radiological_present = True
 
             counts = _safe_array(comp_df["Counts"].values[0])

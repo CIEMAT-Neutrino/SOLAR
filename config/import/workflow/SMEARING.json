@@ -94,6 +94,7 @@
             "MatchedOpFlashTime": 0,
             "MatchedOpFlashPur": 0,
             "MatchedOpFlashPE": 0,
+            "MatchedOpFlashNHits": 0,
             "MatchedOpFlashR": 0,
             "RecoX": 1,
             "RecoY": 1,

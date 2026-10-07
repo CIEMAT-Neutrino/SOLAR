@@ -303,7 +303,7 @@ class Sample:
         quality = accepted_flash_planes(d["plane"], ROOT, True) & (d["pe"] > 0)
         if is_surface_background(ROOT, name):
             quality &= d["surface"] >= 0
-            if args.folder in ("Reduced", "Truncated"):
+            if args.folder in ("Reduced", "Truncated", "Realistic"):
                 quality &= d["surface"] < 3
         self.quality = quality
         emin = args.emin

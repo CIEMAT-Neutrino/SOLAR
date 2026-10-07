@@ -17,6 +17,62 @@ import os
 import numpy as np
 
 
+def check_signal_template_inputs(
+    template_path, root, config, name, folder, *, truth_fiducial=False,
+    fiducial_folder=None,
+) -> tuple:
+    """Reject a signal template older than inputs that change its selected events.
+
+    Sampling markers describe the oscillation calculation, but do not cover the
+    fiducial volume or signal/background classifier. Those can change while a
+    numerically valid template remains on disk. Compare the actual pkl timestamp
+    (not its marker) so a marker rewrite cannot make old counts appear current.
+    """
+    if not os.path.isfile(template_path):
+        return False, f"missing signal template {template_path}"
+    root = os.fspath(root)
+    analysis_config = os.path.join(root, "config", "analysis", "config.json")
+    fiducial_stem = "BestFiducials_fiduc_truth" if truth_fiducial else "BestFiducials"
+    fiducial_path = os.path.join(
+        root, "config", "analysis", "fiducial", (fiducial_folder or folder).lower(),
+        f"{fiducial_stem}.json",
+    )
+    dependencies = [analysis_config, fiducial_path]
+    # A branch switch or reconstruction/weighting fix changes the response even
+    # if the JSON inputs have not moved. Only existing files are included so the
+    # helper also works in small standalone validation environments.
+    source_inputs = (
+        "lib/cluster.py", "lib/weights.py", "lib/fiducial.py",
+        "src/physics/sensitivity/02_signal_template.py",
+    )
+    dependencies.extend(
+        path for relative in source_inputs
+        if os.path.isfile(path := os.path.join(root, relative))
+    )
+    if not os.path.isfile(analysis_config):
+        return False, f"missing analysis configuration {analysis_config}"
+    if not os.path.isfile(fiducial_path):
+        return False, f"missing fiducial definition {fiducial_path}"
+    with open(analysis_config) as handle:
+        classifier_enabled = json.load(handle).get("SIGNAL_BACKGROUND_CLASSIFIER", False)
+    if classifier_enabled:
+        for sample in dict.fromkeys((name, "marley_final" if name.endswith("_final") else "")):
+            if not sample:
+                continue
+            classifier_path = os.path.join(
+                root, "config", config, sample, f"{config}_calib",
+                f"{config}_signal_background.json",
+            )
+            if os.path.isfile(classifier_path):
+                dependencies.append(classifier_path)
+                break
+    template_mtime = os.path.getmtime(template_path)
+    for dependency in dependencies:
+        if os.path.getmtime(dependency) > template_mtime:
+            return False, f"{os.path.basename(dependency)} is newer than {os.path.basename(template_path)}"
+    return True, "current"
+
+
 def clean_and_validate_template(
     arr,
     label: str = "template",

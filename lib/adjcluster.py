@@ -111,13 +111,16 @@ def compute_adjcl_basics(
         run["Reco"]["MaxAdjClCharge"][idx] = np.max(
             run["Reco"]["AdjClCharge"][idx], axis=1
         )
-        run["Reco"]["MeanAdjClCharge"][idx] = np.mean(
-            run["Reco"]["AdjClCharge"][idx], axis=1
-        )
-        run["Reco"]["MeanAdjClR"][idx] = np.mean(run["Reco"]["AdjClR"][idx], axis=1)
-        run["Reco"]["MeanAdjClTime"][idx] = np.mean(
-            run["Reco"]["AdjClTime"][idx], axis=1
-        )
+        # The AdjCl vectors are zero-padded to the longest vector of the sample: average real clusters only.
+        _real = run["Reco"]["AdjClCharge"][idx] != 0
+        _nreal = np.maximum(np.sum(_real, axis=1), 1)
+        run["Reco"]["MeanAdjClCharge"][idx] = np.sum(
+            run["Reco"]["AdjClCharge"][idx], axis=1, where=_real
+        ) / _nreal
+        run["Reco"]["MeanAdjClR"][idx] = np.sum(run["Reco"]["AdjClR"][idx], axis=1, where=_real) / _nreal
+        run["Reco"]["MeanAdjClTime"][idx] = np.sum(
+            run["Reco"]["AdjClTime"][idx], axis=1, where=_real
+        ) / _nreal
 
         converted_array = reshape_array(
             run["Reco"]["Generator"][idx], len(run["Reco"]["AdjClGen"][idx][0])
@@ -151,9 +154,9 @@ def compute_adjcl_basics(
         run["Reco"]["MaxAdjClSameGenCharge"][idx] = np.max(
             run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1
         )
-        run["Reco"]["MeanAdjClSameGenCharge"][idx] = np.mean(
-            run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1
-        )
+        run["Reco"]["MeanAdjClSameGenCharge"][idx] = np.sum(
+            run["Reco"]["AdjClCharge"][idx] * gen_idx, axis=1, where=_real
+        ) / _nreal
 
     # Same-gen mask across all events: excludes same-gen clusters from ExternalBkg
     # so that background events whose Generator ∈ EXTERNAL_BACKGROUNDS don't cause

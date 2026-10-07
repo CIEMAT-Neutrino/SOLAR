@@ -10,7 +10,11 @@
         "STAGES": {
           "FIDUCIAL": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.4318
@@ -19,7 +23,11 @@
           },
           "SIGNIFICANCE": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.4318
@@ -34,7 +42,12 @@
         "STAGES": {
           "FIDUCIAL": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological", "8B"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final",
+              "8B"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.6191
@@ -43,7 +56,12 @@
           },
           "SIGNIFICANCE": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological", "8B"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final",
+              "8B"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.6191
@@ -58,7 +76,11 @@
         "STAGES": {
           "FIDUCIAL": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.5968
@@ -67,7 +89,11 @@
           },
           "SIGNIFICANCE": {
             "component_mode": "only",
-            "components": ["gamma", "neutron", "radiological"],
+            "components": [
+              "gamma_final",
+              "neutron_final",
+              "radiological_final"
+            ],
             "dimensions": {
               "1d": {
                 "sigma": 0.5968

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from lib import *
 from lib.root import Sensitivity_Fitter
 from lib.fitting import SENSITIVITY_FIT_METHODS, sensitivity_pull_chi2
-from lib.template_guards import check_template_sampling_marker
+from lib.template_guards import check_signal_template_inputs, check_template_sampling_marker
 
 parser = argparse.ArgumentParser(
     description="Cut optimisation for Sensitivity analysis. "
@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal",   type=str, default="marley")
 parser.add_argument(
-    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal"], default="Nominal"
+    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal"
 )
 parser.add_argument(
     "--energy",
@@ -120,8 +120,8 @@ parser.add_argument(
 parser.add_argument(
     "--scan_top",
     type=int,
-    default=3,
-    help="Coarse strategy: how many leading cuts to refine around each round (default 3).",
+    default=5,
+    help="Coarse strategy: how many leading cuts to refine around each round (default 5).",
 )
 parser.add_argument(
     "--scan_workers",
@@ -210,14 +210,25 @@ def _is_valid(path: str) -> bool:
 
 
 def _sampling_current(cut) -> bool:
-    """Reference templates of this cut were built with the configured P_ee sampling."""
+    """Reference templates match both oscillation sampling and event-selection inputs."""
     ok, _ = check_template_sampling_marker(
         signal_path, args.config, args.signal, cut["NHits"], cut["AdjCl"], cut["OpHits"],
         backend=args.oscillation_backend,
         nadir_oversample=int(analysis_info.get("OSC_NADIR_OVERSAMPLE", 1)),
         scopes=("scan", "grid"),
     )
-    return ok
+    if not ok:
+        return False
+    for dm2 in (solar_dm2, react_dm2):
+        current, reason = check_signal_template_inputs(
+            _pkl_path(cut["NHits"], cut["AdjCl"], cut["OpHits"], dm2),
+            root, args.config, args.signal, args.folder,
+            truth_fiducial=args.truth_fiducial,
+        )
+        if not current:
+            rprint(f"[yellow][WARNING][/yellow] Stale signal template: {reason}")
+            return False
+    return True
 
 
 # The cut list goes to 02_signal_template.py in a file, not on the command line: a full
@@ -645,13 +656,40 @@ def _scan(batch, label):
     return scored
 
 
+def _related_best_cuts():
+    """Best Day-Night and HEP cuts of this configuration (same folder, signal, energy and study).
+
+    They seed the coarse search next to the strided grid: with three refinement candidates the
+    grid alone left VD Shielded (classifier run) in a weaker region than the reference run found.
+    """
+    out = []
+    for analysis_key, stem in (("DAYNIGHT", "DayNight"), ("HEP", "HEP")):
+        path = (
+            f"{info['PATH']}/{analysis_key}/{args.folder.lower()}/{args.config}/{args.signal}/"
+            f"{args.config}_{args.signal}_highest_{stem}{_study_suffix}.pkl"
+        )
+        if not os.path.exists(path):
+            continue
+        try:
+            entry = pd.read_pickle(path)[(args.config, args.signal, args.energy)]
+            cut = {k: int(entry[k]) for k in _AXES}
+        except Exception:
+            continue
+        if _key(cut) in _available:
+            out.append(cut)
+    return out
+
+
 if args.scan_strategy == "full":
     _scan(cut_candidates, f"Full scan of {len(cut_candidates)} cut(s)")
 else:
     _stride = max(1, int(round((1.0 / max(args.scan_fraction, 1e-9)) ** (1.0 / 3.0))))
     _scan(_seed_grid(_axes, _stride, _available), f"Coarse seed scan (stride {_stride})")
+    _scan(_related_best_cuts(), "Seeds from the Day-Night and HEP best cuts")
     _offset = max(1, _stride // 2)
+    _climb = 0
     while cut_quality:
+        _best_before = max(item["Score"] for item in cut_quality)
         _top = sorted(cut_quality, key=lambda item: item["Score"], reverse=True)[: max(1, args.scan_top)]
         rprint(
             "[cyan][INFO][/cyan] Leading cuts: "
@@ -668,7 +706,12 @@ else:
                     _batch.append(_nb)
         _scan(_batch, f"Refinement at offset {_offset} around the top {len(_top)}")
         if _offset == 1:
-            break
+            # Keep climbing at offset 1 while the best score still improves, so the search
+            # does not stop with the best cut on the edge of the refined region.
+            _climb += 1
+            if not _batch or max(item["Score"] for item in cut_quality) <= _best_before or _climb >= 8:
+                break
+            continue
         _offset = max(1, _offset // 2)
     rprint(
         f"[cyan][INFO][/cyan] Coarse-to-fine scan scored {len(_scanned)} of "

@@ -1255,14 +1255,37 @@ def _sensitivity_apply_energy_scale(
     delta_e: float,
     e_centers: np.ndarray,
 ) -> np.ndarray:
-    """Shift template energy axis by fractional delta_e via linear interpolation."""
+    """Shift binned event counts along the energy axis without inventing rate.
+
+    The template stores counts per bin, not density samples at the bin centres.
+    Redistribute every source bin by its overlap with the scaled destination
+    bins so the energy-scale nuisance does not also become a rate nuisance.
+    Counts shifted outside the represented range become under/overflow.
+    """
     if delta_e == 0.0:
         return template_2d
-    query = e_centers / (1.0 + delta_e)
-    out = np.empty_like(template_2d)
-    for row in range(template_2d.shape[0]):
-        out[row] = np.interp(query, e_centers, template_2d[row], left=0.0, right=0.0)
-    return out
+    values = np.asarray(template_2d, dtype=float)
+    centers = np.asarray(e_centers, dtype=float)
+    if values.ndim != 2 or values.shape[1] != centers.size:
+        raise ValueError("template_2d must have shape (n_rows, len(e_centers))")
+    if centers.size < 2 or np.any(np.diff(centers) <= 0):
+        raise ValueError("e_centers must contain at least two strictly increasing values")
+    scale = 1.0 + float(delta_e)
+    if scale <= 0:
+        raise ValueError("energy-scale shift must satisfy 1 + delta_e > 0")
+
+    edges = np.empty(centers.size + 1, dtype=float)
+    edges[1:-1] = 0.5 * (centers[:-1] + centers[1:])
+    edges[0] = centers[0] - 0.5 * (centers[1] - centers[0])
+    edges[-1] = centers[-1] + 0.5 * (centers[-1] - centers[-2])
+    shifted_edges = scale * edges
+
+    # Matrix element [destination, source] is the retained source fraction.
+    left = np.maximum(edges[:-1, None], shifted_edges[None, :-1])
+    right = np.minimum(edges[1:, None], shifted_edges[None, 1:])
+    overlap = np.clip(right - left, 0.0, None)
+    fractions = overlap / np.diff(shifted_edges)[None, :]
+    return values @ fractions.T
 
 
 def _sensitivity_fit_with_escale(

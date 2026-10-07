@@ -99,7 +99,7 @@ parser.add_argument(
     nargs="+",
     type=str,
     default=["Truncated"],
-    choices=["Reduced", "Truncated", "Nominal"],
+    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
     help="Background folder(s) used for cut-flow stage (Stage 3).",
 )
 parser.add_argument(

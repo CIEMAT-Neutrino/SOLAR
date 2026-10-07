@@ -445,8 +445,19 @@ def save_figure(
 
     # Check type of figure to select the correct saving method
     if type(fig) == go._figure.Figure or type(fig) == plotly.graph_objs._figure.Figure:
-        fig.write_image(f"{filepath}")
-        output += f"Saved figure in: {filepath}"
+        # A failed image export (e.g. kaleido cannot scale the axes of an empty
+        # spectrum) must not abort the analysis that produced the figure.
+        # SOLAR_NO_PNG=1 skips the kaleido export: with several pipelines in parallel, kaleido's headless
+        # Chrome blocks on a file lock and the workers hang (2026-10-06).
+        if os.environ.get("SOLAR_NO_PNG") and filetype == "png":
+            rprint(output + f"SOLAR_NO_PNG set: not writing {filepath}")
+            return
+        try:
+            fig.write_image(f"{filepath}")
+            output += f"Saved figure in: {filepath}"
+        except Exception as exc:
+            rprint(f"[yellow][WARNING][/yellow] Could not export {filepath}: {type(exc).__name__}: {exc}")
+            return
 
     elif type(fig) == plt.Figure:
         fig.savefig(f"{filepath}")

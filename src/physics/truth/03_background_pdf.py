@@ -288,7 +288,10 @@ def run_truth_backend(config: str, name: str):
                 rm=args.rewrite, debug=args.plot,
             )
 
-        counts = int(np.sum(h * np.diff(bins))) if len(h) > 0 else 0
+        # h is a weighted histogram: each bin already holds events / (kT yr), not a density, so the
+        # surface rate is its plain sum. Until 2026-10-05 this multiplied by the bin width (MeV),
+        # which scaled the gamma rates by 0.26 and the neutron rates by 2.74.
+        counts = float(np.sum(h)) if len(h) > 0 else 0.0
         exposure_dict[surface_id_int] = {
             "detector_mass":      detector_mass,
             "detector_mass_unit": r"\mathrm{kT}",
@@ -382,7 +385,7 @@ def run_truth_backend(config: str, name: str):
                 mode="lines", name="Weighted by PDF", line_shape="hvh",
             ))
             fig.add_trace(go.Scatter(
-                x=bins_orig, y=h_orig,
+                x=bins_orig, y=h_orig / np.diff(bins_orig),  # per MeV, like y_check
                 mode="lines", name="Original PDF", line_shape="hvh",
             ))
             fig.update_yaxes(title_text="Events / (kT·years)")
