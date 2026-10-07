@@ -337,10 +337,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
         {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
-        # Realistic: the Truncated selection with the unscaled external gamma/neutron rates (the other folders
+        # Pessimistic: the Truncated selection with the unscaled external gamma/neutron rates (the other folders
         # divide them by background_model_factors, 10 for HD and VD). The full chain (fiducial volume,
         # cuts, sigmas) is re-optimised for this background level.
-        {"label": "bkgmodel_realistic", "folder": "Realistic", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
+        {"label": "bkgmodel_pessimistic", "folder": "Pessimistic", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
          "skip_best_sigmas": False, "skip_templates": False},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)

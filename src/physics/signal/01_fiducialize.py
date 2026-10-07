@@ -29,7 +29,7 @@ parser.add_argument(
     "--folder",
     type=str,
     help="The name of the background folder",
-    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
+    choices=["Reduced", "Truncated", "Nominal", "Pessimistic"],
     default="Nominal",
 )
 parser.add_argument(
