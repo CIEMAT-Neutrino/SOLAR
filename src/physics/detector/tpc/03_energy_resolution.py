@@ -28,10 +28,15 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--no-sb-classifier", action="store_true",
+    help="Disable the signal/background gate in SolarEnergy and write separately named outputs",
+)
 
 args = parser.parse_args()
 config = args.config
 name = args.name
+export_suffix = "_NoSBClassifier" if args.no_sb_classifier else ""
 
 configs = {config: [name]}
 
@@ -64,7 +69,7 @@ for label, params in zip(
     this_run = compute_reco_workflow(
         run,
         configs,
-        params=params,
+        params={**params, **({"SB_CLASSIFIER": False} if args.no_sb_classifier else {})},
         workflow=user_input["workflow"],
         debug=user_input["debug"],
     )
@@ -333,15 +338,16 @@ for label, params in zip(
                     xaxis_title="(Truth - MainK) / Truth",
                     yaxis_title="Counts",
                 )
-                save_figure(
-                    fig3,
-                    save_path,
-                    config,
-                    name,
-                    filename=f"{column}_{label}ResolutionFit_NHits{nhit}",
-                    rm=user_input["rewrite"],
-                    debug=user_input["debug"],
-                )
+                if not args.no_sb_classifier:
+                    save_figure(
+                        fig3,
+                        save_path,
+                        config,
+                        name,
+                        filename=f"{column}_{label}ResolutionFit_NHits{nhit}{export_suffix}",
+                        rm=user_input["rewrite"],
+                        debug=user_input["debug"],
+                    )
 
             fig1 = make_subplots(
                 rows=1,
@@ -520,15 +526,16 @@ for label, params in zip(
                 yaxis2_range=[0, 0.5],
             )
 
-            save_figure(
-                fig1,
-                save_path,
-                config,
-                name,
-                filename=f"{column}_{label}Resolution_NHits{nhit}",
-                rm=user_input["rewrite"],
-                debug=user_input["debug"],
-            )
+            if not args.no_sb_classifier:
+                save_figure(
+                    fig1,
+                    save_path,
+                    config,
+                    name,
+                    filename=f"{column}_{label}Resolution_NHits{nhit}{export_suffix}",
+                    rm=user_input["rewrite"],
+                    debug=user_input["debug"],
+                )
             # fig1.show()
 
         fig2 = format_coustom_plotly(
@@ -545,22 +552,23 @@ for label, params in zip(
             # Set axis range
             range=[0, 0.5],
         )
-        save_figure(
-            fig2,
-            save_path,
-            config,
-            name,
-            filename=f"Neutrino_Energy_{label}Resolution",
-            rm=user_input["rewrite"],
-            debug=user_input["debug"],
-        )
+        if not args.no_sb_classifier:
+            save_figure(
+                fig2,
+                save_path,
+                config,
+                name,
+                filename=f"Neutrino_Energy_{label}Resolution{export_suffix}",
+                rm=user_input["rewrite"],
+                debug=user_input["debug"],
+            )
         # fig2.show()
 save_pkl(
     RMS_data,
     data_path,
     config,
     name,
-    filename=f"Neutrino_Energy_Resolution",
+    filename=f"Neutrino_Energy_Resolution{export_suffix}",
     rm=user_input["rewrite"],
     debug=user_input["debug"],
 )
@@ -573,7 +581,7 @@ save_df(
     data_path,
     config,
     name,
-    filename=f"MainK_Resolution_GaussianFit",
+    filename=f"MainK_Resolution_GaussianFit{export_suffix}",
     rm=user_input["rewrite"],
     debug=user_input["debug"],
 )
