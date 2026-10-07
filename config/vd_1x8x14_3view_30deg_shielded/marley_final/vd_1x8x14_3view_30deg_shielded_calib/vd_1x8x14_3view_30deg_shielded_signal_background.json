@@ -1,5 +1,5 @@
 {
-  "SB_THRESHOLD": 0.4031215118267436,
+  "SB_THRESHOLD": 0.2014049304349045,
   "TARGET_COMPLETENESS": 0.95,
   "COMPLETENESS_PER_BIN": false,
   "FEATURES": [
@@ -17,8 +17,9 @@
     "MatchedOpFlashPE",
     "MatchedOpFlashNHits"
   ],
+  "EXCLUDED_FEATURES": [],
   "MIN_ENERGY": 3.0,
-  "AUC": 0.9835310125492552,
+  "AUC": 0.9246640128561774,
   "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k",
   "SIGNAL_SAMPLE": "marley_final",
   "BACKGROUND_SAMPLES": [
@@ -33,13 +34,28 @@
     "min_samples_leaf": 20
   },
   "FLAGGED_SIGNAL_LIKE": {
-    "marley_final": 0.9626944437463876,
-    "gamma_final": 0.2693607935590054,
-    "neutron_final": 0.0423773987206823,
-    "radiological_final": 0.025582208240485866,
-    "marley_final_Enu_6_8": 0.6913884007029877,
-    "marley_final_Enu_8_10": 0.8911971830985915,
-    "marley_final_Enu_10_14": 0.9756619219706468,
-    "marley_final_Enu_14_20": 0.9842777751389351
+    "marley_final": 0.9588393725529315,
+    "gamma_final": 0.710035811364715,
+    "neutron_final": 0.49822342911955037,
+    "radiological_final": 0.054930381896205735,
+    "marley_final_Enu_6_8": 0.8038487508440243,
+    "marley_final_Enu_8_10": 0.9085355210333391,
+    "marley_final_Enu_10_14": 0.9611058010440409,
+    "marley_final_Enu_14_20": 0.9745201853077432
+  },
+  "SB_GATE_ENERGY": 12.0,
+  "SB_THRESHOLD_HIGH": 0.4997522803587272,
+  "SB_THRESHOLD_HIGH_BY_COMPLETENESS": {
+    "0.80": 0.7659170800426561,
+    "0.85": 0.7062623349972124,
+    "0.90": 0.628089736615995,
+    "0.95": 0.4997522803587272
+  },
+  "TARGET_COMPLETENESS_HIGH": 0.95,
+  "FLAGGED_SIGNAL_LIKE_HIGH": {
+    "marley_final": 0.9499922721574419,
+    "gamma_final": 0.4198621664605054,
+    "neutron_final": 0.5306454235083726,
+    "radiological_final": 0.38095238095238093
   }
 }

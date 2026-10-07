@@ -149,63 +149,9 @@ $$
 
 ---
 
-### HD Central
+### Fiducial plots
 
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_DAYNIGHT_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_DAYNIGHT_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### HD Lateral
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_DAYNIGHT_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_DAYNIGHT_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_DAYNIGHT_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_DAYNIGHT_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_DAYNIGHT_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_DAYNIGHT_BestFiducial_Significance.png">
-  </div>
-</div>
+No fiducial optimization plots were found for this folder.
 
 ---
 
@@ -213,10 +159,10 @@ $$
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 20 | 100 | 320 | 0.431 | 3.856 | 2.89 |
-| HD Lateral | 80 | 140 | 200 | 0.075 | 2.546 | 2.88 |
-| VD Top | 0 | 20 | 60 | 0.032 | 0.059 | 7.17 |
-| VD Bottom Shielded | 20 | 100 | 20 | 0.018 | 0.070 | 6.35 |
+| HD Central | 160 | 160 | 240 | 3.393 | 13.449 | 1.81 |
+| HD Lateral | 20 | 80 | 320 | 0.777 | 2.254 | 3.00 |
+| VD Top | 0 | 0 | 0 | 0.621 | 0.621 | 7.84 |
+| VD Bottom Shielded | 0 | 0 | 60 | 0.013 | 0.039 | 7.39 |
 
 ---
 
@@ -232,46 +178,19 @@ No matching exposure/significance pair found for HD Central
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/day-night/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/day-night/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/day-night/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/day-night/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/day-night/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_DayNight_Significance_Exposure_30.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/day-night/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_DayNight_Exposure_Threshold_0.png">
-  </div>
-</div>
+No matching exposure/significance pair found for VD Bottom Shielded
 
 ---
 
@@ -292,121 +211,25 @@ No matching exposure/significance pair found for HD Central
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Central (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Lateral (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Top (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/day-night/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 

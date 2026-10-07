@@ -176,63 +176,9 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ---
 
-### HD Central
+### Fiducial plots
 
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### HD Lateral
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_SENSITIVITY_BestFiducial_Significance.png">
-  </div>
-</div>
+No fiducial optimization plots were found for this folder.
 
 ---
 
@@ -240,10 +186,10 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 100 | 0.549 | 5.342 | 5.02 |
-| HD Lateral | 60 | 220 | 0 | 0.164 | 2.743 | 3.56 |
-| VD Top | 0 | 0 | 20 | 1.057 | 1.072 | 7.69 |
-| VD Bottom Shielded | 0 | 0 | 20 | 1.000 | 1.001 | 7.69 |
+| HD Central | 160 | 100 | 320 | 2.204 | 10.151 | 1.70 |
+| HD Lateral | 60 | 280 | 180 | 0.603 | 1.960 | 2.23 |
+| VD Top | 0 | 0 | 20 | 0.537 | 1.255 | 7.69 |
+| VD Bottom Shielded | 0 | 260 | 520 | 0.191 | 0.239 | 2.43 |
 
 ---
 
@@ -265,16 +211,7 @@ No Solar Contour (sin12)/Reactor Contour (sin12) contour pair found for HD Later
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin12)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin12_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin12)/Reactor Contour (sin12) contour pair found for VD Top
 
 ---
 
@@ -302,16 +239,7 @@ No Solar Contour (sin13)/Reactor Contour (sin13) contour pair found for HD Later
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Solar Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_solar_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-  <div>
-<p><strong>Reactor Contour (sin13)</strong></p>
-<img src="../../output/images/analysis/sensitivity/vd_1x8x14_3view_30deg_nominal/marley/truncated/full/vd_1x8x14_3view_30deg_nominal_marley_react_sin13_df_Truncated_SolarEnergy_NHits8_AdjCl8_OpHits10_Signal4_Bkg2.png">
-  </div>
-</div>
+No Solar Contour (sin13)/Reactor Contour (sin13) contour pair found for VD Top
 
 ---
 
@@ -333,9 +261,7 @@ No significance plot found for HD Central.
 
 ### HD Lateral
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_Sensitivity_Significance_Exposure_30.png">
-</div>
+No significance plot found for HD Lateral.
 
 ---
 
@@ -357,85 +283,25 @@ No significance plot found for VD Bottom Shielded.
 
 ### HD Central Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Background_SolarEnergy_NHits1_AdjCl1_OpHits4.png">
-</div>
+No template found for HD Central
 
 ---
 
 ### HD Lateral Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_SolarEnergy_NHits1_AdjCl1_OpHits4.png">
-</div>
+No template found for HD Lateral
 
 ---
 
 ### VD Top Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_SolarEnergy_NHits1_AdjCl1_OpHits4.png">
-</div>
+No template found for VD Top
 
 ---
 
 ### VD Bottom Shielded Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Background_SolarEnergy_NHits1_AdjCl1_OpHits4.png">
-</div>
-
----
-
-## 1D Parameter Projections
-
----
-
-### HD Central
-
-No 1D projections found.
-
----
-
-### HD Lateral: Mixing Angle Projections
-
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin13_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### HD Lateral: Mass Splitting Projections
-
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-No 1D projections found.
-
----
-
-### VD Bottom Shielded
-
-No 1D projections found.
+No template found for VD Bottom Shielded
 
 ---
 
@@ -445,8 +311,9 @@ No 1D projections found.
 |---|---:|---:|---:|---:|---:|---:|
 | HD Central | - | - | - | - | - | - |
 | HD Lateral | - | - | - | - | - | 28.75 |
-| VD Top | 8 | 10 | 8 | 4 | 2 | - |
+| VD Top | - | - | - | - | - | - |
 | VD Bottom Shielded | - | - | - | - | - | - |
+| *(no parsable cut metadata found in selected filenames)* | - | - | - | - | - | - |
 
 ---
 
@@ -457,121 +324,25 @@ No 1D projections found.
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Central (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Lateral (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Top (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/sensitivity/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
@@ -586,7 +357,7 @@ No 1D projections found.
 ## Coverage and Notes
 
 - Configs with selected sin12 solar contour plots:
-- truncated: 1
+- truncated: 0
 - Cut table values are parsed from selected result filenames when available.
 - Re-run script to refresh this folder after each workflow run:
 - /usr/bin/python3 scripts/generate_sensitivity_presentation.py --folder truncated

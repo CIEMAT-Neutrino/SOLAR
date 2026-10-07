@@ -125,63 +125,9 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ---
 
-### HD Central
+### Fiducial plots
 
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### HD Lateral
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded
-
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_BestFiducial_Significance.png">
-  </div>
-</div>
+No fiducial optimization plots were found for this folder.
 
 ---
 
@@ -189,10 +135,10 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 0 | 80 | 0 | 0.494 | 2.174 | 5.85 |
-| HD Lateral | 60 | 80 | 20 | 0.167 | 1.478 | 4.74 |
-| VD Top | 0 | 0 | 40 | 1.001 | 1.045 | 7.54 |
-| VD Bottom Shielded | 0 | 0 | 20 | 1.413 | 1.413 | 7.69 |
+| HD Central | 0 | 80 | 0 | 0.669 | 1.710 | 5.85 |
+| HD Lateral | 60 | 100 | 0 | 0.229 | 0.300 | 4.69 |
+| VD Top | 0 | 200 | 260 | 0.593 | 1.256 | 4.15 |
+| VD Bottom Shielded | 0 | 0 | 20 | 0.113 | 0.115 | 7.69 |
 
 ---
 
@@ -202,77 +148,25 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
-</div>
+No matching HEP significance or exposure plot found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
-</div>
+No matching HEP significance or exposure plot found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
-</div>
+No matching HEP significance or exposure plot found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0.png">
-  </div>
-</div>
-
-<div class="comparison-note">
-  <strong>Lower subplot guide:</strong> local discovery density, estimated as z_local / DeltaE (sigma per MeV), where z_local comes from the per-bin discovery test statistic. Compare where discovery is concentrated.
-</div>
+No matching HEP significance or exposure plot found for VD Bottom Shielded
 
 ---
 
@@ -282,31 +176,13 @@ The background is **never shifted**, so the profiled nuisance $\hat{\beta}$ is u
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>Significance Reference Comparison</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous.png">
-  </div>
-  <div>
-<p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
-  </div>
-</div>
+No matching reference-comparison pair found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>Significance Reference Comparison</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomRigorous.png">
-  </div>
-  <div>
-<p><strong>Exposure Reference Comparison</strong></p>
-<img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Exposure_Comparison_Threshold_0.png">
-  </div>
-</div>
+No matching reference-comparison pair found for HD Lateral
 
 ---
 
@@ -328,97 +204,25 @@ No matching reference-comparison pair found for VD Bottom Shielded
 
 ### HD Central
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for HD Central
 
 ---
 
 ### HD Lateral
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../output/images/analysis/hep/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for HD Lateral
 
 ---
 
 ### VD Top
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for VD Top
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="three-col">
-  <div>
-  <p><strong>Gaussian</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Gaussian_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>Asimov</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Asimov_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-  <div>
-  <p><strong>ProfileLikelihood</strong></p>
-  <img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_ProfileLikelihood_AdaptiveRebin_Comparison_Threshold_0.png">
-</div>
-</div>
-
-<div class="comparison-note">
-  <strong>How to compare:</strong> Left = Asimov, middle = Gaussian, right = ProfileLikelihood.
-  Compare the exposure turn-on point near threshold 0 MeV, relative ordering between methods, and curve smoothness/step behavior after adaptive rebinning.
-</div>
+No matching adaptive-rebin comparison set found for VD Bottom Shielded
 
 ---
 
@@ -437,53 +241,9 @@ No matching reference-comparison pair found for VD Bottom Shielded
 
 ---
 
-### HD Central — best excluded (spiked)
+### Spike Debug
 
-No spiked plots found.
-
----
-
-### HD Lateral — best excluded (spiked)
-
-No spiked plots found.
-
----
-
-### VD Top — best excluded (spiked)
-
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
-
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive_highest_spiked.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded — best excluded (spiked)
-
-<div class="comparison-note">
-  <strong>Debug:</strong> Highest-significance cut <em>excluded</em> from main selection due to a spike in the pre-isotonic PL curve. Compare against the main result to assess the impact of the filter.
-</div>
-
-<div class="two-col">
-  <div>
-<p><strong>Significance</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Significance_ProfileLikelihood_Exposure_30_BottomIntuitive_highest_spiked.png">
-  </div>
-  <div>
-<p><strong>Exposure</strong></p>
-<img src="../../output/images/analysis/hep/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_SolarEnergy_HEP_Exposure_ProfileLikelihood_Threshold_0_highest_spiked.png">
-  </div>
-</div>
+No spiked-cut plots found. Run workflow with `--pkl_label highest_spiked` to generate them.
 
 ## Oscillograms
 
@@ -491,121 +251,25 @@ No spiked plots found.
 
 ### HD Central
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Central (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### HD Lateral
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### HD Lateral (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Top
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Top (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
 ### VD Bottom Shielded
 
-<div class="two-col">
-  <div>
-<p><strong>P(ν<sub>e</sub>→ν<sub>e</sub>) heatmap</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>Nadir projection</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirProjection_SolarEnergy.png">
-  </div>
-</div>
-
----
-
-### VD Bottom Shielded (cont.)
-
-<div class="two-col">
-  <div>
-<p><strong>Nadir-weighted oscillogram</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Oscillogram_NadirWeighted_SolarEnergy.png">
-  </div>
-  <div>
-<p><strong>1D fiducial signal spectrum</strong></p>
-<img src="../../output/images/analysis/hep/oscillogram/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Signal1D_SolarEnergy_FidOnly.png">
-  </div>
-</div>
+No oscillogram found.
 
 ---
 
