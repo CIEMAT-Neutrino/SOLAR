@@ -26,6 +26,11 @@ upper/lower branch classifier as before.
 - Threshold: the largest score cut that keeps --completeness of the signal clusters with
   E_nu in [6, 20] MeV (completeness favoured over purity), over the whole range or, with
   --completeness_per_bin, in every E_nu bin.
+- High-energy threshold: clusters whose SolarEnergy (with the offset) is at least --gate_energy use
+  SB_THRESHOLD_HIGH, the largest score cut that keeps --completeness_high of the signal clusters above the
+  gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
+  external gammas and neutron captures, and the CC clusters there are the most signal-like, so a stricter
+  cut costs little signal (study of 2026-10-07, _xchk/hep). --gate_energy 0 switches it off.
 """
 
 parser = argparse.ArgumentParser(description="Train the signal/background cluster classifier")
@@ -38,6 +43,10 @@ parser.add_argument("--completeness_per_bin", action=argparse.BooleanOptionalAct
 parser.add_argument("--exclude_features", nargs="*", default=[],
     help="Inputs left out of the classifier (HD Central: the matched-flash inputs, whose gamma/neutron samples lack the light overlay).")
 parser.add_argument("--min_energy", type=float, default=3.0)
+parser.add_argument("--gate_energy", type=float, default=12.0,
+    help="SolarEnergy (with the offset, MeV) above which SB_THRESHOLD_HIGH applies; 0 switches the high-energy threshold off.")
+parser.add_argument("--completeness_high", type=float, default=0.95,
+    help="Signal completeness of SB_THRESHOLD_HIGH among the CC clusters above --gate_energy.")
 parser.add_argument("--max_per_sample", type=int, default=300000)
 parser.add_argument("--rf_estimators", type=int, default=300)
 parser.add_argument("--rf_depth", type=int, default=10)
@@ -74,6 +83,7 @@ def load_sample(name):
     df["Flag"] = np.asarray(reco["Flag"]).astype(np.int64)
     df["Event"] = np.asarray(reco["Event"]).astype(np.int64)
     df["SignalParticleK"] = np.asarray(reco["SignalParticleK"], dtype=float)
+    df["SolarEnergy"] = np.asarray(reco["SolarEnergy"], dtype=float)  # classifier off: the offset version
     df["Generator"] = np.asarray(reco["Generator"])
     df["Sample"] = name
     df = df[(df["Energy"] >= args.min_energy) & (df["SignalParticleK"].abs() <= 30)]
@@ -134,6 +144,9 @@ if args.completeness_per_bin:
     threshold = min(_thr)
 else:
     threshold = float(np.quantile(data.loc[ref, "Score"], 1 - args.completeness))
+threshold_high, high = None, sig & (data["SolarEnergy"] >= args.gate_energy)
+if args.gate_energy > 0 and high.sum() >= 100:
+    threshold_high = max(threshold, float(np.quantile(data.loc[high, "Score"], 1 - args.completeness_high)))
 auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
 summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, "COMPLETENESS_PER_BIN": args.completeness_per_bin, "FEATURES": features,
            "EXCLUDED_FEATURES": list(args.exclude_features),
@@ -141,6 +154,12 @@ summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, 
            "SIGNAL_SAMPLE": args.name, "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
            "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
            "FLAGGED_SIGNAL_LIKE": {}}
+if threshold_high is not None:
+    summary.update({"SB_GATE_ENERGY": args.gate_energy, "SB_THRESHOLD_HIGH": threshold_high,
+                    "TARGET_COMPLETENESS_HIGH": args.completeness_high, "FLAGGED_SIGNAL_LIKE_HIGH": {}})
+    for name in [args.name] + args.backgrounds:
+        m = (data["Sample"] == name) & (data["SolarEnergy"] >= args.gate_energy)
+        summary["FLAGGED_SIGNAL_LIKE_HIGH"][name] = float(np.mean(data.loc[m, "Score"] >= threshold_high)) if m.sum() else None
 for name in [args.name] + args.backgrounds:
     m = data["Sample"] == name
     summary["FLAGGED_SIGNAL_LIKE"][name] = float(np.mean(data.loc[m, "Score"] >= threshold))

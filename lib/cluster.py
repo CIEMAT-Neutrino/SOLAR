@@ -37,7 +37,9 @@ def _signal_background_flags(run, config, name, idx, this_params):
     Uses the two fold models of 03b_signal_background.py for the calibration sample of `name`
     (`name` itself or _calib_fallback). A cluster in fold f = (Flag + Event) % 2 is scored by the
     model trained on the other fold, so training clusters are never scored by their own model.
-    Clusters below the training MIN_ENERGY are left signal-like. Returns None (no change) if the
+    Clusters below the training MIN_ENERGY are left signal-like. Clusters whose SolarEnergy (still with the
+    offset when this is called) is at least SB_GATE_ENERGY use SB_THRESHOLD_HIGH when the json has it.
+    Returns None (no change) if the
     classifier is switched off (config.json SIGNAL_BACKGROUND_CLASSIFIER, params SB_CLASSIFIER) or absent.
     """
     if not load_analysis_info(str(root)).get("SIGNAL_BACKGROUND_CLASSIFIER", False):
@@ -74,7 +76,11 @@ def _signal_background_flags(run, config, name, idx, this_params):
     if "SignalBackgroundScore" not in reco:
         reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
     reco["SignalBackgroundScore"][idx] = score
-    return score >= info["SB_THRESHOLD"]
+    threshold = np.full(len(score), float(info["SB_THRESHOLD"]))
+    if "SB_THRESHOLD_HIGH" in info:
+        solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
+        threshold[solar >= float(info["SB_GATE_ENERGY"])] = float(info["SB_THRESHOLD_HIGH"])
+    return score >= threshold
 
 def _adjcl_slots(run, idx):
     """Mask of the real adjacent clusters in the zero-padded AdjCl* arrays.
