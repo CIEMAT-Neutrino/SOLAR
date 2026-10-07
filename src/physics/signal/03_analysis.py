@@ -108,7 +108,7 @@ def build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, 
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
-parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal")
+parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Pessimistic"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
 parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument(
@@ -147,6 +147,9 @@ parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, defaul
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
 parser.add_argument("--minimal_cuts", action=argparse.BooleanOptionalAction, default=False, help="Scan only the minimally restrictive cut point: NHits=min, OpHits=min, AdjCl=max (i.e. NHits=1, OpHits=4, AdjCl=20). Useful for background flux plots with no selection applied.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, adds Charge>Q and sum(AdjClCharge>Q)<AdjCl cuts on top of the NHits scan. Default 0 (no charge cut).")
+parser.add_argument("--sb_completeness_high", type=float, default=None,
+    help="Study knob: signal/background classifier working point above SB_GATE_ENERGY (CC completeness, e.g. 0.90) "
+         "instead of the calibrated SB_THRESHOLD_HIGH. Needs --study_label (labeled Rebin pkls).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
     "--truth_fiducial",
@@ -189,7 +192,7 @@ parser.add_argument("--truth_purity", action=argparse.BooleanOptionalAction, def
 parser.add_argument("--truth_min_purity", type=float, default=None, help="Override truth_match_purity.min_purity (MatchedOpFlashPur threshold).")
 parser.add_argument("--truth_drift_tol", type=float, default=None, help="Override truth_match_purity.drift_tolerance_cm (|RecoX - truthX|).")
 parser.add_argument("--truth_transverse_tol", type=float, default=None, help="Override truth_match_purity.transverse_tolerance_cm (|RecoY/Z - truthY/Z|).")
-parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Realistic"],
+parser.add_argument("--fiducial_folder", type=str, default=None, choices=["Reduced", "Truncated", "Nominal", "Pessimistic"],
                     help="Read BestFiducials*.json of this folder instead of --folder (bkgmodel studies hold the Truncated volumes).")
 
 parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalAction, default=False,
@@ -280,6 +283,10 @@ workflow_params = (
     if "marley" in args.signal
     else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
 )
+if args.sb_completeness_high is not None:
+    if not args.study_label:
+        raise SystemExit("[ERROR] --sb_completeness_high is a study knob: pass --study_label so the Rebin pkls are labeled.")
+    workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
 run = compute_reco_workflow(
     run,
     configs,

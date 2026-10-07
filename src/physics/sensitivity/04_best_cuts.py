@@ -9,6 +9,7 @@ from shlex import quote
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.study import variant_labels_rebin
 from lib.root import Sensitivity_Fitter
 from lib.fitting import SENSITIVITY_FIT_METHODS, sensitivity_pull_chi2
 from lib.template_guards import check_signal_template_inputs, check_template_sampling_marker
@@ -22,7 +23,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--config", type=str, default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal",   type=str, default="marley")
 parser.add_argument(
-    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Nominal"
+    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Pessimistic"], default="Nominal"
 )
 parser.add_argument(
     "--energy",
@@ -388,6 +389,7 @@ def _mc_supported_cuts():
     # Match the labeled Rebins 01_background_template.py reads for this variant.
     _selection_changed = (
         getattr(args, "charge_threshold", 0) > 0
+        or variant_labels_rebin(getattr(args, "study_label", None))
         or args.truth_fiducial
         or not args.membrane_veto
     )

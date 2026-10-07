@@ -68,7 +68,7 @@ parser.add_argument(
     help="Sample names (signal + background). One pkl saved per name.",
 )
 parser.add_argument(
-    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Realistic"], default="Truncated"
+    "--folder", type=str, choices=["Reduced", "Truncated", "Nominal", "Pessimistic"], default="Truncated"
 )
 parser.add_argument(
     "--energy", type=str, default="SolarEnergy", help="Energy label for output naming"

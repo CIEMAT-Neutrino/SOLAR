@@ -80,7 +80,7 @@ parser.add_argument(
     "--folder",
     type=str,
     default="Truncated",
-    choices=["Reduced", "Truncated", "Nominal", "Realistic"],
+    choices=["Reduced", "Truncated", "Nominal", "Pessimistic"],
     help="Result folder containing the HEP pkl files.",
 )
 parser.add_argument(

@@ -81,7 +81,7 @@ class Sample:
         quality = accepted_flash_planes(self.d["plane"], ROOT, True) & (self.d["pe"] > 0)
         if is_surface_background(ROOT, name):
             quality &= self.d["surface"] >= 0
-            if FOLDER in ("Reduced", "Truncated", "Realistic"):
+            if FOLDER in ("Reduced", "Truncated", "Pessimistic"):
                 quality &= self.d["surface"] < 3
         self.quality = quality
         # truth position inside the active box +- MARGIN_CM, from the current geometry config (the cache's 'contained'

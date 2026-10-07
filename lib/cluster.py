@@ -39,7 +39,8 @@ def _signal_background_flags(run, config, name, idx, this_params):
     (`name` itself or _calib_fallback). A cluster in fold f = (Flag + Event) % 2 is scored by the
     model trained on the other fold, so training clusters are never scored by their own model.
     Clusters below the training MIN_ENERGY are left signal-like. Clusters whose SolarEnergy (still with the
-    offset when this is called) is at least SB_GATE_ENERGY use SB_THRESHOLD_HIGH when the json has it.
+    offset when this is called) is at least SB_GATE_ENERGY use SB_THRESHOLD_HIGH when the json has it,
+    or, with params SB_COMPLETENESS_HIGH (studies), the SB_THRESHOLD_HIGH_BY_COMPLETENESS entry of that completeness.
     Returns None (no change) if the
     classifier is switched off (config.json SIGNAL_BACKGROUND_CLASSIFIER, params SB_CLASSIFIER) or absent.
     """
@@ -79,8 +80,17 @@ def _signal_background_flags(run, config, name, idx, this_params):
     reco["SignalBackgroundScore"][idx] = score
     threshold = np.full(len(score), float(info["SB_THRESHOLD"]))
     if "SB_THRESHOLD_HIGH" in info:
+        threshold_high = float(info["SB_THRESHOLD_HIGH"])
+        completeness_high = None if this_params is None else this_params.get("SB_COMPLETENESS_HIGH")
+        if completeness_high is not None:
+            table = info.get("SB_THRESHOLD_HIGH_BY_COMPLETENESS", {})
+            key = f"{float(completeness_high):.2f}"
+            if key not in table:
+                raise KeyError(f"Signal/background classifier for {config} {name}: no high-energy threshold for completeness "
+                               f"{key} (have {sorted(table)}); rerun 03b_signal_background.py")
+            threshold_high = float(table[key])
         solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
-        threshold[solar >= float(info["SB_GATE_ENERGY"])] = float(info["SB_THRESHOLD_HIGH"])
+        threshold[solar >= float(info["SB_GATE_ENERGY"])] = threshold_high
     return score >= threshold
 
 def _adjcl_slots(run, idx):

@@ -155,6 +155,7 @@ def study_context(args, folder: Optional[str] = None, analysis: Optional[str] = 
     #                       reading that path silently inherited veto-off physics.
     has_rebin_variant = (
         (charge_threshold > 0)
+        or variant_labels_rebin(label)
         or (dm2_override is not None)
         or (exposure is not None and exposure not in _reference_exposures_for(analysis))
         or truth_fiducial
@@ -169,6 +170,13 @@ def study_context(args, folder: Optional[str] = None, analysis: Optional[str] = 
         save_subfolder=subfolder,
         ref_suffix=study_sfx if truth_fiducial else "",
     )
+
+
+def variant_labels_rebin(label: Optional[str]) -> bool:
+    """True for a registry variant whose extra flags change the Rebin contents (labeled_rebin)."""
+    if not label:
+        return False
+    return any(v.get("label") == label and v.get("labeled_rebin", False) for vs in STUDY_VARIANTS.values() for v in vs)
 
 
 def study_variant_extra(label: Optional[str]) -> List[str]:
@@ -209,6 +217,7 @@ class StudyVariant(TypedDict):
     skip_templates:       NotRequired[bool]            # pass --skip-templates (reuse existing template pkls)
     excluded_configs:     NotRequired[List[str]]       # configs this variant does not run for
     extra:                NotRequired[List[str]]       # verbatim flags appended last
+    labeled_rebin:        NotRequired[bool]            # the variant changes the Rebin contents through its extra flags
 
 
 # ---------------------------------------------------------------------------
@@ -328,10 +337,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
         {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
-        # Realistic: the Truncated selection with the unscaled external gamma/neutron rates (the other folders
+        # Pessimistic: the Truncated selection with the unscaled external gamma/neutron rates (the other folders
         # divide them by background_model_factors, 10 for HD and VD). The full chain (fiducial volume,
         # cuts, sigmas) is re-optimised for this background level.
-        {"label": "bkgmodel_realistic", "folder": "Realistic", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
+        {"label": "bkgmodel_pessimistic", "folder": "Pessimistic", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
          "skip_best_sigmas": False, "skip_templates": False},
     ],
     # 9.1.3 — oscillation best-fit point: solar (Δm²₂₁=6e-5) vs reactor (Δm²₂₁=7.54e-5)
@@ -342,6 +351,15 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # Sensitivity stage is skipped for both variants: the Score is invariant to Δm²₂₁ because
     # the discrimination is always computed between solar and reactor dm² templates regardless
     # of which point the signal MC was simulated at (Score(oscpoint_reactor) = Score(default)).
+    # S/B classifier working point above the 12 MeV gate: 90% instead of the calibrated 95% CC completeness
+    # (user, 2026-10-07: a study for the VD Shielded HEP analysis only). Fiducial volume and cuts held at
+    # the nominal Truncated ones; only the Rebin pkls (labeled) and the HEP significance are rebuilt.
+    "sbhep": [
+        {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
+         "analysis_override": ["HEP"], "labeled_rebin": True,
+         "excluded_configs": ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal"],
+         "extra": ["--sb_completeness_high", "0.90"]},
+    ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},

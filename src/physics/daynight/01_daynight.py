@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.study import variant_labels_rebin
 
 
 parser = argparse.ArgumentParser(
@@ -240,6 +241,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # 01_background_template.py / 04_best_cuts.py. dm2/unc variants leave backgrounds unchanged.
     _bkg_selection_changed = (
         getattr(args, "charge_threshold", 0) > 0
+        or variant_labels_rebin(getattr(args, "study_label", None))
         or getattr(args, "truth_fiducial", False)
         or not getattr(args, "membrane_veto", True)
     )
