@@ -77,6 +77,9 @@ parser.add_argument("--bin_width", type=float, default=1.0, help="Histogram bin 
 parser.add_argument("--exposure", type=float, default=None,
                     help="Livetime (years) of the cutflow-format pkl counts; default EVALUATION_EXPOSURE_YEARS DEFAULT (20 yr)")
 parser.add_argument("--max_energy", type=float, default=30.0, help="Histogram upper edge (MeV)")
+parser.add_argument("--center_bins", action=argparse.BooleanOptionalAction, default=False,
+                    help="Centre the histogram bins on multiples of --bin_width (edges at k*w - w/2) "
+                         "instead of starting the edges at 0")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 
@@ -219,7 +222,8 @@ correct_flash = np.asarray(reco["MatchedOpFlashCorrectly"])[mask] == 1
 FLASH_CLASSES = {"NoFlash": no_flash, "WrongFlash": ~no_flash & ~correct_flash, "CorrectFlash": ~no_flash & correct_flash}
 FLASH_LABELS = {"NoFlash": "No flash (edge default)", "WrongFlash": "Wrong flash", "CorrectFlash": "Correct flash"}
 
-edges = np.arange(0, args.max_energy + args.bin_width / 2, args.bin_width)
+edges = (np.arange(-args.bin_width / 2, args.max_energy + args.bin_width, args.bin_width) if args.center_bins
+         else np.arange(0, args.max_energy + args.bin_width / 2, args.bin_width))
 centers = 0.5 * (edges[1:] + edges[:-1])
 
 
