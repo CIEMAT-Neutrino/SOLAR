@@ -83,6 +83,7 @@ from typing import List, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from lib import *
+from lib.study import variant_labels_rebin
 
 
 def warn_sensitivity_state(config: str, folder: str, name: str) -> None:
@@ -409,6 +410,8 @@ parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the
 parser.add_argument("--parallel_samples", type=int, default=1,
     help="Run the per-sample steps (01_fiducialize, 03_analysis cut scan and best-cuts pass, 04_weighted) for this many samples at once. Default 1 (sequential).")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC) passed to 03_analysis.py. Default 0 (no charge cut).")
+parser.add_argument("--sb_completeness_high", type=float, default=None,
+    help="Study knob passed to 03_analysis.py: S/B classifier working point above the gate energy (see lib/study.py sb_hep90).")
 parser.add_argument(
     "--fiducial_mc_threshold",
     type=float,
@@ -915,6 +918,10 @@ def charge_scan_args_for() -> List[str]:
     return []
 
 
+def sb_args_for() -> List[str]:
+    return [] if args.sb_completeness_high is None else ["--sb_completeness_high", str(args.sb_completeness_high)]
+
+
 def charge_threshold_only_args_for() -> List[str]:
     if args.charge_threshold > 0:
         return ["--charge_threshold", str(args.charge_threshold)]
@@ -1192,6 +1199,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             + energy_args
             + cut_args
             + charge_scan_args_for()
+            + sb_args_for()
             + oscillation_args_for()
             + study_label_args_for()
             + truth_fiducial_args_for()
@@ -1210,6 +1218,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
             + energy_args
             + cut_args
             + charge_scan_args_for()
+            + sb_args_for()
             + oscillation_args_for()
             + study_label_args_for()
             + truth_fiducial_args_for()
@@ -1368,7 +1377,8 @@ def run_hep_stage(config: str, folder: str, name: str):
 
         # Labeled Rebin pkls (no fallback to nominal) whenever the variant changes the event
         # selection — the same rule 01_hep.py applies, so the threshold is chosen on the data it fits.
-        _selection_changed = args.charge_threshold > 0 or args.truth_fiducial or not args.membrane_veto
+        _selection_changed = (args.charge_threshold > 0 or args.truth_fiducial or not args.membrane_veto
+                              or variant_labels_rebin(args.study_label))
         _rebin_study_label = args.study_label if _selection_changed else None
         for energy in energies:
             _rebin_suffix = f"_{_rebin_study_label}" if _rebin_study_label else ""
@@ -1736,6 +1746,7 @@ for config, folder in product(args.config, args.folder):
             + energy_args
             + oscillation_args_for()
             + membrane_veto_args_for()
+            + sb_args_for()
             + study_label_args_for()
             + truth_fiducial_args_for()
             + truth_purity_args_for()

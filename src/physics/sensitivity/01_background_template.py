@@ -14,6 +14,7 @@ for _noisy in ("choreographer", "kaleido"):
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.study import variant_labels_rebin
 
 
 TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
@@ -375,6 +376,7 @@ background_samples = []
 # lifting the membrane veto (which admits VD plane 1-4 optical matches for every sample).
 _bkg_selection_changed = (
     getattr(args, "charge_threshold", 0) > 0
+    or variant_labels_rebin(getattr(args, "study_label", None))
     or args.truth_fiducial
     or not args.membrane_veto
 )

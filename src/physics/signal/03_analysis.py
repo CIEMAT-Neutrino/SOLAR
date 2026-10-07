@@ -147,6 +147,9 @@ parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, defaul
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
 parser.add_argument("--minimal_cuts", action=argparse.BooleanOptionalAction, default=False, help="Scan only the minimally restrictive cut point: NHits=min, OpHits=min, AdjCl=max (i.e. NHits=1, OpHits=4, AdjCl=20). Useful for background flux plots with no selection applied.")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC). When >0, adds Charge>Q and sum(AdjClCharge>Q)<AdjCl cuts on top of the NHits scan. Default 0 (no charge cut).")
+parser.add_argument("--sb_completeness_high", type=float, default=None,
+    help="Study knob: signal/background classifier working point above SB_GATE_ENERGY (CC completeness, e.g. 0.90) "
+         "instead of the calibrated SB_THRESHOLD_HIGH. Needs --study_label (labeled Rebin pkls).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
     "--truth_fiducial",
@@ -280,6 +283,10 @@ workflow_params = (
     if "marley" in args.signal
     else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
 )
+if args.sb_completeness_high is not None:
+    if not args.study_label:
+        raise SystemExit("[ERROR] --sb_completeness_high is a study knob: pass --study_label so the Rebin pkls are labeled.")
+    workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
 run = compute_reco_workflow(
     run,
     configs,
