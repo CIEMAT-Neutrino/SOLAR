@@ -26,6 +26,11 @@ upper/lower branch classifier as before.
 - Threshold: the largest score cut that keeps --completeness of the signal clusters with
   E_nu in [6, 20] MeV (completeness favoured over purity), over the whole range or, with
   --completeness_per_bin, in every E_nu bin.
+- HEP working point: the HEP analysis reads SolarEnergyHEP, where clusters whose SolarEnergy (with the offset) is at
+  least --hep_gate_energy use SB_THRESHOLD_HEP (--hep_completeness of the CC clusters above that gate). Above the gate
+  the external gammas carry most of the HEP background; tuned on fold-split HEP significance (2026-10-08, _xchk/heptune):
+  HD Lateral +14%, VD Shielded +26-30%, HD Central and VD Top unchanged within the MC noise. DayNight and Sensitivity
+  keep SolarEnergy.
 - High-energy threshold: clusters whose SolarEnergy (with the offset) is at least --gate_energy use
   SB_THRESHOLD_HIGH, the largest score cut that keeps --completeness_high of the signal clusters above the
   gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
@@ -45,6 +50,10 @@ parser.add_argument("--exclude_features", nargs="*", default=[],
 parser.add_argument("--min_energy", type=float, default=3.0)
 parser.add_argument("--gate_energy", type=float, default=12.0,
     help="SolarEnergy (with the offset, MeV) above which SB_THRESHOLD_HIGH applies; 0 switches the high-energy threshold off.")
+parser.add_argument("--hep_gate_energy", type=float, default=14.0,
+    help="SolarEnergy (with the offset, MeV) above which the HEP analysis uses SB_THRESHOLD_HEP; 0 switches it off.")
+parser.add_argument("--hep_completeness", type=float, default=0.80,
+    help="CC completeness above --hep_gate_energy of SB_THRESHOLD_HEP (HEP-only energy, SolarEnergyHEP).")
 parser.add_argument("--completeness_high", type=float, default=0.95,
     help="Signal completeness of SB_THRESHOLD_HIGH among the CC clusters above --gate_energy.")
 parser.add_argument("--max_per_sample", type=int, default=300000)
@@ -151,6 +160,9 @@ if args.gate_energy > 0 and high.sum() >= 100:
     # Other working points, for the studies (03_analysis.py --sb_completeness_high).
     for c in sorted({0.80, 0.85, 0.90, 0.95, args.completeness_high}):
         thresholds_high[f"{c:.2f}"] = max(threshold, float(np.quantile(data.loc[high, "Score"], 1 - c)))
+threshold_hep, hep_region = None, sig & (data["SolarEnergy"] >= args.hep_gate_energy)
+if args.hep_gate_energy > 0 and hep_region.sum() >= 100:
+    threshold_hep = max(threshold, float(np.quantile(data.loc[hep_region, "Score"], 1 - args.hep_completeness)))
 auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
 summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, "COMPLETENESS_PER_BIN": args.completeness_per_bin, "FEATURES": features,
            "EXCLUDED_FEATURES": list(args.exclude_features),
@@ -158,6 +170,12 @@ summary = {"SB_THRESHOLD": threshold, "TARGET_COMPLETENESS": args.completeness, 
            "SIGNAL_SAMPLE": args.name, "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
            "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
            "FLAGGED_SIGNAL_LIKE": {}}
+if threshold_hep is not None:
+    summary.update({"SB_HEP_GATE_ENERGY": args.hep_gate_energy, "SB_THRESHOLD_HEP": threshold_hep,
+                    "TARGET_COMPLETENESS_HEP": args.hep_completeness, "FLAGGED_SIGNAL_LIKE_HEP": {}})
+    for name in [args.name] + args.backgrounds:
+        m = (data["Sample"] == name) & (data["SolarEnergy"] >= args.hep_gate_energy)
+        summary["FLAGGED_SIGNAL_LIKE_HEP"][name] = float(np.mean(data.loc[m, "Score"] >= threshold_hep)) if m.sum() else None
 if threshold_high is not None:
     summary.update({"SB_GATE_ENERGY": args.gate_energy, "SB_THRESHOLD_HIGH": threshold_high,
                     "SB_THRESHOLD_HIGH_BY_COMPLETENESS": thresholds_high,

@@ -33,6 +33,9 @@ def _calib_fallback(name: str, default: str) -> str:
 
 
 
+_SB_INFO_CACHE = {}  # (config, name) -> classifier json of the last _signal_background_flags call
+
+
 def _signal_background_flags(run, config, name, idx, this_params):
     """First SolarEnergy stage: True for clusters the signal/background classifier calls signal-like.
 
@@ -79,6 +82,7 @@ def _signal_background_flags(run, config, name, idx, this_params):
     if "SignalBackgroundScore" not in reco:
         reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
     reco["SignalBackgroundScore"][idx] = score
+    _SB_INFO_CACHE[(config, name)] = info
     threshold = np.full(len(score), float(info["SB_THRESHOLD"]))
     if "SB_THRESHOLD_HIGH" in info:
         threshold_high = float(info["SB_THRESHOLD_HIGH"])
@@ -754,6 +758,18 @@ def compute_energy_calibration(
                 run["Reco"]["SolarEnergyOffset"][rows] = run["Reco"]["SolarEnergy"][rows]
                 run["Reco"]["SolarEnergyNoOffset"][rows] = no_offset
                 run["Reco"]["SolarEnergy"][rows[~signal_like]] = no_offset[~signal_like]
+                # HEP-only energy: above SB_HEP_GATE_ENERGY the HEP working point SB_THRESHOLD_HEP replaces the
+                # default threshold (03b_signal_background.py); read by 03_analysis.py for the HEP analysis only.
+                sb_info = _SB_INFO_CACHE.get((config, name), {})
+                if "SolarEnergyHEP" not in run["Reco"]:
+                    run["Reco"]["SolarEnergyHEP"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
+                hep_energy = np.array(run["Reco"]["SolarEnergy"][rows], dtype=float, copy=True)
+                if "SB_THRESHOLD_HEP" in sb_info:
+                    offset_e = np.asarray(run["Reco"]["SolarEnergyOffset"][rows], dtype=float)
+                    score = np.asarray(run["Reco"]["SignalBackgroundScore"][rows], dtype=float)
+                    hep_bkg = (offset_e >= float(sb_info["SB_HEP_GATE_ENERGY"])) & (score < float(sb_info["SB_THRESHOLD_HEP"]))
+                    hep_energy[hep_bkg] = no_offset[hep_bkg]
+                run["Reco"]["SolarEnergyHEP"][rows] = hep_energy
                 output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)

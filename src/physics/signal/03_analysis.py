@@ -342,13 +342,21 @@ for config in configs:
         # Truth keys are per-sample: radiological has no valid signal particle and
         # must fiducialise on Main* instead of SignalParticle*.
         _pos_keys = get_truth_pos_keys(str(root), name) if args.truth_fiducial else _DEFAULT_POS_KEYS
+        # The HEP analysis reads the HEP-only energy (lib/cluster SolarEnergyHEP: the S/B classifier at its HEP
+        # working point) when it exists; outputs keep the SolarEnergy label, so every later stage is unchanged.
+        _energy_key = {
+            _an: ("SolarEnergyHEP" if (_an == "HEP" and energy == "SolarEnergy" and "SolarEnergyHEP" in run["Reco"]) else energy)
+            for _an in args.analysis
+        }
+        if any(v != energy for v in _energy_key.values()):
+            rprint(f"[cyan][INFO][/cyan] {name}: HEP analysis uses SolarEnergyHEP")
         _spatial_masks = {}
         for _an in args.analysis:
             _fid = fiducials_by_analysis[_an]
             _bfid = band_fiducials_by_analysis[_an]
             if _bfid and energy:
                 _spatial_masks[_an] = np.asarray(build_energy_band_spatial_mask(
-                    run, config, detector_x, detector_y, info, args.folder, _fid, _bfid, energy,
+                    run, config, detector_x, detector_y, info, args.folder, _fid, _bfid, _energy_key[_an],
                     pos_keys=_pos_keys,
                 ), dtype=bool)
             else:
@@ -506,7 +514,7 @@ for config in configs:
                 cache_key = (analysis, this_nhit, this_ophit, this_adjcl)
                 if cache_key not in analysis_cache:
                     mask = _quality_mask & _spatial_masks[analysis]
-                    sel_reco = _reco_energy_arr[mask]
+                    sel_reco = np.asarray(run["Reco"][_energy_key[analysis]])[mask]
                     sel_true = _true_energy_arr[mask]
                     # Pre-compute bin indices once; reuse with bincount for all subsequent
                     # histogram calls — avoids repeated bin-search inside the osc/weight loop.
@@ -629,7 +637,7 @@ for config in configs:
                     if args.export_raw:
                         save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
                         save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][_energy_key[analysis]][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
                         save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
 
                     cut_impact = build_cut_impact(run, args, config, info, fiducial, detector_x, detector_y, this_nhit, this_ophit, this_adjcl, name, pos_keys=_pos_keys)
@@ -645,7 +653,7 @@ for config in configs:
                         analysis_key = analysis.upper()
                         save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
                         save_pkl(run["Reco"]["SignalParticleK"][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisEnergy_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
-                        save_pkl(run["Reco"][energy][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
+                        save_pkl(run["Reco"][_energy_key[analysis]][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisData_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
                         save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
 
         if _prev_cut is not None:
