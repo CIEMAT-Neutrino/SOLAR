@@ -56,7 +56,7 @@ def check_signal_template_inputs(
     with open(analysis_config) as handle:
         classifier_enabled = json.load(handle).get("SIGNAL_BACKGROUND_CLASSIFIER", False)
     if classifier_enabled:
-        for sample in dict.fromkeys((name, "marley_final" if name.endswith("_final") else "")):
+        for sample in dict.fromkeys((name, "marley_final" if name.endswith(("_final", "_test")) else "")):
             if not sample:
                 continue
             classifier_path = os.path.join(

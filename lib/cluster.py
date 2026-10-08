@@ -25,9 +25,10 @@ def _calib_fallback(name: str, default: str) -> str:
     Samples of the final-defaults production (gamma_final, neutron_final, radiological_final, ...)
     share the reconstruction configuration of marley_final, so their charge correction, cluster
     calibration, discriminant model and energy calibration must come from marley_final, not from
-    the legacy marley_official default.
+    the legacy marley_official default. The *_test samples (e.g. the combined PIC HD Central gamma_test /
+    neutron_test) come from the same chain and use it too.
     """
-    return "marley_final" if str(name).endswith("_final") and str(name) != "marley_final" else default
+    return "marley_final" if str(name).endswith(("_final", "_test")) and str(name) != "marley_final" else default
 
 
 
