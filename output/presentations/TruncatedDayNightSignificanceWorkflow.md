@@ -162,7 +162,7 @@ No fiducial optimization plots were found for this folder.
 | HD Central | 160 | 160 | 240 | 3.393 | 13.449 | 1.81 |
 | HD Lateral | 20 | 80 | 320 | 0.777 | 2.254 | 3.00 |
 | VD Top | 0 | 0 | 0 | 0.621 | 0.621 | 7.84 |
-| VD Bottom Shielded | 0 | 0 | 60 | 0.013 | 0.039 | 7.39 |
+| VD Bottom Shielded | 0 | 20 | 0 | 2.664 | 2.725 | 7.60 |
 
 ---
 
