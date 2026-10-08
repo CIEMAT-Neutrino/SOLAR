@@ -414,7 +414,7 @@ configs = {args.config: [args.signal]}
 
 for path in [save_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
-        os.makedirs(f"{path}/{args.folder.lower()}")
+        os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
 run, output = load_multi(
     configs,

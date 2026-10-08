@@ -354,7 +354,7 @@ def _project_1d_to_2d(hist_1d, oscillation_df, nadir_pdf=None):
 
 for path in [save_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
-        os.makedirs(f"{path}/{args.folder.lower()}")
+        os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
 plot_df = pd.DataFrame()
 oscillation_df = pd.DataFrame()

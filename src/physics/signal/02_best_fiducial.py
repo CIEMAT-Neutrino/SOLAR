@@ -298,7 +298,7 @@ configs = {config: [name]}
 
 for path in [save_path, data_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
-        os.makedirs(f"{path}/{args.folder.lower()}")
+        os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
 _best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
 filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"

@@ -215,7 +215,7 @@ configs = {config: [name]}
 
 for path in [save_path, data_path, export_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
-        os.makedirs(f"{path}/{args.folder.lower()}")
+        os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
 _log_dir  = f"{root}/output/logs/signal"
 os.makedirs(_log_dir, exist_ok=True)
