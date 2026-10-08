@@ -70,11 +70,11 @@ for feature in features:
     unmatched = feature.startswith("MatchedOpFlash") and np.any(pooled < 0)
     matched = pooled[pooled >= 0] if unmatched else pooled
     integer = np.allclose(matched, np.round(matched))
-    # Range: widest central 99% over the samples (not of the pooled sample, whose upper percentile cuts
+    # Range: widest central 99.8% over the samples (not of the pooled sample, whose upper percentile cuts
     # into the CC tail and piles it into the overflow bin); values outside go to the edge bins.
     per_sample = [d[feature].to_numpy() for d in samples.values()]
     per_sample = [v[v >= 0] if unmatched else v for v in per_sample]
-    limits = np.array([np.percentile(v, [0.5, 99.5]) for v in per_sample if len(v)])
+    limits = np.array([np.percentile(v, [0.1, 99.9]) for v in per_sample if len(v)])
     lo, hi = limits[:, 0].min(), limits[:, 1].max()
     if integer:
         edges = np.arange(np.floor(lo) - 0.5, np.ceil(hi) + 1.5, 1.0)
