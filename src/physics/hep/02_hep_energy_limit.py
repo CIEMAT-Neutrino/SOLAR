@@ -21,15 +21,19 @@ N'/N with N' ~ Poisson(N), N = (Counts / Error)^2 the effective number of simula
 in the Rebin pkls): a bin of 400 marley events carries the hep weight of only one or two of them when they lie
 above the hep endpoint. Components are drawn independently. The band is the 16-84% interval of the bootstrap.
 
-Unsimulated background: a bin with hep signal but no simulated external background (gamma, neutron) has an
-expectation set to zero only because the sample has no event there. Its plausible range is 0 to the 68% Poisson upper
-limit for zero observed events, 1.14 times the mean weight of one simulated event of each external sample at this
-cut. Z_floor is the significance with that upper limit put in every such bin of the window; the lower edge of the
-band is the 16% point of the bootstrap of Z_floor, the upper edge the 84% point of the nominal bootstrap.
+Background endpoint: the external gammas (generated below 14 MeV) and the neutron-capture gammas have a true
+endpoint; they reach the hep window only through the energy response. Where the analysis selection leaves a bin of
+an external sample empty, its expectation is taken from the tail of the same sample at the loosest cut of the scan
+(same fiducial volume and quality selection, far more simulated events): an exponential fit of that tail, scaled to
+the analysis cut by the ratio of the two spectra where both are populated. Above the true endpoint this tail falls
+steeply and the bins stay background free; below it the extrapolation fills the bins the analysis sample cannot
+populate. The 8B solar background (same marley events as the signal, reweighted) is part of the background in every
+bin; its own endpoint (16.5 MeV in neutrino energy) makes it negligible in the highest bins.
+The lower edge of the band is the 16% point of the bootstrap with the extrapolated tails, its slope moved one
+standard deviation towards a harder tail; the upper edge is the 84% point of the nominal bootstrap.
 
-The recommended upper edge is the largest E_max whose relative uncertainty, (median - lower edge) / median, stays at
-or below --max_relative_error: beyond it the significance rests on bins whose background the simulation cannot
-estimate.
+The recommended upper edge is the largest E_max whose relative uncertainty, (nominal - lower edge) / nominal, stays at
+or below --max_relative_error.
 """
 
 parser = argparse.ArgumentParser(description="HEP significance versus the upper edge of the energy window")
@@ -95,13 +99,32 @@ for config in args.config:
         if c is not None:
             bkg_counts.append((bkg, c, mc, neff))
     mc_total = hep_mc + sum(x[2] for x in bkg_counts)  # 8B shares the marley MC, as in 01_hep.py
-    # one-event background floor for bins without simulated external background
-    ext = [x for x in bkg_counts if x[0].split("_")[0] in ("gamma", "neutron")]  # external samples
-    # "no simulated background" = zero external counts: 03_analysis.py zeroes the bins below its MC filter but keeps MCCounts
-    ext_counts = sum(x[1] for x in ext) if ext else np.zeros_like(hep_mc)
-    one_event = sum(float(np.sum(x[1][x[2] > 0]) / max(np.sum(x[2][x[2] > 0]), 1.0)) for x in ext)
-    # below 1% of one simulated event the bin is empty (weights of 1e-11 come from spectral reweighting, not events)
-    floor = np.where((ext_counts < 0.01 * one_event) & (edges[:-1] >= args.threshold), 1.14 * one_event, 0.0)
+    # external tails extrapolated from the loosest cut of the scan (see the module docstring)
+    tail = np.zeros_like(hep); tail_hard = np.zeros_like(hep); tail_info = {}
+    for name, c, mc, _ in bkg_counts:
+        if name.split("_")[0] not in ("gamma", "neutron"):
+            continue
+        df = pd.read_pickle(f"{pnfs}/background/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{args.energy}_Rebin.pkl")
+        df = df[(df["Component"] == name) & (df["Oscillation"] == "Truth") & (df["Mean"] == "Mean")]
+        loose = df[(df["NHits"] == df["NHits"].min()) & (df["OpHits"] == df["OpHits"].min()) & (df["AdjCl"] == df["AdjCl"].max())].iloc[0]
+        lc, lmc = np.asarray(loose["Counts"], float), np.asarray(loose["MCCounts"], float)
+        centers = 0.5 * (edges[:-1] + edges[1:])
+        last = int(np.max(np.where(lmc > 0)[0])) if np.any(lmc > 0) else 0
+        fit = (lmc >= 3) & (centers >= args.threshold - 4) & (np.arange(len(lc)) <= last) & (lc > 0)
+        if fit.sum() < 3:
+            continue
+        (slope, icpt), cov = np.polyfit(centers[fit], np.log(lc[fit]), 1, w=np.sqrt(lmc[fit]), cov=True)
+        both = (mc >= 3) & (lmc >= 3) & (c > 0)
+        k = float(c[both].sum() / lc[both].sum()) if both.any() else float(c.sum() / max(lc[c > 0].sum(), 1e-30))
+        one_event = float(c[mc > 0].sum() / max(mc[mc > 0].sum(), 1.0))
+        empty = (c < 0.01 * one_event) & (edges[:-1] >= args.threshold)
+        model = k * np.exp(icpt + slope * centers)
+        x0 = float(centers[fit].mean())  # harder tail: slope +1 sigma, pivoting at the centre of the fitted range
+        model_hard = k * np.exp(icpt + slope * x0 + (slope + np.sqrt(cov[0, 0])) * (centers - x0))
+        tail += np.where(empty, model, 0.0); tail_hard += np.where(empty, model_hard, 0.0)
+        tail_info[name] = (slope, np.sqrt(cov[0, 0]), centers[last], k)
+    for name, (sl, esl, end, k) in tail_info.items():
+        rprint(f"   {config} {name}: loosest-cut tail slope {sl:.2f} +- {esl:.2f} /MeV, last populated bin {end:.1f} MeV, analysis/loose ratio {k:.3g}")
 
     def spectra(scale=None):
         s = factor * hep * (1 if scale is None else scale["hep"])
@@ -112,7 +135,7 @@ for config in args.config:
 
     s0, b0 = spectra()
     nominal = np.array([significance(s0, b0, mc_total, e) for e in emax_grid])
-    floored = np.array([significance(s0, b0 + factor * floor, mc_total, e) for e in emax_grid])
+    floored = np.array([significance(s0, b0 + factor * tail, mc_total, e) for e in emax_grid])
     boot = np.zeros((args.bootstrap, len(emax_grid))); boot_f = np.zeros_like(boot)
     for k in range(args.bootstrap):
         draw = lambda n: np.divide(rng.poisson(n), n, out=np.zeros_like(n), where=n > 0)
@@ -121,24 +144,25 @@ for config in args.config:
             scale[name] = draw(neff)
         s, b = spectra(scale)
         boot[k] = [significance(s, b, mc_total, e) for e in emax_grid]
-        boot_f[k] = [significance(s, b + factor * floor, mc_total, e) for e in emax_grid]
+        boot_f[k] = [significance(s, b + factor * tail_hard, mc_total, e) for e in emax_grid]
     p16, p50, p84 = np.percentile(boot, [16, 50, 84], axis=0)
     low = np.percentile(boot_f, 16, axis=0)
     rel = np.divide(nominal - low, nominal, out=np.full_like(nominal, np.inf), where=nominal > 0)
     ok = np.where(rel <= args.max_relative_error)[0]
     chosen = float(emax_grid[ok.max()]) if ok.size else float("nan")
+    b8_window = np.array([float(factor * b8[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
     hep_mc_above = np.array([float(hep_neff[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
     rprint(f"\n## {config} ({args.signal}, cut {cut}, {exposure:g} yr): recommended E_max {chosen:g} MeV (relative error <= {args.max_relative_error:g})")
-    for e, z, l_, c, f_, r_, n in zip(emax_grid, nominal, low, p84, floored, rel, hep_mc_above):
-        rprint(f"   E_max {e:4.0f}  Z {z:6.2f}  band {l_:6.2f} - {c:6.2f}  (Z_floor {f_:6.2f})  rel {r_:5.2f}  hep effective MC events in last bin {n:6.1f}")
+    for e, z, l_, c, f_, r_, n, b8w in zip(emax_grid, nominal, low, p84, floored, rel, hep_mc_above, b8_window):
+        rprint(f"   E_max {e:4.0f}  Z {z:6.2f}  band {l_:6.2f} - {c:6.2f}  (Z_tail {f_:6.2f})  rel {r_:5.2f}  hep N_eff in last bin {n:6.1f}  8B in last bin {b8w:.2g}")
     rows_out.append({
         "Geometry": info["GEOMETRY"], "Config": config, "Name": args.signal, "Analysis": "HEP", "EnergyLabel": args.energy,
         "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2], "Exposure": exposure, "ExposureUnit": "year",
         "Variable": "ProfileLikelihood", "SpectrumType": "Raw", "Study": "default",
         "EnergyMax": emax_grid, "EnergyMaxUnit": "MeV", "Significance": nominal, "SignificanceUnit": "\\sigma",
-        "SignificanceLow": low, "SignificanceHigh": p84, "SignificanceFloor": floored, "SignificanceP16": p16,
-        "SignificanceP50": p50, "SignificanceP84": p84, "RelativeError": rel, "OneEventBackground": factor * one_event,
-        "HepEffectiveMCLastBin": hep_mc_above, "RecommendedEnergyMax": chosen, "MaxRelativeError": args.max_relative_error,
+        "SignificanceLow": low, "SignificanceHigh": p84, "SignificanceTail": floored, "SignificanceP16": p16,
+        "SignificanceP50": p50, "SignificanceP84": p84, "RelativeError": rel, "TailBackground": factor * tail,
+        "HepEffectiveMCLastBin": hep_mc_above, "B8LastBin": b8_window, "RecommendedEnergyMax": chosen, "MaxRelativeError": args.max_relative_error,
         "Bootstrap": args.bootstrap,
     })
     data_path = f"{root}/output/data/analysis/hep"
