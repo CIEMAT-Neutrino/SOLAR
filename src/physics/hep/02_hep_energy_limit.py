@@ -100,7 +100,8 @@ for config in args.config:
     # "no simulated background" = zero external counts: 03_analysis.py zeroes the bins below its MC filter but keeps MCCounts
     ext_counts = sum(x[1] for x in ext) if ext else np.zeros_like(hep_mc)
     one_event = sum(float(np.sum(x[1][x[2] > 0]) / max(np.sum(x[2][x[2] > 0]), 1.0)) for x in ext)
-    floor = np.where((ext_counts <= 0) & (edges[:-1] >= args.threshold), 1.14 * one_event, 0.0)
+    # below 1% of one simulated event the bin is empty (weights of 1e-11 come from spectral reweighting, not events)
+    floor = np.where((ext_counts < 0.01 * one_event) & (edges[:-1] >= args.threshold), 1.14 * one_event, 0.0)
 
     def spectra(scale=None):
         s = factor * hep * (1 if scale is None else scale["hep"])
