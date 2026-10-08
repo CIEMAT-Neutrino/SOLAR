@@ -99,8 +99,13 @@ def _adjcl_slots(run, idx):
     The per-cluster AdjCl vectors are padded with 0 to the longest vector of the loaded sample
     (lib/io.resize_subarrays). A padded slot has AdjClR = 0 and would pass any AdjClR < limit cut,
     so every count over these arrays must be restricted to the first AdjClNum slots.
+
+    config.json SELECTED_ADJCL_PADDING_BUG (diagnostic only, default false) counts every slot again, as
+    before c01e61a, to measure what the padding fix changed. Never set it for results.
     """
     width = np.asarray(run["Reco"]["AdjClR"][idx]).shape[1]
+    if load_analysis_info(str(root)).get("SELECTED_ADJCL_PADDING_BUG", False):
+        return np.ones((len(np.asarray(run["Reco"]["AdjClR"][idx])), width), dtype=bool)
     if "AdjClNum" in run["Reco"]:
         num = np.asarray(run["Reco"]["AdjClNum"][idx]).astype(np.int64)
         return np.arange(width)[None, :] < num[:, None]

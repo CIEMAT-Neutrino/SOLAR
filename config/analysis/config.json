@@ -136,5 +136,7 @@
   },
   "SIGNAL_CANDIDATE": "leading_cluster",
   "_SIGNAL_CANDIDATE_comment": "leading_cluster: one candidate per signal interaction (largest-Charge cluster) carrying the Truth-tree event weight, sum preserved; per_cluster: legacy, every cluster weighted (fragments dilute the event weight). lib/weights.py assign_signal_event_weights.",
-  "SIGNAL_BACKGROUND_CLASSIFIER": true
+  "SIGNAL_BACKGROUND_CLASSIFIER": true,
+  "_SELECTED_ADJCL_PADDING_BUG_comment": "Diagnostic only: true re-creates the pre-c01e61a SelectedAdjClNum (zero padding counted) to measure the effect of the fix. Never true for results.",
+  "SELECTED_ADJCL_PADDING_BUG": false
 }
