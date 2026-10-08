@@ -49,6 +49,9 @@ parser.add_argument("--min_mc_per_bin", type=float, default=1.0)
 parser.add_argument("--bootstrap", type=int, default=1000)
 parser.add_argument("--max_relative_error", type=float, default=0.2)
 parser.add_argument("--seed", type=int, default=12345)
+parser.add_argument("--tail_mode", choices=["endpoint", "exponential"], default="endpoint",
+    help="endpoint: the extrapolated external tail stops one bin above the last bin the loosest cut populates (true "
+         "endpoint of the gamma/neutron response); exponential: the fitted tail continues to the end of the window.")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 args = parser.parse_args()
@@ -118,6 +121,8 @@ for config in args.config:
         k = float(c[both].sum() / lc[both].sum()) if both.any() else float(c.sum() / max(lc[c > 0].sum(), 1e-30))
         one_event = float(c[mc > 0].sum() / max(mc[mc > 0].sum(), 1.0))
         empty = (c < 0.01 * one_event) & (edges[:-1] >= args.threshold)
+        if args.tail_mode == "endpoint":
+            empty &= np.arange(len(c)) <= last + 1
         model = k * np.exp(icpt + slope * centers)
         x0 = float(centers[fit].mean())  # harder tail: slope +1 sigma, pivoting at the centre of the fitted range
         model_hard = k * np.exp(icpt + slope * x0 + (slope + np.sqrt(cov[0, 0])) * (centers - x0))
