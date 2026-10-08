@@ -16,9 +16,10 @@ At the HEP best cut of 01_hep.py (read from the HEP_Counts pkl), the significanc
 significance with the global background-normalisation nuisance, the 01_hep.py bin mask (summed background MCCounts,
 8B included, >= --min_mc_per_bin), counts = rate x exposure x full detector mass.
 
-Uncertainty: Poisson bootstrap of the simulated events behind every bin. Each component bin is rescaled by
-N'/N with N' ~ Poisson(N = MCCounts); hep and 8B are the same marley events and share the draw. The band is the
-16-84% interval of the bootstrap significance.
+Uncertainty: Poisson bootstrap of the simulated statistics behind every bin. Each component bin is rescaled by
+N'/N with N' ~ Poisson(N), N = (Counts / Error)^2 the effective number of simulated events (Error = sqrt(sum w^2)
+in the Rebin pkls): a bin of 400 marley events carries the hep weight of only one or two of them when they lie
+above the hep endpoint. Components are drawn independently. The band is the 16-84% interval of the bootstrap.
 
 The recommended upper edge is the largest E_max whose relative uncertainty (half the 16-84% width over the
 median) stays at or below --max_relative_error: beyond it the significance is carried by a handful of simulated
@@ -56,8 +57,10 @@ def row(df, component, osc, cut):
     r = df[(df["Component"] == component) & (df["Oscillation"] == osc) & (df["Mean"] == "Mean")
            & (df["NHits"] == nh) & (df["OpHits"] == oph) & (df["AdjCl"] == adj)]
     if r.empty:
-        return None, None
-    return np.asarray(r.iloc[0]["Counts"], dtype=float), np.asarray(r.iloc[0]["MCCounts"], dtype=float)
+        return None, None, None
+    c = np.asarray(r.iloc[0]["Counts"], dtype=float); e = np.asarray(r.iloc[0]["Error"], dtype=float)
+    neff = np.divide(c * c, e * e, out=np.zeros_like(c), where=e > 0)
+    return c, np.asarray(r.iloc[0]["MCCounts"], dtype=float), neff
 
 
 def significance(s, b, mc, emax):
@@ -75,23 +78,22 @@ for config in args.config:
     exposure = float(args.exposure if args.exposure is not None else ref["Exposure"])
     factor = exposure * get_full_detector_mass(config, info)
     sig = pd.read_pickle(f"{pnfs}/signal/{args.folder.lower()}/HEP/{config}/{args.signal}/{config}_{args.signal}_{args.energy}_Rebin.pkl")
-    hep, hep_mc = row(sig, "hep", "Osc", cut)
-    b8, _ = row(sig, "8B", "Osc", cut)
-    comps = [("marley", None, hep_mc)]
+    hep, hep_mc, hep_neff = row(sig, "hep", "Osc", cut)
+    b8, _, b8_neff = row(sig, "8B", "Osc", cut)
     bkg_counts = []
     for bkg in backgrounds:
         p = f"{pnfs}/background/{args.folder.lower()}/HEP/{config}/{bkg}/{config}_{bkg}_{args.energy}_Rebin.pkl"
         if not os.path.exists(p):
             rprint(f"[yellow][WARNING][/yellow] {config}: no {bkg} Rebin ({p})"); continue
-        c, mc = row(pd.read_pickle(p), bkg, "Truth", cut)
+        c, mc, neff = row(pd.read_pickle(p), bkg, "Truth", cut)
         if c is not None:
-            bkg_counts.append((bkg, c, mc))
-    mc_total = hep_mc + sum(mc for _, _, mc in bkg_counts)  # 8B shares the marley MC, as in 01_hep.py
+            bkg_counts.append((bkg, c, mc, neff))
+    mc_total = hep_mc + sum(x[2] for x in bkg_counts)  # 8B shares the marley MC, as in 01_hep.py
 
     def spectra(scale=None):
-        s = factor * hep * (1 if scale is None else scale["marley"])
-        b = factor * b8 * (1 if scale is None else scale["marley"])
-        for name, c, _ in bkg_counts:
+        s = factor * hep * (1 if scale is None else scale["hep"])
+        b = factor * b8 * (1 if scale is None else scale["8B"])
+        for name, c, _, _ in bkg_counts:
             b = b + factor * c * (1 if scale is None else scale[name])
         return s, b
 
@@ -99,26 +101,27 @@ for config in args.config:
     nominal = np.array([significance(s0, b0, mc_total, e) for e in emax_grid])
     boot = np.zeros((args.bootstrap, len(emax_grid)))
     for k in range(args.bootstrap):
-        scale = {"marley": np.divide(rng.poisson(hep_mc), hep_mc, out=np.zeros_like(hep_mc), where=hep_mc > 0)}
-        for name, _, mc in bkg_counts:
-            scale[name] = np.divide(rng.poisson(mc), mc, out=np.zeros_like(mc), where=mc > 0)
+        draw = lambda n: np.divide(rng.poisson(n), n, out=np.zeros_like(n), where=n > 0)
+        scale = {"hep": draw(hep_neff), "8B": draw(b8_neff)}
+        for name, _, _, neff in bkg_counts:
+            scale[name] = draw(neff)
         s, b = spectra(scale)
         boot[k] = [significance(s, b, mc_total, e) for e in emax_grid]
     p16, p50, p84 = np.percentile(boot, [16, 50, 84], axis=0)
     rel = np.divide(0.5 * (p84 - p16), p50, out=np.full_like(p50, np.inf), where=p50 > 0)
     ok = np.where(rel <= args.max_relative_error)[0]
     chosen = float(emax_grid[ok.max()]) if ok.size else float("nan")
-    hep_mc_above = np.array([float(hep_mc[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
+    hep_mc_above = np.array([float(hep_neff[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
     rprint(f"\n## {config} ({args.signal}, cut {cut}, {exposure:g} yr): recommended E_max {chosen:g} MeV (relative error <= {args.max_relative_error:g})")
     for e, z, a, b_, c, r_, n in zip(emax_grid, nominal, p16, p50, p84, rel, hep_mc_above):
-        rprint(f"   E_max {e:4.0f}  Z {z:6.2f}  bootstrap 16/50/84 {a:6.2f} {b_:6.2f} {c:6.2f}  rel {r_:5.2f}  signal MC in last bin {n:5.0f}")
+        rprint(f"   E_max {e:4.0f}  Z {z:6.2f}  bootstrap 16/50/84 {a:6.2f} {b_:6.2f} {c:6.2f}  rel {r_:5.2f}  hep effective MC events in last bin {n:6.1f}")
     rows_out.append({
         "Geometry": info["GEOMETRY"], "Config": config, "Name": args.signal, "Analysis": "HEP", "EnergyLabel": args.energy,
         "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2], "Exposure": exposure, "ExposureUnit": "year",
         "Variable": "ProfileLikelihood", "SpectrumType": "Raw", "Study": "default",
         "EnergyMax": emax_grid, "EnergyMaxUnit": "MeV", "Significance": nominal, "SignificanceUnit": "\\sigma",
         "SignificanceP16": p16, "SignificanceP50": p50, "SignificanceP84": p84, "RelativeError": rel,
-        "SignalMCLastBin": hep_mc_above, "RecommendedEnergyMax": chosen, "MaxRelativeError": args.max_relative_error,
+        "HepEffectiveMCLastBin": hep_mc_above, "RecommendedEnergyMax": chosen, "MaxRelativeError": args.max_relative_error,
         "Bootstrap": args.bootstrap,
     })
     data_path = f"{root}/output/data/analysis/hep"
