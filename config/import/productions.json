@@ -11,10 +11,10 @@
         "neutron": 3600,
         "gamma": 3600,
         "gamma_final": {
-            "events_per_job": 900
+            "events_per_job": 100
         },
         "neutron_final": {
-            "events_per_job": 900
+            "events_per_job": 100
         },
         "gamma_test": {
             "events_per_job": 100
