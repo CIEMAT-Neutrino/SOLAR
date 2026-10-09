@@ -381,6 +381,19 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "ncveto_off", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "analysis_override": ["DayNight", "Sensitivity"], "labeled_rebin": True, "extra": ["--no-ncveto"]},
     ],
+    # MC-statistics requirements loosened (2026-10-09, user: how much looser to reach thesis-like results). Default:
+    # fiducial gate 2x100 essential background MC events, DayNight/HEP cut-scan gate 20, per-sample 1 MeV bins with
+    # fewer than 2 simulated events zeroed. Full chain (volume, cuts) re-optimised under each setting. Diagnostic only.
+    "mcgate": [
+        {"label": "mcgate_50", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False, "fiducialization": True,
+         "labeled_rebin": True, "extra": ["--fiducial_mc_threshold", "50", "--daynight_mc_threshold", "10", "--hep_mc_threshold", "10"]},
+        {"label": "mcgate_20", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False, "fiducialization": True,
+         "labeled_rebin": True, "extra": ["--fiducial_mc_threshold", "20", "--daynight_mc_threshold", "5", "--hep_mc_threshold", "5",
+                                          "--mc_filter_threshold", "1"]},
+        {"label": "mcgate_0", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False, "fiducialization": True,
+         "labeled_rebin": True, "extra": ["--fiducial_mc_threshold", "0", "--daynight_mc_threshold", "0", "--hep_mc_threshold", "0",
+                                          "--mc_filter_threshold", "1"]},
+    ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
@@ -510,7 +523,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

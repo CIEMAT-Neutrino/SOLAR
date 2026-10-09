@@ -133,6 +133,10 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "ncveto": {"*": ("default", None)},
     "ncveto_off": {"*": ("default", None)},
     "hep_plain": {"*": ("default", None)},
+    # looser MC-statistics requirements (diagnostic)
+    "mcgate_50": {"*": ("default", None)},
+    "mcgate_20": {"*": ("default", None)},
+    "mcgate_0": {"*": ("default", None)},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
