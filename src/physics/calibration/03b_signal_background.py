@@ -31,6 +31,16 @@ upper/lower branch classifier as before.
   the external gammas carry most of the HEP background; tuned on fold-split HEP significance (2026-10-08, _xchk/heptune):
   HD Lateral +14%, VD Shielded +26-30%, HD Central and VD Top unchanged within the MC noise. DayNight and Sensitivity
   keep SolarEnergy.
+- Alternative HEP classifier (--target hep): a second random forest, trained only on clusters with Energy >=
+  --hep_min_energy (8 MeV) against the external backgrounds (gamma, neutron; radiological left out), with the CC
+  clusters weighted by their hep spectral weight (SignalParticleWeighthepOscMean, SIGNIFICANCE workflow) so that it
+  learns hep-like clusters rather than the 8B mix. Same inputs as the default classifier (its EXCLUDED_FEATURES), same
+  folds, same per-sample background weights. Threshold SB_HEP_MODEL_THRESHOLD keeps --hep_model_completeness of the
+  CC clusters whose SolarEnergy (with the offset) is at least --hep_model_gate_energy. Writes
+  <config>_signal_background_hep.json and the fold models *_signal_background_hep_fold{0,1}.pkl; the default
+  classifier and its outputs are not touched. Used only by the HEP study variant hep_sbmodel (03_analysis.py
+  --hep_energy SolarEnergyHEPModel). Fold-split test (2026-10-08, _xchk/heptune "hepSB gate12 C0.8"): VD Shielded
+  +44%, HD Lateral +7%, HD Central +1%, VD Top -11%.
 - High-energy threshold: clusters whose SolarEnergy (with the offset) is at least --gate_energy use
   SB_THRESHOLD_HIGH, the largest score cut that keeps --completeness_high of the signal clusters above the
   gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
@@ -56,6 +66,13 @@ parser.add_argument("--hep_completeness", type=float, default=0.80,
     help="CC completeness above --hep_gate_energy of SB_THRESHOLD_HEP (HEP-only energy, SolarEnergyHEP).")
 parser.add_argument("--completeness_high", type=float, default=0.95,
     help="Signal completeness of SB_THRESHOLD_HIGH among the CC clusters above --gate_energy.")
+parser.add_argument("--target", choices=["default", "hep"], default="default",
+    help="default: the S/B classifier of SolarEnergy; hep: the alternative HEP-trained classifier (SolarEnergyHEPModel).")
+parser.add_argument("--hep_min_energy", type=float, default=8.0, help="--target hep: minimum cluster Energy of the training sample.")
+parser.add_argument("--hep_model_gate_energy", type=float, default=12.0,
+    help="--target hep: SolarEnergy (with the offset, MeV) above which the HEP classifier replaces the default one.")
+parser.add_argument("--hep_model_completeness", type=float, default=0.80,
+    help="--target hep: CC completeness above --hep_model_gate_energy of SB_HEP_MODEL_THRESHOLD.")
 parser.add_argument("--max_per_sample", type=int, default=300000)
 parser.add_argument("--rf_estimators", type=int, default=300)
 parser.add_argument("--rf_depth", type=int, default=10)
@@ -66,6 +83,14 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Fa
 args = parser.parse_args()
 
 config = args.config
+HEP = args.target == "hep"
+if HEP:
+    # External backgrounds only; the inputs of the default classifier (its excluded features unless given).
+    args.backgrounds = [b for b in args.backgrounds if not b.startswith("radiological")]
+    _default_json = f"{root}/config/{config}/{args.name}/{config}_calib/{config}_signal_background.json"
+    if not args.exclude_features and os.path.isfile(_default_json):
+        args.exclude_features = list(json.load(open(_default_json)).get("EXCLUDED_FEATURES", []))
+    args.min_energy = args.hep_min_energy
 analysis_info = load_analysis_info(str(root))
 _models_base = analysis_info.get("DATA_PATHS", {}).get(
     "CALIBRATION", "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration"
@@ -76,13 +101,20 @@ optional_features = ["MatchedOpFlashPE", "MatchedOpFlashNHits", "MatchedOpFlashM
 
 def load_sample(name):
     configs = {config: [name]}
-    run, output = load_multi(configs, preset="ANALYSIS", branches={"Config": ["Geometry"]}, debug=args.debug)
+    # --target hep needs the hep spectral weight of the CC clusters: SIGNIFICANCE workflow (as 03_analysis.py).
+    workflow = "SIGNIFICANCE" if HEP else "ANALYSIS"
+    run, output = load_multi(configs, preset=workflow, branches={"Config": ["Geometry"]}, debug=args.debug)
     params = (
         {"PARTICLE_TYPE": "signal", "SB_CLASSIFIER": False}
         if name.startswith("marley")
         else {"PARTICLE_TYPE": "background", "SB_CLASSIFIER": False}
     )
-    run = compute_reco_workflow(run, configs, params=params, workflow="ANALYSIS", rm_branches=False, debug=args.debug)
+    if HEP and name.startswith("marley"):
+        params.update({"DEFAULT_SIGNAL_WEIGHT": ["truth", "osc"], "DEFAULT_SIGNAL_NADIR": ["mean", "day", "night"],
+                       "PARTICLE_WEIGHTING": "volume", "OSCILLATION_BACKEND": "nufast"})
+    elif HEP:
+        params["PARTICLE_WEIGHTING"] = "histogram"
+    run = compute_reco_workflow(run, configs, params=params, workflow=workflow, rm_branches=False, debug=args.debug)
     # No preset filter: 03_analysis.py applies none (the VD SIGNIFICANCE filter would drop every
     # surface-generated gamma/neutron); only the analysed energy range is kept below.
     reco = run["Reco"]
@@ -94,6 +126,7 @@ def load_sample(name):
     df["SignalParticleK"] = np.asarray(reco["SignalParticleK"], dtype=float)
     df["SolarEnergy"] = np.asarray(reco["SolarEnergy"], dtype=float)  # classifier off: the offset version
     df["Generator"] = np.asarray(reco["Generator"])
+    df["HepWeight"] = np.asarray(reco["SignalParticleWeighthepOscMean"], dtype=float) if (HEP and name.startswith("marley")) else 0.0
     df["Sample"] = name
     df = df[(df["Energy"] >= args.min_energy) & (df["SignalParticleK"].abs() <= 30)]
     if name.startswith("marley"):
@@ -118,6 +151,9 @@ data["Fold"] = ((data["Flag"] + data["Event"]) % 2).astype(int)
 weights = np.zeros(len(data))
 sig = data["Label"] == 1
 weights[sig.values] = 1.0 / max(sig.sum(), 1)
+if HEP:  # CC clusters weighted by their hep spectral weight (same total)
+    hw = np.clip(data.loc[sig, "HepWeight"].to_numpy(dtype=float), 0, None)
+    weights[sig.values] = hw / hw.sum() if hw.sum() > 0 else 1.0 / max(sig.sum(), 1)
 for name in args.backgrounds:
     m = (data["Sample"] == name).values
     if m.sum():
@@ -140,6 +176,39 @@ for fold in (0, 1):
     scores[apply.values] = model.predict_proba(data.loc[apply, features])[:, 1]
     models[fold] = model
 data["Score"] = scores
+
+if HEP:
+    # Alternative HEP classifier: threshold, summary and models only (no plotting exports).
+    gate = sig & (data["SolarEnergy"] >= args.hep_model_gate_energy)
+    if gate.sum() < 100:
+        raise SystemExit(f"[ERROR] {config}: only {gate.sum()} CC clusters above {args.hep_model_gate_energy} MeV")
+    threshold = float(np.quantile(data.loc[gate, "Score"], 1 - args.hep_model_completeness))
+    auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
+    summary = {"SB_HEP_MODEL_THRESHOLD": threshold, "SB_HEP_MODEL_GATE_ENERGY": args.hep_model_gate_energy,
+               "TARGET_COMPLETENESS": args.hep_model_completeness, "FEATURES": features,
+               "EXCLUDED_FEATURES": list(args.exclude_features), "MIN_ENERGY": args.min_energy, "AUC": float(auc),
+               "SIGNAL_WEIGHT": "SignalParticleWeighthepOscMean", "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k",
+               "SIGNAL_SAMPLE": args.name, "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
+               "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
+               "FLAGGED_SIGNAL_LIKE_ABOVE_GATE": {}}
+    for name in [args.name] + args.backgrounds:
+        m = (data["Sample"] == name) & (data["SolarEnergy"] >= args.hep_model_gate_energy)
+        summary["FLAGGED_SIGNAL_LIKE_ABOVE_GATE"][name] = float(np.mean(data.loc[m, "Score"] >= threshold)) if m.sum() else None
+    rprint(json.dumps(summary, indent=2))
+    model_dir = f"{_models_base}/{config}/{args.name}/models"
+    os.makedirs(model_dir, exist_ok=True)
+    for fold, model in models.items():
+        path = f"{model_dir}/{config}_{args.name}_signal_background_hep_fold{fold}.pkl"
+        if os.path.isfile(path):  # pnfs cannot overwrite in place
+            os.remove(path)
+        with open(path, "wb") as f:
+            pickle.dump(model, f)
+    calib_dir = f"{root}/config/{config}/{args.name}/{config}_calib"
+    os.makedirs(calib_dir, exist_ok=True)
+    with open(f"{calib_dir}/{config}_signal_background_hep.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    rprint(f"Saved HEP signal/background classifier ({len(features)} features, AUC {auc:.3f}) to {model_dir} and {calib_dir}")
+    sys.exit(0)
 
 # Completeness-driven threshold on held-out signal clusters with E_nu in [6, 20] MeV.
 ref = sig & (data["SignalParticleK"] >= 6) & (data["SignalParticleK"] <= 20)

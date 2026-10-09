@@ -360,6 +360,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "excluded_configs": ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal"],
          "extra": ["--sb_completeness_high", "0.90"]},
     ],
+    # Alternative HEP energy (user, 2026-10-08: kept as an option next to SolarEnergyHEP): the HEP-trained S/B
+    # classifier of 03b_signal_background.py --target hep decides the offset above 12 MeV. HEP only; fiducial
+    # volume and cuts held at the nominal Truncated ones, as sb_hep90.
+    "hepsbmodel": [
+        {"label": "hep_sbmodel", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
+         "analysis_override": ["HEP"], "labeled_rebin": True,
+         "extra": ["--hep_energy", "SolarEnergyHEPModel"]},
+    ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
@@ -489,7 +497,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol"]
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 
