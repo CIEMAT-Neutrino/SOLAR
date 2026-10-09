@@ -150,6 +150,9 @@ parser.add_argument("--charge_threshold", type=float, default=0, help="Charge th
 parser.add_argument("--sb_completeness_high", type=float, default=None,
     help="Study knob: signal/background classifier working point above SB_GATE_ENERGY (CC completeness, e.g. 0.90) "
          "instead of the calibrated SB_THRESHOLD_HIGH. Needs --study_label (labeled Rebin pkls).")
+parser.add_argument("--hep_energy", type=str, default="SolarEnergyHEP", choices=["SolarEnergyHEP", "SolarEnergyHEPModel"],
+    help="Energy of the HEP analysis when --energy is SolarEnergy. SolarEnergyHEPModel (study knob, needs --study_label): "
+         "the alternative HEP-trained S/B classifier (03b_signal_background.py --target hep).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
     "--truth_fiducial",
@@ -287,6 +290,10 @@ if args.sb_completeness_high is not None:
     if not args.study_label:
         raise SystemExit("[ERROR] --sb_completeness_high is a study knob: pass --study_label so the Rebin pkls are labeled.")
     workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
+if args.hep_energy != "SolarEnergyHEP":
+    if not args.study_label:
+        raise SystemExit("[ERROR] --hep_energy is a study knob: pass --study_label so the Rebin pkls are labeled.")
+    workflow_params["SB_HEP_MODEL"] = True
 run = compute_reco_workflow(
     run,
     configs,
@@ -345,11 +352,11 @@ for config in configs:
         # The HEP analysis reads the HEP-only energy (lib/cluster SolarEnergyHEP: the S/B classifier at its HEP
         # working point) when it exists; outputs keep the SolarEnergy label, so every later stage is unchanged.
         _energy_key = {
-            _an: ("SolarEnergyHEP" if (_an == "HEP" and energy == "SolarEnergy" and "SolarEnergyHEP" in run["Reco"]) else energy)
+            _an: (args.hep_energy if (_an == "HEP" and energy == "SolarEnergy" and args.hep_energy in run["Reco"]) else energy)
             for _an in args.analysis
         }
         if any(v != energy for v in _energy_key.values()):
-            rprint(f"[cyan][INFO][/cyan] {name}: HEP analysis uses SolarEnergyHEP")
+            rprint(f"[cyan][INFO][/cyan] {name}: HEP analysis uses {args.hep_energy}")
         _spatial_masks = {}
         for _an in args.analysis:
             _fid = fiducials_by_analysis[_an]

@@ -36,6 +36,35 @@ def _calib_fallback(name: str, default: str) -> str:
 _SB_INFO_CACHE = {}  # (config, name) -> classifier json of the last _signal_background_flags call
 
 
+def _signal_background_hep_model(run, config, name, idx):
+    """Scores of the alternative HEP classifier (03b_signal_background.py --target hep) and its json, or (None, None).
+
+    Same fold rule as _signal_background_flags; clusters below the training MIN_ENERGY get score 1 (signal-like).
+    """
+    for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+        if not sample:
+            continue
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_signal_background_hep.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_signal_background_hep_fold{k}.pkl" for k in (0, 1)]
+        if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
+            break
+    else:
+        return None, None
+    info = json.load(open(jpath))
+    models = [pickle.load(open(p, "rb")) for p in mpaths]
+    reco = run["Reco"]
+    X = np.nan_to_num(np.column_stack([np.asarray(reco[feat])[idx].astype(float) for feat in info["FEATURES"]]),
+                      nan=0.0, posinf=0.0, neginf=0.0)
+    fold = ((np.asarray(reco["Flag"])[idx].astype(np.int64) + np.asarray(reco["Event"])[idx].astype(np.int64)) % 2).astype(int)
+    energy = np.asarray(reco["Energy"])[idx].astype(float)
+    score = np.ones(len(fold))
+    for k in (0, 1):
+        m = (fold == 1 - k) & (energy >= info.get("MIN_ENERGY", 0.0))  # model k was trained on fold k
+        if np.any(m):
+            score[m] = models[k].predict_proba(X[m])[:, 1]
+    return score, info
+
+
 def _signal_background_flags(run, config, name, idx, this_params):
     """First SolarEnergy stage: True for clusters the signal/background classifier calls signal-like.
 
@@ -770,6 +799,21 @@ def compute_energy_calibration(
                     hep_bkg = (offset_e >= float(sb_info["SB_HEP_GATE_ENERGY"])) & (score < float(sb_info["SB_THRESHOLD_HEP"]))
                     hep_energy[hep_bkg] = no_offset[hep_bkg]
                 run["Reco"]["SolarEnergyHEP"][rows] = hep_energy
+                # Alternative HEP energy (study variant hep_sbmodel): above SB_HEP_MODEL_GATE_ENERGY the HEP-trained
+                # classifier decides the offset; below it SolarEnergy is unchanged. Built only on request.
+                if this_params is not None and this_params.get("SB_HEP_MODEL", False):
+                    hep_score, hep_info = _signal_background_hep_model(run, config, name, idx)
+                    if hep_score is None:
+                        raise FileNotFoundError(f"SB_HEP_MODEL requested but no HEP classifier for {config} {name}: "
+                                                "run 03b_signal_background.py --target hep")
+                    if "SolarEnergyHEPModel" not in run["Reco"]:
+                        run["Reco"]["SolarEnergyHEPModel"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
+                    offset_e = np.asarray(run["Reco"]["SolarEnergyOffset"][rows], dtype=float)
+                    above = offset_e >= float(hep_info["SB_HEP_MODEL_GATE_ENERGY"])
+                    model_energy = np.array(run["Reco"]["SolarEnergy"][rows], dtype=float, copy=True)
+                    model_energy[above] = np.where(hep_score[above] >= float(hep_info["SB_HEP_MODEL_THRESHOLD"]),
+                                                   offset_e[above], no_offset[above])
+                    run["Reco"]["SolarEnergyHEPModel"][rows] = model_energy
                 output += f"\t\t[cyan][INFO][/cyan] {name}: {np.mean(~signal_like):.1%} of clusters background-like (no offset)\n"
 
     run = remove_branches(run, rm_branches, [], debug=debug)

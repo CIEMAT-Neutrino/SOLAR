@@ -127,6 +127,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "bkgmodel_pessimistic": {"*": ("default:Truncated", "<=")},
     # S/B classifier working point above 12 MeV (VD Shielded HEP only): no expected direction
     "sb_hep90": {"*": ("default", None)},
+    # alternative HEP-trained S/B classifier (HEP only): no expected direction
+    "hep_sbmodel": {"*": ("default", None)},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
