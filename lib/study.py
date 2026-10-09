@@ -367,6 +367,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_sbmodel", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
          "extra": ["--hep_energy", "SolarEnergyHEPModel"]},
+        # HEP without the HEP-only S/B working point (the SolarEnergy of DayNight/Sensitivity).
+        {"label": "hep_plain", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
+         "analysis_override": ["HEP"], "labeled_rebin": True,
+         "extra": ["--hep_energy", "SolarEnergy"]},
     ],
     # Neutron-capture veto (config NEUTRON_CAPTURE_VETO) for DayNight and Sensitivity, 2026-10-09: default volume,
     # cuts re-optimised with the veto on. Optional group; adopted per config (ENABLED_CONFIGS) where neither
@@ -374,6 +378,8 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "ncveto": [
         {"label": "ncveto", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "analysis_override": ["DayNight", "Sensitivity"], "labeled_rebin": True, "extra": ["--ncveto"]},
+        {"label": "ncveto_off", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "analysis_override": ["DayNight", "Sensitivity"], "labeled_rebin": True, "extra": ["--no-ncveto"]},
     ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},

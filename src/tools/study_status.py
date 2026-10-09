@@ -131,6 +131,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "hep_sbmodel": {"*": ("default", None)},
     # neutron-capture veto (DayNight, Sensitivity): no expected direction
     "ncveto": {"*": ("default", None)},
+    "ncveto_off": {"*": ("default", None)},
+    "hep_plain": {"*": ("default", None)},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},

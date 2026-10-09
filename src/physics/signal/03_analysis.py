@@ -150,7 +150,7 @@ parser.add_argument("--charge_threshold", type=float, default=0, help="Charge th
 parser.add_argument("--sb_completeness_high", type=float, default=None,
     help="Study knob: signal/background classifier working point above SB_GATE_ENERGY (CC completeness, e.g. 0.90) "
          "instead of the calibrated SB_THRESHOLD_HIGH. Needs --study_label (labeled Rebin pkls).")
-parser.add_argument("--hep_energy", type=str, default="SolarEnergyHEP", choices=["SolarEnergyHEP", "SolarEnergyHEPModel"],
+parser.add_argument("--hep_energy", type=str, default="SolarEnergyHEP", choices=["SolarEnergyHEP", "SolarEnergyHEPModel", "SolarEnergy"],
     help="Energy of the HEP analysis when --energy is SolarEnergy. SolarEnergyHEPModel (study knob, needs --study_label): "
          "the alternative HEP-trained S/B classifier (03b_signal_background.py --target hep).")
 parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=None,
@@ -293,13 +293,12 @@ if args.sb_completeness_high is not None:
     if not args.study_label:
         raise SystemExit("[ERROR] --sb_completeness_high is a study knob: pass --study_label so the Rebin pkls are labeled.")
     workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
-if args.ncveto and not args.study_label:
-    raise SystemExit("[ERROR] --ncveto is a study knob: pass --study_label so the Rebin pkls are labeled.")
-_NCVETO = load_analysis_info(str(root)).get("NEUTRON_CAPTURE_VETO", {})
+if args.ncveto is not None and not args.study_label:
+    raise SystemExit("[ERROR] --ncveto / --no-ncveto is a study knob: pass --study_label so the Rebin pkls are labeled.")
 if args.hep_energy != "SolarEnergyHEP":
     if not args.study_label:
         raise SystemExit("[ERROR] --hep_energy is a study knob: pass --study_label so the Rebin pkls are labeled.")
-    workflow_params["SB_HEP_MODEL"] = True
+    workflow_params["SB_HEP_MODEL"] = args.hep_energy == "SolarEnergyHEPModel"
 run = compute_reco_workflow(
     run,
     configs,
@@ -379,14 +378,10 @@ for config in configs:
                 ), dtype=bool)
 
         # Neutron-capture veto (config NEUTRON_CAPTURE_VETO): small main cluster at a large analysis energy.
-        _ncveto_on = (config in _NCVETO.get("ENABLED_CONFIGS", [])) if args.ncveto is None else bool(args.ncveto)
         _ncveto_masks = {}
         for _an in args.analysis:
-            _keep = np.ones(len(run["Reco"]["Event"]), dtype=bool)
-            if _ncveto_on and _NCVETO and _an in _NCVETO.get("ANALYSES", []):
-                _e_an = np.asarray(run["Reco"][_energy_key[_an]], dtype=float)
-                _keep = ~((_e_an >= float(_NCVETO["ENERGY_MIN"])) & (_e_an < float(_NCVETO["ENERGY_MAX"]))
-                          & (np.asarray(run["Reco"]["Energy"], dtype=float) < float(_NCVETO["MAIN_CLUSTER_ENERGY_MIN"])))
+            _keep = neutron_capture_veto_keep(str(root), config, _an, run["Reco"][_energy_key[_an]], run["Reco"]["Energy"], args.ncveto)
+            if not _keep.all():
                 rprint(f"[cyan][INFO][/cyan] {name} {_an}: neutron-capture veto removes {np.mean(~_keep):.2%} of clusters")
             _ncveto_masks[_an] = _keep
 

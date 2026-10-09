@@ -91,6 +91,30 @@ def get_component_model_factor(root: str, folder: str, component: str, config: O
     return _component_factor(factors, folder, component, config, "background-model factor")
 
 
+def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None):
+    """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
+
+    Removed: ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN. On for the configs in
+    ENABLED_CONFIGS; override (True/False) or the environment variable SOLAR_NCVETO (1/0, set by run_sensitivity for
+    the study variants) takes precedence. Returns an all-True mask when off or for analyses not listed.
+    """
+    import os
+    import numpy as np
+
+    energy = np.asarray(energy, dtype=float)
+    keep = np.ones(len(energy), dtype=bool)
+    veto = load_analysis_info(root).get("NEUTRON_CAPTURE_VETO", {})
+    if not veto or analysis not in veto.get("ANALYSES", []):
+        return keep
+    if override is None and os.environ.get("SOLAR_NCVETO") in ("0", "1"):
+        override = os.environ["SOLAR_NCVETO"] == "1"
+    on = (config in veto.get("ENABLED_CONFIGS", [])) if override is None else bool(override)
+    if not on:
+        return keep
+    return ~((energy >= float(veto["ENERGY_MIN"])) & (energy < float(veto["ENERGY_MAX"]))
+             & (np.asarray(main_energy, dtype=float) < float(veto["MAIN_CLUSTER_ENERGY_MIN"])))
+
+
 def background_weight_divisor(root: str, folder: str, sample_name: str, config: str, true_energy=None):
     """Divisor of the weights of one background sample in a folder.
 

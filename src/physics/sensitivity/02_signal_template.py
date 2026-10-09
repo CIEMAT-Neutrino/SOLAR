@@ -567,7 +567,10 @@ for config in configs:
             selected_fiducial, selected_fiducial_bands, energy,
             pos_keys=_pos_keys,
         )
-        this_filter = np.where(quality_mask & spatial_mask)
+        # Neutron-capture veto (config NEUTRON_CAPTURE_VETO), as in the 1D spectra of 03_analysis.py that the
+        # background templates are built from.
+        veto_keep = neutron_capture_veto_keep(str(root), config, "Sensitivity", run["Reco"][energy], run["Reco"]["Energy"])
+        this_filter = np.where(quality_mask & spatial_mask & veto_keep)
 
         if args.debug:
             print(f"Selected #Events: {len(this_filter[0])} ({len(this_filter[0])/len(run['Reco']['Event'])*100:.2f}%)")

@@ -647,6 +647,8 @@ def _compute_osc_kde_and_exposure(
 
     counts = float(np.sum(weighted_flux))
     return kde, {
+        "pee_energy":         np.asarray(_ec, dtype=float),
+        "pee":                np.asarray(pee_e, dtype=float),
         "counts":             counts,
         "exposure":           1.0,
         "years":              1.0,
@@ -1050,14 +1052,26 @@ def normalize_true_weights(
                                 this_exposure = exposure[(weight, "osc")][
                                     osc_names[osc_name]
                                 ]
-                                # Osc weights are normalised to the tree's weight sum, so the
-                                # generated-event count only enters the debug message.
-                                run[tree][this_weight_name][idx] = (
-                                    this_exposure["counts"]
-                                    * run[tree][this_weight_name][idx]
-                                    / np.sum(run[tree][this_weight_name][idx])
-                                    / this_exposure["exposure"]
-                                )
+                                # Osc weight = normalised truth weight x P_ee(E_nu) of this nadir slice (the
+                                # truth weights are normalised first: DEFAULT_SIGNAL_WEIGHT lists "truth"
+                                # before "osc"). Renormalising the oscillated KDE to the flux-averaged rate over
+                                # the simulated events weighted P_ee by the simulated energy distribution
+                                # instead of the flux (2026-10-09: 0.71 x P_ee at 8-16 MeV).
+                                truth_name = f"SignalParticleWeight{weight}"
+                                if "pee" in this_exposure and "truth" in params["DEFAULT_SIGNAL_WEIGHT"] and \
+                                        list(params["DEFAULT_SIGNAL_WEIGHT"]).index("truth") < list(params["DEFAULT_SIGNAL_WEIGHT"]).index("osc"):
+                                    pee_i = np.interp(
+                                        np.asarray(run[tree]["SignalParticleP"][idx], dtype=float),
+                                        this_exposure["pee_energy"], this_exposure["pee"],
+                                    )
+                                    run[tree][this_weight_name][idx] = np.asarray(run[tree][truth_name][idx], dtype=float) * pee_i
+                                else:
+                                    run[tree][this_weight_name][idx] = (
+                                        this_exposure["counts"]
+                                        * run[tree][this_weight_name][idx]
+                                        / np.sum(run[tree][this_weight_name][idx])
+                                        / this_exposure["exposure"]
+                                    )
                                 if debug:
                                     this_event_count = resolve_generated_event_count(
                                         run, config_tree_weight, config, name, jdx, info
