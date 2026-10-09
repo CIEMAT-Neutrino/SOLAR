@@ -809,7 +809,9 @@ def compute_energy_calibration(
                     if "SolarEnergyHEPModel" not in run["Reco"]:
                         run["Reco"]["SolarEnergyHEPModel"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
                     offset_e = np.asarray(run["Reco"]["SolarEnergyOffset"][rows], dtype=float)
-                    above = offset_e >= float(hep_info["SB_HEP_MODEL_GATE_ENERGY"])
+                    # Clusters below the training MIN_ENERGY of the HEP classifier keep the default decision.
+                    trained = np.asarray(run["Reco"]["Energy"])[rows].astype(float) >= float(hep_info.get("MIN_ENERGY", 0.0))
+                    above = (offset_e >= float(hep_info["SB_HEP_MODEL_GATE_ENERGY"])) & trained
                     model_energy = np.array(run["Reco"]["SolarEnergy"][rows], dtype=float, copy=True)
                     model_energy[above] = np.where(hep_score[above] >= float(hep_info["SB_HEP_MODEL_THRESHOLD"]),
                                                    offset_e[above], no_offset[above])
