@@ -138,5 +138,16 @@
   "_SIGNAL_CANDIDATE_comment": "leading_cluster: one candidate per signal interaction (largest-Charge cluster) carrying the Truth-tree event weight, sum preserved; per_cluster: legacy, every cluster weighted (fragments dilute the event weight). lib/weights.py assign_signal_event_weights.",
   "SIGNAL_BACKGROUND_CLASSIFIER": true,
   "_SELECTED_ADJCL_PADDING_BUG_comment": "Diagnostic only: true re-creates the pre-c01e61a SelectedAdjClNum (zero padding counted) to measure the effect of the fix. Never true for results.",
-  "SELECTED_ADJCL_PADDING_BUG": false
+  "SELECTED_ADJCL_PADDING_BUG": false,
+  "NEUTRON_CAPTURE_VETO": {
+    "_doc": "03_analysis.py: in the listed analyses, clusters with ENERGY_MIN <= analysis energy < ENERGY_MAX whose main cluster Energy is below MAIN_CLUSTER_ENERGY_MIN are removed. Neutron-capture cascades share their 6.1 MeV among several clusters, so a small main cluster with a large reconstructed energy is mostly a capture (HD Central, new PIC backgrounds, cluster-level study 2026-10-09: DayNight +4/+8% on the two event halves). On by default only for ENABLED_CONFIGS; the study variant ncveto switches it on for any config.",
+    "ENABLED_CONFIGS": [],
+    "ANALYSES": [
+      "DayNight",
+      "Sensitivity"
+    ],
+    "ENERGY_MIN": 8.0,
+    "ENERGY_MAX": 12.0,
+    "MAIN_CLUSTER_ENERGY_MIN": 4.5
+  }
 }

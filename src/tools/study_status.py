@@ -129,6 +129,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "sb_hep90": {"*": ("default", None)},
     # alternative HEP-trained S/B classifier (HEP only): no expected direction
     "hep_sbmodel": {"*": ("default", None)},
+    # neutron-capture veto (DayNight, Sensitivity): no expected direction
+    "ncveto": {"*": ("default", None)},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},

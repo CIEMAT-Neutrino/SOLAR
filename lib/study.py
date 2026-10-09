@@ -368,6 +368,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "analysis_override": ["HEP"], "labeled_rebin": True,
          "extra": ["--hep_energy", "SolarEnergyHEPModel"]},
     ],
+    # Neutron-capture veto (config NEUTRON_CAPTURE_VETO) for DayNight and Sensitivity, 2026-10-09: default volume,
+    # cuts re-optimised with the veto on. Optional group; adopted per config (ENABLED_CONFIGS) where neither
+    # analysis gets worse.
+    "ncveto": [
+        {"label": "ncveto", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "analysis_override": ["DayNight", "Sensitivity"], "labeled_rebin": True, "extra": ["--ncveto"]},
+    ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
@@ -497,7 +504,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

@@ -410,6 +410,8 @@ parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the
 parser.add_argument("--parallel_samples", type=int, default=1,
     help="Run the per-sample steps (01_fiducialize, 03_analysis cut scan and best-cuts pass, 04_weighted) for this many samples at once. Default 1 (sequential).")
 parser.add_argument("--charge_threshold", type=float, default=0, help="Charge threshold Q (ADC) passed to 03_analysis.py. Default 0 (no charge cut).")
+parser.add_argument("--ncveto", action="store_true", default=False,
+    help="Study knob passed to 03_analysis.py: neutron-capture veto on (see lib/study.py ncveto).")
 parser.add_argument("--hep_energy", type=str, default=None,
     help="Study knob passed to 03_analysis.py: energy of the HEP analysis (see lib/study.py hep_sbmodel).")
 parser.add_argument("--sb_completeness_high", type=float, default=None,
@@ -922,7 +924,7 @@ def charge_scan_args_for() -> List[str]:
 
 def sb_args_for() -> List[str]:
     return ([] if args.sb_completeness_high is None else ["--sb_completeness_high", str(args.sb_completeness_high)]) + (
-        [] if args.hep_energy is None else ["--hep_energy", args.hep_energy])
+        [] if args.hep_energy is None else ["--hep_energy", args.hep_energy]) + (["--ncveto"] if args.ncveto else [])
 
 
 def charge_threshold_only_args_for() -> List[str]:
