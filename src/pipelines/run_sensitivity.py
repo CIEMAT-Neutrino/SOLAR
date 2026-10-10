@@ -832,6 +832,19 @@ if args.truth_fiducial and not args.fiducial_from_reco and not args.fiducializat
 
 configure_global_logging(verbose=args.verbose)
 analysis_info = load_analysis_info(str(root))
+# Per-config MC-statistics requirements (config.json MC_THRESHOLDS_PER_CONFIG) replace the global defaults when the
+# run has a single config and the CLI did not set them (the study variants pass their own values).
+_mc_pc = analysis_info.get("MC_THRESHOLDS_PER_CONFIG", {}).get(args.config[0], {}) if len(args.config) == 1 else {}
+for _key, _attr in (("FIDUCIALIZATION", "fiducial_mc_threshold"), ("DAYNIGHT", "daynight_mc_threshold")):
+    if _key in _mc_pc and getattr(args, _attr) == get_analysis_threshold(str(root), _key, stage="MC", fallback=0.0):
+        setattr(args, _attr, float(_mc_pc[_key]))
+if "HEP" in _mc_pc and args.hep_mc_threshold is None:
+    args.hep_mc_threshold = float(_mc_pc["HEP"])
+if "MC_FILTER" in _mc_pc and args.mc_filter_threshold is None:
+    args.mc_filter_threshold = int(_mc_pc["MC_FILTER"])
+if _mc_pc:
+    rprint(f"[cyan][INFO][/cyan] {args.config[0]}: MC requirements fiducial {args.fiducial_mc_threshold}, DayNight "
+           f"{args.daynight_mc_threshold}, HEP {args.hep_mc_threshold}, per-bin filter {args.mc_filter_threshold}")
 selected_background_components = get_selected_background_components(args.analysis, analysis_info)
 
 # Warn about nuisance parameter defaults that affect sensitivity results

@@ -148,6 +148,33 @@
     ],
     "ENERGY_MIN": 8.0,
     "ENERGY_MAX": 12.0,
-    "MAIN_CLUSTER_ENERGY_MIN": 4.5
+    "MAIN_CLUSTER_ENERGY_MIN": 4.5,
+    "PER_CONFIG": {
+        "_doc": "Per-config window (overrides the defaults above), from a scan of ENERGY_MIN 7-9, ENERGY_MAX 11-16, MAIN_CLUSTER_ENERGY_MIN 3.5-6 on the rerun 17 clusters at the DayNight cut, checked on both event halves (2026-10-10): HD Central [7,12) <5.5 MeV +10% (halves +2.5/+18%), VD Top [7,12) <6 MeV +1.8% (+1.7/+1.6%); HD Lateral and VD Shielded keep the default window.",
+        "hd_1x2x6_centralAPA": {
+          "ENERGY_MIN": 7.0,
+          "ENERGY_MAX": 12.0,
+          "MAIN_CLUSTER_ENERGY_MIN": 5.5
+        },
+        "vd_1x8x14_3view_30deg_nominal": {
+          "ENERGY_MIN": 7.0,
+          "ENERGY_MAX": 12.0,
+          "MAIN_CLUSTER_ENERGY_MIN": 6.0
+        }
+      }
+  },
+  "MC_THRESHOLDS_PER_CONFIG": {
+    "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with no gate and a 1-event per-bin filter (HEP 6.25 -> 14.51, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
+    "hd_1x2x6_centralAPA": {
+      "FIDUCIALIZATION": 0,
+      "DAYNIGHT": 0,
+      "HEP": 0,
+      "MC_FILTER": 1
+    },
+    "hd_1x2x6_lateralAPA": {
+      "FIDUCIALIZATION": 50,
+      "DAYNIGHT": 10,
+      "HEP": 10
+    }
   }
 }

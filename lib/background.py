@@ -111,8 +111,9 @@ def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, mai
     on = (config in veto.get("ENABLED_CONFIGS", [])) if override is None else bool(override)
     if not on:
         return keep
-    return ~((energy >= float(veto["ENERGY_MIN"])) & (energy < float(veto["ENERGY_MAX"]))
-             & (np.asarray(main_energy, dtype=float) < float(veto["MAIN_CLUSTER_ENERGY_MIN"])))
+    par = {**{k: veto[k] for k in ("ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN")}, **veto.get("PER_CONFIG", {}).get(config, {})}
+    return ~((energy >= float(par["ENERGY_MIN"])) & (energy < float(par["ENERGY_MAX"]))
+             & (np.asarray(main_energy, dtype=float) < float(par["MAIN_CLUSTER_ENERGY_MIN"])))
 
 
 def background_weight_divisor(root: str, folder: str, sample_name: str, config: str, true_energy=None):
