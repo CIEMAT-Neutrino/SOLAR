@@ -91,7 +91,7 @@ def get_component_model_factor(root: str, folder: str, component: str, config: O
     return _component_factor(factors, folder, component, config, "background-model factor")
 
 
-def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None):
+def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
     """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
 
     Removed: ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN. On for the configs in
@@ -112,6 +112,18 @@ def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, mai
     if not on:
         return keep
     par = {**{k: veto[k] for k in ("ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN")}, **veto.get("PER_CONFIG", {}).get(config, {})}
+    if par.get("MODE") == "classifier":
+        # Neutron-capture classifier (03b --target ncap): drop its region clusters scored below the threshold of COMPLETENESS.
+        import json as _json
+        jpath = f"{root}/config/{config}/marley_final/{config}_calib/{config}_neutron_capture.json"
+        if reco is None or "NeutronCaptureScore" not in reco or not os.path.isfile(jpath):
+            raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: NeutronCaptureScore or {jpath} missing")
+        info = _json.load(open(jpath))
+        t = float(info["NCAP_THRESHOLDS"][f"{float(par['COMPLETENESS']):.2f}"])
+        score = np.asarray(reco["NeutronCaptureScore"], dtype=float)
+        if rows is not None:
+            score = score[rows]
+        return ~(score < t)
     return ~((energy >= float(par["ENERGY_MIN"])) & (energy < float(par["ENERGY_MAX"]))
              & (np.asarray(main_energy, dtype=float) < float(par["MAIN_CLUSTER_ENERGY_MIN"])))
 

@@ -150,25 +150,27 @@
     "ENERGY_MAX": 12.0,
     "MAIN_CLUSTER_ENERGY_MIN": 4.5,
     "PER_CONFIG": {
-        "_doc": "Per-config window (overrides the defaults above), from a scan of ENERGY_MIN 7-9, ENERGY_MAX 11-16, MAIN_CLUSTER_ENERGY_MIN 3.5-6 on the rerun 17 clusters at the DayNight cut, checked on both event halves (2026-10-10): HD Central [7,12) <5.5 MeV +10% (halves +2.5/+18%), VD Top [7,12) <6 MeV +1.8% (+1.7/+1.6%); HD Lateral and VD Shielded keep the default window.",
+        "_doc": "Per-config veto (overrides the defaults above). MODE classifier: the neutron-capture classifier (03b --target ncap) removes the clusters of its 6-14 MeV region scored below the threshold of COMPLETENESS (CC kept in the region); chosen from the cluster-level test on the rerun 17 state (2026-10-10, both event halves; DayNight / Sensitivity-selection day-night significance at 50%: HD Central +20% / +38%, HD Lateral +13% / +6%, VD Top +23% / +22%). VD Shielded keeps the window rule [8,12) MeV, main cluster < 4.5 MeV (classifier <= +5%).",
         "hd_1x2x6_centralAPA": {
-          "ENERGY_MIN": 7.0,
-          "ENERGY_MAX": 12.0,
-          "MAIN_CLUSTER_ENERGY_MIN": 5.5
+          "MODE": "classifier",
+          "COMPLETENESS": 0.5
+        },
+        "hd_1x2x6_lateralAPA": {
+          "MODE": "classifier",
+          "COMPLETENESS": 0.5
         },
         "vd_1x8x14_3view_30deg_nominal": {
-          "ENERGY_MIN": 7.0,
-          "ENERGY_MAX": 12.0,
-          "MAIN_CLUSTER_ENERGY_MIN": 6.0
+          "MODE": "classifier",
+          "COMPLETENESS": 0.5
         }
       }
   },
   "MC_THRESHOLDS_PER_CONFIG": {
-    "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with no gate and a 1-event per-bin filter (HEP 6.25 -> 14.51, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
+    "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with the gates divided by 5 (20/5/5, user's choice) and a 1-event per-bin filter (HEP 6.25 -> 13.74, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
     "hd_1x2x6_centralAPA": {
-      "FIDUCIALIZATION": 0,
-      "DAYNIGHT": 0,
-      "HEP": 0,
+      "FIDUCIALIZATION": 20,
+      "DAYNIGHT": 5,
+      "HEP": 5,
       "MC_FILTER": 1
     },
     "hd_1x2x6_lateralAPA": {

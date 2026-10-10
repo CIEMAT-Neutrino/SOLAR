@@ -569,7 +569,8 @@ for config in configs:
         )
         # Neutron-capture veto (config NEUTRON_CAPTURE_VETO), as in the 1D spectra of 03_analysis.py that the
         # background templates are built from.
-        veto_keep = neutron_capture_veto_keep(str(root), config, "Sensitivity", run["Reco"][energy], run["Reco"]["Energy"])
+        veto_keep = neutron_capture_veto_keep(str(root), config, "Sensitivity", run["Reco"][energy], run["Reco"]["Energy"],
+                                              reco=run["Reco"])
         this_filter = np.where(quality_mask & spatial_mask & veto_keep)
 
         if args.debug:

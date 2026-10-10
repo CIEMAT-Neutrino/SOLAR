@@ -41,6 +41,13 @@ upper/lower branch classifier as before.
   classifier and its outputs are not touched. Used only by the HEP study variant hep_sbmodel (03_analysis.py
   --hep_energy SolarEnergyHEPModel). Fold-split test (2026-10-08, _xchk/heptune "hepSB gate12 C0.8"): VD Shielded
   +44%, HD Lateral +7%, HD Central +1%, VD Top -11%.
+- Neutron-capture classifier (--target ncap): random forest CC vs neutron captures for clusters whose SolarEnergy with
+  the offset is in [--ncap_energy_min, --ncap_energy_max) (6-14 MeV), CC clusters weighted by the oscillated solar weight,
+  neutrons by their rate weight; inputs of the default classifier. Writes <config>_neutron_capture.json (score thresholds
+  per CC completeness, NCAP_THRESHOLDS) and *_neutron_capture_fold{0,1}.pkl. Used by the neutron-capture veto in MODE
+  "classifier" (config NEUTRON_CAPTURE_VETO.PER_CONFIG): DayNight and Sensitivity drop the region clusters scored below
+  the threshold. Cluster-level test on the rerun 17 state (2026-10-10, both event halves): HD Central at 50% CC
+  completeness in the region DayNight +20%, Sensitivity-selection day-night significance +38%.
 - High-energy threshold: clusters whose SolarEnergy (with the offset) is at least --gate_energy use
   SB_THRESHOLD_HIGH, the largest score cut that keeps --completeness_high of the signal clusters above the
   gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
@@ -66,8 +73,11 @@ parser.add_argument("--hep_completeness", type=float, default=0.80,
     help="CC completeness above --hep_gate_energy of SB_THRESHOLD_HEP (HEP-only energy, SolarEnergyHEP).")
 parser.add_argument("--completeness_high", type=float, default=0.95,
     help="Signal completeness of SB_THRESHOLD_HIGH among the CC clusters above --gate_energy.")
-parser.add_argument("--target", choices=["default", "hep"], default="default",
-    help="default: the S/B classifier of SolarEnergy; hep: the alternative HEP-trained classifier (SolarEnergyHEPModel).")
+parser.add_argument("--target", choices=["default", "hep", "ncap"], default="default",
+    help="default: the S/B classifier of SolarEnergy; hep: the alternative HEP-trained classifier (SolarEnergyHEPModel); "
+         "ncap: the neutron-capture classifier of the neutron-capture veto.")
+parser.add_argument("--ncap_energy_min", type=float, default=6.0, help="--target ncap: region lower edge (SolarEnergy with the offset).")
+parser.add_argument("--ncap_energy_max", type=float, default=14.0, help="--target ncap: region upper edge.")
 parser.add_argument("--hep_min_energy", type=float, default=8.0, help="--target hep: minimum cluster Energy of the training sample.")
 parser.add_argument("--hep_model_gate_energy", type=float, default=12.0,
     help="--target hep: SolarEnergy (with the offset, MeV) above which the HEP classifier replaces the default one.")
@@ -84,6 +94,13 @@ args = parser.parse_args()
 
 config = args.config
 HEP = args.target == "hep"
+NCAP = args.target == "ncap"
+if NCAP:
+    args.backgrounds = [b for b in args.backgrounds if b.startswith("neutron")]
+    _default_json = f"{root}/config/{config}/{args.name}/{config}_calib/{config}_signal_background.json"
+    if not args.exclude_features and os.path.isfile(_default_json):
+        args.exclude_features = list(json.load(open(_default_json)).get("EXCLUDED_FEATURES", []))
+    args.min_energy = 0.0
 if HEP:
     # External backgrounds only; the inputs of the default classifier (its excluded features unless given).
     args.backgrounds = [b for b in args.backgrounds if not b.startswith("radiological")]
@@ -102,17 +119,17 @@ optional_features = ["MatchedOpFlashPE", "MatchedOpFlashNHits", "MatchedOpFlashM
 def load_sample(name):
     configs = {config: [name]}
     # --target hep needs the hep spectral weight of the CC clusters: SIGNIFICANCE workflow (as 03_analysis.py).
-    workflow = "SIGNIFICANCE" if HEP else "ANALYSIS"
+    workflow = "SIGNIFICANCE" if (HEP or NCAP) else "ANALYSIS"
     run, output = load_multi(configs, preset=workflow, branches={"Config": ["Geometry"]}, debug=args.debug)
     params = (
         {"PARTICLE_TYPE": "signal", "SB_CLASSIFIER": False}
         if name.startswith("marley")
         else {"PARTICLE_TYPE": "background", "SB_CLASSIFIER": False}
     )
-    if HEP and name.startswith("marley"):
+    if (HEP or NCAP) and name.startswith("marley"):
         params.update({"DEFAULT_SIGNAL_WEIGHT": ["truth", "osc"], "DEFAULT_SIGNAL_NADIR": ["mean", "day", "night"],
                        "PARTICLE_WEIGHTING": "volume", "OSCILLATION_BACKEND": "nufast"})
-    elif HEP:
+    elif HEP or NCAP:
         params["PARTICLE_WEIGHTING"] = "histogram"
     run = compute_reco_workflow(run, configs, params=params, workflow=workflow, rm_branches=False, debug=args.debug)
     # No preset filter: 03_analysis.py applies none (the VD SIGNIFICANCE filter would drop every
@@ -127,7 +144,11 @@ def load_sample(name):
     df["SolarEnergy"] = np.asarray(reco["SolarEnergy"], dtype=float)  # classifier off: the offset version
     df["Generator"] = np.asarray(reco["Generator"])
     df["HepWeight"] = np.asarray(reco["SignalParticleWeighthepOscMean"], dtype=float) if (HEP and name.startswith("marley")) else 0.0
+    df["NcapWeight"] = (np.asarray(reco["SignalParticleWeightOscMean"] if name.startswith("marley") else reco["SignalParticleWeight"],
+                                   dtype=float) if NCAP else 0.0)
     df["Sample"] = name
+    if NCAP:
+        df = df[(df["SolarEnergy"] >= args.ncap_energy_min) & (df["SolarEnergy"] < args.ncap_energy_max)]
     df = df[(df["Energy"] >= args.min_energy) & (df["SignalParticleK"].abs() <= 30)]
     if name.startswith("marley"):
         df = df[df["Generator"] == 1]
@@ -151,6 +172,11 @@ data["Fold"] = ((data["Flag"] + data["Event"]) % 2).astype(int)
 weights = np.zeros(len(data))
 sig = data["Label"] == 1
 weights[sig.values] = 1.0 / max(sig.sum(), 1)
+if NCAP:  # CC by the oscillated solar weight, neutrons by their rate weight (equal totals)
+    for lab in (1, 0):
+        msk = (data["Label"] == lab).values
+        ww = np.clip(np.nan_to_num(data.loc[msk, "NcapWeight"].to_numpy(dtype=float)), 0, None)
+        weights[msk] = ww / ww.sum() if ww.sum() > 0 else 1.0 / max(msk.sum(), 1)
 if HEP:  # CC clusters weighted by their hep spectral weight (same total)
     hw = np.clip(data.loc[sig, "HepWeight"].to_numpy(dtype=float), 0, None)
     weights[sig.values] = hw / hw.sum() if hw.sum() > 0 else 1.0 / max(sig.sum(), 1)
@@ -176,6 +202,33 @@ for fold in (0, 1):
     scores[apply.values] = model.predict_proba(data.loc[apply, features])[:, 1]
     models[fold] = model
 data["Score"] = scores
+
+if NCAP:
+    # Neutron-capture classifier: thresholds per CC completeness in the region, summary and models only.
+    sigs = data.loc[sig, "Score"]
+    thresholds = {f"{c:.2f}": float(np.quantile(sigs, 1 - c)) for c in (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95)}
+    auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
+    summary = {"NCAP_THRESHOLDS": thresholds, "NCAP_ENERGY_MIN": args.ncap_energy_min, "NCAP_ENERGY_MAX": args.ncap_energy_max,
+               "FEATURES": features, "EXCLUDED_FEATURES": list(args.exclude_features), "AUC": float(auc),
+               "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k", "SIGNAL_SAMPLE": args.name,
+               "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
+               "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
+               "NEUTRON_KEPT": {c: float(np.average(data.loc[~sig, "Score"] >= t, weights=data.loc[~sig, "W"])) for c, t in thresholds.items()}}
+    rprint(json.dumps(summary, indent=2))
+    model_dir = f"{_models_base}/{config}/{args.name}/models"
+    os.makedirs(model_dir, exist_ok=True)
+    for fold, model in models.items():
+        path = f"{model_dir}/{config}_{args.name}_neutron_capture_fold{fold}.pkl"
+        if os.path.isfile(path):  # pnfs cannot overwrite in place
+            os.remove(path)
+        with open(path, "wb") as f:
+            pickle.dump(model, f)
+    calib_dir = f"{root}/config/{config}/{args.name}/{config}_calib"
+    os.makedirs(calib_dir, exist_ok=True)
+    with open(f"{calib_dir}/{config}_neutron_capture.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    rprint(f"Saved neutron-capture classifier ({len(features)} features, AUC {auc:.3f}) to {model_dir} and {calib_dir}")
+    sys.exit(0)
 
 if HEP:
     # Alternative HEP classifier: threshold, summary and models only (no plotting exports).

@@ -380,7 +380,8 @@ for config in configs:
         # Neutron-capture veto (config NEUTRON_CAPTURE_VETO): small main cluster at a large analysis energy.
         _ncveto_masks = {}
         for _an in args.analysis:
-            _keep = neutron_capture_veto_keep(str(root), config, _an, run["Reco"][_energy_key[_an]], run["Reco"]["Energy"], args.ncveto)
+            _keep = neutron_capture_veto_keep(str(root), config, _an, run["Reco"][_energy_key[_an]], run["Reco"]["Energy"], args.ncveto,
+                                              reco=run["Reco"])
             if not _keep.all():
                 rprint(f"[cyan][INFO][/cyan] {name} {_an}: neutron-capture veto removes {np.mean(~_keep):.2%} of clusters")
             _ncveto_masks[_an] = _keep

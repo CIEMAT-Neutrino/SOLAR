@@ -65,6 +65,39 @@ def _signal_background_hep_model(run, config, name, idx):
     return score, info
 
 
+def _neutron_capture_scores(run, config, name, idx, offset_energy):
+    """Scores of the neutron-capture classifier (03b_signal_background.py --target ncap) for the clusters in its region
+    (SolarEnergy with the offset in [NCAP_ENERGY_MIN, NCAP_ENERGY_MAX)); 1 elsewhere. (None, None) without a classifier."""
+    for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
+        if not sample:
+            continue
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_neutron_capture.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_neutron_capture_fold{k}.pkl" for k in (0, 1)]
+        if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
+            break
+    else:
+        return None, None
+    info = json.load(open(jpath))
+    reco = run["Reco"]
+    offset_energy = np.asarray(offset_energy, dtype=float)
+    region = (offset_energy >= float(info["NCAP_ENERGY_MIN"])) & (offset_energy < float(info["NCAP_ENERGY_MAX"]))
+    score = np.ones(len(offset_energy))
+    if not region.any():
+        return score, info
+    models = [pickle.load(open(p, "rb")) for p in mpaths]
+    rows = np.asarray(idx[0])[region]
+    X = np.nan_to_num(np.column_stack([np.asarray(reco[feat], dtype=float)[rows] for feat in info["FEATURES"]]),
+                      nan=0.0, posinf=0.0, neginf=0.0)
+    fold = ((np.asarray(reco["Flag"])[rows].astype(np.int64) + np.asarray(reco["Event"])[rows].astype(np.int64)) % 2).astype(int)
+    sub_score = np.ones(len(rows))
+    for k in (0, 1):
+        m = fold == 1 - k  # model k was trained on fold k
+        if np.any(m):
+            sub_score[m] = models[k].predict_proba(X[m])[:, 1]
+    score[region] = sub_score
+    return score, info
+
+
 def _signal_background_flags(run, config, name, idx, this_params):
     """First SolarEnergy stage: True for clusters the signal/background classifier calls signal-like.
 
@@ -799,6 +832,12 @@ def compute_energy_calibration(
                     hep_bkg = (offset_e >= float(sb_info["SB_HEP_GATE_ENERGY"])) & (score < float(sb_info["SB_THRESHOLD_HEP"]))
                     hep_energy[hep_bkg] = no_offset[hep_bkg]
                 run["Reco"]["SolarEnergyHEP"][rows] = hep_energy
+                # Neutron-capture classifier score (veto MODE "classifier"); 1 outside its region or without a classifier.
+                nc_score, nc_info = _neutron_capture_scores(run, config, name, idx, run["Reco"]["SolarEnergyOffset"][rows])
+                if nc_score is not None:
+                    if "NeutronCaptureScore" not in run["Reco"]:
+                        run["Reco"]["NeutronCaptureScore"] = np.ones(len(run["Reco"]["Event"]))
+                    run["Reco"]["NeutronCaptureScore"][rows] = nc_score
                 # Alternative HEP energy (study variant hep_sbmodel): above SB_HEP_MODEL_GATE_ENERGY the HEP-trained
                 # classifier decides the offset; below it SolarEnergy is unchanged. Built only on request.
                 if this_params is not None and this_params.get("SB_HEP_MODEL", False):
