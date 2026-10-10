@@ -21,7 +21,8 @@
     "SIN13": 0.022,
     "SIN12": 0.304,
     "SIN13_SIGMA": 0.00056,
-    "ENERGY_SCALE_SIGMA": 0.02,
+    "_ENERGY_SCALE_SIGMA_comment": "Sensitivity energy-scale nuisance prior. 1% (2026-10-10, was 2%): the DUNE calibration programme targets a 1-2% understanding of the energy scale and 1% on the lepton energy (DUNE FD Interim Design Report Vol. 1, arXiv:1807.10334, sec. 4.1.1).",
+    "ENERGY_SCALE_SIGMA": 0.01,
     "DUNE_LATITUDE_DEG": 44.35,
     "OSCILLATION_BACKEND": "nufast",
     "OSCILLATION_GRID": {
