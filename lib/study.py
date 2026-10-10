@@ -394,6 +394,14 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "labeled_rebin": True, "extra": ["--fiducial_mc_threshold", "0", "--daynight_mc_threshold", "0", "--hep_mc_threshold", "0",
                                           "--mc_filter_threshold", "1"]},
     ],
+    # HEP with a stricter per-bin MC filter (03_analysis: per-sample 1 MeV bins with fewer simulated events are zeroed),
+    # cuts re-optimised, default volumes (2026-10-10, diagnostic).
+    "mcfilter": [
+        {"label": "hep_mcf3", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "analysis_override": ["HEP"], "labeled_rebin": True, "extra": ["--mc_filter_threshold", "3"]},
+        {"label": "hep_mcf5", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "analysis_override": ["HEP"], "labeled_rebin": True, "extra": ["--mc_filter_threshold", "5"]},
+    ],
     "oscpoint": [
         {"label": "oscpoint_solar",   "skip_rebin": True,  "skip_best_cuts": True, "skip_best_sigmas": True, "analysis_override": ["DayNight", "HEP"]},
         {"label": "oscpoint_reactor", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "extra": ["--dm2", "7.54e-5"], "analysis_override": ["DayNight", "HEP"]},
@@ -523,7 +531,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

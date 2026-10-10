@@ -137,6 +137,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},
     "mcgate_0": {"*": ("default", None)},
+    "hep_mcf3": {"*": ("default", None)},
+    "hep_mcf5": {"*": ("default", None)},
     # oscillation point: solar = default inputs; reactor dm2 gives a smaller day-night effect
     "oscpoint_solar":   {"*": ("default", "==")},
     "oscpoint_reactor": {"DayNight": ("default", "<="), "HEP": ("default", "==")},
