@@ -66,7 +66,10 @@ out = {
 path = score_categories_path(str(root), config)
 # Unchanged thresholds leave the file (and its mtime, which the template staleness checks compare) untouched; the
 # Truncated run and the background-model studies run this step concurrently.
-if os.path.isfile(path) and json.load(open(path)) == json.loads(json.dumps(out)):
+def _same(old, new):   # np.quantile can differ in the last digit between runs
+    return ({k: v for k, v in old.items() if k != "THRESHOLDS"} == {k: v for k, v in new.items() if k != "THRESHOLDS"}
+            and np.allclose(old["THRESHOLDS"], new["THRESHOLDS"], rtol=1e-9, atol=0))
+if os.path.isfile(path) and _same(json.load(open(path)), json.loads(json.dumps(out))):
     rprint(f"[cyan][INFO][/cyan] {config}: score thresholds unchanged ({path})")
     raise SystemExit(0)
 with open(f"{path}.tmp{os.getpid()}", "w") as handle:

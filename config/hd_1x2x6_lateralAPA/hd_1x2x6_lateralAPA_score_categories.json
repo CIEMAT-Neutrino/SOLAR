@@ -1,0 +1,21 @@
+{
+  "VARIABLE": "SignalBackgroundScore",
+  "SIGNAL_SAMPLE": "marley_final",
+  "ENERGY": "SolarEnergy",
+  "ENERGY_RANGE": [
+    8,
+    13
+  ],
+  "FIDUCIAL_FOLDER": "Truncated",
+  "QUANTILES": [
+    0.25,
+    0.5,
+    0.75
+  ],
+  "THRESHOLDS": [
+    0.5170990828431832,
+    0.6206125129647571,
+    0.727337024915837
+  ],
+  "N_CLUSTERS": 10153
+}
