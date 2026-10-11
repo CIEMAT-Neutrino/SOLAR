@@ -159,7 +159,7 @@ threshold = get_analysis_threshold(str(root), "SENSITIVITY", stage="SIGNIFICANCE
 thld = int(np.where(sensitivity_rebin_centers >= threshold)[0][0]) if threshold > 0.0 else 0
 
 expected_ecols = len(sensitivity_rebin_centers)
-expected_nrows = analysis_info["NADIR_BINS"]
+expected_nrows = analysis_info["NADIR_BINS"] * n_score_categories(str(root), args.config)   # one block per score category
 
 signal_path     = f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}{_template_suffix}"
 background_path = f"{info['PATH']}/SENSITIVITY/{args.config}/background/{args.folder.lower()}/{args.energy}{_template_suffix}"

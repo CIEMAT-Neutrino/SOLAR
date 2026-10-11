@@ -10,6 +10,7 @@ Prerequisites (all samples, signal + background):
   01  fiducialize      signal/01_fiducialize.py          --no-fiducialization   (on by default)
   02  best fiducial    signal/02_best_fiducial.py         (always runs with computation)
   02  fiducial plot    common/significance_plot.py --analysis Fiducial
+  00  score categories sensitivity/00_score_categories.py  (Sensitivity, SENSITIVITY_SCORE_CATEGORIES configs)
   03  cut scan         signal/03_analysis.py --export_fiducial --no-rebin to skip scan
                          Pass 1+2 merged: Ref arrays + FiducializationMask + rebinned DataFrames
 
@@ -1215,6 +1216,16 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
         plot_base_args + energy_args_for(args.energy) + exposure_arg_for()
         + ["--analysis", "Fiducial", "--fiducial-analyses", *args.analysis] + truth_fiducial_args_for() + membrane_veto_args_for(),
     )
+
+    # Thresholds of the Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES), read by 03_analysis.py
+    # and the template scripts.
+    _signal_names = [n for n in available_names if "marley" in n]
+    if args.rebin and "Sensitivity" in args.analysis and _signal_names and config in load_analysis_info(str(root)).get(
+            "SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
+        run_analysis_script(
+            "src/physics/sensitivity/00_score_categories.py",
+            ["--config", config, "--signal", _signal_names[0], "--folder", folder],
+        )
 
     # Pass 1+2 (merged): Ref arrays + FiducializationMask + full cut scan in one data load
     # study_label_args_for() is included so charge/dm2 variants write labeled Rebin pkls for

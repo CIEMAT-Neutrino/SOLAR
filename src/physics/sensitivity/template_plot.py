@@ -128,13 +128,18 @@ def select_cuts() -> Optional[Tuple[int, int, int]]:
     return int(selected["NHits"]), int(selected["OpHits"]), int(selected["AdjCl"])
 
 
+def _read_template(path: str) -> np.ndarray:
+    """Template summed over the Sensitivity score categories (the figures show the full sample)."""
+    return collapse_score_categories(pd.read_pickle(path), int(analysis_info.get("NADIR_BINS", 40)))
+
+
 def load_background_template(nhits: int, ophits: int, adjcl: int):
     exact = (
         f"{info['PATH']}/SENSITIVITY/{args.config}/background/{args.folder.lower()}/{args.energy}/"
         f"{args.config}_background_NHits{nhits}_AdjCl{adjcl}_OpHits{ophits}.pkl"
     )
     if os.path.exists(exact):
-        return exact, np.asarray(pd.read_pickle(exact), dtype=float)
+        return exact, _read_template(exact)
 
     pattern = (
         f"{info['PATH']}/SENSITIVITY/{args.config}/background/{args.folder.lower()}/{args.energy}/"
@@ -159,7 +164,7 @@ def load_background_template(nhits: int, ophits: int, adjcl: int):
             abs(parse(path)[2] - ophits),
         ),
     )
-    return best, np.asarray(pd.read_pickle(best), dtype=float)
+    return best, _read_template(best)
 
 
 def load_signal_template(nhits: int, ophits: int, adjcl: int):
@@ -173,7 +178,7 @@ def load_signal_template(nhits: int, ophits: int, adjcl: int):
         f"_dm2_{dm2:.3e}_sin13_{sin13:.3e}_sin12_{sin12:.3e}.pkl"
     )
     if os.path.exists(exact):
-        return exact, np.asarray(pd.read_pickle(exact), dtype=float)
+        return exact, _read_template(exact)
 
     pattern = (
         f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{args.folder.lower()}/{args.energy}/"
@@ -184,7 +189,7 @@ def load_signal_template(nhits: int, ophits: int, adjcl: int):
         return None, None
 
     first = matches[0]
-    return first, np.asarray(pd.read_pickle(first), dtype=float)
+    return first, _read_template(first)
 
 
 def load_oscillation_axis() -> np.ndarray:

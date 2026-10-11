@@ -128,6 +128,58 @@ def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, mai
              & (np.asarray(main_energy, dtype=float) < float(par["MAIN_CLUSTER_ENERGY_MIN"])))
 
 
+def score_categories_path(root: str, config: str) -> str:
+    """Thresholds of the Sensitivity score categories of one config (written by sensitivity/00_score_categories.py)."""
+    return os.path.join(root, "config", config, f"{config}_score_categories.json")
+
+
+def score_categories(root: str, config: str) -> list:
+    """Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES): the signal/background classifier score
+    thresholds of this config, or [] when the categories are off for it. With K thresholds the Sensitivity templates
+    hold K + 1 categories stacked along the nadir axis, the most signal-like first."""
+    import json as _json
+
+    cfg = load_analysis_info(root).get("SENSITIVITY_SCORE_CATEGORIES", {})
+    if not cfg or config not in cfg.get("ENABLED_CONFIGS", []):
+        return []
+    path = score_categories_path(root, config)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Sensitivity score categories on for {config} but {path} is missing: run src/physics/sensitivity/00_score_categories.py")
+    return [float(t) for t in _json.load(open(path))["THRESHOLDS"]]
+
+
+def score_category_index(score, thresholds):
+    """Category of each cluster: 0 for score >= the highest threshold, ..., len(thresholds) below the lowest."""
+    import numpy as np
+
+    t = np.sort(np.asarray(thresholds, dtype=float))
+    return len(t) - np.searchsorted(t, np.asarray(score, dtype=float), side="right")
+
+
+def score_category_of(root: str, config: str, reco) -> "Optional[Any]":
+    """Score category of every cluster in reco (score_category_index), or None when the categories are off for config."""
+    thresholds = score_categories(root, config)
+    if not thresholds:
+        return None
+    variable = load_analysis_info(root)["SENSITIVITY_SCORE_CATEGORIES"].get("VARIABLE", "SignalBackgroundScore")
+    return score_category_index(reco[variable], thresholds)
+
+
+def n_score_categories(root: str, config: str) -> int:
+    """Number of category blocks in the Sensitivity templates of config (1 when the categories are off)."""
+    return len(score_categories(root, config)) + 1
+
+
+def collapse_score_categories(template, rows: int):
+    """Sum a category-stacked template (K x rows, N) over its categories; other arrays are returned unchanged."""
+    import numpy as np
+
+    a = np.asarray(template, dtype=float)
+    if a.ndim != 2 or a.shape[0] == rows or a.shape[0] % rows:
+        return a
+    return a.reshape(-1, rows, a.shape[1]).sum(axis=0)
+
+
 def background_weight_divisor(root: str, folder: str, sample_name: str, config: str, true_energy=None):
     """Divisor of the weights of one background sample in a folder.
 
@@ -258,13 +310,16 @@ def load_available_background_dataframes(
     config: str,
     energy: str,
     study_label: str = None,
+    category: Optional[int] = None,
 ) -> List[Any]:
+    """(sample, Rebin pkl) of the configured backgrounds; category k reads the Sensitivity score-category Rebins."""
     essential = get_essential_backgrounds(root)
     frames = []
+    cat = f"_ScoreCat{category}" if category is not None else ""
     for sample in get_background_samples(root, analysis_name):
         base = f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/{folder.lower()}/{analysis_name.upper()}/{config}/{sample}/{config}_{sample}_{energy}"
-        labeled = f"{base}_Rebin_{study_label}.pkl" if study_label else None
-        standard = f"{base}_Rebin.pkl"
+        labeled = f"{base}_Rebin_{study_label}{cat}.pkl" if study_label else None
+        standard = f"{base}_Rebin{cat}.pkl"
         if labeled:
             if os.path.exists(labeled):
                 filepath = labeled

@@ -49,6 +49,9 @@ def check_signal_template_inputs(
         path for relative in source_inputs
         if os.path.isfile(path := os.path.join(root, relative))
     )
+    score_categories_json = os.path.join(root, "config", config, f"{config}_score_categories.json")
+    if os.path.isfile(score_categories_json):
+        dependencies.append(score_categories_json)
     if not os.path.isfile(analysis_config):
         return False, f"missing analysis configuration {analysis_config}"
     if not os.path.isfile(fiducial_path):

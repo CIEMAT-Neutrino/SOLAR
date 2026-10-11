@@ -526,6 +526,10 @@ for config in configs:
         _bin_edges = energy_edges
         _energy_centers_for_plot = energy_centers
     
+    # Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES): one response matrix per category of the
+    # signal/background classifier score, stacked in the saved templates (the background templates hold the same blocks).
+    score_category = score_category_of(str(root), config, run["Reco"])
+
     for cut in cuts_to_process:
         nhits  = int(cut["NHits"])
         adjcl  = int(cut["AdjCl"])
@@ -607,8 +611,20 @@ for config in configs:
             row=1, col=2,
         )
         h_weighted = np.nan_to_num(h_weighted, nan=0.0)
+        h_categories = None
+        if score_category is not None:
+            _selected = quality_mask & spatial_mask & veto_keep
+            h_categories = [
+                np.nan_to_num(np.histogram2d(
+                    run["Reco"][f"{energy}"][_selected & (score_category == _k)],
+                    run["Reco"]["SignalParticleK"][_selected & (score_category == _k)],
+                    bins=(_bin_edges, _bin_edges),
+                    weights=run["Reco"]["SignalParticleWeight"][_selected & (score_category == _k)],
+                )[0], nan=0.0)
+                for _k in range(n_score_categories(str(root), config))
+            ]
 
-        cut_data.append((nhits, adjcl, ophits, [h, h_weighted, None], fig, title))
+        cut_data.append((nhits, adjcl, ophits, [h, h_weighted, None, h_categories], fig, title))
     
     # ── Phase 1.5: Flyweight mode - save base templates and skip oscillation loop ────
     if args.flyweight:
@@ -622,9 +638,16 @@ for config in configs:
             )
             # Save the base template (unoscillated histogram in coarse bins)
             # This is the solar-weighted histogram (weight="")
+            _base_to_save = detector_mass * h_clean
+            if h_array[3] is not None:
+                # one (reco x true) block per score category
+                _base_to_save = detector_mass * np.vstack([
+                    clean_and_validate_template(_hk, label=f"Signal base template {args.config} {args.signal} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits} category {_k}", debug=args.debug)
+                    for _k, _hk in enumerate(h_array[3])
+                ])
             save_pkl(
                 # per-year template: detector_mass_kT x rate
-                detector_mass * h_clean,
+                _base_to_save,
                 f"{info['PATH']}/SENSITIVITY",
                 config=args.config,
                 name=args.signal,
@@ -706,9 +729,17 @@ for config in configs:
                         f"[cyan][INFO][/cyan] Saving signal template NHits{nhits} AdjCl{adjcl} OpHits{ophits} "
                         f"dm2={dm2:.3e} sin13={sin13:.3e} sin12={sin12:.3e}"
                     )
+                _template_rows = rebin_z
+                if h_array[3] is not None:
+                    # one NADIR_BINS block per score category
+                    _template_rows = np.vstack([
+                        rebin_hist2d(energy_centers, np.asarray(list(oscillation_df.index)),
+                                     np.dot(oscillation_df.values, _hk.T), sensitivity_rebin)[2]  # type: ignore[arg-type]
+                        for _hk in h_array[3]
+                    ])
                 # Apply stability guards before saving
                 _template_to_save = clean_and_validate_template(
-                    detector_mass * rebin_z,
+                    detector_mass * _template_rows,
                     label=f"Signal template {args.config} {args.signal} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits} dm2={dm2:.3e}",
                     debug=args.debug,
                 )

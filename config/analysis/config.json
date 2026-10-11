@@ -165,6 +165,14 @@
         }
       }
   },
+  "SENSITIVITY_SCORE_CATEGORIES": {
+    "_doc": "Sensitivity fit in categories of the signal/background classifier score (SignalBackgroundScore): the selected clusters of each cut are split at the QUANTILES of the score of the CC signal with ENERGY_RANGE (MeV) reconstructed energy (quality cuts, Sensitivity fiducial volume of FIDUCIAL_FOLDER, neutron-capture veto), written per config to config/<config>/<config>_score_categories.json by src/physics/sensitivity/00_score_categories.py. Signal and background templates hold one block of NADIR_BINS rows per category, the most signal-like first; the fit is unchanged (same bins and nuisances, summed over all rows). HD Central study 2026-10-11 (rerun 20 state, cut 3/4/5): Delta chi2 4.13 -> 6.77 at 30 years.",
+    "ENABLED_CONFIGS": ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"],
+    "VARIABLE": "SignalBackgroundScore",
+    "QUANTILES": [0.25, 0.5, 0.75],
+    "ENERGY_RANGE": [8, 13],
+    "FIDUCIAL_FOLDER": "Truncated"
+  },
   "MC_THRESHOLDS_PER_CONFIG": {
     "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with the gates divided by 5 (20/5/5, user's choice) and a 1-event per-bin filter (HEP 6.25 -> 13.74, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
     "hd_1x2x6_centralAPA": {

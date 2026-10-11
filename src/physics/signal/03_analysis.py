@@ -342,7 +342,6 @@ for config in configs:
         if args.skip_scan and not args.export_fiducial:
             continue
 
-        plot_lists = {analysis: [] for analysis in args.analysis}
         fiducials_by_analysis     = {a: get_best_fiducial(fiducials, config, energy, a)       for a in args.analysis}
         band_fiducials_by_analysis = {a: get_best_fiducial_bands(fiducials, config, energy, a) for a in args.analysis}
         analysis_cache = {}
@@ -385,6 +384,16 @@ for config in configs:
             if not _keep.all():
                 rprint(f"[cyan][INFO][/cyan] {name} {_an}: neutron-capture veto removes {np.mean(~_keep):.2%} of clusters")
             _ncveto_masks[_an] = _keep
+
+        # Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES): the background spectra are also written per
+        # category of the signal/background classifier score (Rebin pkls *_ScoreCat<k>); the signal templates are split in
+        # sensitivity/02_signal_template.py.
+        _score_cat = (score_category_of(str(root), config, run["Reco"])
+                      if "Sensitivity" in args.analysis and workflow_params.get("PARTICLE_TYPE") == "background" else None)
+        _pairs = [(_an, None) for _an in args.analysis]
+        if _score_cat is not None:
+            _pairs += [("Sensitivity", _k) for _k in range(n_score_categories(str(root), config))]
+        plot_lists = {_p: [] for _p in _pairs}
 
         # Surface cut and reco arrays extracted once to avoid per-iteration dict lookups.
         _surface_mask = surface_quality_mask(str(root), name, args.folder, run["Reco"]["SignalParticleSurface"], run["Reco"], info)
@@ -526,15 +535,17 @@ for config in configs:
                     )
                 _quality_mask_cut = _cur_cut
             if _prev_cut is not None and _cur_cut != _prev_cut:
-                for _a in args.analysis:
-                    analysis_cache.pop((_a, *_prev_cut), None)
+                for _p in _pairs:
+                    analysis_cache.pop((*_p, *_prev_cut), None)
             _prev_cut = _cur_cut
 
-            for analysis in args.analysis:
+            for analysis, _cat in _pairs:
                 fiducial = fiducials_by_analysis[analysis]
-                cache_key = (analysis, this_nhit, this_ophit, this_adjcl)
+                cache_key = (analysis, _cat, this_nhit, this_ophit, this_adjcl)
                 if cache_key not in analysis_cache:
                     mask = _quality_mask & _spatial_masks[analysis] & _ncveto_masks[analysis]
+                    if _cat is not None:
+                        mask = mask & (_score_cat == _cat)
                     sel_reco = np.asarray(run["Reco"][_energy_key[analysis]])[mask]
                     sel_true = _true_energy_arr[mask]
                     # Pre-compute bin indices once; reuse with bincount for all subsequent
@@ -631,7 +642,7 @@ for config in configs:
                     w2 *= cached["mc_filter"]
                     h_error = np.sqrt(w2)
 
-                    plot_lists[analysis].append({
+                    plot_lists[(analysis, _cat)].append({
                         "Geometry": config.split("_")[0],
                         "Config": config,
                         "Name": name,
@@ -653,7 +664,7 @@ for config in configs:
                         "AdjCl": this_adjcl,
                     })
 
-                if (args.minimal_cuts or (this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls)) and weight == "SignalParticleWeight":
+                if _cat is None and (args.minimal_cuts or (this_nhit == args.nhits and this_ophit == args.ophits and this_adjcl == args.adjcls)) and weight == "SignalParticleWeight":
                     analysis_key = analysis.upper()
                     if args.export_raw:
                         save_pkl(np.asarray(mask), export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisMask_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
@@ -668,7 +679,7 @@ for config in configs:
                     cut_path = f"{cut_dir}/analysis_cuts_{analysis_key}{_ref_sfx}.json"
                     merge_and_write_json(cut_path, cut_impact)
 
-                if args.export_raw and weight == "SignalParticleWeight" and best_cuts_by_analysis and args.best_cuts_only:
+                if _cat is None and args.export_raw and weight == "SignalParticleWeight" and best_cuts_by_analysis and args.best_cuts_only:
                     bc = best_cuts_by_analysis.get(analysis, {})
                     if bc and int(bc.get("NHits", -1)) == this_nhit and int(bc.get("OpHits", -1)) == this_ophit and int(bc.get("AdjCl", -1)) == this_adjcl:
                         analysis_key = analysis.upper()
@@ -678,19 +689,19 @@ for config in configs:
                         save_pkl(run["Reco"][weight][mask], export_path, config, name, subfolder=args.folder.lower(), filename=f"AnalysisWeights_{energy}_{analysis_key}_NHits{this_nhit}_OpHits{this_ophit}_AdjCl{this_adjcl}{_mask_sfx}", rm=user_input["rewrite"], debug=user_input["debug"])
 
         if _prev_cut is not None:
-            for _a in args.analysis:
-                analysis_cache.pop((_a, *_prev_cut), None)
+            for _p in _pairs:
+                analysis_cache.pop((*_p, *_prev_cut), None)
 
         if not args.best_cuts_only:
             # All analyses use identical rebinning (0-31 MeV, 1 MeV bins)
             # Cache rebin result by DataFrame id to avoid duplicate computation
             rebin_cache = {}
             rebin_dict = {"DayNight": daynight_rebin, "Sensitivity": sensitivity_rebin, "HEP": hep_rebin}
-            for analysis in args.analysis:
-                df = pd.DataFrame(plot_lists[analysis])
+            for analysis, _cat in _pairs:
+                df = pd.DataFrame(plot_lists[(analysis, _cat)])
                 if df.empty:
                     continue
-                if args.save_weighted:
+                if args.save_weighted and _cat is None:
                     save_df(df, data_path, config=config, name=name, subfolder=args.folder.lower(), filename=f"{energy}_{analysis}_AnalysisData", rm=user_input["rewrite"], debug=user_input["debug"])
 
                 # Cache check: if this exact DataFrame was already rebinned, reuse result
@@ -699,7 +710,7 @@ for config in configs:
                     rebin_cache[df_id] = rebin_df_columns(df, rebin_dict[analysis], "Energy", "Counts", "Counts/Energy", "Error", "MCCounts")
                 rebin_df = rebin_cache[df_id]
 
-                _rebin_label = _ctx.rebin_label(energy)
+                _rebin_label = _ctx.rebin_label(energy) + (f"_ScoreCat{_cat}" if _cat is not None else "")
 
                 # Never persist an all-zero template: it silently propagates into the cut
                 # optimiser, which then walks to the loosest grid corner because there is
@@ -710,7 +721,7 @@ for config in configs:
                 essential_map = get_essential_backgrounds(str(root))
                 _is_essential = essential_map.get(str(name).lower(), False)
                 _mc_sum = float(np.sum([np.sum(_c) for _c in rebin_df["MCCounts"]]))
-                if _mc_sum == 0.0 and _is_essential:
+                if _mc_sum == 0.0 and _is_essential and _cat is None:
                     raise SystemExit(
                         f"[ERROR] Rebin template for '{name}' ({config}, {args.folder}, {analysis}, "
                         f"{energy}) has zero MCCounts at every cut — refusing to overwrite "

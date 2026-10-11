@@ -732,10 +732,11 @@ def _flyweight_base_template(signal_path: str, config: str, name: str, nhits: in
     require_per_year_templates(signal_path)
     base_template = np.nan_to_num(pd.read_pickle(base_template_path), nan=0.0)
     expected_coarse_bins = len(sensitivity_rebin_centers)
-    if base_template.shape != (expected_coarse_bins, expected_coarse_bins):
+    expected_rows = expected_coarse_bins * n_score_categories(str(root), config)   # one block per score category
+    if base_template.shape != (expected_rows, expected_coarse_bins):
         raise ValueError(
             f"Flyweight base template has unexpected shape {base_template.shape}. "
-            f"Expected ({expected_coarse_bins}, {expected_coarse_bins}) for coarse sensitivity bins."
+            f"Expected ({expected_rows}, {expected_coarse_bins}) for coarse sensitivity bins and the score categories."
         )
     return base_template
 
@@ -783,9 +784,10 @@ def _flyweight_convolve(base_template, point):
                 pee_values_coarse[i_nadir, k] = np.interp(
                     coarse_energy_centers[k], fine_energy_centers, pee_values_fine[i_nadir, :]
                 )
-    # (N_nadir, N_true_coarse) @ (N_true_coarse, N_reco_coarse) -> (N_nadir, N_reco_coarse);
-    # base_template already carries detector_mass (per-year normalisation).
-    return np.dot(pee_values_coarse, base_template.T)
+    # (N_nadir, N_true_coarse) @ (N_true_coarse, N_reco_coarse) -> (N_nadir, N_reco_coarse) per score category,
+    # stacked along the nadir axis; base_template already carries detector_mass (per-year normalisation).
+    blocks = np.asarray(base_template).reshape(-1, len(coarse_energy_centers), len(coarse_energy_centers))
+    return np.vstack([np.dot(pee_values_coarse, block.T) for block in blocks])
 
 
 def _mark_invalid(output_dir: str, reason: str, tag: str = "") -> None:
@@ -983,6 +985,7 @@ for config in configs:
                 bkg_raw = 0 * pred1_raw
 
             _expected_ecols = len(sensitivity_rebin_centers)
+            _expected_rows = int(analysis_info["NADIR_BINS"]) * n_score_categories(str(root), config)
             
             # GUARD: Validate and clean templates
             MAX_TEMPLATE_VALUE = 1e10
@@ -1002,6 +1005,11 @@ for config in configs:
                     bkg_raw = _arr
                 
                 # Check shape
+                if np.ndim(_arr) >= 2 and _arr.shape[0] != _expected_rows:
+                    raise ValueError(
+                        f"Template shape mismatch ({_label}): got {_arr.shape[0]} rows, expected {_expected_rows} "
+                        f"(NADIR_BINS x score categories). Regenerate the signal and background templates."
+                    )
                 if np.ndim(_arr) >= 2 and _arr.shape[1] != _expected_ecols:
                     raise ValueError(
                         f"Template shape mismatch ({_label}): got {_arr.shape[1]} energy columns, "

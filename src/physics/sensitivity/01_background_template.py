@@ -394,6 +394,23 @@ plot_df = explode(
 plot_df["Counts"] = plot_df["Counts"].replace(0, np.nan)
 plot_df["Counts/Energy"] = plot_df["Counts/Energy"].replace(0, np.nan)
 
+# Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES): one background spectrum per category of the
+# signal/background classifier score (Rebins *_ScoreCat<k> from 03_analysis.py), stacked along the nadir axis.
+score_category_dfs = []
+for _k in range(n_score_categories(str(root), args.config) if score_categories(str(root), args.config) else 0):
+    _frames = load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy,
+                                                    study_label=_bkg_study_label, category=_k)
+    score_category_dfs.append(pd.concat([pd.read_pickle(_fp) for _, _fp in _frames], ignore_index=True))
+
+
+def _category_total(category_df, nhits, adjcl, ophits):
+    """Summed background spectrum of one score category at one cut (raw, as `total` below; one Rebin row per sample)."""
+    rows = category_df[(category_df["NHits"] == nhits) & (category_df["OpHits"] == ophits) & (category_df["AdjCl"] == adjcl)]
+    total = np.zeros(len(sensitivity_rebin) - 1)
+    for _, row in rows.iterrows():
+        total = total + np.nan_to_num(np.asarray(row["Counts"], dtype=float))
+    return total
+
 if args.oscillation_backend == "file":
     (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
         dm2=None,
@@ -698,6 +715,13 @@ for idx, cut in enumerate(cut_entries):
     
     # Apply stability guards before saving: clean NaN/Inf, clip negative and extreme values
     _template_to_save = detector_mass * smoothed_bkg_hist
+    if score_category_dfs:
+        # One NADIR_BINS block per score category, each smoothed as the total spectrum above.
+        _template_to_save = detector_mass * np.vstack([
+            _project_1d_to_2d(smooth_histogram_with_config(_category_total(_cdf, nhits, adjcl, ophits), smoothing_config_1d),
+                              oscillation_df, nadir_pdf=_nadir_pdf_weights)
+            for _cdf in score_category_dfs
+        ])
     _template_to_save = clean_and_validate_template(
         _template_to_save,
         label=f"Background template {args.config} {energy} NHits{nhits} AdjCl{adjcl} OpHits{ophits}",
