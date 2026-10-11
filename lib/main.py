@@ -116,6 +116,15 @@ def update_default_values(
 
             # Substitute the values that are -1e6 with the central x coordinate point
             output += f"\t\t[cyan][INFO][/cyan] Update Default RecoX Values by Setting {100 * np.sum(run['Reco']['RecoX'][idx] == -1e6) / len(run['Reco']['RecoX'][idx]):.2f}% to Default ([{info['DETECTOR_MIN_X']}, {info['DETECTOR_MAX_X']}])\n"
+            # VD (2026-10-11): a single drift volume, so the side of a cluster is not known from the readout. Clusters
+            # without a matched flash get the middle of the drift (neutral default) instead of the edge picked by the
+            # sign of the true X. HD keeps the edge of the drift volume on the side of the cluster (the TPC is known).
+            if info["GEOMETRY"] == "vd":
+                run["Reco"]["RecoX"][idx] = np.where(
+                    run["Reco"]["RecoX"][idx] == -1e6,
+                    0.5 * (info["DETECTOR_MIN_X"] + info["DETECTOR_MAX_X"]),
+                    run["Reco"]["RecoX"][idx],
+                )
             run["Reco"]["RecoX"][idx] = np.where(
                 (run["Reco"]["RecoX"][idx] == -1e6)
                 * (run["Reco"]["SignalParticleX"][idx] >= 0),

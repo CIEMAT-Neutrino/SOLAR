@@ -97,7 +97,7 @@ is_signal = "marley" in name
 # particle (Purity == 0, SignalParticleK is a dummy MARLEY neutrino), so they use the energy of the
 # cluster's main particle and the dominant-generator charge fraction instead. Neutron clusters come
 # from capture gammas / recoils, so the neutron kinetic energy is not their reference either.
-SAMPLE_TRUTH = {"marley": "ElectronK", "gamma": "SignalParticleK", "neutron": "MainK", "radiological": "MainK"}
+SAMPLE_TRUTH = {"marley": "ElectronK", "gamma": "SignalParticleK", "neutron": "MainK", "radiological": "MainK", "electrongun": "SignalParticleK", "gammagun": "SignalParticleK"}  # *gun: single-particle productions (gun_1008b)
 SAMPLE_PURITY = {"radiological": "GenPurity"}
 family = name.split("_")[0]
 
@@ -134,6 +134,10 @@ workflow_params = (
     {"DEFAULT_SIGNAL_WEIGHT": ["truth", "osc"], "DEFAULT_SIGNAL_NADIR": ["mean", "day", "night"],
      "PARTICLE_TYPE": "signal", "PARTICLE_WEIGHTING": "volume", "OSCILLATION_BACKEND": "nufast"}
     if is_signal
+    # Single-particle productions (*gun_*) are generated uniformly in the active volume like the signal; only
+    # --unweighted makes sense for them (no physical spectrum, no exposure files): weights are skipped.
+    else {"PARTICLE_TYPE": "signal", "PARTICLE_WEIGHTING": "volume", "COMPUTE_WEIGHTS": False}
+    if name.split("_")[0].endswith("gun")
     else {"PARTICLE_TYPE": "background", "PARTICLE_WEIGHTING": "histogram"}
 )
 weight_branch = "SignalParticleWeightOscMean" if is_signal and args.weight == "analysis" else "SignalParticleWeight"

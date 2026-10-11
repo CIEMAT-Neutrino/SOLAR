@@ -28,7 +28,9 @@ def _calib_fallback(name: str, default: str) -> str:
     the legacy marley_official default. The *_test samples (e.g. the combined PIC HD Central gamma_test /
     neutron_test) come from the same chain and use it too.
     """
-    return "marley_final" if str(name).endswith(("_final", "_test")) and str(name) != "marley_final" else default
+    # The single-particle productions (electrongun_*, gammagun_*, neutrongun_*) ran the same final reconstruction.
+    final_chain = str(name).endswith(("_final", "_test")) or str(name).split("_")[0].endswith("gun")
+    return "marley_final" if final_chain and str(name) != "marley_final" else default
 
 
 

@@ -201,7 +201,8 @@ def compute_reco_workflow(
         )
         new_branches += this_new_branches
 
-    if workflow == "SIGNIFICANCE":
+    # COMPUTE_WEIGHTS False skips the surface and flux weights (single-particle productions have no exposure files)
+    if workflow == "SIGNIFICANCE" and (params or {}).get("COMPUTE_WEIGHTS", True):
         run, output, new_branches_surface = compute_particle_surface(
             run,
             configs,

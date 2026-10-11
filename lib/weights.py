@@ -465,8 +465,9 @@ def compute_particle_surface(
                 * (np.asarray(run[tree]["Version"]) == info["VERSION"])
                 * (np.asarray(run[tree]["Name"]) == name)
             )
-            # If marley in name, production is flat so surface is -1 (unknown)
-            if "marley" in name.lower():
+            # If marley in name, production is flat so surface is -1 (unknown); so are the single-particle
+            # productions (*gun_*), generated uniformly in the active volume
+            if "marley" in name.lower() or name.split("_")[0].lower().endswith("gun"):
                 run[tree]["SignalParticleSurface"][idx] = -1.0
 
             elif "gamma" in name.lower() or "neutron" in name.lower() or "radiological" in name.lower():
@@ -523,7 +524,7 @@ def compute_particle_surface(
 
             else:
                 rprint(
-                    f"[red][ERROR][/red] Particle name {name} not recognized for surface computation[/red]"
+                    f"[red][ERROR][/red] Particle name {name} not recognized for surface computation"
                 )
 
     output += f"\tParticle surface computation \t-> Done!\n\n"
