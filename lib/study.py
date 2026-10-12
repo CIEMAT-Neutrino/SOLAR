@@ -334,7 +334,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # excluded_configs: vd_1x8x14_3view_30deg_shielded does not run this study (2026-09-22, by request).
     "bkgmodel": [
         {"label": "bkgmodel_nominal", "folder": "Nominal", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
-         "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
+         "excluded_configs": [], "extra": ["--reference_folder", "Truncated"]},
         {"label": "bkgmodel_reduced", "folder": "Reduced", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True, "skip_templates": False,
          "excluded_configs": ["vd_1x8x14_3view_30deg_shielded"], "extra": ["--reference_folder", "Truncated"]},
         # Pessimistic: the Truncated selection with the unscaled external gamma/neutron rates (the other folders
