@@ -173,6 +173,15 @@
     "ENERGY_RANGE": [8, 13],
     "FIDUCIAL_FOLDER": "Truncated"
   },
+  "SIGNAL_GENERATION_CONTAINMENT": {
+    "_doc": "Signal samples whose MARLEY vertices are generated in a volume larger than the active TPC (the official VD Top dataset: x up to 375 cm, y +-732 cm, z -57..2157 cm against the active box of the config json; 2026-10-12, 79% of its events give a reco cluster against ~97% elsewhere). N_gen counts only the Truth entries with the vertex inside DETECTOR_MIN/MAX_X/Y/Z, so the rate is normalised to the active mass (lib/weights.resolve_generated_event_count). Before: VD Top signal low by a factor ~0.82.",
+    "ENABLED_CONFIGS": ["vd_1x8x14_3view_30deg_nominal"]
+  },
+  "HEP_TAIL_EXTRAPOLATION": {
+    "_doc": "HEP (01_hep.py): for these configs the external gamma/neutron spectrum of every cut gets, in the bins the cut leaves without simulated events, the tail of the same sample at the loosest cut of the scan (same fiducial volume; exponential fit of the populated tail, scaled by the cut/loose ratio where both have >= 3 simulated events, stopped one bin above the last populated loose bin: MODE endpoint). Same model as src/physics/hep/02_hep_energy_limit.py (ch. 8.3 tails-extrapolated curves). VD Top: its tight selection leaves 0-1 simulated gammas per bin above 21 MeV, which the per-bin MC filter zeroes, so those bins were background-free.",
+    "ENABLED_CONFIGS": ["vd_1x8x14_3view_30deg_nominal"],
+    "MODE": "endpoint"
+  },
   "MC_THRESHOLDS_PER_CONFIG": {
     "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with the gates divided by 5 (20/5/5, user's choice) and a 1-event per-bin filter (HEP 6.25 -> 13.74, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
     "hd_1x2x6_centralAPA": {

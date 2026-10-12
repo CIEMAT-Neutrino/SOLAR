@@ -180,6 +180,42 @@ def collapse_score_categories(template, rows: int):
     return a.reshape(-1, rows, a.shape[1]).sum(axis=0)
 
 
+def external_tail_model(loose_counts, loose_mc, edges, threshold: float):
+    """Exponential fit of an external background spectrum at the loosest cut (HEP_TAIL_EXTRAPOLATION), as in
+    src/physics/hep/02_hep_energy_limit.py: log-linear fit of the bins with >= 3 simulated events from threshold - 4 MeV
+    up to the last populated bin. Returns (slope, intercept, last populated bin index, loose counts, loose MC) or None."""
+    import numpy as np
+
+    lc, lmc = np.asarray(loose_counts, dtype=float), np.asarray(loose_mc, dtype=float)
+    edges = np.asarray(edges, dtype=float); centers = 0.5 * (edges[:-1] + edges[1:])
+    if not np.any(lmc > 0):
+        return None
+    last = int(np.max(np.where(lmc > 0)[0]))
+    fit = (lmc >= 3) & (centers >= threshold - 4) & (np.arange(len(lc)) <= last) & (lc > 0)
+    if fit.sum() < 3:
+        return None
+    slope, icpt = np.polyfit(centers[fit], np.log(lc[fit]), 1, w=np.sqrt(lmc[fit]))
+    return float(slope), float(icpt), last, lc, lmc
+
+
+def extrapolated_external_tail(counts, mc, model, edges, threshold: float, mode: str = "endpoint"):
+    """Background to add to one cut's external spectrum in the bins the cut leaves empty (see external_tail_model)."""
+    import numpy as np
+
+    c, mc = np.asarray(counts, dtype=float), np.asarray(mc, dtype=float)
+    if model is None:
+        return np.zeros_like(c)
+    slope, icpt, last, lc, lmc = model
+    edges = np.asarray(edges, dtype=float); centers = 0.5 * (edges[:-1] + edges[1:])
+    both = (mc >= 3) & (lmc >= 3) & (c > 0)
+    k = float(c[both].sum() / lc[both].sum()) if both.any() else float(c.sum() / max(lc[c > 0].sum(), 1e-30))
+    one_event = float(c[mc > 0].sum() / max(mc[mc > 0].sum(), 1.0))
+    empty = (c < 0.01 * one_event) & (edges[:-1] >= threshold)
+    if mode == "endpoint":
+        empty &= np.arange(len(c)) <= last + 1
+    return np.where(empty, k * np.exp(icpt + slope * centers), 0.0)
+
+
 def background_weight_divisor(root: str, folder: str, sample_name: str, config: str, true_energy=None):
     """Divisor of the weights of one background sample in a folder.
 

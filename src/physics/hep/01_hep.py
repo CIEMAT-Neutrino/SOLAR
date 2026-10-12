@@ -443,6 +443,24 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         if _thr <= 0:
             rprint(f"[cyan][INFO][/cyan] MC support: '{_comp}' has 0 simulated events everywhere in this grid; not gated.")
 
+    # HEP_TAIL_EXTRAPOLATION: external gamma/neutron tails from the loosest cut fill the bins a cut leaves empty.
+    _tail_cfg = load_analysis_info(str(root)).get("HEP_TAIL_EXTRAPOLATION", {})
+    _tail_models = {}
+    if config in _tail_cfg.get("ENABLED_CONFIGS", []):
+        for _comp in _hep_bkg_components:
+            if _comp.split("_")[0] not in ("gamma", "neutron"):
+                continue
+            _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
+            if _cdf.empty:
+                continue
+            _loose = _cdf.loc[(_cdf["NHits"] == _cdf["NHits"].min()) & (_cdf["OpHits"] == _cdf["OpHits"].min()) & (_cdf["AdjCl"] == _cdf["AdjCl"].max())]
+            if _loose.empty:
+                continue
+            _tail_models[_comp] = external_tail_model(_loose.iloc[0]["Counts"], _loose.iloc[0]["MCCounts"], hep_rebin, args.threshold)
+            if _tail_models[_comp] is not None:
+                rprint(f"[cyan][INFO][/cyan] {config} {_comp}: HEP tail extrapolation, loose-cut slope {_tail_models[_comp][0]:.2f}/MeV, "
+                       f"last populated bin {hep_rebin_centers[_tail_models[_comp][2]]:.1f} MeV")
+
     sigmamax = 0.0
     last_sigma2 = 1e6
     last_sigma3 = 1e6
@@ -500,6 +518,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             counts = np.asarray(this_comp_df["Counts"].values[0][threshold_idx:], dtype=float)
             errors = np.asarray(this_comp_df["Error"].values[0][threshold_idx:], dtype=float)
             mc_counts = np.asarray(this_comp_df["MCCounts"].values[0][threshold_idx:], dtype=float)
+            if _tail_models.get(component) is not None:
+                counts = counts + extrapolated_external_tail(
+                    this_comp_df["Counts"].values[0], this_comp_df["MCCounts"].values[0], _tail_models[component],
+                    hep_rebin, args.threshold, _tail_cfg.get("MODE", "endpoint"))[threshold_idx:]
             mc_sums[component] = float(np.sum(mc_counts))
             component_smoothing_config = get_component_smoothing_config(smoothing_config, component)
             smoothed_counts = smooth_histogram_with_config(counts, component_smoothing_config)

@@ -183,7 +183,7 @@ def resolve_generated_event_count(
                 f"available (Config/{spec}.npy missing or inconsistent, Truth tree not loaded). Run "
                 f"src/tools/backfill_analyzed_events.py or add an explicit productions.json entry."
             )
-        return counts[spec]
+        return _contained(counts[spec], run, config, name, info)
 
     selected = counts.get("SelectedEvents")
     if selected is not None and selected > 0:
@@ -196,7 +196,29 @@ def resolve_generated_event_count(
                 + (f" (analysed {counts['AnalyzedEvents']:.0f})" if "AnalyzedEvents" in counts else "")
                 + f" over {n_jobs} jobs (ratio {ratio:.3f}). Using productions.json.",
             )
-    return spec_total
+    return _contained(spec_total, run, config, name, info)
+
+
+def _contained(n_gen: float, run: dict, config: str, name: str, info: Optional[dict]) -> float:
+    """N_gen of a signal sample whose vertices are generated beyond the active TPC (SIGNAL_GENERATION_CONTAINMENT): only
+    the share of Truth entries with the vertex inside DETECTOR_MIN/MAX_X/Y/Z counts, so the weights are normalised to the
+    active mass the rate is quoted for."""
+    cfg = load_analysis_info(str(root)).get("SIGNAL_GENERATION_CONTAINMENT", {})
+    if config not in cfg.get("ENABLED_CONFIGS", []) or not name.lower().startswith("marley") or info is None:
+        return n_gen
+    t = run.get("Truth", {})
+    if not all(k in t for k in ("SignalParticleX", "SignalParticleY", "SignalParticleZ", "Name")):
+        raise ValueError(f"{config}/{name}: SIGNAL_GENERATION_CONTAINMENT needs the Truth vertex branches")
+    m = ((np.asarray(t["Geometry"]) == info["GEOMETRY"]) & (np.asarray(t["Version"]) == info["VERSION"])
+         & (np.asarray(t["Name"]) == name))
+    inside = m.copy()
+    for ax in ("X", "Y", "Z"):
+        v = np.asarray(t[f"SignalParticle{ax}"], dtype=float)
+        inside &= (v >= info[f"DETECTOR_MIN_{ax}"]) & (v <= info[f"DETECTOR_MAX_{ax}"])
+    frac = float(inside.sum() / max(m.sum(), 1))
+    _report_once((config, name, "containment"), f"[cyan][INFO][/cyan] {config}/{name}: {frac:.3f} of the generated vertices "
+                 f"lie inside the active volume; N_gen {n_gen:.0f} -> {n_gen * frac:.0f} (SIGNAL_GENERATION_CONTAINMENT)")
+    return n_gen * frac
 
 
 def evaluate_1d_pdf(kde, values):
