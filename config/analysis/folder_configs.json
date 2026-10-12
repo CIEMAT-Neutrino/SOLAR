@@ -8,8 +8,8 @@
   ],
   "FOLDERS": {
     "Nominal": {
-      "description": "Full detector geometry. Z endcap backgrounds rejected via fiducial Z cut. No statistical reduction. Background model: the external gamma and neutron rates are divided by background_model_factors (12.57 for HD and VD) at all energies; the Pessimistic folder keeps the unscaled rates.",
-      "z_endcap_rejection": "fiducial",
+      "description": "Unscaled external rates without end-caps (2026-10-12, user decision): Z endcap backgrounds rejected via the SignalParticleSurface < 3 filter, as Truncated and Reduced; the external gamma and neutron rates are NOT divided by background_model_factors (no 4pi external reduction), as Pessimistic. No statistical reduction. Until 2026-10-12 Nominal kept the end-cap surfaces (fiducial Z cut) and divided the external rates by 12.57.",
+      "z_endcap_rejection": "surface",
       "apply_reduction": false,
       "path_key": "nominal",
       "reduction_threshold_mev": 0.0,
@@ -19,16 +19,6 @@
         "neutron": 1,
         "alpha": 1,
         "radiological": 1
-      },
-      "background_model_factors": {
-        "gamma": {
-          "hd": 12.57,
-          "vd": 12.57
-        },
-        "neutron": {
-          "hd": 12.57,
-          "vd": 12.57
-        }
       }
     },
     "Reduced": {
