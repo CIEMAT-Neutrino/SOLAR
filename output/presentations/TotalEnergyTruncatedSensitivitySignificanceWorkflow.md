@@ -176,18 +176,9 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 ---
 
-### HD Central
+### Fiducial plots
 
-<div class="two-col">
-  <div>
-<p><strong>No Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_SENSITIVITY_NoFiducial_Significance.png">
-  </div>
-  <div>
-<p><strong>Best Fiducial</strong></p>
-<img src="../../output/images/solar/fiducial/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_TotalEnergy_SENSITIVITY_BestFiducial_Significance.png">
-  </div>
-</div>
+No fiducial optimization plots were found for this folder.
 
 ---
 
@@ -195,10 +186,10 @@ Improvements 2–5 implemented in [lib/root.py](../../lib/root.py) and [src/phys
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 100 | 280 | 120 | 0.045 | 0.247 | 2.16 |
-| HD Lateral | 40 | 20 | 20 | 0.002 | 0.057 | 5.64 |
+| HD Central | 140 | 280 | 240 | 0.037 | 2.305 | 1.45 |
+| HD Lateral | 0 | 0 | 180 | 0.042 | 0.087 | 5.02 |
 | VD Top | 0 | 0 | 0 | 0.097 | 0.097 | 7.84 |
-| VD Bottom Shielded | 60 | 80 | 0 | 0.061 | 0.101 | 6.28 |
+| VD Bottom Shielded | 0 | 280 | 500 | 0.714 | 0.918 | 2.40 |
 
 ---
 
@@ -292,85 +283,25 @@ No significance plot found for VD Bottom Shielded.
 
 ### HD Central Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_centralAPA/marley/truncated/hd_1x2x6_centralAPA_marley_Background_TotalEnergy_NHits1_AdjCl4_OpHits8.png">
-</div>
+No template found for HD Central
 
 ---
 
 ### HD Lateral Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_Background_TotalEnergy_NHits4_AdjCl4_OpHits4.png">
-</div>
+No template found for HD Lateral
 
 ---
 
 ### VD Top Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_nominal/marley/truncated/vd_1x8x14_3view_30deg_nominal_marley_Background_TotalEnergy_NHits7_AdjCl7_OpHits20.png">
-</div>
+No template found for VD Top
 
 ---
 
 ### VD Bottom Shielded Templates
 
-<div class="center">
-  <img src="../../output/images/analysis/sensitivity/templates/vd_1x8x14_3view_30deg_shielded/marley/truncated/vd_1x8x14_3view_30deg_shielded_marley_Background_TotalEnergy_NHits7_AdjCl15_OpHits18.png">
-</div>
-
----
-
-## 1D Parameter Projections
-
----
-
-### HD Central
-
-No 1D projections found.
-
----
-
-### HD Lateral: Mixing Angle Projections
-
-<div class="two-col">
-  <div>
-<p><strong>sin²θ₁₂</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin12_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>sin²θ₁₃</strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_sin13_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### HD Lateral: Mass Splitting Projections
-
-<div class="two-col">
-  <div>
-<p><strong>Δm²<sub>sol</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_solar_projection_NuFit61.png">
-  </div>
-  <div>
-<p><strong>Δm²<sub>react</sub></strong></p>
-<img src="../../output/images/analysis/sensitivity/hd_1x2x6_lateralAPA/marley/truncated/hd_1x2x6_lateralAPA_marley_hd_1x2x6_lateralAPA_marley_Truncated_SolarEnergy_NHits3_AdjCl2_OpHits10_dm2_reactor_projection_NuFit61.png">
-  </div>
-</div>
-
----
-
-### VD Top
-
-No 1D projections found.
-
----
-
-### VD Bottom Shielded
-
-No 1D projections found.
+No template found for VD Bottom Shielded
 
 ---
 
