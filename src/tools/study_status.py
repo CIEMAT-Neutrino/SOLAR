@@ -84,10 +84,10 @@ CONFIG_EPOCHS = {
     "hd_1x2x6_lateralAPA": "2026-09-23T17:39",
 }
 # Studies that do not apply to a geometry (label -> config-name prefix): the veto only acts on VD planes;
-# bkgmodel is not run on vd_1x8x14_3view_30deg_shielded (2026-09-22, by request; also lib.study excluded_configs).
+# bkgmodel_reduced is not run on vd_1x8x14_3view_30deg_shielded (2026-09-22, by request; also lib.study excluded_configs);
+# bkgmodel_nominal is (2026-10-12, unscaled rates without end-caps, adeaba1).
 NOT_APPLICABLE = {
     "membrane_veto_off": ("hd_",),
-    "bkgmodel_nominal": ("vd_1x8x14_3view_30deg_shielded",),
     "bkgmodel_reduced": ("vd_1x8x14_3view_30deg_shielded",),
 }
 
