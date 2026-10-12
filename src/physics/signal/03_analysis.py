@@ -656,7 +656,7 @@ for config in configs:
                         "Counts": h.tolist(),
                         "Energy": true_energy_centers,
                         "EnergyUnit": "MeV",
-                        "CountsUnit": "events/(kT·yr)",
+                        "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
                         "Error": h_error,
                         "Color": color,
                         "NHits": this_nhit,
