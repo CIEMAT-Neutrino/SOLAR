@@ -93,6 +93,17 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--electron_fraction_min",
+    type=float,
+    default=0.5,
+    help=(
+        "F0(NHits) table: use only clusters whose charge comes at least this much from the primary electron "
+        "(SignalFrac electron share; 2026-10-13). Single-hit de-excitation-gamma fragments carry the event's "
+        "ElectronK as reference and pulled the NHits = 1 mode to 34 instead of ~140 ADC x tick/MeV in the 60k VD Top "
+        "sample. Set to 0 for the previous selection."
+    ),
+)
+parser.add_argument(
     "--f0_from",
     type=str,
     choices=["table", "fit"],
@@ -136,6 +147,14 @@ if args.factor_estimator == "peak":
         run, _time_output, _ = compute_cluster_time(run, configs, debug=False)
     except Exception as exc:
         rprint(f"[yellow][WARNING][/yellow] compute_cluster_time failed ({exc}); F0 peak falls back to Corrected<charge>ChargePerMeV")
+# Electron share of the cluster charge (SignalFrac[:, 0]), read from the npy of the sample in the loaded order
+if args.electron_fraction_min > 0:
+    _info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
+    _npy = f'{_info["PATH"]}/data/{_info["GEOMETRY"]}/{_info["VERSION"]}/{_info["NAME"]}{name}/Reco'
+    _frac = np.load(f"{_npy}/SignalFrac.npy", allow_pickle=True)
+    if len(_frac) != len(run["Reco"]["Charge"]) or not np.allclose(np.load(f"{_npy}/Charge.npy"), run["Reco"]["Charge"]):
+        raise SystemExit("SignalFrac.npy does not match the loaded clusters (order or length)")
+    run["Reco"]["ElectronChargeFraction"] = np.asarray([float(f[0]) for f in _frac])
 filtered_run, mask, output = compute_filtered_run(
     run,
     configs,
@@ -484,7 +503,10 @@ for config in configs:
             else:
                 rprint(f"[yellow][WARNING][/yellow] {_time_branch} or Charge not available: F0 peak taken on Corrected{charge}ChargePerMeV")
         for nhit in range(1, np.max(data["NHits"]) + 1, 1):
-            this_filter_idx = np.where((data["NHits"] == nhit))[0]
+            nhit_mask = data["NHits"] == nhit
+            if args.electron_fraction_min > 0:
+                nhit_mask = nhit_mask & (np.asarray(data["ElectronChargeFraction"]) >= args.electron_fraction_min)
+            this_filter_idx = np.where(nhit_mask)[0]
             if len(this_filter_idx) < (args.min_clusters_nhit1 if nhit == 1 else args.min_clusters):
                 continue
 
