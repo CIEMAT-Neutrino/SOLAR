@@ -304,10 +304,16 @@ for config in configs:
                 bins=np.arange(-20, 20.5, 0.5),
                 density=False,
             )
-            fit_function, popt, perr_tmp, _ = _fit_resolution(
-                this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > purity_threshold],
-                edges, name, label=f"{coord} overall", bootstrap=True,
-            )
+            try:
+                fit_function, popt, perr_tmp, _ = _fit_resolution(
+                    this_reco_df[error][this_reco_df["MatchedOpFlashPur"] > purity_threshold],
+                    edges, name, label=f"{coord} overall", bootstrap=True,
+                )
+            except RuntimeError as exc:
+                # Background samples with few high-purity matches (e.g. VD Top own gammas, 2026-10-14): keep the
+                # purity-match shares and leave the resolution fit undefined.
+                rprint(f"[yellow]{config} {name} {coord}: no resolution fit ({exc})[/yellow]")
+                fit_function, popt, perr_tmp = "Gaussian", np.full(3, np.nan), np.full(3, np.nan)
 
             perr = perr_tmp
             popt_overall, perr_overall = popt, perr

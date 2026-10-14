@@ -7,6 +7,14 @@ the chain (own-generator charge, true drift time, flat gain G; no flash, no NHit
 
   E_charge = Q * Purity * exp(|t_true| / tau) / G
 
+Every cluster enters with its own-generator (generator 1, the sample's own) charge only: Q * Purity for the
+primary cluster, AdjClCharge * AdjClGenPur for an adjacent cluster whose main generator is 1 (adjacent clusters
+led by another generator are left out). Per event three references are built:
+  Primary            the primary cluster with the highest E_charge in the event
+  PrimaryAdjacent    that primary cluster plus its own-generator adjacent clusters
+  Cheated            all own-generator charge of the event: every primary cluster plus its own-generator
+                     adjacent clusters
+
 and splits it by what produced the cluster and by its place in the event:
 
   marley  SignalFrac (charge fraction per MARLEY particle family: electron, gamma, neutron, rest)
@@ -77,7 +85,7 @@ FLASH_LABELS = {"NoFlash": "No flash", "WrongFlash": "Wrong flash", "CorrectFlas
 info = json.load(open(f"{root}/config/{config}/{config}_config.json"))
 edges = np.arange(0, args.max_energy + args.bin_width / 2, args.bin_width)
 centers = 0.5 * (edges[1:] + edges[:-1])
-r_edges = np.arange(0.0, 2.0 + 1e-9, 0.02)
+r_edges = np.arange(0.0, 3.0 + 1e-9, 0.02)  # response histograms up to 3 (neutron-capture cheated tail, 2026-10-13)
 r_centers = 0.5 * (r_edges[1:] + r_edges[:-1])
 
 
@@ -144,7 +152,8 @@ for name in args.names:
     # Branches the SIGNIFICANCE preset does not carry, from the same npy directory (same order, see 04)
     npy_dir = f'{info["PATH"]}/data/{info["GEOMETRY"]}/{info["VERSION"]}/{info["NAME"]}{name}/Reco'
     side = ["Purity", "MainTime", "MatchedOpFlashCorrectly", "SignalFrac", "Ind0NHits", "Ind1NHits", "Event", "Flag",
-            "SignalParticleX", "SignalParticleY", "SignalParticleZ", "SignalParticleK", "RecoY", "RecoZ", "TPC"]
+            "SignalParticleX", "SignalParticleY", "SignalParticleZ", "SignalParticleK", "RecoY", "RecoZ", "TPC",
+            "AdjClCharge", "AdjClGen", "AdjClGenPur", "AdjClTime"]
     if family == "marley":
         side += ["TSignalPDG", "TSignalK", "TSignalMother"]
     npy = {}
@@ -163,6 +172,13 @@ for name in args.names:
     true_time = np.asarray(reco["Time"], dtype=float) - 1e-3 * np.asarray(npy["MainTime"], dtype=float)
     true_lifetime = np.exp(np.abs(true_time) / tau)
     e_charge = charge * purity * true_lifetime / gain
+    # Own-generator adjacent clusters (generator 1), each with its own true drift time and pure charge
+    adj_charge = np.asarray(npy["AdjClCharge"], dtype=float)
+    adj_own = (np.asarray(npy["AdjClGen"]) == 1) & (adj_charge > 0)
+    adj_true_time = np.asarray(npy["AdjClTime"], dtype=float) - 1e-3 * np.asarray(npy["MainTime"], dtype=float)[:, None]
+    adj_energy = np.sum(np.where(adj_own, adj_charge * np.clip(np.asarray(npy["AdjClGenPur"], dtype=float), 0, 1)
+                                 * np.exp(np.abs(adj_true_time) / tau), 0.0), axis=1) / gain
+    e_primary_adj = e_charge + adj_energy
     e_lifetime = charge * np.asarray(reco["Correction"], dtype=float) / gain
     e_calibration = np.asarray(reco["Energy"], dtype=float)
     # Neutron samples: the reference is the capture-cascade energy, not the neutron kinetic energy
@@ -195,7 +211,7 @@ for name in args.names:
                               np.round(np.asarray(npy["SignalParticleX"], dtype=float), 3))))
     sel = np.flatnonzero(mask)
     sel_keys = keys.iloc[sel].astype(str).to_numpy()
-    df_ev = pd.DataFrame({"idx": sel, "key": sel_keys, "q": e_charge[sel]})
+    df_ev = pd.DataFrame({"idx": sel, "key": sel_keys, "q": e_charge[sel], "qa": e_primary_adj[sel]})
     df_ev["rank"] = df_ev.groupby("key")["q"].rank(ascending=False, method="first")
     df_ev["n"] = df_ev.groupby("key")["q"].transform("size")
     leading = np.zeros(len(charge), dtype=bool)
@@ -206,6 +222,10 @@ for name in args.names:
     event_sum = np.full(len(charge), np.nan)
     df_ev["sum"] = df_ev.groupby("key")["q"].transform("sum")
     event_sum[df_ev.loc[df_ev["rank"] == 1, "idx"].to_numpy()] = df_ev.loc[df_ev["rank"] == 1, "sum"].to_numpy()
+    # Cheated: every primary cluster of the event with its own-generator adjacent clusters, stored on the leading one
+    cheated = np.full(len(charge), np.nan)
+    df_ev["sum_adj"] = df_ev.groupby("key")["qa"].transform("sum")
+    cheated[df_ev.loc[df_ev["rank"] == 1, "idx"].to_numpy()] = df_ev.loc[df_ev["rank"] == 1, "sum_adj"].to_numpy()
 
     if family == "marley":
         f_e, f_g = frac[:, 0], frac[:, 1]
@@ -279,7 +299,10 @@ for name in args.names:
 
     # ── Response against matched references ───────────────────────────────────────
     references = {"Cluster": (e_charge, true_energy, mask), "Leading": (e_charge, true_energy, mask & leading),
-                  "EventSum": (event_sum, true_energy, mask & leading)}
+                  "EventSum": (event_sum, true_energy, mask & leading),
+                  "Primary": (e_charge, true_energy, mask & leading),
+                  "PrimaryAdjacent": (e_primary_adj, true_energy, mask & leading),
+                  "Cheated": (cheated, true_energy, mask & leading)}
     if family == "marley":
         references["ElectronCharge"] = (charge * np.clip(frac[:, 0], 0, 1) * true_lifetime / gain, true_energy,
                                         mask & (frac[:, 0] >= 0.5))
@@ -291,7 +314,10 @@ for name in args.names:
     ref_labels = {"Cluster": "All primary clusters / E_true", "Leading": "Leading cluster / E_true",
                   "ElectronCharge": "Electron charge / ElectronK", "ElectronOnly": "Electron-only clusters / ElectronK",
                   "LeadingVisible": "Leading cluster / (ElectronK + de-excitation gammas)",
-                  "Matched": "Single-particle clusters / E_true", "EventSum": "Sum of primary clusters / E_true"}
+                  "Matched": "Single-particle clusters / E_true", "EventSum": "Sum of primary clusters / E_true",
+                  "Primary": "Primary cluster / E_true",
+                  "PrimaryAdjacent": "Primary + own-generator adjacent clusters / E_true",
+                  "Cheated": "All own-generator charge of the event / E_true"}
     ref_rows, summary_refs = [], {}
     for ref, (num, den, m) in references.items():
         r = num[m] / den[m]
@@ -387,6 +413,8 @@ for name in args.names:
         "prompt_gamma_k_mean_mev": float(np.mean(gamma_k[mask & leading])) if family == "marley" else 0.0,
         "prompt_gamma_fraction": float(np.mean(gamma_k[mask & leading] > 0)) if family == "marley" else 0.0,
         "leading_nhits_median": float(np.median(nhits[mask & leading])),
+        "adjacent_own_energy_mean_mev": float(np.mean(adj_energy[mask & leading])),
+        "primary_clusters_per_event": n_slice / n_events,
         "leading_charge_per_hit_median_mev": float(np.median((e_charge / np.maximum(nhits, 1))[mask & leading])),
         "flash": {f"{r['Flash']}_{r['Step']}": {k: r[k] for k in ["Share", "PeakMean", "PeakSigma", "Median"]} for r in flash_rows},
         "depth": [{k: r[k] for k in ["DistanceLo", "DistanceHi", "Share", "PeakMean", "PeakSigma", "Median"]} for r in depth_rows],
