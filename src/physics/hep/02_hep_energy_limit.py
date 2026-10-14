@@ -105,7 +105,7 @@ for config in args.config:
     # external tails extrapolated from the loosest cut of the scan (see the module docstring)
     tail = np.zeros_like(hep); tail_hard = np.zeros_like(hep); tail_info = {}
     for name, c, mc, _ in bkg_counts:
-        if name.split("_")[0] not in ("gamma", "neutron"):
+        if name.split("_")[0] not in analysis_info.get("HEP_TAIL_EXTRAPOLATION", {}).get("COMPONENTS", ["gamma", "neutron"]):
             continue
         df = pd.read_pickle(f"{pnfs}/background/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{args.energy}_Rebin.pkl")
         df = df[(df["Component"] == name) & (df["Oscillation"] == "Truth") & (df["Mean"] == "Mean")]

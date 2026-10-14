@@ -181,5 +181,18 @@
       ]
     ],
     "FLUX_REFERENCE_CONFIG": "vd_1x8x14_3view_30deg_nominal"
+  },
+  "HEP_TAIL_EXTRAPOLATION": {
+    "_doc": "HEP (01_hep.py, 02_hep_energy_limit.py): in the bins a cut leaves without simulated events, the external spectrum of COMPONENTS gets the tail of the same sample at the loosest cut of the scan (exponential fit, endpoint mode). 2026-10-14 (user): every config, gammas only; the neutron-capture spectra are over-calibrated by the Geant4 capture bug, so their tails are not extrapolated. Kept here rather than in config.json (it overrides the config.json entry, load_analysis_info merges this file later) because config.json is an input of the Sensitivity template staleness guard and studies were running.",
+    "ENABLED_CONFIGS": [
+      "hd_1x2x6_centralAPA",
+      "hd_1x2x6_lateralAPA",
+      "vd_1x8x14_3view_30deg_nominal",
+      "vd_1x8x14_3view_30deg_shielded"
+    ],
+    "COMPONENTS": [
+      "gamma"
+    ],
+    "MODE": "endpoint"
   }
 }

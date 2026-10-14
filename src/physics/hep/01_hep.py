@@ -448,7 +448,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     _tail_models = {}
     if config in _tail_cfg.get("ENABLED_CONFIGS", []):
         for _comp in _hep_bkg_components:
-            if _comp.split("_")[0] not in ("gamma", "neutron"):
+            if _comp.split("_")[0] not in _tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
                 continue
             _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
             if _cdf.empty:
