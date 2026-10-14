@@ -141,7 +141,7 @@
     "VALIDATION_SCALE": 1000
   },
   "DATA_PATHS": {
-    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth_vdgeo_20261014",
+    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth_hdgeo_20261014",
     "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
     "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_sb_20261004"
   },
