@@ -193,6 +193,8 @@
     "COMPONENTS": [
       "gamma"
     ],
-    "MODE": "endpoint"
+    "MODE": "endpoint",
+    "FIT_THRESHOLD": 14.0,
+    "_FIT_THRESHOLD_doc": "Lower edge of the HEP window: the loosest-cut tail is fitted from FIT_THRESHOLD - 4 MeV (lib.background.external_tail_model), as in 02_hep_energy_limit.py and ch. 8.3. Before 2026-10-14 01_hep.py passed its analysis threshold (0 MeV), so the fit covered the whole spectrum."
   }
 }

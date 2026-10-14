@@ -456,7 +456,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             _loose = _cdf.loc[(_cdf["NHits"] == _cdf["NHits"].min()) & (_cdf["OpHits"] == _cdf["OpHits"].min()) & (_cdf["AdjCl"] == _cdf["AdjCl"].max())]
             if _loose.empty:
                 continue
-            _tail_models[_comp] = external_tail_model(_loose.iloc[0]["Counts"], _loose.iloc[0]["MCCounts"], hep_rebin, args.threshold)
+            _tail_models[_comp] = external_tail_model(_loose.iloc[0]["Counts"], _loose.iloc[0]["MCCounts"], hep_rebin, float(_tail_cfg.get("FIT_THRESHOLD", args.threshold)))
             if _tail_models[_comp] is not None:
                 rprint(f"[cyan][INFO][/cyan] {config} {_comp}: HEP tail extrapolation, loose-cut slope {_tail_models[_comp][0]:.2f}/MeV, "
                        f"last populated bin {hep_rebin_centers[_tail_models[_comp][2]]:.1f} MeV")
