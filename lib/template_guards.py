@@ -37,7 +37,19 @@ def check_signal_template_inputs(
         root, "config", "analysis", "fiducial", (fiducial_folder or folder).lower(),
         f"{fiducial_stem}.json",
     )
-    dependencies = [analysis_config, fiducial_path]
+    # The fiducial input is the per-entry record of this config's Sensitivity volume for the template's energy
+    # (lib/fiducial_entries.py), not the shared BestFiducials*.json that every scan rewrites.
+    # Falls back to the shared file when no entry record exists.
+    fiducial_dependency = fiducial_path
+    # Template folders are <...>/SENSITIVITY/<config>/<name>/<folder>/<energy><template suffix>/
+    entry_dir = os.path.join(root, "config", "analysis", "fiducial", (fiducial_folder or folder).lower(), "entries",
+                             fiducial_stem, config)
+    for part in reversed(os.path.normpath(os.fspath(template_path)).split(os.sep)[:-1]):
+        entry = os.path.join(entry_dir, f"SENSITIVITY_{part.split('_')[0]}.json")
+        if os.path.isfile(entry):
+            fiducial_dependency = entry
+            break
+    dependencies = [analysis_config, fiducial_dependency]
     # A branch switch or reconstruction/weighting fix changes the response even
     # if the JSON inputs have not moved. Only existing files are included so the
     # helper also works in small standalone validation environments.

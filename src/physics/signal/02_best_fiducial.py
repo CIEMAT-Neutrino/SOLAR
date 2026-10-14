@@ -1,11 +1,13 @@
 import os
 import sys
+import json
 from typing import Dict, List, Optional, Set, Tuple
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial_entries import write_fiducial_entries
 from lib.fiducial_significance import (
     GROUP_COLUMNS,
     FIDUCIAL_COLUMNS,
@@ -486,3 +488,5 @@ for config in configs:
                 best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
 
 _merge_and_write_json(filename, best_fiducials)
+# Per-entry records for the template staleness guard (lib/fiducial_entries.py)
+write_fiducial_entries(str(root), args.folder, _best_fiducials_stem, json.load(open(filename)), configs=list(best_fiducials))
