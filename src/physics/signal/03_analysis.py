@@ -565,7 +565,13 @@ for config in configs:
                     _rb_idx = np.digitize(sel_reco, _rb_edges) - 1
                     _rb_valid = (_rb_idx >= 0) & (_rb_idx < _rb_bins)
                     _mc_counts_rb = np.bincount(_rb_idx[_rb_valid], minlength=_rb_bins)
-                    _mc_filter_rb = _mc_counts_rb >= args.mc_filter_threshold
+                    # Radiological sample: never trust a bin backed by fewer than RADIOLOGICAL_MIN_MC_PER_BIN simulated
+                    # clusters (backgrounds.json; 2026-10-14). Its clusters carry weights of 1e5-1e6 events, so a single
+                    # cluster in an otherwise empty bin is not a valid background estimate (HD Central runs with MC_FILTER 1).
+                    _mc_thr = args.mc_filter_threshold
+                    if str(name).split("_")[0].lower() == "radiological":
+                        _mc_thr = max(_mc_thr, int(_analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN", 1)))
+                    _mc_filter_rb = _mc_counts_rb >= _mc_thr
                     # Expand from 30-bin to 60-bin: find parent 30-bin for each 60-bin center
                     _bin_centers_60 = (true_energy_edges[:-1] + true_energy_edges[1:]) / 2
                     _parent_rb = np.clip(np.digitize(_bin_centers_60, _rb_edges) - 1, 0, _rb_bins - 1)
