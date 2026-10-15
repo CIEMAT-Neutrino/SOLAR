@@ -462,7 +462,8 @@ rprint(_flux_df.to_string(index=False))
 # The flux of each surface and origin integrated over its area and normalised to the workspace mass, per year and per
 # 100 keV block (Counts, events kT^-1 yr^-1), with the SURFACE_RATE_FACTORS of the analysis weights: the truth-level
 # rates of the samples before any reconstruction. SurfaceGroup groups the surfaces as the analysis tables (anode plane 0,
-# walls 1+2, end caps 3+4); "All" repeats every row once more for the totals. Saved as background_surface_rates.pkl.
+# walls 1+2, end caps 3+4); "All" repeats every row once more for the totals. Saved per config and particle (Name) as
+# {config}/spectra/{config}_{particle}_background_surface_rates.pkl.
 _SURFACE_GROUPS = {"0": "Anode", "1": "Walls", "2": "Walls", "3": "EndCaps", "4": "EndCaps"}
 _surface_rate_records = []
 for config in configs_to_run:
@@ -482,22 +483,18 @@ for config in configs_to_run:
                 "Surface":      surface_id,
                 "SurfaceGroup": _group,
                 "Particle":     particle_type,
+                "Name":         particle_type,
                 "Energy":       np.array(x_mev),
                 "EnergyUnit":   r"\mathrm{MeV}",
                 "Counts":       _counts,
                 "CountsUnit":   r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
             })
-for config in {r["Config"] for r in _surface_rate_records}:
-    save_pkl(
-        pd.DataFrame([r for r in _surface_rate_records if r["Config"] == config]),
-        data_path,
-        config,
-        None,
-        subfolder="spectra",
-        filename="background_surface_rates",
-        rm=args.rewrite,
-        debug=True,
-    )
+for config, particle in {(r["Config"], r["Particle"]) for r in _surface_rate_records}:
+    _path = f"{data_path}/{config}/spectra/{config}_{particle}_background_surface_rates.pkl"
+    if args.rewrite or not os.path.exists(_path):
+        os.makedirs(os.path.dirname(_path), exist_ok=True)
+        pd.DataFrame([r for r in _surface_rate_records if r["Config"] == config and r["Particle"] == particle]).to_pickle(_path)
+        rprint(f"Saved data in: {_path}")
 
 
 # ── Save per-config summary pkl ───────────────────────────────────────────────
