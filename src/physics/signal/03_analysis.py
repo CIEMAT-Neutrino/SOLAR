@@ -148,7 +148,11 @@ parser.add_argument("--surface_split", action=argparse.BooleanOptionalAction, de
                          "(Selection TPC) and after the fiducialisation step (Selection Fiducial), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
                          "Writes nothing else (no Ref/mask exports, weighted DataFrame, analysis_cuts json or Rebin pkl).")
 parser.add_argument("--surface_split_cut_energy", type=str, default="SolarEnergy",
-                    help="With --surface_split: energy whose best-cut JSON entry gives the analysis cut (the analysis energy).")
+                    help="With --surface_split: the analysis energy. Its best-cut JSON entry gives the analysis cut; its fiducial volume "
+                         "(and energy bands, assigned with this energy) gives the Fiducial rows.")
+parser.add_argument("--surface_split_fiducial_json", type=str, default=None,
+                    help="With --surface_split: BestFiducials json for the Fiducial rows (default: the folder's BestFiducials.json), "
+                         "e.g. a snapshot of the volumes of a given set of runs.")
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
@@ -502,6 +506,19 @@ for config in configs:
                         "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2],
                     })
 
+            # Fiducial rows: the volume of the analysis energy (--surface_split_cut_energy) and its energy bands, assigned with that
+            # energy (the HEP-only energy for HEP, as in the analysis), from --surface_split_fiducial_json or the folder file.
+            _fid_src = json.load(open(args.surface_split_fiducial_json)) if args.surface_split_fiducial_json else fiducials
+            _E = args.surface_split_cut_energy
+            _split_spatial = {}
+            for _an in args.analysis:
+                _ek = args.hep_energy if (_an == "HEP" and _E == "SolarEnergy" and args.hep_energy in run["Reco"]) else _E
+                _f, _b = get_best_fiducial(_fid_src, config, _E, _an), get_best_fiducial_bands(_fid_src, config, _E, _an)
+                _split_spatial[_an] = np.asarray(build_energy_band_spatial_mask(
+                    run, config, detector_x, detector_y, info, args.folder, _f, _b, _ek, pos_keys=_pos_keys,
+                ) if _b else build_fiducial_spatial_mask(
+                    run, config, detector_x, detector_y, info, args.folder, _f, pos_keys=_pos_keys,
+                ), dtype=bool)
             _w_tpc = np.asarray(run["Reco"]["SignalParticleWeight"]) / background_weight_divisor(
                 str(root), args.folder, name, config, _true_energy_arr
             )
@@ -515,7 +532,7 @@ for config in configs:
                 # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
                 # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
                 # cut, no neutron-capture veto, no MC filter.
-                _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _spatial_masks[_an]
+                _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _split_spatial[_an]
                 _fr, _ft = _valid & _fid, _tvalid & _fid
                 _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
                                     _surf_group[_ft], _tbidx[_ft], _w_tpc[_ft], None, (0, 0, 0))
