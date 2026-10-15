@@ -361,6 +361,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier", "--no-ncveto"]},
     ],
+    # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
+    # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
+    "radsmooth": [
+        {"label": "rad_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing"]},
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -538,7 +544,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

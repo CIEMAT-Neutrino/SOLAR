@@ -407,8 +407,8 @@ def _smoothed_component(y, component):
     """Smoothed spectrum of one background component (2026-10-13). Radiological is never smoothed: its falling spectrum
     peaks at ~5.5 MeV with ~1e8 counts/yr, and Gaussian smoothing leaked it into the 6.5-7.5 MeV bins by up to 1e5
     (the old code smoothed the TOTAL spectrum), which dominated the background exactly where the solar signal starts."""
-    if "radiological" in str(component):
-        return np.asarray(y, dtype=float)
+    if "radiological" in str(component) and os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") != "1":
+        return np.asarray(y, dtype=float)  # study rad_smooth (SOLAR_RADIOLOGICAL_SMOOTHING=1) smooths it as configured
     return smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
 
 
