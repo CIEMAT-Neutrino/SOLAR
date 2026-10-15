@@ -1,5 +1,5 @@
 {
-  "SB_THRESHOLD": 0.1989192715948114,
+  "SB_THRESHOLD": 0.19890521423452803,
   "TARGET_COMPLETENESS": 0.95,
   "COMPLETENESS_PER_BIN": false,
   "FEATURES": [
@@ -19,7 +19,7 @@
   ],
   "EXCLUDED_FEATURES": [],
   "MIN_ENERGY": 3.0,
-  "AUC": 0.9238497245923074,
+  "AUC": 0.9238503170599601,
   "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k",
   "SIGNAL_SAMPLE": "marley_final",
   "BACKGROUND_SAMPLES": [
@@ -34,37 +34,37 @@
     "min_samples_leaf": 20
   },
   "FLAGGED_SIGNAL_LIKE": {
-    "marley_final": 0.9613006784294547,
-    "gamma_final": 0.7369203524344651,
-    "neutron_final": 0.5339239035724659,
-    "radiological_final": 0.06781379368610775,
-    "marley_final_Enu_6_8": 0.7767857142857143,
-    "marley_final_Enu_8_10": 0.908232826428946,
-    "marley_final_Enu_10_14": 0.9634541703507221,
-    "marley_final_Enu_14_20": 0.9765918047576089
+    "marley_final": 0.9611599363113222,
+    "gamma_final": 0.7354665150255895,
+    "neutron_final": 0.5331493718684192,
+    "radiological_final": 0.0687217749852739,
+    "marley_final_Enu_6_8": 0.7779684282772821,
+    "marley_final_Enu_8_10": 0.9073426573426573,
+    "marley_final_Enu_10_14": 0.9639042357274401,
+    "marley_final_Enu_14_20": 0.9764108405714557
   },
   "SB_HEP_GATE_ENERGY": 14.0,
-  "SB_THRESHOLD_HEP": 0.8370597612677556,
+  "SB_THRESHOLD_HEP": 0.845120643475559,
   "TARGET_COMPLETENESS_HEP": 0.8,
   "FLAGGED_SIGNAL_LIKE_HEP": {
-    "marley_final": 0.7999876293761082,
-    "gamma_final": 0.08155106935838496,
-    "neutron_final": 0.1658653846153846,
+    "marley_final": 0.7999874940075453,
+    "gamma_final": 0.07923593915811815,
+    "neutron_final": 0.18345323741007194,
     "radiological_final": 0.14285714285714285
   },
   "SB_GATE_ENERGY": 12.0,
-  "SB_THRESHOLD_HIGH": 0.4862255142220222,
+  "SB_THRESHOLD_HIGH": 0.4932623263614114,
   "SB_THRESHOLD_HIGH_BY_COMPLETENESS": {
-    "0.80": 0.7587188035812561,
-    "0.85": 0.6966678303838505,
-    "0.90": 0.6175394798066194,
-    "0.95": 0.4862255142220222
+    "0.80": 0.7653717050275705,
+    "0.85": 0.7057156788280445,
+    "0.90": 0.6259742443911193,
+    "0.95": 0.4932623263614114
   },
   "TARGET_COMPLETENESS_HIGH": 0.95,
   "FLAGGED_SIGNAL_LIKE_HIGH": {
-    "marley_final": 0.9499974278512269,
-    "gamma_final": 0.41390165050195676,
-    "neutron_final": 0.535977425928829,
-    "radiological_final": 0.5
+    "marley_final": 0.9499930328154392,
+    "gamma_final": 0.40555555555555556,
+    "neutron_final": 0.5411089866156787,
+    "radiological_final": 0.36363636363636365
   }
 }
