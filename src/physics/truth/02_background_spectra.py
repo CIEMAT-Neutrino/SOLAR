@@ -458,6 +458,48 @@ rprint("\n[bold]Integrated flux (counts · kT⁻¹ · yr⁻¹):[/bold]")
 rprint(_flux_df.to_string(index=False))
 
 
+# ── Workspace rates per generation surface ────────────────────────────────────
+# The flux of each surface and origin integrated over its area and normalised to the workspace mass, per year and per
+# 100 keV block (Counts, events kT^-1 yr^-1), with the SURFACE_RATE_FACTORS of the analysis weights: the truth-level
+# rates of the samples before any reconstruction. SurfaceGroup groups the surfaces as the analysis tables (anode plane 0,
+# walls 1+2, end caps 3+4); "All" repeats every row once more for the totals. Saved as background_surface_rates.pkl.
+_SURFACE_GROUPS = {"0": "Anode", "1": "Walls", "2": "Walls", "3": "EndCaps", "4": "EndCaps"}
+_surface_rate_records = []
+for config in configs_to_run:
+    if config not in all_plots:
+        continue
+    _geo  = config.split("_")[0].lower()
+    _info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _mass = get_workspace_detector_mass(config, _info)
+    for (surface_id, particle_type, particle_origin), (x_mev, y_flux) in all_plots[config].items():
+        _area = areas.get(_geo, {}).get(surface_id, 0.0) * float(_info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0))
+        _counts = np.array(y_flux) * np.diff(np.append(x_mev, 2 * x_mev[-1] - x_mev[-2])) * _area / _mass * 60 * 60 * 24 * 365.25
+        for _group in [_SURFACE_GROUPS.get(str(surface_id), "None"), "All"]:
+            _surface_rate_records.append({
+                "Config":       config,
+                "Geometry":     _geo,
+                "Component":    clean_component_name(particle_origin),
+                "Surface":      surface_id,
+                "SurfaceGroup": _group,
+                "Particle":     particle_type,
+                "Energy":       np.array(x_mev),
+                "EnergyUnit":   r"\mathrm{MeV}",
+                "Counts":       _counts,
+                "CountsUnit":   r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+            })
+for config in {r["Config"] for r in _surface_rate_records}:
+    save_pkl(
+        pd.DataFrame([r for r in _surface_rate_records if r["Config"] == config]),
+        data_path,
+        config,
+        None,
+        subfolder="spectra",
+        filename="background_surface_rates",
+        rm=args.rewrite,
+        debug=True,
+    )
+
+
 # ── Save per-config summary pkl ───────────────────────────────────────────────
 _summary_records = []
 for row in _spectra_records:
