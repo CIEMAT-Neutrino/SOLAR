@@ -133,6 +133,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "ncveto": {"*": ("default", None)},
     "ncveto_off": {"*": ("default", None)},
     "hep_plain": {"*": ("default", None)},
+    # analysis without the signal/background classifier (full chain re-optimised): no expected direction
+    "sb_off": {"*": ("default", None)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},

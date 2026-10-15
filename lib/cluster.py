@@ -114,6 +114,16 @@ def _signal_background_flags(run, config, name, idx, this_params):
     """
     if not load_analysis_info(str(root)).get("SIGNAL_BACKGROUND_CLASSIFIER", False):
         return None
+    if os.environ.get("SOLAR_SB_CLASSIFIER") == "0":
+        # Study knob sb_off (run_sensitivity --no-sb_classifier): every cluster signal-like, i.e. SolarEnergy keeps the
+        # offset everywhere and SolarEnergyHEP equals it; the branches the classifier block writes (neutron-capture
+        # score included) are still filled. Score 1 for every cluster.
+        _SB_INFO_CACHE.pop((config, name), None)
+        reco = run["Reco"]
+        if "SignalBackgroundScore" not in reco:
+            reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
+        reco["SignalBackgroundScore"][idx] = 1.0
+        return np.ones(len(np.asarray(idx[0])), dtype=bool)
     if this_params is not None and this_params.get("SB_CLASSIFIER", True) is False:
         return None
     for sample in dict.fromkeys([name, _calib_fallback(name, "")]):

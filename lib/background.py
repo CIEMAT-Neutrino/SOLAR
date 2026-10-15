@@ -139,8 +139,12 @@ def score_categories(root: str, config: str) -> list:
     hold K + 1 categories stacked along the nadir axis, the most signal-like first."""
     import json as _json
 
+    import os as _os
+
     cfg = load_analysis_info(root).get("SENSITIVITY_SCORE_CATEGORIES", {})
     if not cfg or config not in cfg.get("ENABLED_CONFIGS", []):
+        return []
+    if _os.environ.get("SOLAR_SB_CLASSIFIER") == "0":  # study sb_off: the categories are classifier-score categories
         return []
     path = score_categories_path(root, config)
     if not os.path.isfile(path):

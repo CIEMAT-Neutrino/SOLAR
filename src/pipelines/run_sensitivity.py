@@ -418,6 +418,9 @@ parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=N
          "SOLAR_NCVETO), see lib/study.py ncveto / ncveto_off.")
 parser.add_argument("--hep_energy", type=str, default=None,
     help="Study knob passed to 03_analysis.py: energy of the HEP analysis (see lib/study.py hep_sbmodel).")
+parser.add_argument("--sb_classifier", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-sb_classifier switches the signal/background classifier off for every step (no SolarEnergy "
+         "first stage, no Sensitivity score categories; through SOLAR_SB_CLASSIFIER), see lib/study.py sb_off.")
 parser.add_argument("--sb_completeness_high", type=float, default=None,
     help="Study knob passed to 03_analysis.py: S/B classifier working point above the gate energy (see lib/study.py sb_hep90).")
 parser.add_argument(
@@ -939,6 +942,11 @@ def charge_scan_args_for() -> List[str]:
     return []
 
 
+if args.sb_classifier is not None:  # every child process follows the study knob (lib/cluster.py, lib/background.py)
+    if not args.sb_classifier and not args.study_label:
+        raise SystemExit("[ERROR] --no-sb_classifier is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_SB_CLASSIFIER"] = "1" if args.sb_classifier else "0"
+
 if args.ncveto is not None:  # every child process (templates included) follows the study knob
     os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"
 
@@ -1220,8 +1228,8 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     # Thresholds of the Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES), read by 03_analysis.py
     # and the template scripts.
     _signal_names = [n for n in available_names if "marley" in n]
-    if args.rebin and "Sensitivity" in args.analysis and _signal_names and config in load_analysis_info(str(root)).get(
-            "SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
+    if args.rebin and "Sensitivity" in args.analysis and _signal_names and os.environ.get("SOLAR_SB_CLASSIFIER") != "0" \
+            and config in load_analysis_info(str(root)).get("SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
         run_analysis_script(
             "src/physics/sensitivity/00_score_categories.py",
             ["--config", config, "--signal", _signal_names[0], "--folder", folder],

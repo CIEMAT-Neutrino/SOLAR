@@ -354,6 +354,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # S/B classifier working point above the 12 MeV gate: 90% instead of the calibrated 95% CC completeness
     # (user, 2026-10-07: a study for the VD Shielded HEP analysis only). Fiducial volume and cuts held at
     # the nominal Truncated ones; only the Rebin pkls (labeled) and the HEP significance are rebuilt.
+    # Analysis without the signal/background classifier (user, 2026-10-15, comparison page): SolarEnergy keeps the
+    # de-excitation offset for every cluster and the Sensitivity fit has no score categories; the neutron-capture veto
+    # is off as well (user). Full chain re-optimised (volume, cuts, sigmas), as the 2026-10-08 diag_sboff.
+    "sboff": [
+        {"label": "sb_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier", "--no-ncveto"]},
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -531,7 +538,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 
