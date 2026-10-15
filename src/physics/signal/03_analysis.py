@@ -498,6 +498,17 @@ for config in configs:
                     raise SystemExit(f"[ERROR] --surface_split: no {args.surface_split_cut_energy} best cut for {config} {_an}.")
                 _split_cuts[_an].setdefault((int(_bc["NHits"]), int(_bc["OpHits"]), int(_bc["AdjCl"])), []).append("Analysis")
             _surface_rows = {_an: [] for _an in args.analysis}
+            # Role of each row in each analysis (tab:fiducial_windows): the signal component (Solar = 8B + hep for DayNight and
+            # Sensitivity, hep for HEP, where 8B is a background) and the background samples of BACKGROUND_SAMPLES.ANALYSES.
+            from lib.background import get_background_config
+            _bkg_samples = {_an: [str(b).lower() for b in get_background_config(str(root)).get("ANALYSES", {}).get(
+                _an.upper(), get_background_config(str(root)).get("default", []))] for _an in args.analysis}
+            _signal_roles = {"DayNight": {"Solar": "Signal"}, "Sensitivity": {"Solar": "Signal"}, "HEP": {"hep": "Signal", "8B": "Background"}}
+
+            def _role(analysis, component):
+                if _is_signal:
+                    return _signal_roles.get(analysis, {}).get(component, "None")
+                return "Background" if str(name).lower() in _bkg_samples[analysis] else "None"
 
             def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, true_group, true_bidx, true_w, mc_filter, cut,
                                     component=None):
@@ -512,7 +523,7 @@ for config in configs:
                     _surface_rows[analysis].append({
                         "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": analysis,
                         "Component": component or name, "Type": "signal" if _is_signal else "background",
-                        "Selection": selection, "Surface": _g,
+                        "Selection": selection, "Surface": _g, "Role": _role(analysis, component or name),
                         "MCCounts": np.bincount(reco_bidx[_in], minlength=_n_bins).tolist(),
                         "TrueCounts": np.bincount(true_bidx[_tin], weights=true_w[_tin], minlength=_n_bins).astype(float).tolist(),
                         "Counts": _h.tolist(), "Error": np.sqrt(_w2), "Energy": true_energy_centers,
@@ -591,7 +602,7 @@ for config in configs:
                         _c = sum(_gen.values()) if _g == "All" else _gen.get(_g, np.zeros(_n_bins))
                         _surface_rows[_an].append({
                             "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": _an,
-                            "Component": _part, "Type": "background", "Selection": "Truth", "Surface": _g,
+                            "Component": _part, "Type": "background", "Selection": "Truth", "Surface": _g, "Role": _role(_an, _part),
                             "MCCounts": np.zeros(_n_bins, dtype=int).tolist(), "TrueCounts": np.asarray(_c, dtype=float).tolist(),
                             "Counts": np.asarray(_c, dtype=float).tolist(), "Error": np.zeros(_n_bins), "Energy": true_energy_centers,
                             "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
