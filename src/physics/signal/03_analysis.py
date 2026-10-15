@@ -142,6 +142,13 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--export_raw", action=argparse.BooleanOptionalAction, default=True, help="Export raw numpy arrays (energy, mask, weights) as pkl files")
 parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, default=False, help="Save per-cut weighted DataFrame to output/data/solar/weighted/ (disabled by default; used by 04_weighted.py)")
+parser.add_argument("--surface_split", action=argparse.BooleanOptionalAction, default=False,
+                    help="Gamma/neutron study export: the weighted spectra split by generation-surface group (SURFACE_GROUPS) at the "
+                         "reference cut (NHits 1, OpHits 4, AdjCl 20) and at the analysis best cut, plus all clusters before any cut "
+                         "(Selection TPC), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
+                         "Writes nothing else (no Ref/mask exports, weighted DataFrame, analysis_cuts json or Rebin pkl).")
+parser.add_argument("--surface_split_cut_energy", type=str, default="SolarEnergy",
+                    help="With --surface_split: energy whose best-cut JSON entry gives the analysis cut (the analysis energy).")
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
@@ -208,6 +215,13 @@ parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalActio
 args = parser.parse_args()
 if "ElectronEnergy" in args.energy and not args.electron_energy:
     parser.error("--energy ElectronEnergy requires --electron_energy (builds the branch).")
+# Surface groups of SignalParticleSurface (config/import/surface_positions.json): 0 the anode plane (HD APA side, VD top),
+# 1+2 the walls (HD top/bottom, VD membranes), 3+4 the end caps; "None" collects clusters without an assigned surface.
+SURFACE_GROUPS = {"Anode": [0], "Walls": [1, 2], "EndCaps": [3, 4]}
+if args.surface_split:
+    if args.best_cuts_only or args.skip_scan or args.minimal_cuts or args.nhits is not None or args.charge_threshold > 0:
+        parser.error("--surface_split runs the default scan: no --best_cuts_only, --skip_scan, --minimal_cuts, --nhits or --charge_threshold.")
+    args.export_raw = args.export_fiducial = args.save_weighted = False
 _ctx = study_context(args)
 # Event-level exports (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts) are labeled
 # for truth-fiducial variants, which share energy and folder with the nominal run.
@@ -451,6 +465,47 @@ for config in configs:
         _true_energy_arr = run["Reco"]["SignalParticleK"]
         _n_bins = len(true_energy_edges) - 1
 
+        # --surface_split: per-cluster surface group, the cuts to record and the TPC rows (all clusters, no cut, no MC filter).
+        if args.surface_split:
+            if not is_surface_background(str(root), name):
+                raise SystemExit(f"[ERROR] --surface_split is for the surface backgrounds (gamma, neutron), not '{name}'.")
+            _surf = np.asarray(run["Reco"]["SignalParticleSurface"])
+            _surf_group = np.full(len(_surf), "None", dtype=object)
+            for _g, _ids in SURFACE_GROUPS.items():
+                _surf_group[np.isin(_surf, _ids)] = _g
+            # Reference cut (the loosest grid point, as --minimal_cuts) and the analysis best cut; one row set per label.
+            _split_cuts = {_an: {(nhits[0], nhits[3], nhits[::-1][0]): ["Reference"]} for _an in args.analysis}
+            for _an in args.analysis:
+                _bc = _load_best_cuts(_an, args.folder, config).get(args.surface_split_cut_energy, {})
+                if not _bc:
+                    raise SystemExit(f"[ERROR] --surface_split: no {args.surface_split_cut_energy} best cut for {config} {_an}.")
+                _split_cuts[_an].setdefault((int(_bc["NHits"]), int(_bc["OpHits"]), int(_bc["AdjCl"])), []).append("Analysis")
+            _surface_rows = {_an: [] for _an in args.analysis}
+
+            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, mc_filter, cut):
+                for _g in [*SURFACE_GROUPS, "None"]:
+                    _in = sel_group == _g
+                    _h = np.bincount(reco_bidx[_in], weights=sel_w[_in], minlength=_n_bins).astype(float)
+                    _w2 = np.bincount(reco_bidx[_in], weights=sel_w[_in] ** 2, minlength=_n_bins)
+                    if mc_filter is not None:
+                        _h, _w2 = _h * mc_filter, _w2 * mc_filter
+                    _surface_rows[analysis].append({
+                        "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": analysis,
+                        "Component": name, "Type": "background", "Selection": selection, "Surface": _g,
+                        "MCCounts": np.bincount(reco_bidx[_in], minlength=_n_bins).tolist(),
+                        "Counts": _h.tolist(), "Error": np.sqrt(_w2), "Energy": true_energy_centers,
+                        "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+                        "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2],
+                    })
+
+            for _an in args.analysis:
+                _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
+                _valid = (_bidx >= 0) & (_bidx < _n_bins)
+                _w_all = np.asarray(run["Reco"]["SignalParticleWeight"])[_valid] / background_weight_divisor(
+                    str(root), args.folder, name, config, _true_energy_arr[_valid]
+                )
+                _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_all, None, (0, 0, 0))
+
         # Pre-compute charge filter arrays once per (config, name, energy) iteration.
         _reco_charge_ok: Optional[np.ndarray] = None
         _reco_adjcl_above_Q: Optional[np.ndarray] = None
@@ -647,6 +702,11 @@ for config in configs:
                     h  *= cached["mc_filter"]
                     w2 *= cached["mc_filter"]
                     h_error = np.sqrt(w2)
+                    if args.surface_split and _cat is None and _cur_cut in _split_cuts[analysis]:
+                        # Same selected clusters, weights and MC filter as h: the groups sum to Counts bin by bin.
+                        for _sel in _split_cuts[analysis][_cur_cut]:
+                            _surface_split_rows(analysis, _sel, _surf_group[mask][_reco_bvalid], _reco_bidx, _sel_w,
+                                                cached["mc_filter"], _cur_cut)
 
                     plot_lists[(analysis, _cat)].append({
                         "Geometry": config.split("_")[0],
@@ -697,6 +757,12 @@ for config in configs:
         if _prev_cut is not None:
             for _p in _pairs:
                 analysis_cache.pop((*_p, *_prev_cut), None)
+
+        if args.surface_split:
+            for _an in args.analysis:
+                save_df(pd.DataFrame(_surface_rows[_an]), data_path, config=config, name=name, subfolder=args.folder.lower(),
+                        filename=f"{energy}_{_an}_AnalysisDataSurface", rm=user_input["rewrite"], debug=user_input["debug"])
+            continue
 
         if not args.best_cuts_only:
             # All analyses use identical rebinning (0-31 MeV, 1 MeV bins)
