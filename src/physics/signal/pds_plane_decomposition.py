@@ -15,7 +15,8 @@ effective MC size), the unweighted fraction, the weight relative to plane 0 (wha
 the drift coordinate is reconstructed (|RecoX - truth X| < 10 cm; truth key per sample as in truth_position_study.py).
 
 Planes (lib.fiducial.accepted_flash_planes): -1 no match; 0 cathode (VD) / APA (HD); 1, 2 membranes; 3, 4 end caps.
-HD only reports -1 and 0. The default analysis keeps plane 0 only (QUALITY_CUTS.OPFLASH_PLANE, the membrane veto).
+Besides the single planes, each stage also has one row per plane group (PLANE_GROUPS: both membranes, both end caps),
+with Plane = NaN and the member planes in Planes. HD only reports -1 and 0. The default analysis keeps plane 0 only (QUALITY_CUTS.OPFLASH_PLANE, the membrane veto).
 
 Input: the per-event caches of truth_position_study.py (output/data/solar/truth_position/{config}/). Weights are
 SignalParticleWeight (no oscillation weighting for backgrounds; marley combines all fluxes).
@@ -66,6 +67,7 @@ ANALYSES = {"DayNight": ("day-night", "daynight-json", "highest_DayNight"),
 PLANES = [-1, 0, 1, 2, 3, 4]
 PLANE_LABEL = {-1: "No match", 0: "P0 cathode/APA", 1: "P1 membrane", 2: "P2 membrane", 3: "P3 end cap", 4: "P4 end cap"}
 PLANE_ROLE = {-1: "no flash match", 0: "cathode (VD) / APA (HD)", 1: "membrane", 2: "membrane", 3: "end cap", 4: "end cap"}
+PLANE_GROUPS = {"Membranes": [1, 2], "End caps": [3, 4]}
 STAGES = ["all", "matched", "cut", "cut+window", "cut+window+fiducial"]
 
 
@@ -108,17 +110,19 @@ def rows_for(config, sample, analysis, d, info):
         w_all = d["w"][m]
         n_eff = neff(w_all)
         p0 = m & (d["plane"] == 0)
-        for plane in PLANES:
-            mp = m & (d["plane"] == plane)
+        groups = [(plane, PLANE_LABEL[plane], PLANE_ROLE[plane], [plane]) for plane in PLANES]
+        groups += [(np.nan, label, label.lower(), planes) for label, planes in PLANE_GROUPS.items()]
+        for plane, label, role, planes in groups:
+            mp = m & np.isin(d["plane"], planes)
             w = d["w"][mp]
             f = float(w.sum() / w_all.sum()) if w_all.sum() > 0 else np.nan
             out.append({
                 "Geometry": config.split("_")[0], "Config": config, "Name": sample, "Analysis": analysis, "Study": "default",
-                "Folder": args.folder, "Selection": stage, "Variable": PLANE_LABEL[plane], "Plane": plane, "PlaneRole": PLANE_ROLE[plane],
+                "Folder": args.folder, "Selection": stage, "Variable": label, "Plane": plane, "Planes": "+".join(str(q) for q in planes), "PlaneRole": role,
                 "Fraction": f, "FractionError": float(np.sqrt(f * (1 - f) / n_eff)) if n_eff > 0 and np.isfinite(f) else np.nan,
                 "FractionMC": float(mp.sum() / m.sum()) if m.sum() else np.nan,
-                "RelativeToPlane0": float(w.sum() / d["w"][p0].sum()) if plane > 0 and d["w"][p0].sum() > 0 else np.nan,
-                "FractionDXWithin": float(d["w"][mp & good_dx].sum() / w.sum()) if plane >= 0 and w.sum() > 0 else np.nan,
+                "RelativeToPlane0": float(w.sum() / d["w"][p0].sum()) if min(planes) > 0 and d["w"][p0].sum() > 0 else np.nan,
+                "FractionDXWithin": float(d["w"][mp & good_dx].sum() / w.sum()) if min(planes) >= 0 and w.sum() > 0 else np.nan,
                 "DXWithinCm": args.dx_cm, "TruthKey": truth_key,
                 "Weight": float(w.sum()), "WeightStage": float(w_all.sum()), "NMC": int(mp.sum()), "NMCStage": int(m.sum()), "NEffStage": n_eff,
                 "WeightLabel": "SignalParticleWeight", **wp,
