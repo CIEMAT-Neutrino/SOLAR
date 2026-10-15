@@ -574,6 +574,12 @@ for config in configs:
                 _tk = np.asarray(run["Truth"]["SignalParticleK"], dtype=float)
                 _tb = np.digitize(_tk, true_energy_edges) - 1
                 _tv = (_tb >= 0) & (_tb < _n_bins)
+                # Samples generated beyond the active volume (SIGNAL_GENERATION_CONTAINMENT): only the interactions inside it,
+                # the volume the weights are normalised to (lib/weights._contained).
+                if config in _analysis_info.get("SIGNAL_GENERATION_CONTAINMENT", {}).get("ENABLED_CONFIGS", []):
+                    for _ax in ("X", "Y", "Z"):
+                        _v = np.asarray(run["Truth"][f"SignalParticle{_ax}"], dtype=float)
+                        _tv &= (_v >= info[f"DETECTOR_MIN_{_ax}"]) & (_v <= info[f"DETECTOR_MAX_{_ax}"])
                 for _comp, _wname in _comp_weights:
                     _tw = np.asarray(run["Truth"][_wname], dtype=float)[_tv]
                     _tg = np.full(int(_tv.sum()), "None", dtype=object)
