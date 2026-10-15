@@ -145,7 +145,7 @@ parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, de
 parser.add_argument("--surface_split", action=argparse.BooleanOptionalAction, default=False,
                     help="Gamma/neutron study export: the weighted spectra split by generation-surface group (SURFACE_GROUPS) at the "
                          "reference cut (NHits 1, OpHits 4, AdjCl 20) and at the analysis best cut, plus all clusters before any cut "
-                         "(Selection TPC), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
+                         "(Selection TPC) and after the fiducialisation step (Selection Fiducial), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
                          "Writes nothing else (no Ref/mask exports, weighted DataFrame, analysis_cuts json or Rebin pkl).")
 parser.add_argument("--surface_split_cut_energy", type=str, default="SolarEnergy",
                     help="With --surface_split: energy whose best-cut JSON entry gives the analysis cut (the analysis energy).")
@@ -512,6 +512,13 @@ for config in configs:
                 _valid = (_bidx >= 0) & (_bidx < _n_bins)
                 _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
                                     _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0))
+                # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
+                # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
+                # cut, no neutron-capture veto, no MC filter.
+                _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _spatial_masks[_an]
+                _fr, _ft = _valid & _fid, _tvalid & _fid
+                _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
+                                    _surf_group[_ft], _tbidx[_ft], _w_tpc[_ft], None, (0, 0, 0))
 
         # Pre-compute charge filter arrays once per (config, name, energy) iteration.
         _reco_charge_ok: Optional[np.ndarray] = None
