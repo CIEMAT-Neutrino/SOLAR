@@ -22,7 +22,7 @@ Outputs (per-config summary)
                   FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot cm^{-2}}"
                   AreaUnit = r"\mathrm{cm^{2}}"
                 Combined rows (SpectrumType="combined"):
-                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"
+                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot kT^{-1} \cdot yr^{-1}}"
                   (area-weighted sum, normalised by detector mass in kT)
                   AreaUnit = None, Component = None, Surface = None
 
@@ -194,7 +194,9 @@ for config in configs_to_run:
             # Convert: x keV→MeV,  y → counts MeV⁻¹ s⁻¹ cm⁻² (density)
             x_mev  = 1e-3 * x_rb
             dx_mev = np.diff(x_mev)[0]
-            y_flux = 1e3 * y_rb / dx_mev  # /keV → /MeV factor
+            # y_rb holds the counts of each rebinned block, so the density per MeV is y_rb / dx_mev (until 2026-10-15
+            # this carried an extra factor 1e3, which put every flux of the summary pkl 1000 times too high).
+            y_flux = y_rb / dx_mev
 
             key = (surface_id, particle_type, particle_origin)
             # Raw (uncorrected) — kept only for shielding comparison plots
@@ -391,7 +393,11 @@ for config in configs_to_run:
     for (surface_id, particle_type, particle_origin), (x, y) in all_plots[config].items():
         if particle_type not in names:
             continue
-        area_weight = areas.get(geometry, {}).get(surface_id, 0.0)
+        # SURFACE_RATE_FACTORS: the same per-surface correction as the analysis weights (lib/weights.py), e.g. the x2 of
+        # the HD Lateral anode plane, whose surface_areas.json entry is one wall while the workspace mass has two TPCs.
+        area_weight = areas.get(geometry, {}).get(surface_id, 0.0) * float(
+            _info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
+        )
         y_scaled    = np.array(y) / detector_mass * area_weight  # counts/(MeV·s·kT)
 
         if particle_type not in combined_spectra[config]:
@@ -411,8 +417,8 @@ for config, spectra in combined_spectra.items():
             "Particle":        particle_type,
             "Energy":          np.array(x_comb),
             "EnergyUnit":      r"\mathrm{MeV}",
-            "Flux":            np.array(y_comb),
-            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}",
+            "Flux":            np.array(y_comb) * 60 * 60 * 24 * 365.25,  # per year, as the analysis rates
+            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot kT^{-1} \cdot yr^{-1}}",
             "SpectrumType":    "combined",
         })
 _combined_df = pd.DataFrame(_combined_records)
@@ -469,7 +475,7 @@ for row in _combined_records:
         "Energy":          row["Energy"],
         "EnergyUnit":      row.get("EnergyUnit", "MeV"),
         "Flux":            row["Flux"],
-        "FluxUnit":        row.get("FluxUnit", "counts MeV⁻¹ s⁻¹ kT⁻¹"),
+        "FluxUnit":        row["FluxUnit"],
         "SpectrumType":    row["SpectrumType"],
     })
 _summary_df = pd.DataFrame(_summary_records)
@@ -501,7 +507,7 @@ for config in configs_to_run:
             "Energy":          row["Energy"],
             "EnergyUnit":      row.get("EnergyUnit", r"\mathrm{MeV}"),
             "Flux":            row["Flux"],
-            "FluxUnit":        row.get("FluxUnit", r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"),
+            "FluxUnit":        row["FluxUnit"],
             "SpectrumType":    row["SpectrumType"],
         }
         for row in _combined_records
