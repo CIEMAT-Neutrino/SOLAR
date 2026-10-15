@@ -216,7 +216,8 @@ args = parser.parse_args()
 if "ElectronEnergy" in args.energy and not args.electron_energy:
     parser.error("--energy ElectronEnergy requires --electron_energy (builds the branch).")
 # Surface groups of SignalParticleSurface (config/import/surface_positions.json): 0 the anode plane (HD APA side, VD top),
-# 1+2 the walls (HD top/bottom, VD membranes), 3+4 the end caps; "None" collects clusters without an assigned surface.
+# 1+2 the walls (HD top/bottom, VD membranes), 3+4 the end caps; "None" collects clusters without an assigned surface and
+# "All" every cluster. Rows carry Counts (reconstructed energy) and TrueCounts (true kinetic energy of the primary).
 SURFACE_GROUPS = {"Anode": [0], "Walls": [1, 2], "EndCaps": [3, 4]}
 if args.surface_split:
     if args.best_cuts_only or args.skip_scan or args.minimal_cuts or args.nhits is not None or args.charge_threshold > 0:
@@ -482,9 +483,11 @@ for config in configs:
                 _split_cuts[_an].setdefault((int(_bc["NHits"]), int(_bc["OpHits"]), int(_bc["AdjCl"])), []).append("Analysis")
             _surface_rows = {_an: [] for _an in args.analysis}
 
-            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, mc_filter, cut):
-                for _g in [*SURFACE_GROUPS, "None"]:
-                    _in = sel_group == _g
+            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, true_group, true_bidx, true_w, mc_filter, cut):
+                # "All": every selected cluster whatever its surface (the sum of the groups and None).
+                for _g in [*SURFACE_GROUPS, "None", "All"]:
+                    _in = np.ones(len(sel_group), dtype=bool) if _g == "All" else sel_group == _g
+                    _tin = np.ones(len(true_group), dtype=bool) if _g == "All" else true_group == _g
                     _h = np.bincount(reco_bidx[_in], weights=sel_w[_in], minlength=_n_bins).astype(float)
                     _w2 = np.bincount(reco_bidx[_in], weights=sel_w[_in] ** 2, minlength=_n_bins)
                     if mc_filter is not None:
@@ -493,18 +496,22 @@ for config in configs:
                         "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": analysis,
                         "Component": name, "Type": "background", "Selection": selection, "Surface": _g,
                         "MCCounts": np.bincount(reco_bidx[_in], minlength=_n_bins).tolist(),
+                        "TrueCounts": np.bincount(true_bidx[_tin], weights=true_w[_tin], minlength=_n_bins).astype(float).tolist(),
                         "Counts": _h.tolist(), "Error": np.sqrt(_w2), "Energy": true_energy_centers,
                         "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
                         "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2],
                     })
 
+            _w_tpc = np.asarray(run["Reco"]["SignalParticleWeight"]) / background_weight_divisor(
+                str(root), args.folder, name, config, _true_energy_arr
+            )
+            _tbidx = np.digitize(np.asarray(_true_energy_arr), true_energy_edges) - 1
+            _tvalid = (_tbidx >= 0) & (_tbidx < _n_bins)
             for _an in args.analysis:
                 _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
                 _valid = (_bidx >= 0) & (_bidx < _n_bins)
-                _w_all = np.asarray(run["Reco"]["SignalParticleWeight"])[_valid] / background_weight_divisor(
-                    str(root), args.folder, name, config, _true_energy_arr[_valid]
-                )
-                _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_all, None, (0, 0, 0))
+                _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
+                                    _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0))
 
         # Pre-compute charge filter arrays once per (config, name, energy) iteration.
         _reco_charge_ok: Optional[np.ndarray] = None
@@ -706,6 +713,7 @@ for config in configs:
                         # Same selected clusters, weights and MC filter as h: the groups sum to Counts bin by bin.
                         for _sel in _split_cuts[analysis][_cur_cut]:
                             _surface_split_rows(analysis, _sel, _surf_group[mask][_reco_bvalid], _reco_bidx, _sel_w,
+                                                _surf_group[mask][_true_bvalid], _true_bidx, _sel_w_true,
                                                 cached["mc_filter"], _cur_cut)
 
                     plot_lists[(analysis, _cat)].append({
