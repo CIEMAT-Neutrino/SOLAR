@@ -143,16 +143,21 @@ parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=Tru
 parser.add_argument("--export_raw", action=argparse.BooleanOptionalAction, default=True, help="Export raw numpy arrays (energy, mask, weights) as pkl files")
 parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, default=False, help="Save per-cut weighted DataFrame to output/data/solar/weighted/ (disabled by default; used by 04_weighted.py)")
 parser.add_argument("--surface_split", action=argparse.BooleanOptionalAction, default=False,
-                    help="Gamma/neutron study export: the weighted spectra split by generation-surface group (SURFACE_GROUPS) at the "
+                    help="Study export: the weighted spectra (gamma/neutron split by generation-surface group, SURFACE_GROUPS; signal per "
+                         "component Solar/8B/hep with the mean oscillated weights) at the "
                          "reference cut (NHits 1, OpHits 4, AdjCl 20) and at the analysis best cut, plus all clusters before any cut "
-                         "(Selection TPC) and after the fiducialisation step (Selection Fiducial), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
+                         "(Selection TPC), after the fiducialisation step (Selection Fiducial) and at generation (Selection Truth: signal "
+                         "interactions, gamma/neutron surface rates; none for radiological), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
                          "Writes nothing else (no Ref/mask exports, weighted DataFrame, analysis_cuts json or Rebin pkl).")
 parser.add_argument("--surface_split_cut_energy", type=str, default="SolarEnergy",
                     help="With --surface_split: the analysis energy. Its best-cut JSON entry gives the analysis cut; its fiducial volume "
                          "(and energy bands, assigned with this energy) gives the Fiducial rows.")
 parser.add_argument("--surface_split_fiducial_json", type=str, default=None,
-                    help="With --surface_split: BestFiducials json for the Fiducial rows (default: the folder's BestFiducials.json), "
+                    help="With --surface_split: BestFiducials json for all its rows (default: the folder's BestFiducials.json), "
                          "e.g. a snapshot of the volumes of a given set of runs.")
+parser.add_argument("--surface_split_best_cuts_json", type=str, default=None,
+                    help="With --surface_split: json {config: {analysis: {NHits, OpHits, AdjCl}}} with the analysis cuts "
+                         "(default: the best-cut JSON of the config), e.g. a snapshot of a given set of runs.")
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
@@ -338,6 +343,9 @@ for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     _best_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
     fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_best_fiducials_stem}.json").read())
+    if args.surface_split and args.surface_split_fiducial_json:
+        # Every --surface_split row, including the scan masks behind the cut rows, uses the snapshot volumes.
+        fiducials = json.load(open(args.surface_split_fiducial_json))
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 
@@ -472,22 +480,27 @@ for config in configs:
 
         # --surface_split: per-cluster surface group, the cuts to record and the TPC rows (all clusters, no cut, no MC filter).
         if args.surface_split:
-            if not is_surface_background(str(root), name):
-                raise SystemExit(f"[ERROR] --surface_split is for the surface backgrounds (gamma, neutron), not '{name}'.")
+            # Signal: one component per weight (Solar = 8B + hep, mean oscillated weights); backgrounds: the sample weight.
+            _is_signal = "marley" in name
+            _comp_weights = ([("Solar", "SignalParticleWeightOscMean"), ("8B", "SignalParticleWeightb8OscMean"),
+                              ("hep", "SignalParticleWeighthepOscMean")] if _is_signal else [(name.split("_")[0], "SignalParticleWeight")])
             _surf = np.asarray(run["Reco"]["SignalParticleSurface"])
             _surf_group = np.full(len(_surf), "None", dtype=object)
             for _g, _ids in SURFACE_GROUPS.items():
                 _surf_group[np.isin(_surf, _ids)] = _g
             # Reference cut (the loosest grid point, as --minimal_cuts) and the analysis best cut; one row set per label.
             _split_cuts = {_an: {(nhits[0], nhits[3], nhits[::-1][0]): ["Reference"]} for _an in args.analysis}
+            _bc_snap = json.load(open(args.surface_split_best_cuts_json)) if args.surface_split_best_cuts_json else None
             for _an in args.analysis:
-                _bc = _load_best_cuts(_an, args.folder, config).get(args.surface_split_cut_energy, {})
+                _bc = (_bc_snap.get(config, {}).get(_an, {}) if _bc_snap is not None
+                       else _load_best_cuts(_an, args.folder, config).get(args.surface_split_cut_energy, {}))
                 if not _bc:
                     raise SystemExit(f"[ERROR] --surface_split: no {args.surface_split_cut_energy} best cut for {config} {_an}.")
                 _split_cuts[_an].setdefault((int(_bc["NHits"]), int(_bc["OpHits"]), int(_bc["AdjCl"])), []).append("Analysis")
             _surface_rows = {_an: [] for _an in args.analysis}
 
-            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, true_group, true_bidx, true_w, mc_filter, cut):
+            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, true_group, true_bidx, true_w, mc_filter, cut,
+                                    component=None):
                 # "All": every selected cluster whatever its surface (the sum of the groups and None).
                 for _g in [*SURFACE_GROUPS, "None", "All"]:
                     _in = np.ones(len(sel_group), dtype=bool) if _g == "All" else sel_group == _g
@@ -498,7 +511,8 @@ for config in configs:
                         _h, _w2 = _h * mc_filter, _w2 * mc_filter
                     _surface_rows[analysis].append({
                         "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": analysis,
-                        "Component": name, "Type": "background", "Selection": selection, "Surface": _g,
+                        "Component": component or name, "Type": "signal" if _is_signal else "background",
+                        "Selection": selection, "Surface": _g,
                         "MCCounts": np.bincount(reco_bidx[_in], minlength=_n_bins).tolist(),
                         "TrueCounts": np.bincount(true_bidx[_tin], weights=true_w[_tin], minlength=_n_bins).astype(float).tolist(),
                         "Counts": _h.tolist(), "Error": np.sqrt(_w2), "Energy": true_energy_centers,
@@ -519,23 +533,70 @@ for config in configs:
                 ) if _b else build_fiducial_spatial_mask(
                     run, config, detector_x, detector_y, info, args.folder, _f, pos_keys=_pos_keys,
                 ), dtype=bool)
-            _w_tpc = np.asarray(run["Reco"]["SignalParticleWeight"]) / background_weight_divisor(
-                str(root), args.folder, name, config, _true_energy_arr
-            )
+            _divisor = (background_weight_divisor(str(root), args.folder, name, config, _true_energy_arr)
+                        if workflow_params.get("PARTICLE_TYPE") == "background" else 1.0)
+            # TPC rows: every cluster. The radiological sample keeps its external-overlap removal (_surface_mask), which defines
+            # the sample rather than selecting it; the gamma/neutron surface cut belongs to the fiducialisation step.
+            _tpc_keep = np.ones(len(_surf), dtype=bool) if is_surface_background(str(root), name) else np.asarray(_surface_mask, dtype=bool)
             _tbidx = np.digitize(np.asarray(_true_energy_arr), true_energy_edges) - 1
-            _tvalid = (_tbidx >= 0) & (_tbidx < _n_bins)
-            for _an in args.analysis:
-                _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
-                _valid = (_bidx >= 0) & (_bidx < _n_bins)
-                _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
-                                    _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0))
-                # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
-                # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
-                # cut, no neutron-capture veto, no MC filter.
-                _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _split_spatial[_an]
-                _fr, _ft = _valid & _fid, _tvalid & _fid
-                _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
-                                    _surf_group[_ft], _tbidx[_ft], _w_tpc[_ft], None, (0, 0, 0))
+            _tvalid = (_tbidx >= 0) & (_tbidx < _n_bins) & _tpc_keep
+            for _comp, _wname in _comp_weights:
+                _w_tpc = np.asarray(run["Reco"][_wname]) / _divisor
+                for _an in args.analysis:
+                    _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
+                    _valid = (_bidx >= 0) & (_bidx < _n_bins) & _tpc_keep
+                    _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
+                                        _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0), _comp)
+                    # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
+                    # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
+                    # cut, no neutron-capture veto, no MC filter.
+                    _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _split_spatial[_an]
+                    _fr, _ft = _valid & _fid, _tvalid & _fid
+                    _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
+                                        _surf_group[_ft], _tbidx[_ft], _w_tpc[_ft], None, (0, 0, 0), _comp)
+
+            # Truth rows (rate at generation, binned in true energy; Counts = TrueCounts). Signal: every interaction of the Truth
+            # tree with its true neutrino energy. Gamma/neutron: the surface rates of the weights (exposure.pkl counts with
+            # SURFACE_RATE_FACTORS, momentum PDFs of pdf.pkl) over each true kinetic-energy bin, divided as the weights.
+            # Radiological: no generation-level rate (only its reconstructed clusters exist).
+            if _is_signal:
+                _tk = np.asarray(run["Truth"]["SignalParticleK"], dtype=float)
+                _tb = np.digitize(_tk, true_energy_edges) - 1
+                _tv = (_tb >= 0) & (_tb < _n_bins)
+                for _comp, _wname in _comp_weights:
+                    _tw = np.asarray(run["Truth"][_wname], dtype=float)[_tv]
+                    _tg = np.full(int(_tv.sum()), "None", dtype=object)
+                    for _an in args.analysis:
+                        _surface_split_rows(_an, "Truth", _tg, _tb[_tv], _tw, _tg, _tb[_tv], _tw, None, (0, 0, 0), _comp)
+            elif is_surface_background(str(root), name):
+                from lib.weights import _truth_path
+                _part = name.split("_")[0]
+                _exp = pickle.load(open(f"{_truth_path()}/{config}/{config}_{_part}_exposure.pkl", "rb"))
+                _hists, _hbins = pickle.load(open(f"{_truth_path()}/{config}/{config}_{_part}_pdf.pkl", "rb"))
+                _to_p = (lambda k: np.asarray(k, dtype=float)) if _part == "gamma" else (lambda k: np.sqrt(2 * 939.565 * np.asarray(k, dtype=float)))
+                _pe = _to_p(np.clip(true_energy_edges, 0, None))
+                _gen = {}
+                for _sid, _e in _exp.items():
+                    _h, _hb = np.asarray(_hists[int(_sid)], dtype=float), np.asarray(_hbins[int(_sid)], dtype=float)
+                    if len(_h) == 0:
+                        continue
+                    _cdf = np.concatenate([[0.0], np.cumsum(_h * np.diff(_hb))])  # PDF integrates to 1
+                    _frac = np.diff(np.interp(_pe, _hb, _cdf))
+                    _rate = float(_e["counts"]) * float(info.get("SURFACE_RATE_FACTORS", {}).get(str(_sid), 1.0))
+                    _g = next((k for k, v in SURFACE_GROUPS.items() if int(_sid) in v), "None")
+                    _gen[_g] = _gen.get(_g, 0) + _rate * _frac / np.asarray(
+                        background_weight_divisor(str(root), args.folder, name, config, true_energy_centers), dtype=float)
+                for _an in args.analysis:
+                    for _g in [*SURFACE_GROUPS, "None", "All"]:
+                        _c = sum(_gen.values()) if _g == "All" else _gen.get(_g, np.zeros(_n_bins))
+                        _surface_rows[_an].append({
+                            "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": _an,
+                            "Component": _part, "Type": "background", "Selection": "Truth", "Surface": _g,
+                            "MCCounts": np.zeros(_n_bins, dtype=int).tolist(), "TrueCounts": np.asarray(_c, dtype=float).tolist(),
+                            "Counts": np.asarray(_c, dtype=float).tolist(), "Error": np.zeros(_n_bins), "Energy": true_energy_centers,
+                            "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+                            "NHits": 0, "OpHits": 0, "AdjCl": 0,
+                        })
 
         # Pre-compute charge filter arrays once per (config, name, energy) iteration.
         _reco_charge_ok: Optional[np.ndarray] = None
@@ -733,12 +794,14 @@ for config in configs:
                     h  *= cached["mc_filter"]
                     w2 *= cached["mc_filter"]
                     h_error = np.sqrt(w2)
-                    if args.surface_split and _cat is None and _cur_cut in _split_cuts[analysis]:
+                    if (args.surface_split and _cat is None and _cur_cut in _split_cuts[analysis]
+                            and mean_label == ("OscMean" if "marley" in name else "")):
                         # Same selected clusters, weights and MC filter as h: the groups sum to Counts bin by bin.
                         for _sel in _split_cuts[analysis][_cur_cut]:
                             _surface_split_rows(analysis, _sel, _surf_group[mask][_reco_bvalid], _reco_bidx, _sel_w,
                                                 _surf_group[mask][_true_bvalid], _true_bidx, _sel_w_true,
-                                                cached["mc_filter"], _cur_cut)
+                                                cached["mc_filter"], _cur_cut,
+                                                weight_labels if "marley" in name else name.split("_")[0])
 
                     plot_lists[(analysis, _cat)].append({
                         "Geometry": config.split("_")[0],
