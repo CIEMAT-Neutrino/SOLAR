@@ -144,6 +144,7 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     **{f"bkgsub_s{s}": {"*": ("default", None)} for s in (1, 2, 3)},
     "hep_extmask": {"*": ("default", None)},
     "hep_looseshape": {"*": ("default", None)},
+    "hep_looseshape_plain": {"*": ("default", None)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},

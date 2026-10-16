@@ -429,6 +429,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_looseshape", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
          "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose"]},
+        # the same on SolarEnergy (the DayNight/Sensitivity energy) instead of SolarEnergyHEP (user, 2026-10-16)
+        {"label": "hep_looseshape_plain", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose", "--hep_energy", "SolarEnergy"]},
     ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
