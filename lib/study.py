@@ -416,6 +416,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "extra": ["--bkg_subsample", f"match=vd_1x8x14_3view_30deg_nominal:{seed}"]}
         for seed in (1, 2, 3)
     ],
+    # HEP without the tail extrapolation and with the likelihood bins restricted to those with simulated gamma/neutron
+    # clusters at the cut (2026-10-16, user: simplify HEP, keep VD Shielded above VD Top). HEP only, full re-optimisation.
+    "hepextmask": [
+        {"label": "hep_extmask", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bin_mask", "external"]},
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -593,7 +600,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

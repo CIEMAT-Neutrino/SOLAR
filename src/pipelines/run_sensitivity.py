@@ -430,6 +430,9 @@ parser.add_argument("--mc_floor", type=float, default=None,
 parser.add_argument("--bkg_subsample", type=str, default=None,
     help="Study knob (SOLAR_BKG_SUBSAMPLE): F:SEED or match=<config>:SEED keeps a random fraction of the whole jobs of "
          "gamma_final/neutron_final in every stage (lib/subsample.py), see lib/study.py bkgsub.")
+parser.add_argument("--hep_bin_mask", choices=["default", "external"], default=None,
+    help="Study knob (SOLAR_HEP_BIN_MASK): external also drops the HEP likelihood bins without simulated gamma/neutron "
+         "clusters at the cut (01_hep.py), see lib/study.py hep_extmask.")
 parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --no-hep_tail_extrapolation switches HEP_TAIL_EXTRAPOLATION off in 01_hep.py "
          "(through SOLAR_HEP_TAIL_EXTRAPOLATION), see lib/study.py hep_notail.")
@@ -1008,6 +1011,11 @@ if args.bkg_subsample is not None:  # every child process follows the study knob
     if not args.study_label or args.update_best_fiducials:
         raise SystemExit("[ERROR] --bkg_subsample needs --study_label and --no-update_best_fiducials.")
     os.environ["SOLAR_BKG_SUBSAMPLE"] = args.bkg_subsample
+
+if args.hep_bin_mask is not None:  # every child process follows the study knob (01_hep.py)
+    if args.hep_bin_mask != "default" and not args.study_label:
+        raise SystemExit("[ERROR] --hep_bin_mask is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_HEP_BIN_MASK"] = args.hep_bin_mask
 
 if args.hep_tail_extrapolation is not None:  # every child process follows the study knob (01_hep.py)
     if not args.hep_tail_extrapolation and not args.study_label:

@@ -502,6 +502,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
         smoothed_background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
         background_mc_counts = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
+        external_mc_counts = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
         hep_signal = None
         smoothed_hep = None
         mc_sums = {}
@@ -538,6 +539,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 raw_background += counts
                 smoothed_background += smoothed_counts
                 background_mc_counts += mc_counts
+                if str(component).lower().split("_")[0] in ("gamma", "neutron"):
+                    external_mc_counts += mc_counts
                 background_statistical = np.divide(
                     errors,
                     counts,
@@ -651,6 +654,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # the standard ROOT/HistFactory treatment: zero contribution to the test
         # statistic for bins without MC support, regardless of exposure.
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
+        # study hep_extmask (run_sensitivity --hep_bin_mask external, SOLAR_HEP_BIN_MASK): a bin also needs simulated
+        # gamma/neutron clusters at this cut, so the bins a cut empties of external MC drop out instead of counting as
+        # background free (8B MC alone no longer makes a bin "supported").
+        if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
+            pl_bin_mask = pl_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
 
         prev_raw_starts = [np.zeros(0, dtype=int) for _ in range(3)]
         prev_smoothed_starts = [np.zeros(0, dtype=int) for _ in range(3)]
