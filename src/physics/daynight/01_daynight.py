@@ -279,10 +279,12 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 out[component][cut] = out[component].get(cut, 0.0) + float(np.nansum(mc[threshold_idx:]))
         return out
 
+    _mc_by_cut = _background_mc_by_cut(plot_df, _background_components_only)
     _mc_thresholds = adaptive_mc_thresholds(
-        _background_mc_by_cut(plot_df, _background_components_only),
-        essential_background_components, args.mc_threshold, args.min_nonessential_mc,
+        _mc_by_cut, essential_background_components, args.mc_threshold, args.min_nonessential_mc,
     )
+    from lib.background import report_mc_floor
+    report_mc_floor(str(root), config, "DAYNIGHT", energy, _mc_by_cut, _mc_thresholds, ("NHits", "OpHits", "AdjCl"))
     for _comp, _thr in _mc_thresholds.items():
         if _thr <= 0:
             rprint(f"[cyan][INFO][/cyan] MC support: '{_comp}' has 0 simulated events everywhere in this grid; not gated.")

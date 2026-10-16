@@ -423,6 +423,12 @@ parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAc
          "(seeded from the folder's BestFiducials.json; through SOLAR_FIDUCIAL_STEM, lib/fiducial_entries.py) and the "
          "Sensitivity score-category thresholds are not rewritten, so the shared BestFiducials.json is left as it was. "
          "Default: update it, as before.")
+parser.add_argument("--mc_floor", type=float, default=None,
+    help="Study knob (SOLAR_MC_FLOOR): a cut is eligible only if gamma and neutron each keep >= this many simulated "
+         "clusters in the analysis window and fiducial volume (DayNight, HEP, Sensitivity), see lib/study.py mcfloor.")
+parser.add_argument("--bkg_subsample", type=str, default=None,
+    help="Study knob (SOLAR_BKG_SUBSAMPLE): F:SEED or match=<config>:SEED keeps a random fraction of the whole jobs of "
+         "gamma_final/neutron_final in every stage (lib/subsample.py), see lib/study.py bkgsub.")
 parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --no-hep_tail_extrapolation switches HEP_TAIL_EXTRAPOLATION off in 01_hep.py "
          "(through SOLAR_HEP_TAIL_EXTRAPOLATION), see lib/study.py hep_notail.")
@@ -981,6 +987,17 @@ if not args.update_best_fiducials:  # every child reads and writes BestFiducials
                 _shutil.copytree(f"{_fid_dir}/entries/BestFiducials/{_cfg}",
                                  f"{_fid_dir}/entries/BestFiducials_{args.study_label}/{_cfg}", dirs_exist_ok=True)
         rprint(f"[cyan][INFO][/cyan] --no-update_best_fiducials: fiducial volumes in {_fid_dir}/BestFiducials_{args.study_label}.json")
+
+if args.mc_floor is not None:  # every child process follows the study knob (lib/background.adaptive_mc_thresholds)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --mc_floor is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_MC_FLOOR"] = f"{args.mc_floor:g}"
+    os.environ["SOLAR_MC_FLOOR_LABEL"] = args.study_label
+
+if args.bkg_subsample is not None:  # every child process follows the study knob (lib/io.load_multi, lib/weights)
+    if not args.study_label or args.update_best_fiducials:
+        raise SystemExit("[ERROR] --bkg_subsample needs --study_label and --no-update_best_fiducials.")
+    os.environ["SOLAR_BKG_SUBSAMPLE"] = args.bkg_subsample
 
 if args.hep_tail_extrapolation is not None:  # every child process follows the study knob (01_hep.py)
     if not args.hep_tail_extrapolation and not args.study_label:

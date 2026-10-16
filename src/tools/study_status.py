@@ -139,6 +139,9 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "rad_smooth": {"*": ("default", None)},
     # HEP without the external-tail extrapolation (full chain re-optimised): no expected direction
     "hep_notail": {"*": ("default", None)},
+    # MC-statistics diagnostics (selection bias): no expected direction
+    **{f"mcfloor_{n}": {"*": ("default", None)} for n in (10, 25, 50)},
+    **{f"bkgsub_s{s}": {"*": ("default", None)} for s in (1, 2, 3)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},

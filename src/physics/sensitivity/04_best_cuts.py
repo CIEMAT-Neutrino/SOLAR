@@ -419,6 +419,8 @@ def _mc_supported_cuts():
     if not mc_by_component:
         return None
     thresholds = adaptive_mc_thresholds(mc_by_component, essential, args.min_background_mc, args.min_nonessential_mc)
+    from lib.background import report_mc_floor
+    report_mc_floor(str(root), args.config, "SENSITIVITY", args.energy, mc_by_component, thresholds, ("NHits", "AdjCl", "OpHits"))
     supported = None
     if args.max_sparse_weight_fraction > 0 and total_weight:
         supported = {c for c, tot in total_weight.items() if tot <= 0 or sparse_weight.get(c, 0.0) / tot <= args.max_sparse_weight_fraction}

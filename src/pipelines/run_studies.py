@@ -112,6 +112,8 @@ parser.add_argument("--flyweight", action=argparse.BooleanOptionalAction, defaul
                    help="Flyweight Sensitivity templates (default). --no-flyweight uses the per-point template grid.")
 parser.add_argument("--no-templates", dest="skip_templates", action="store_true",
                    help="Alias for --skip-templates: skip template computation")
+parser.add_argument("--mc_floor", type=float, default=None,
+                    help="Passed to run_sensitivity.py (overrides a variant's own --mc_floor): MC floor of the cut selection.")
 parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAction, default=None,
                     help="Passed to run_sensitivity.py: --no-update_best_fiducials keeps the volumes this study optimises in "
                          "BestFiducials_<label>.json instead of the shared BestFiducials.json (default: run_sensitivity's, update).")
@@ -361,6 +363,8 @@ def _base_pipeline_args(
         base.extend(["--adjcls", str(args.adjcls)])
     if args.update_best_fiducials is not None:
         base.append("--update_best_fiducials" if args.update_best_fiducials else "--no-update_best_fiducials")
+    if args.mc_floor is not None:
+        base.extend(["--mc_floor", f"{args.mc_floor:g}"])
     return base
 
 

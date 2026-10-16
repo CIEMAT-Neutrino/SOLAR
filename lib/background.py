@@ -46,7 +46,58 @@ def adaptive_mc_thresholds(
             out[component] = 1.0
         else:
             out[component] = float(nonessential_threshold)
+    floor = mc_floor()
+    if floor > 0:  # study mcfloor: every external component needs at least MC_FLOOR simulated clusters at a cut
+        for component in out:
+            if _is_external(component):
+                out[component] = max(out[component], floor)
     return out
+
+
+def mc_floor() -> float:
+    """MC_FLOOR of the study mcfloor (run_sensitivity --mc_floor, SOLAR_MC_FLOOR), 0 when off."""
+    return float(os.environ.get("SOLAR_MC_FLOOR", "0") or 0)
+
+
+def _is_external(component) -> bool:
+    return str(component).lower().split("_")[0] in ("gamma", "neutron")
+
+
+def report_mc_floor(root: str, config: str, analysis: str, energy: str, mc_by_component, thresholds, axes) -> None:
+    """Log and write (output/logs/mcfloor/) the cuts eligible under the MC floor: count, range of each cut axis and the
+    gamma/neutron simulated clusters at every eligible cut (the analysis picks its best cut among these). No-op when
+    the floor is off. `axes` names the positions of the cut tuples of `mc_by_component`."""
+    floor = mc_floor()
+    if floor <= 0:
+        return
+    import json
+    from rich import print as rprint
+    gated = {c: float(t) for c, t in thresholds.items() if t > 0}
+    cuts = set()
+    for per_cut in mc_by_component.values():
+        cuts.update(per_cut)
+    eligible = sorted(c for c in cuts if all(mc_by_component.get(comp, {}).get(c, 0.0) >= t for comp, t in gated.items()))
+    ranges = {ax: [min(c[i] for c in eligible), max(c[i] for c in eligible)] for i, ax in enumerate(axes)} if eligible else {}
+    external = [c for c in mc_by_component if _is_external(c)]
+    label = os.environ.get("SOLAR_MC_FLOOR_LABEL") or f"mcfloor{floor:g}"
+    payload = {
+        "Config": config, "Analysis": analysis, "Energy": energy, "Label": label, "MCFloor": floor,
+        "Thresholds": {c: float(t) for c, t in thresholds.items()}, "Axes": list(axes),
+        "NCuts": len(cuts), "NEligible": len(eligible), "EligibleRange": ranges,
+        "MC": {"/".join(str(v) for v in c): {comp: float(mc_by_component[comp].get(c, 0.0)) for comp in external} for c in eligible},
+    }
+    out_dir = os.path.join(str(root), "output", "logs", "mcfloor")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{config}_{analysis}_{energy}_{label}.json")
+    tmp = f"{path}.tmp{os.getpid()}"
+    with open(tmp, "w") as handle:
+        json.dump(payload, handle, indent=1)
+    os.replace(tmp, path)
+    rprint(
+        f"[cyan][INFO][/cyan] MC floor {floor:g} ({analysis} {config} {energy}): {len(eligible)} of {len(cuts)} cuts eligible"
+        + ("".join(f", {ax} {lo}-{hi}" for ax, (lo, hi) in ranges.items()) if ranges else ", none")
+        + f" -> {path}"
+    )
 
 
 def folder_applies_surface_cut(root: str, folder: str) -> bool:

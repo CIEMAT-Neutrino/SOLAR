@@ -70,7 +70,14 @@ def load_config_counts(info: Optional[dict], name: str, branch: str) -> Optional
             _config_npy_cache[path] = np.asarray(arr, dtype=np.int64).ravel()
         except FileNotFoundError:
             _config_npy_cache[path] = None
-    return _config_npy_cache[path]
+    arr = _config_npy_cache[path]
+    # study bkgsub: only the kept jobs count (N_gen rescales with the subsample)
+    from lib.subsample import subsample_masks
+    from src.utils import get_project_root
+    sub = subsample_masks(path.rsplit("/Config/", 1)[0], name, info, str(get_project_root()))
+    if arr is not None and sub is not None and len(arr) == len(sub["Config"]):
+        arr = arr[sub["Config"]]
+    return arr
 
 
 def _truth_entry_count(run: dict, info: Optional[dict], name: str) -> Optional[float]:
