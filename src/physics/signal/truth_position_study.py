@@ -87,6 +87,9 @@ parser.add_argument("--export_dir", default="export", help="export stage: sub-fo
 parser.add_argument("--agree_cm", type=float, default=30.0, help="|reco - truth| below which a position 'agrees'")
 parser.add_argument("--formats", nargs="+", default=["png", "pdf"])
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=False, help="extract: overwrite an existing cache")
+parser.add_argument("--sample_suffix", default="", help="extract: suffix of the analysis sample names (e.g. _final); the caches keep the base names")
+parser.add_argument("--fiducial_json", default=None, help="plot/faces/export: BestFiducials json to use instead of the folder file (e.g. a snapshot of given runs)")
+parser.add_argument("--best_cuts_json", default=None, help="plot/faces/export: {config: {DayNight|HEP|Sensitivity: {NHits, OpHits, AdjCl}}} instead of the best-cut JSONs")
 args = parser.parse_args()
 
 from lib import root, load_analysis_info                       # noqa: E402
@@ -118,7 +121,7 @@ def extract_one(config, name):
     out.parent.mkdir(parents=True, exist_ok=True)
 
     info = config_info(config)
-    configs = {config: [name]}
+    configs = {config: [name + args.sample_suffix]}
     run, _ = load_multi(configs, preset="SIGNIFICANCE", branches={"Config": ["Geometry"]}, debug=False)
     run = compute_reco_workflow(
         run, configs,
@@ -157,7 +160,7 @@ def extract_aux_one(config, name):
         return
     ref = CACHE / config / f"{config}_{name}.npz"
     n_ref = len(np.load(ref)["w"]) if ref.exists() else None
-    configs = {config: [name]}
+    configs = {config: [name + args.sample_suffix]}
     run, _ = load_multi(configs, preset="SIGNIFICANCE", branches={"Config": ["Geometry"]}, debug=False)
     run = compute_reco_workflow(
         run, configs,
@@ -359,12 +362,17 @@ def best_cut(config):
     """Default best cut of --analysis (the Sensitivity map carries NHits/OpHits/AdjCl under the same keys)."""
     sub, tag = {"DAYNIGHT": ("daynight-json", "highest_DayNight"), "HEP": ("hep-json", "highest_HEP"),
                 "SENSITIVITY": ("sensitivity-json", "highest_Sensitivity")}[args.analysis]
+    if args.best_cuts_json:
+        e = json.load(open(args.best_cuts_json))[config][{"DAYNIGHT": "DayNight", "HEP": "HEP", "SENSITIVITY": "Sensitivity"}[args.analysis]]
+        return {"NHits": int(e["NHits"]), "OpHits": int(e["OpHits"]), "AdjCl": int(e["AdjCl"])}
     p = f"{ROOT}/config/{config}/{sub}/{args.folder.lower()}/{config}_{tag}.json"
     e = json.load(open(p))[config][args.energy]
     return {"NHits": int(e["NHits"]), "OpHits": int(e["OpHits"]), "AdjCl": int(e["AdjCl"])}
 
 
 def fiducials(label=""):
+    if args.fiducial_json and not label:
+        return json.load(open(args.fiducial_json))
     p = f"{ROOT}/config/analysis/fiducial/{args.folder.lower()}/BestFiducials{label}.json"
     return json.load(open(p)) if os.path.exists(p) else {}
 
