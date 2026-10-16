@@ -98,12 +98,16 @@ def mc_floor_cuts(root: str, folder: str, config: str, analysis: str, energy: st
     cuts = set()
     for per_cut in mc.values():
         cuts.update(per_cut)
-    eligible = sorted(c for c in cuts if all(per_cut.get(c, 0.0) >= floor for per_cut in mc.values()))
+    # A component whose window MC stays below the floor even at the loosest cut (HD Central gamma in 6-18 MeV: 9
+    # clusters) cannot meet it anywhere; its requirement is then its own grid maximum (the cut may not lose any of it).
+    required = {comp: min(floor, max(per_cut.values()) if per_cut else 0.0) for comp, per_cut in mc.items()}
+    eligible = sorted(c for c in cuts if all(mc[comp].get(c, 0.0) >= required[comp] for comp in mc))
     ranges = {ax: [min(c[i] for c in eligible), max(c[i] for c in eligible)] for i, ax in enumerate(axes)} if eligible else {}
     label = os.environ.get("SOLAR_MC_FLOOR_LABEL") or f"mcfloor{floor:g}"
     payload = {
         "Config": config, "Analysis": str(analysis).upper(), "Energy": energy, "Label": label, "MCFloor": floor,
-        "Window": [e_min, e_max], "Axes": list(axes), "Components": list(mc), "NCuts": len(cuts), "NEligible": len(eligible),
+        "Window": [e_min, e_max], "Axes": list(axes), "Components": list(mc), "Required": required,
+        "NCuts": len(cuts), "NEligible": len(eligible),
         "EligibleRange": ranges,
         "MC": {"/".join(str(v) for v in c): {comp: mc[comp].get(c, 0.0) for comp in mc} for c in eligible},
     }
@@ -116,7 +120,7 @@ def mc_floor_cuts(root: str, folder: str, config: str, analysis: str, energy: st
     os.replace(tmp, path)
     rprint(
         f"[cyan][INFO][/cyan] MC floor {floor:g} in {e_min:g}-{e_max:g} MeV ({analysis} {config} {energy}): "
-        f"{len(eligible)} of {len(cuts)} cuts eligible"
+        f"{len(eligible)} of {len(cuts)} cuts eligible (required " + ", ".join(f"{c} {r:g}" for c, r in required.items()) + ")"
         + ("".join(f", {ax} {lo}-{hi}" for ax, (lo, hi) in ranges.items()) if ranges else ", none")
         + f" -> {path}"
     )
