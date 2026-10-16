@@ -962,13 +962,24 @@ if not args.update_best_fiducials:  # every child reads and writes BestFiducials
         _fid_dir = f"{root}/config/analysis/fiducial/{_fid_folder.lower()}"
         if not os.path.isfile(f"{_fid_dir}/BestFiducials.json"):
             continue
-        # Seeded fresh from the shared file at every start, so volumes this run does not scan are the current ones.
-        _tmp = f"{_fid_dir}/BestFiducials_{args.study_label}.json.tmp{os.getpid()}"
-        _shutil.copy2(f"{_fid_dir}/BestFiducials.json", _tmp)
-        os.replace(_tmp, f"{_fid_dir}/BestFiducials_{args.study_label}.json")
-        if os.path.isdir(f"{_fid_dir}/entries/BestFiducials"):
-            _shutil.copytree(f"{_fid_dir}/entries/BestFiducials", f"{_fid_dir}/entries/BestFiducials_{args.study_label}",
-                             dirs_exist_ok=True)
+        # The entries of this run's configs are seeded fresh from the shared file at every start (volumes this run does not
+        # scan are the current ones); other configs' entries, e.g. of a parallel run of the same label, are kept.
+        import fcntl as _fcntl, json as _json
+        _labeled = f"{_fid_dir}/BestFiducials_{args.study_label}.json"
+        with open(f"{_labeled}.lock", "a+") as _lock:
+            _fcntl.flock(_lock.fileno(), _fcntl.LOCK_EX)
+            _shared = _json.load(open(f"{_fid_dir}/BestFiducials.json"))
+            _payload = _json.load(open(_labeled)) if os.path.isfile(_labeled) else {}
+            for _cfg in args.config:
+                if _cfg in _shared:
+                    _payload[_cfg] = _shared[_cfg]
+            _tmp = f"{_labeled}.tmp{os.getpid()}"
+            _json.dump(_payload, open(_tmp, "w"), indent=4)
+            os.replace(_tmp, _labeled)
+        for _cfg in args.config:
+            if os.path.isdir(f"{_fid_dir}/entries/BestFiducials/{_cfg}"):
+                _shutil.copytree(f"{_fid_dir}/entries/BestFiducials/{_cfg}",
+                                 f"{_fid_dir}/entries/BestFiducials_{args.study_label}/{_cfg}", dirs_exist_ok=True)
         rprint(f"[cyan][INFO][/cyan] --no-update_best_fiducials: fiducial volumes in {_fid_dir}/BestFiducials_{args.study_label}.json")
 
 if args.hep_tail_extrapolation is not None:  # every child process follows the study knob (01_hep.py)
