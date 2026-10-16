@@ -423,6 +423,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
          "extra": ["--no-hep_tail_extrapolation", "--hep_bin_mask", "external"]},
     ],
+    # HEP without the tail extrapolation, external backgrounds with the shape of their loosest cut normalised to each
+    # cut (2026-10-16, user: simpler HEP, HD Central near the thesis, VD Shielded above VD Top). HEP only, full re-optimisation.
+    "heplooseshape": [
+        {"label": "hep_looseshape", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose"]},
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -600,7 +607,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

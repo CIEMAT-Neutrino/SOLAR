@@ -466,6 +466,23 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 rprint(f"[cyan][INFO][/cyan] {config} {_comp}: HEP tail extrapolation, loose-cut slope {_tail_models[_comp][0]:.2f}/MeV, "
                        f"last populated bin {hep_rebin_centers[_tail_models[_comp][2]]:.1f} MeV")
 
+    # study hep_looseshape (run_sensitivity --hep_bkg_shape loose, SOLAR_HEP_BKG_SHAPE): every external component takes
+    # the spectral shape of its loosest cut of the scan (same fiducial volume, most simulated events), normalised to the
+    # cut's own total; no fit, no extrapolation beyond the bins the loosest cut populates.
+    _loose_shapes = {}
+    if os.environ.get("SOLAR_HEP_BKG_SHAPE") == "loose":
+        for _comp in _hep_bkg_components:
+            if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
+                continue
+            _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
+            if _cdf.empty:
+                continue
+            _loose = _cdf.loc[(_cdf["NHits"] == _cdf["NHits"].min()) & (_cdf["OpHits"] == _cdf["OpHits"].min()) & (_cdf["AdjCl"] == _cdf["AdjCl"].max())]
+            if _loose.empty:
+                continue
+            _loose_shapes[_comp] = (np.asarray(_loose.iloc[0]["Counts"], dtype=float), np.asarray(_loose.iloc[0]["Error"], dtype=float))
+        rprint(f"[cyan][INFO][/cyan] HEP background shapes from the loosest cut for {sorted(_loose_shapes)} ({config} {energy})")
+
     sigmamax = 0.0
     last_sigma2 = 1e6
     last_sigma3 = 1e6
@@ -524,6 +541,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             counts = np.asarray(this_comp_df["Counts"].values[0][threshold_idx:], dtype=float)
             errors = np.asarray(this_comp_df["Error"].values[0][threshold_idx:], dtype=float)
             mc_counts = np.asarray(this_comp_df["MCCounts"].values[0][threshold_idx:], dtype=float)
+            if component in _loose_shapes:
+                _lc, _le = _loose_shapes[component]
+                _ratio = float(np.nansum(this_comp_df["Counts"].values[0])) / float(np.nansum(_lc)) if np.nansum(_lc) > 0 else 0.0
+                counts = (_lc * _ratio)[threshold_idx:]
+                errors = (_le * _ratio)[threshold_idx:]
             if _tail_models.get(component) is not None:
                 counts = counts + extrapolated_external_tail(
                     this_comp_df["Counts"].values[0], this_comp_df["MCCounts"].values[0], _tail_models[component],
