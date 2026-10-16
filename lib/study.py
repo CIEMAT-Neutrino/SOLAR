@@ -380,6 +380,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "fidband": [
         {"label": "fid_oneband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--single_fiducial_band"]},
+        # fid_zlim: beam-direction margin limited to the vertical reach of the grid (user, 2026-10-16: test whether F_z is
+        # picked only because its range is longer); full chain re-optimised.
+        {"label": "fid_zlim", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_limit_y"]},
         # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
         # range the cut scan and the significances use; full chain re-optimised.
         {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

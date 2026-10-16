@@ -436,6 +436,9 @@ parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalA
 parser.add_argument("--fiducial_energy_branch", type=str, default=None,
     help="Study knob: energy branch read by the fiducial volume scan of the SolarEnergy analyses (01_fiducialize.py, "
          "through SOLAR_FIDUCIAL_ENERGY_BRANCH), e.g. SolarEnergyOffset; see lib/study.py fid_nosb.")
+parser.add_argument("--fiducial_z_limit_y", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: the fiducial scan may not use beam-direction margins larger than the largest vertical margin "
+         "(02_best_fiducial.py, through SOLAR_FIDUCIAL_Z_LIMIT_Y), see lib/study.py fid_zlim.")
 parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
          "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
@@ -1015,6 +1018,11 @@ if args.fiducial_energy_branch:  # 01_fiducialize.py follows the study knob
     if not args.study_label:
         raise SystemExit("[ERROR] --fiducial_energy_branch is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_FIDUCIAL_ENERGY_BRANCH"] = args.fiducial_energy_branch
+
+if args.fiducial_z_limit_y is not None:  # 02_best_fiducial.py follows the study knob
+    if args.fiducial_z_limit_y and not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_z_limit_y is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_Z_LIMIT_Y"] = "1" if args.fiducial_z_limit_y else "0"
 
 if args.single_fiducial_band is not None:  # 02_best_fiducial.py follows the study knob
     if args.single_fiducial_band and not args.study_label:

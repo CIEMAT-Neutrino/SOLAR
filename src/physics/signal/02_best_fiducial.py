@@ -167,6 +167,43 @@ def filter_fiducializable_components(components: List[str]) -> List[str]:
     return [c for c in components if str(c).lower().split("_")[0] not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
 
 
+def fiducial_profile_rows(plot_df: pd.DataFrame, gated_plot_df: pd.DataFrame, analysis_config: Dict,
+                          smoothing_config: Dict, exposure: float, root_path: str, chosen: Tuple[int, int, int],
+                          band_label: str, meta: Dict) -> List[Dict]:
+    """One-coordinate profiles of the smoothed fiducial significance through the origin and through `chosen`."""
+    _, all_sig = select_best_fiducial(plot_df, analysis_config, smoothing_config, exposure)
+    if all_sig.empty:
+        return []
+    _, gated_sig = select_best_fiducial(gated_plot_df, analysis_config, smoothing_config, exposure)
+    passing = set(map(tuple, gated_sig[["FiducializedX", "FiducializedY", "FiducializedZ"]].astype(int).values)) if not gated_sig.empty else set()
+    window = plot_df
+    if analysis_config.get("energy_min") is not None:
+        window = window.loc[window["Energy"] >= float(analysis_config["energy_min"])]
+    if analysis_config.get("energy_max") is not None:
+        window = window.loc[window["Energy"] <= float(analysis_config["energy_max"])]
+    essential = sorted(get_essential_background_components(root_path, list(analysis_config.get("background_components", []))))
+    mc = {c: window.loc[window["Component"] == c].groupby(["FiducializedX", "FiducializedY", "FiducializedZ"])["MCCounts"].sum()
+          for c in essential}
+    axes = {"X": "FiducializedX", "Y": "FiducializedY", "Z": "FiducializedZ"}
+    rows = []
+    for ref_name, ref in (("Origin", (0, 0, 0)), ("Optimum", tuple(int(v) for v in chosen))):
+        for coord, col in axes.items():
+            others = [(k, ref[i]) for i, k in enumerate(axes.values()) if k != col]
+            sel = all_sig
+            for k, v in others:
+                sel = sel.loc[sel[k].astype(int) == int(v)]
+            for _, r in sel.sort_values(col).iterrows():
+                key = (int(r["FiducializedX"]), int(r["FiducializedY"]), int(r["FiducializedZ"]))
+                row = {**meta, "Band": band_label, "Reference": ref_name, "Variable": coord, "Margin": int(r[col]),
+                       "SmoothedSignificance": float(r["SmoothedSignificance"]), "RawSignificance": float(r["RawSignificance"]),
+                       "PassesMCGate": key in passing, "AtReference": key == ref,
+                       "ReferenceX": ref[0], "ReferenceY": ref[1], "ReferenceZ": ref[2]}
+                for c in essential:
+                    row[f"MC_{c}"] = float(mc[c].get(key, 0.0)) if len(mc[c]) else 0.0
+                rows.append(row)
+    return rows
+
+
 def apply_fiducial_mc_threshold(
     plot_df: pd.DataFrame,
     analysis_config: Dict,
@@ -281,6 +318,23 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--export_profiles",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Also export one-coordinate profiles of the fiducial significance: FiducialX, FiducialY and FiducialZ scanned "
+        "one at a time over the full grid, with the other two held at the origin (0/0/0) or at the chosen volume, for "
+        "the full window and for each energy band (ungated, with the MC-gate flag and the essential MC per point). "
+        "Written to FIDUCIAL/<folder>/<config>/<signal>/<config>_<signal>_<energy>_Fiducial_Profiles<label>.pkl."
+    ),
+)
+parser.add_argument(
+    "--write_records",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Write BestFiducials*.json and the per-entry records (--no-write_records: profiles only, records untouched).",
+)
+parser.add_argument(
     "--reference_energy",
     type=str,
     default=None,
@@ -310,6 +364,7 @@ filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
 best_fiducials = {}
 
 _scan_suffix = "_fiduc_truth" if args.truth_fiducial else isolated_suffix()
+_profile_rows = []
 
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):
@@ -335,6 +390,12 @@ for config in configs:
         plot_df["Error-"] = pd.to_numeric(plot_df["Error-"], errors="coerce").fillna(0.0)
         plot_df["Energy"] = pd.to_numeric(plot_df["Energy"], errors="coerce")
         plot_df["MCCounts"] = pd.to_numeric(plot_df["MCCounts"], errors="coerce").fillna(0.0)
+        # Study knob SOLAR_FIDUCIAL_Z_LIMIT_Y=1 (fid_zlim): the beam-direction margin may not exceed the largest vertical
+        # margin of the grid, so F_z cannot use its longer reach (quarter of the module length) to trade statistics.
+        if os.environ.get("SOLAR_FIDUCIAL_Z_LIMIT_Y") == "1":
+            _y_max = float(plot_df["FiducializedY"].max())
+            plot_df = plot_df.loc[plot_df["FiducializedZ"] <= _y_max].copy()
+            rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: FiducialZ limited to the FiducialY reach ({_y_max:g} cm)")
 
         best_fiducials.setdefault(config, {})
 
@@ -454,6 +515,12 @@ for config in configs:
                     f"(essential MC {_mc_diag['ChosenEssentialMC']}, ungated best {_mc_diag['UngatedBest']})"
                 )
 
+            _profile_meta = {"Geometry": "", "Config": config, "Name": name, "Analysis": analysis_name, "Energy": energy_label,
+                             "Folder": args.folder, "MCThreshold": int(args.mc_threshold)}
+            if args.export_profiles:
+                _profile_rows.extend(fiducial_profile_rows(
+                    plot_df, gated_plot_df, analysis_config, smoothing_config, args.exposure, str(root),
+                    (max_row["FiducializedX"], max_row["FiducializedY"], max_row["FiducializedZ"]), "Full window", _profile_meta))
             # Per-energy-band optimization: find the best fiducial independently for
             # each band. Downstream masking applies the band-specific cut per event.
             band_results = []
@@ -473,6 +540,11 @@ for config in configs:
                     continue
                 band_best = band_sig_df.loc[band_sig_df["SmoothedSignificance"].idxmax()]
                 band_label = band.get("label", f"{band['energy_min']}-{band['energy_max']}")
+                if args.export_profiles:
+                    _profile_rows.extend(fiducial_profile_rows(
+                        plot_df, gated_plot_df, band_config, smoothing_config, args.exposure, str(root),
+                        (band_best["FiducializedX"], band_best["FiducializedY"], band_best["FiducializedZ"]),
+                        f"{band['energy_min']:g}-{band['energy_max']:g} MeV", _profile_meta))
                 rprint(
                     f"  [{band_label}] {band['energy_min']}-{band['energy_max']} MeV: "
                     f"significance {band_best['SmoothedSignificance']:.2f} at "
@@ -492,6 +564,19 @@ for config in configs:
             if band_results:
                 best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
 
-_merge_and_write_json(filename, best_fiducials)
-# Per-entry records for the template staleness guard (lib/fiducial_entries.py)
-write_fiducial_entries(str(root), args.folder, _best_fiducials_stem, json.load(open(filename)), configs=list(best_fiducials))
+if args.write_records:
+    _merge_and_write_json(filename, best_fiducials)
+    # Per-entry records for the template staleness guard (lib/fiducial_entries.py)
+    write_fiducial_entries(str(root), args.folder, _best_fiducials_stem, json.load(open(filename)), configs=list(best_fiducials))
+else:
+    rprint("[cyan][INFO][/cyan] --no-write_records: BestFiducials records left untouched")
+if args.export_profiles and _profile_rows:
+    _profiles = pd.DataFrame(_profile_rows)
+    for (_cfg, _name, _energy), _part in _profiles.groupby(["Config", "Name", "Energy"]):
+        _out = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{_cfg}/{_name}"
+        os.makedirs(_out, exist_ok=True)
+        _path = f"{_out}/{_cfg}_{_name}_{_energy}_Fiducial_Profiles{_scan_suffix}.pkl"
+        if os.path.exists(_path):
+            os.remove(_path)  # pnfs: no in-place overwrite
+        _part.reset_index(drop=True).to_pickle(_path)
+        rprint(f"[cyan][INFO][/cyan] fiducial profiles: {len(_part)} rows -> {_path}")
