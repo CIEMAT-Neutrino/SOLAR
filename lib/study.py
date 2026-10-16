@@ -375,6 +375,17 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_notail", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--no-hep_tail_extrapolation"]},
     ],
+    # Fiducial and HEP-energy comparisons (2026-10-16, user; run with --no-update_best_fiducials):
+    # fid_oneband: one fiducial volume over the full analysis window instead of one per energy band; full chain re-optimised.
+    "fidband": [
+        {"label": "fid_oneband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--single_fiducial_band"]},
+    ],
+    # hep_plain_opt: HEP on SolarEnergy (no HEP-only S/B working point) with volume and cuts re-optimised (hep_plain holds them).
+    "hepplain": [
+        {"label": "hep_plain_opt", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--hep_energy", "SolarEnergy"]},
+    ],
     # Selection bias from background MC statistics (2026-10-16, diagnostics; run with --no-update_best_fiducials).
     # mcfloor: a cut is eligible only if gamma and neutron each keep >= MC_FLOOR simulated clusters in the analysis
     # window and fiducial volume; full chain re-optimised.
@@ -568,7 +579,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

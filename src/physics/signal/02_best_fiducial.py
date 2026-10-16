@@ -457,7 +457,12 @@ for config in configs:
             # Per-energy-band optimization: find the best fiducial independently for
             # each band. Downstream masking applies the band-specific cut per event.
             band_results = []
-            for band in analysis_config.get("energy_bands", []):
+            # Study knob SOLAR_FIDUCIAL_SINGLE_BAND=1 (fid_oneband): one volume for the full window, EnergyBands written
+            # empty so the seeded per-band entries of the default do not survive the merge.
+            _single_band = os.environ.get("SOLAR_FIDUCIAL_SINGLE_BAND") == "1"
+            if _single_band:
+                best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = []
+            for band in ([] if _single_band else analysis_config.get("energy_bands", [])):
                 band_config = dict(analysis_config)
                 band_config["energy_min"] = band["energy_min"]
                 band_config["energy_max"] = band["energy_max"]
