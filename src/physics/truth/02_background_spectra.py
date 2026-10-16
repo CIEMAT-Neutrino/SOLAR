@@ -408,6 +408,16 @@ for config in configs_to_run:
             combined_spectra[config][particle_type] = (prev_y[:n] + y_scaled[:n], prev_x[:n])
 
 
+# Default background model (DEFAULT_FOLDER, Truncated): the external rates of the analysis are divided by
+# background_model_factors (lib.background.background_weight_divisor); FluxDefault / CountsDefault carry that normalisation.
+from lib.background import background_weight_divisor
+_default_folder = analysis_info.get("DEFAULT_FOLDER", "Truncated")
+
+
+def _default_divisor(config, particle, energy):
+    return np.asarray(background_weight_divisor(str(root), _default_folder, f"{particle}_final", config, energy), dtype=float)
+
+
 # ── Build combined_df ─────────────────────────────────────────────────────────
 _combined_records = []
 for config, spectra in combined_spectra.items():
@@ -419,6 +429,7 @@ for config, spectra in combined_spectra.items():
             "EnergyUnit":      r"\mathrm{MeV}",
             "Flux":            np.array(y_comb) * 60 * 60 * 24 * 365.25,  # per year, as the analysis rates
             "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot kT^{-1} \cdot yr^{-1}}",
+            "FluxDefault":     np.array(y_comb) * 60 * 60 * 24 * 365.25 / _default_divisor(config, particle_type, np.array(x_comb)),
             "SpectrumType":    "combined",
         })
 _combined_df = pd.DataFrame(_combined_records)
@@ -487,6 +498,7 @@ for config in configs_to_run:
                 "Energy":       np.array(x_mev),
                 "EnergyUnit":   r"\mathrm{MeV}",
                 "Counts":       _counts,
+                "CountsDefault": _counts / _default_divisor(config, particle_type, np.array(x_mev)),
                 "CountsUnit":   r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
             })
 for config, particle in {(r["Config"], r["Particle"]) for r in _surface_rate_records}:
@@ -515,6 +527,7 @@ for row in _combined_records:
         "EnergyUnit":      row.get("EnergyUnit", "MeV"),
         "Flux":            row["Flux"],
         "FluxUnit":        row["FluxUnit"],
+        "FluxDefault":     row["FluxDefault"],
         "SpectrumType":    row["SpectrumType"],
     })
 _summary_df = pd.DataFrame(_summary_records)
@@ -547,6 +560,7 @@ for config in configs_to_run:
             "EnergyUnit":      row.get("EnergyUnit", r"\mathrm{MeV}"),
             "Flux":            row["Flux"],
             "FluxUnit":        row["FluxUnit"],
+            "FluxDefault":     row["FluxDefault"],
             "SpectrumType":    row["SpectrumType"],
         }
         for row in _combined_records
