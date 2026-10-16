@@ -197,7 +197,8 @@ def fiducial_profile_rows(plot_df: pd.DataFrame, gated_plot_df: pd.DataFrame, an
                 row = {**meta, "Band": band_label, "Reference": ref_name, "Variable": coord, "Margin": int(r[col]),
                        "SmoothedSignificance": float(r["SmoothedSignificance"]), "RawSignificance": float(r["RawSignificance"]),
                        "PassesMCGate": key in passing, "AtReference": key == ref,
-                       "ReferenceX": ref[0], "ReferenceY": ref[1], "ReferenceZ": ref[2]}
+                       "ReferenceX": ref[0], "ReferenceY": ref[1], "ReferenceZ": ref[2],
+                       "SelectedX": int(chosen[0]), "SelectedY": int(chosen[1]), "SelectedZ": int(chosen[2])}
                 for c in essential:
                     row[f"MC_{c}"] = float(mc[c].get(key, 0.0)) if len(mc[c]) else 0.0
                 rows.append(row)
