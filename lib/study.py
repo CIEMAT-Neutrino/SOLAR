@@ -24,6 +24,7 @@ pre-scaled template pkl files are needed:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -168,7 +169,8 @@ def study_context(args, folder: Optional[str] = None, analysis: Optional[str] = 
         study_suffix=study_sfx,
         template_suffix=template_sfx,
         save_subfolder=subfolder,
-        ref_suffix=study_sfx if truth_fiducial else "",
+        # --no-update_best_fiducials runs (SOLAR_FIDUCIAL_STEM) label their event-level exports as well
+        ref_suffix=study_sfx if (truth_fiducial or os.environ.get("SOLAR_FIDUCIAL_STEM")) else "",
     )
 
 
@@ -373,6 +375,22 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_notail", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--no-hep_tail_extrapolation"]},
     ],
+    # Selection bias from background MC statistics (2026-10-16, diagnostics; run with --no-update_best_fiducials).
+    # mcfloor: a cut is eligible only if gamma and neutron each keep >= MC_FLOOR simulated clusters in the analysis
+    # window and fiducial volume; full chain re-optimised.
+    "mcfloor": [
+        {"label": f"mcfloor_{n}", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--mc_floor", str(n)]}
+        for n in (10, 25, 50)
+    ],
+    # bkgsub: HD Lateral / VD Shielded gamma and neutron cut to the VD Top generated statistics by keeping a random
+    # subset of whole jobs (F = VD Top generated / own generated, per sample); three seeds, full chain re-optimised.
+    "bkgsub": [
+        {"label": f"bkgsub_s{seed}", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "excluded_configs": ["vd_1x8x14_3view_30deg_nominal"],
+         "extra": ["--bkg_subsample", f"match=vd_1x8x14_3view_30deg_nominal:{seed}"]}
+        for seed in (1, 2, 3)
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -550,7 +568,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

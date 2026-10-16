@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
-from lib.fiducial_entries import best_fiducials_stem, write_fiducial_entries
+from lib.fiducial_entries import best_fiducials_stem, isolated_suffix, write_fiducial_entries
 from lib.fiducial_significance import (
     GROUP_COLUMNS,
     FIDUCIAL_COLUMNS,
@@ -309,7 +309,7 @@ filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
 # back as they were when this process started, undoing whatever a concurrent run stored meanwhile.
 best_fiducials = {}
 
-_scan_suffix = "_fiduc_truth" if args.truth_fiducial else ""
+_scan_suffix = "_fiduc_truth" if args.truth_fiducial else isolated_suffix()
 
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):

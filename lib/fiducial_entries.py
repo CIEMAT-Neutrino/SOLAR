@@ -25,6 +25,15 @@ def best_fiducials_stem(truth_fiducial: bool = False) -> str:
     return os.environ.get("SOLAR_FIDUCIAL_STEM") or "BestFiducials"
 
 
+def isolated_suffix() -> str:
+    """"_<label>" in a run with --no-update_best_fiducials (SOLAR_FIDUCIAL_STEM=BestFiducials_<label>), else "".
+
+    Such a run also keeps its per-sample Fiducial_Scan pkls and event-level exports (Ref arrays, FiducializationMask,
+    AnalysisMask) under the label, so the shared default files stay the final analysis ones."""
+    stem = os.environ.get("SOLAR_FIDUCIAL_STEM") or ""
+    return stem[len("BestFiducials"):] if stem.startswith("BestFiducials_") else ""
+
+
 def fiducial_entry_path(root: str, folder: str, stem: str, config: str, analysis_key: str, energy: str) -> str:
     return os.path.join(str(root), "config", "analysis", "fiducial", str(folder).lower(), "entries", stem, config,
                         f"{analysis_key}_{energy}.json")

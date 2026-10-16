@@ -369,7 +369,8 @@ for config in configs:
                 }
             )
 
-        scan_filename = f"{energy}_Fiducial_Scan_fiduc_truth" if args.truth_fiducial else f"{energy}_Fiducial_Scan"
+        from lib.fiducial_entries import isolated_suffix
+        scan_filename = f"{energy}_Fiducial_Scan_fiduc_truth" if args.truth_fiducial else f"{energy}_Fiducial_Scan{isolated_suffix()}"
         save_df(
             pd.DataFrame(plot_list),
             f"{data_path}/{args.folder.lower()}",
