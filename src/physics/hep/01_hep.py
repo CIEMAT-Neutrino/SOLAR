@@ -446,7 +446,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # HEP_TAIL_EXTRAPOLATION: external gamma/neutron tails from the loosest cut fill the bins a cut leaves empty.
     _tail_cfg = load_analysis_info(str(root)).get("HEP_TAIL_EXTRAPOLATION", {})
     _tail_models = {}
-    if config in _tail_cfg.get("ENABLED_CONFIGS", []):
+    # study hep_notail (run_sensitivity --no-hep_tail_extrapolation) switches it off through SOLAR_HEP_TAIL_EXTRAPOLATION=0
+    if config in _tail_cfg.get("ENABLED_CONFIGS", []) and os.environ.get("SOLAR_HEP_TAIL_EXTRAPOLATION") != "0":
         for _comp in _hep_bkg_components:
             if _comp.split("_")[0] not in _tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
                 continue

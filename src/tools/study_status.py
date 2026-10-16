@@ -137,6 +137,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "sb_off": {"*": ("default", None)},
     # radiological component of the Sensitivity background template smoothed (full chain re-optimised): no expected direction
     "rad_smooth": {"*": ("default", None)},
+    # HEP without the external-tail extrapolation (full chain re-optimised): no expected direction
+    "hep_notail": {"*": ("default", None)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},
@@ -212,6 +214,9 @@ def read_fiducial(root: str, folder: str, cfg: str, an: str, energy: str, label:
     BestFiducials.json, keyed by its own energy (energy_override), see STUDY_VARIANTS.
     """
     stem = "BestFiducials_fiduc_truth" if label == "fiduc_truth" else "BestFiducials"
+    # runs with --no-update_best_fiducials keep their volumes in BestFiducials_<label>.json
+    if label and label != "fiduc_truth" and os.path.exists(f"{root}/config/analysis/fiducial/{folder.lower()}/BestFiducials_{label}.json"):
+        stem = f"BestFiducials_{label}"
     path = f"{root}/config/analysis/fiducial/{folder.lower()}/{stem}.json"
     if path not in _FIDUCIAL_CACHE:
         payload = None

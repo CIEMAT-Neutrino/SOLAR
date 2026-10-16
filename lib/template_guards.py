@@ -32,7 +32,8 @@ def check_signal_template_inputs(
         return False, f"missing signal template {template_path}"
     root = os.fspath(root)
     analysis_config = os.path.join(root, "config", "analysis", "config.json")
-    fiducial_stem = "BestFiducials_fiduc_truth" if truth_fiducial else "BestFiducials"
+    from lib.fiducial_entries import best_fiducials_stem
+    fiducial_stem = best_fiducials_stem(truth_fiducial)
     fiducial_path = os.path.join(
         root, "config", "analysis", "fiducial", (fiducial_folder or folder).lower(),
         f"{fiducial_stem}.json",

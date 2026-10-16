@@ -418,6 +418,14 @@ parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=N
          "SOLAR_NCVETO), see lib/study.py ncveto / ncveto_off.")
 parser.add_argument("--hep_energy", type=str, default=None,
     help="Study knob passed to 03_analysis.py: energy of the HEP analysis (see lib/study.py hep_sbmodel).")
+parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAction, default=True,
+    help="--no-update_best_fiducials: the fiducial volumes this run optimises go to BestFiducials_<study_label>.json "
+         "(seeded from the folder's BestFiducials.json; through SOLAR_FIDUCIAL_STEM, lib/fiducial_entries.py) and the "
+         "Sensitivity score-category thresholds are not rewritten, so the shared BestFiducials.json is left as it was. "
+         "Default: update it, as before.")
+parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-hep_tail_extrapolation switches HEP_TAIL_EXTRAPOLATION off in 01_hep.py "
+         "(through SOLAR_HEP_TAIL_EXTRAPOLATION), see lib/study.py hep_notail.")
 parser.add_argument("--radiological_smoothing", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --radiological_smoothing smooths the radiological component of the Sensitivity background template "
          "as configured (unsmoothed by default since 623b2ce; through SOLAR_RADIOLOGICAL_SMOOTHING), see lib/study.py rad_smooth.")
@@ -945,6 +953,29 @@ def charge_scan_args_for() -> List[str]:
     return []
 
 
+if not args.update_best_fiducials:  # every child reads and writes BestFiducials_<label>.json (lib/fiducial_entries.py)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --no-update_best_fiducials needs --study_label (the volumes go to BestFiducials_<label>.json).")
+    import shutil as _shutil
+    os.environ["SOLAR_FIDUCIAL_STEM"] = f"BestFiducials_{args.study_label}"
+    for _fid_folder in dict.fromkeys([*args.folder, *([args.reference_folder] if args.reference_folder else [])]):
+        _fid_dir = f"{root}/config/analysis/fiducial/{_fid_folder.lower()}"
+        if not os.path.isfile(f"{_fid_dir}/BestFiducials.json"):
+            continue
+        # Seeded fresh from the shared file at every start, so volumes this run does not scan are the current ones.
+        _tmp = f"{_fid_dir}/BestFiducials_{args.study_label}.json.tmp{os.getpid()}"
+        _shutil.copy2(f"{_fid_dir}/BestFiducials.json", _tmp)
+        os.replace(_tmp, f"{_fid_dir}/BestFiducials_{args.study_label}.json")
+        if os.path.isdir(f"{_fid_dir}/entries/BestFiducials"):
+            _shutil.copytree(f"{_fid_dir}/entries/BestFiducials", f"{_fid_dir}/entries/BestFiducials_{args.study_label}",
+                             dirs_exist_ok=True)
+        rprint(f"[cyan][INFO][/cyan] --no-update_best_fiducials: fiducial volumes in {_fid_dir}/BestFiducials_{args.study_label}.json")
+
+if args.hep_tail_extrapolation is not None:  # every child process follows the study knob (01_hep.py)
+    if not args.hep_tail_extrapolation and not args.study_label:
+        raise SystemExit("[ERROR] --no-hep_tail_extrapolation is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_HEP_TAIL_EXTRAPOLATION"] = "1" if args.hep_tail_extrapolation else "0"
+
 if args.radiological_smoothing is not None:  # every child process follows the study knob (01_background_template.py)
     if args.radiological_smoothing and not args.study_label:
         raise SystemExit("[ERROR] --radiological_smoothing is a study knob: pass --study_label so the outputs are labeled.")
@@ -1237,6 +1268,7 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     # and the template scripts.
     _signal_names = [n for n in available_names if "marley" in n]
     if args.rebin and "Sensitivity" in args.analysis and _signal_names and os.environ.get("SOLAR_SB_CLASSIFIER") != "0" \
+            and args.update_best_fiducials \
             and config in load_analysis_info(str(root)).get("SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
         run_analysis_script(
             "src/physics/sensitivity/00_score_categories.py",

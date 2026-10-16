@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.study import variant_labels_rebin
+from lib.fiducial_entries import best_fiducials_stem
 
 
 TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
@@ -363,7 +364,7 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+_fiducials_stem = best_fiducials_stem(args.truth_fiducial and not args.fiducial_from_reco)
 fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_fiducials_stem}.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)

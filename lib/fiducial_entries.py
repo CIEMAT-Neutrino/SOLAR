@@ -12,6 +12,19 @@ from typing import Any, Dict
 FIDUCIAL_ENTRY_ANALYSES = ("DAYNIGHT", "HEP", "SENSITIVITY")
 
 
+def best_fiducials_stem(truth_fiducial: bool = False) -> str:
+    """Stem of the BestFiducials*.json a step reads and writes.
+
+    BestFiducials_fiduc_truth for the truth-position studies. Otherwise BestFiducials, unless the environment variable
+    SOLAR_FIDUCIAL_STEM is set: run_sensitivity --no-update_best_fiducials (2026-10-16) sets it to BestFiducials_<study
+    label>, seeded from the folder's BestFiducials.json, so a run that re-optimises the volumes keeps them to itself and
+    the shared BestFiducials.json (the final analysis volumes) is left as it was.
+    """
+    if truth_fiducial:
+        return "BestFiducials_fiduc_truth"
+    return os.environ.get("SOLAR_FIDUCIAL_STEM") or "BestFiducials"
+
+
 def fiducial_entry_path(root: str, folder: str, stem: str, config: str, analysis_key: str, energy: str) -> str:
     return os.path.join(str(root), "config", "analysis", "fiducial", str(folder).lower(), "entries", stem, config,
                         f"{analysis_key}_{energy}.json")

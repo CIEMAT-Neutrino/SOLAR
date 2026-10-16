@@ -112,6 +112,9 @@ parser.add_argument("--flyweight", action=argparse.BooleanOptionalAction, defaul
                    help="Flyweight Sensitivity templates (default). --no-flyweight uses the per-point template grid.")
 parser.add_argument("--no-templates", dest="skip_templates", action="store_true",
                    help="Alias for --skip-templates: skip template computation")
+parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAction, default=None,
+                    help="Passed to run_sensitivity.py: --no-update_best_fiducials keeps the volumes this study optimises in "
+                         "BestFiducials_<label>.json instead of the shared BestFiducials.json (default: run_sensitivity's, update).")
 parser.add_argument("--parallel_samples", type=int, default=1,
                    help="Passed to run_sensitivity.py: per-sample steps for this many samples at once (default 1).")
 
@@ -356,6 +359,8 @@ def _base_pipeline_args(
         base.extend(["--ophits", str(args.ophits)])
     if args.adjcls is not None:
         base.extend(["--adjcls", str(args.adjcls)])
+    if args.update_best_fiducials is not None:
+        base.append("--update_best_fiducials" if args.update_best_fiducials else "--no-update_best_fiducials")
     return base
 
 

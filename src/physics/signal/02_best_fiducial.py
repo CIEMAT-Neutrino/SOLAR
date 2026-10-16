@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
-from lib.fiducial_entries import write_fiducial_entries
+from lib.fiducial_entries import best_fiducials_stem, write_fiducial_entries
 from lib.fiducial_significance import (
     GROUP_COLUMNS,
     FIDUCIAL_COLUMNS,
@@ -302,7 +302,7 @@ for path in [save_path, data_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
         os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
-_best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+_best_fiducials_stem = best_fiducials_stem(args.truth_fiducial)
 filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
 # Only this run's entries are collected here; _merge_and_write_json merges them into the shared file
 # under a lock. Seeding this dict from the file at start-up would write every other config's entries
@@ -376,7 +376,7 @@ for config in configs:
             )
 
             if args.reference_energy:
-                ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                ref_file = f"{data_path}/{args.folder.lower()}/{best_fiducials_stem()}.json"
                 ref_entry = None
                 if os.path.exists(ref_file):
                     ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(args.reference_energy)
@@ -402,7 +402,7 @@ for config in configs:
                 # the previous run's entry was silent staleness and a lower threshold picked a volume that did
                 # not survive the analysis cuts, so the truth study inherits the reference volume instead.
                 if args.truth_fiducial:
-                    ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                    ref_file = f"{data_path}/{args.folder.lower()}/{best_fiducials_stem()}.json"
                     ref_entry = None
                     if os.path.exists(ref_file):
                         ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(energy_label)

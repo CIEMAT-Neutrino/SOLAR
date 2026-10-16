@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.fiducial import truth_match_purity_mask
+from lib.fiducial_entries import best_fiducials_stem
 
 save_path   = f"{root}/output/images/solar/results"
 export_path = f"{root}/output/data/results"
@@ -341,7 +342,7 @@ if args.charge_threshold > 0:
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    _best_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+    _best_fiducials_stem = best_fiducials_stem(args.truth_fiducial and not args.fiducial_from_reco)
     fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_best_fiducials_stem}.json").read())
     if args.surface_split and args.surface_split_fiducial_json:
         # Every --surface_split row, including the scan masks behind the cut rows, uses the snapshot volumes.
