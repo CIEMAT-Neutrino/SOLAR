@@ -433,6 +433,9 @@ parser.add_argument("--bkg_subsample", type=str, default=None,
 parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --no-hep_tail_extrapolation switches HEP_TAIL_EXTRAPOLATION off in 01_hep.py "
          "(through SOLAR_HEP_TAIL_EXTRAPOLATION), see lib/study.py hep_notail.")
+parser.add_argument("--fiducial_energy_branch", type=str, default=None,
+    help="Study knob: energy branch read by the fiducial volume scan of the SolarEnergy analyses (01_fiducialize.py, "
+         "through SOLAR_FIDUCIAL_ENERGY_BRANCH), e.g. SolarEnergyOffset; see lib/study.py fid_nosb.")
 parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
          "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
@@ -1007,6 +1010,11 @@ if args.hep_tail_extrapolation is not None:  # every child process follows the s
     if not args.hep_tail_extrapolation and not args.study_label:
         raise SystemExit("[ERROR] --no-hep_tail_extrapolation is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_HEP_TAIL_EXTRAPOLATION"] = "1" if args.hep_tail_extrapolation else "0"
+
+if args.fiducial_energy_branch:  # 01_fiducialize.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_energy_branch is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_ENERGY_BRANCH"] = args.fiducial_energy_branch
 
 if args.single_fiducial_band is not None:  # 02_best_fiducial.py follows the study knob
     if args.single_fiducial_band and not args.study_label:

@@ -381,6 +381,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "fid_oneband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--single_fiducial_band"]},
     ],
+    # fid_nosb: fiducial volumes scanned on SolarEnergyOffset (SolarEnergy without the signal/background classifier
+    # stage); band assignment, cuts and significances on the default SolarEnergy; full chain re-optimised.
+    "fidnosb": [
+        {"label": "fid_nosb", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_energy_branch", "SolarEnergyOffset"]},
+    ],
     # hep_plain_opt: HEP on SolarEnergy (no HEP-only S/B working point) with volume and cuts re-optimised (hep_plain holds them).
     "hepplain": [
         {"label": "hep_plain_opt", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
@@ -579,7 +585,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

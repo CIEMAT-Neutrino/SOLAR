@@ -226,7 +226,15 @@ for config in configs:
             _reco_x_arr = run["Reco"]["RecoX"]
             _reco_y_arr = run["Reco"]["RecoY"]
             _reco_z_arr = run["Reco"]["RecoZ"]
-        _energy_arr   = run["Reco"][energy]
+        # Study knob SOLAR_FIDUCIAL_ENERGY_BRANCH (fid_nosb): the volume scan of the SolarEnergy analyses reads another
+        # energy branch, e.g. SolarEnergyOffset (the SolarEnergy without the signal/background classifier stage). The scan
+        # is still saved under the analysis energy, so the band assignment downstream keeps using SolarEnergy.
+        _fid_branch = os.environ.get("SOLAR_FIDUCIAL_ENERGY_BRANCH") if energy == "SolarEnergy" else None
+        if _fid_branch:
+            if _fid_branch not in run["Reco"]:
+                raise SystemExit(f"[ERROR] SOLAR_FIDUCIAL_ENERGY_BRANCH={_fid_branch} is not a Reco branch of {config} {name}")
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: fiducial scan on {_fid_branch} (saved as {energy})")
+        _energy_arr   = run["Reco"][_fid_branch or energy]
         _is_marley    = "marley" in args.signal
 
         _n_bins        = len(reco_energy_edges) - 1
