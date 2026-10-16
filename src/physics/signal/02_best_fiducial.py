@@ -266,6 +266,47 @@ def apply_fiducial_mc_threshold(
     return result
 
 
+def _parse_bin_mc_floor(spec: str) -> Dict[str, float]:
+    """'radiological:2,gamma:1' -> {'radiological': 2.0, 'gamma': 1.0}; empty -> {} (option off)."""
+    floors = {}
+    for item in [s.strip() for s in str(spec).split(",") if s.strip()]:
+        component, _, value = item.partition(":")
+        floors[component.strip()] = float(value) if value else 2.0
+    return floors
+
+
+def apply_bin_mc_floor(plot_df: pd.DataFrame, floors: Dict[str, float]) -> pd.DataFrame:
+    """Zero Counts and errors of component bins with MCCounts below the component's floor (MCCounts kept)."""
+    out = plot_df.copy()
+    for component, floor in floors.items():
+        low = (out["Component"] == component) & (out["MCCounts"] < float(floor))
+        out.loc[low, ["Counts", "Error+", "Error-"]] = 0.0
+        rprint(f"[cyan][INFO][/cyan] bin MC floor {component} < {floor:g}: {int(low.sum())} (volume, bin) entries zeroed")
+    return out
+
+
+def smooth_scan_in_margins(plot_df: pd.DataFrame, sigma: float) -> pd.DataFrame:
+    """Gaussian smoothing (mode 'nearest') of Counts, Error^2 and MCCounts across the fiducial grid, per component and
+    energy bin. The grid is the regular F_x/F_y/F_z scan of 01_fiducialize.py (20 cm steps)."""
+    from scipy.ndimage import gaussian_filter
+
+    out = plot_df.copy()
+    axes = [np.sort(out[c].unique()) for c in FIDUCIAL_COLUMNS]
+    energies = np.sort(out["Energy"].unique())
+    idx = [np.searchsorted(a, out[c].to_numpy()) for a, c in zip(axes, FIDUCIAL_COLUMNS)]
+    e_idx = np.searchsorted(energies, out["Energy"].to_numpy())
+    shape = tuple(len(a) for a in axes) + (len(energies),)
+    for component in out["Component"].unique():
+        rows = (out["Component"] == component).to_numpy()
+        sel = tuple(i[rows] for i in idx) + (e_idx[rows],)
+        for column, power in (("Counts", 1), ("MCCounts", 1), ("Error+", 2), ("Error-", 2)):
+            grid = np.zeros(shape)
+            grid[sel] = out.loc[rows, column].to_numpy(dtype=float) ** power
+            grid = gaussian_filter(grid, sigma=(sigma, sigma, sigma, 0), mode="nearest")
+            out.loc[rows, column] = grid[sel] ** (1.0 / power)
+    return out
+
+
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
@@ -365,6 +406,12 @@ best_fiducials = {}
 
 _scan_suffix = "_fiduc_truth" if args.truth_fiducial else isolated_suffix()
 _profile_rows = []
+# The fidsmooth knobs change the scan itself: never let them write the default records or the default profiles.
+if os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR") or float(os.environ.get("SOLAR_FIDUCIAL_MARGIN_SMOOTH", "0") or 0) > 0:
+    if args.write_records and not _scan_suffix:
+        raise SystemExit("[ERROR] SOLAR_FIDUCIAL_BIN_MC_FLOOR / SOLAR_FIDUCIAL_MARGIN_SMOOTH need --no-write_records or an isolated study suffix")
+    if args.export_profiles and not os.environ.get("SOLAR_FIDUCIAL_PROFILE_SUFFIX"):
+        raise SystemExit("[ERROR] SOLAR_FIDUCIAL_BIN_MC_FLOOR / SOLAR_FIDUCIAL_MARGIN_SMOOTH with --export_profiles need SOLAR_FIDUCIAL_PROFILE_SUFFIX")
 
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):
@@ -396,6 +443,19 @@ for config in configs:
             _y_max = float(plot_df["FiducializedY"].max())
             plot_df = plot_df.loc[plot_df["FiducializedZ"] <= _y_max].copy()
             rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: FiducialZ limited to the FiducialY reach ({_y_max:g} cm)")
+        # Study knob SOLAR_FIDUCIAL_BIN_MC_FLOOR="radiological:2[,gamma:2,...]" (fidsmooth study, default off): a component's
+        # energy bin backed by fewer than N simulated clusters (scan MCCounts, i.e. after the 01_fiducialize gap filling)
+        # is zeroed, as 03_analysis.py does with RADIOLOGICAL_MIN_MC_PER_BIN. A lone heavy cluster then cannot switch a
+        # bin on and off as the margin moves.
+        _mc_floor = _parse_bin_mc_floor(os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR", ""))
+        if _mc_floor:
+            plot_df = apply_bin_mc_floor(plot_df, _mc_floor)
+        # Study knob SOLAR_FIDUCIAL_MARGIN_SMOOTH=<sigma in grid steps> (fidsmooth study, default off): Gaussian smoothing of
+        # every component's Counts, Error^2 and MCCounts across the (F_x, F_y, F_z) grid, bin by bin in energy.
+        _margin_sigma = float(os.environ.get("SOLAR_FIDUCIAL_MARGIN_SMOOTH", "0") or 0)
+        if _margin_sigma > 0:
+            plot_df = smooth_scan_in_margins(plot_df, _margin_sigma)
+            rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: scan smoothed in the margins (sigma {_margin_sigma:g} steps)")
 
         best_fiducials.setdefault(config, {})
 
@@ -575,7 +635,9 @@ if args.export_profiles and _profile_rows:
     for (_cfg, _name, _energy), _part in _profiles.groupby(["Config", "Name", "Energy"]):
         _out = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{_cfg}/{_name}"
         os.makedirs(_out, exist_ok=True)
-        _path = f"{_out}/{_cfg}_{_name}_{_energy}_Fiducial_Profiles{_scan_suffix}.pkl"
+        # SOLAR_FIDUCIAL_PROFILE_SUFFIX (default empty): extra label on the profile file name, so study profiles do not
+        # replace the default ones.
+        _path = f"{_out}/{_cfg}_{_name}_{_energy}_Fiducial_Profiles{_scan_suffix}{os.environ.get('SOLAR_FIDUCIAL_PROFILE_SUFFIX', '')}.pkl"
         if os.path.exists(_path):
             os.remove(_path)  # pnfs: no in-place overwrite
         _part.reset_index(drop=True).to_pickle(_path)
