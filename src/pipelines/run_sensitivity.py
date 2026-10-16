@@ -425,7 +425,8 @@ parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAc
          "Default: update it, as before.")
 parser.add_argument("--mc_floor", type=float, default=None,
     help="Study knob (SOLAR_MC_FLOOR): a cut is eligible only if gamma and neutron each keep >= this many simulated "
-         "clusters in the analysis window and fiducial volume (DayNight, HEP, Sensitivity), see lib/study.py mcfloor.")
+         "clusters in the analysis energy window and fiducial volume (DayNight, HEP, Sensitivity; on top of the default "
+         "gate, which counts 0-30 MeV), see lib/background.mc_floor_cuts and lib/study.py mcfloor.")
 parser.add_argument("--bkg_subsample", type=str, default=None,
     help="Study knob (SOLAR_BKG_SUBSAMPLE): F:SEED or match=<config>:SEED keeps a random fraction of the whole jobs of "
          "gamma_final/neutron_final in every stage (lib/subsample.py), see lib/study.py bkgsub.")

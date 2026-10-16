@@ -46,11 +46,6 @@ def adaptive_mc_thresholds(
             out[component] = 1.0
         else:
             out[component] = float(nonessential_threshold)
-    floor = mc_floor()
-    if floor > 0:  # study mcfloor: every external component needs at least MC_FLOOR simulated clusters at a cut
-        for component in out:
-            if _is_external(component):
-                out[component] = max(out[component], floor)
     return out
 
 
@@ -63,41 +58,69 @@ def _is_external(component) -> bool:
     return str(component).lower().split("_")[0] in ("gamma", "neutron")
 
 
-def report_mc_floor(root: str, config: str, analysis: str, energy: str, mc_by_component, thresholds, axes) -> None:
-    """Log and write (output/logs/mcfloor/) the cuts eligible under the MC floor: count, range of each cut axis and the
-    gamma/neutron simulated clusters at every eligible cut (the analysis picks its best cut among these). No-op when
-    the floor is off. `axes` names the positions of the cut tuples of `mc_by_component`."""
+def mc_floor_cuts(root: str, folder: str, config: str, analysis: str, energy: str, frames, axes):
+    """Cuts eligible under the MC floor of the study mcfloor, or None when the floor is off.
+
+    A cut is eligible when gamma and neutron each keep >= MC_FLOOR simulated clusters (Rebin MCCounts, Truth/Mean rows,
+    i.e. inside the fiducial volume) in the analysis energy window [EnergyMin, EnergyMax) of this analysis' fiducial
+    entry (DayNight 6-18, HEP 14-30, Sensitivity 10-30 MeV). This is on top of the default essential-background gate,
+    which counts the whole 0-30 MeV Rebin. `frames` maps background components to their Rebin rows; `axes` gives the
+    order of the returned cut tuples. Writes the eligible range and the window MC at every eligible cut to
+    output/logs/mcfloor/<config>_<ANALYSIS>_<energy>_<label>.json.
+    """
     floor = mc_floor()
     if floor <= 0:
-        return
+        return None
     import json
+    import numpy as np
     from rich import print as rprint
-    gated = {c: float(t) for c, t in thresholds.items() if t > 0}
+    from .fiducial_entries import best_fiducials_stem
+    fiducials = json.load(open(os.path.join(str(root), "config", "analysis", "fiducial", str(folder).lower(), f"{best_fiducials_stem()}.json")))
+    entry = fiducials.get(config, {}).get(str(analysis).upper(), {}).get(energy, {}) or {}
+    e_min, e_max = float(entry.get("EnergyMin", 0.0)), float(entry.get("EnergyMax", 1e9))
+    mc: Dict[str, Dict[tuple, float]] = {}
+    for component, frame in frames.items():
+        if not _is_external(component) or frame is None or len(frame) == 0 or "MCCounts" not in frame.columns:
+            continue
+        if "Oscillation" in frame.columns:
+            frame = frame.loc[frame["Oscillation"] == "Truth"]
+        if "Mean" in frame.columns:
+            frame = frame.loc[frame["Mean"] == "Mean"]
+        per_cut: Dict[tuple, float] = {}
+        for _, row in frame.iterrows():
+            counts = np.asarray(row["MCCounts"], dtype=float)
+            centers = np.arange(len(counts)) + 0.5  # every analysis Rebin is 0-30 MeV in 1 MeV bins
+            if "Energy" in row.index and hasattr(row["Energy"], "__len__") and len(row["Energy"]) == len(counts):
+                centers = np.asarray(row["Energy"], dtype=float)
+            cut = tuple(int(row[axis]) for axis in axes)
+            per_cut[cut] = per_cut.get(cut, 0.0) + float(np.nansum(counts[(centers >= e_min) & (centers < e_max)]))
+        mc[component] = per_cut
     cuts = set()
-    for per_cut in mc_by_component.values():
+    for per_cut in mc.values():
         cuts.update(per_cut)
-    eligible = sorted(c for c in cuts if all(mc_by_component.get(comp, {}).get(c, 0.0) >= t for comp, t in gated.items()))
+    eligible = sorted(c for c in cuts if all(per_cut.get(c, 0.0) >= floor for per_cut in mc.values()))
     ranges = {ax: [min(c[i] for c in eligible), max(c[i] for c in eligible)] for i, ax in enumerate(axes)} if eligible else {}
-    external = [c for c in mc_by_component if _is_external(c)]
     label = os.environ.get("SOLAR_MC_FLOOR_LABEL") or f"mcfloor{floor:g}"
     payload = {
-        "Config": config, "Analysis": analysis, "Energy": energy, "Label": label, "MCFloor": floor,
-        "Thresholds": {c: float(t) for c, t in thresholds.items()}, "Axes": list(axes),
-        "NCuts": len(cuts), "NEligible": len(eligible), "EligibleRange": ranges,
-        "MC": {"/".join(str(v) for v in c): {comp: float(mc_by_component[comp].get(c, 0.0)) for comp in external} for c in eligible},
+        "Config": config, "Analysis": str(analysis).upper(), "Energy": energy, "Label": label, "MCFloor": floor,
+        "Window": [e_min, e_max], "Axes": list(axes), "Components": list(mc), "NCuts": len(cuts), "NEligible": len(eligible),
+        "EligibleRange": ranges,
+        "MC": {"/".join(str(v) for v in c): {comp: mc[comp].get(c, 0.0) for comp in mc} for c in eligible},
     }
     out_dir = os.path.join(str(root), "output", "logs", "mcfloor")
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{config}_{analysis}_{energy}_{label}.json")
+    path = os.path.join(out_dir, f"{config}_{str(analysis).upper()}_{energy}_{label}.json")
     tmp = f"{path}.tmp{os.getpid()}"
     with open(tmp, "w") as handle:
         json.dump(payload, handle, indent=1)
     os.replace(tmp, path)
     rprint(
-        f"[cyan][INFO][/cyan] MC floor {floor:g} ({analysis} {config} {energy}): {len(eligible)} of {len(cuts)} cuts eligible"
+        f"[cyan][INFO][/cyan] MC floor {floor:g} in {e_min:g}-{e_max:g} MeV ({analysis} {config} {energy}): "
+        f"{len(eligible)} of {len(cuts)} cuts eligible"
         + ("".join(f", {ax} {lo}-{hi}" for ax, (lo, hi) in ranges.items()) if ranges else ", none")
         + f" -> {path}"
     )
+    return set(eligible)
 
 
 def folder_applies_surface_cut(root: str, folder: str) -> bool:

@@ -439,8 +439,10 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     _mc_thresholds = adaptive_mc_thresholds(
         _mc_by_cut, essential_background_components, args.mc_threshold, args.min_nonessential_mc,
     )
-    from lib.background import report_mc_floor
-    report_mc_floor(str(root), config, "HEP", energy, _mc_by_cut, _mc_thresholds, ("NHits", "OpHits", "AdjCl"))
+    from lib.background import mc_floor_cuts
+    _floor_cuts = mc_floor_cuts(str(root), args.folder, config, "HEP", energy,
+                                {c: plot_df.loc[plot_df["Component"] == c] for c in _hep_bkg_components},
+                                ("NHits", "OpHits", "AdjCl"))
     for _comp, _thr in _mc_thresholds.items():
         if _thr <= 0:
             rprint(f"[cyan][INFO][/cyan] MC support: '{_comp}' has 0 simulated events everywhere in this grid; not gated.")
@@ -588,6 +590,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
         if not has_required_background_mc or hep_signal is None or smoothed_hep is None:
             continue
+        if _floor_cuts is not None and (int(nhit), int(ophit), int(adjcl)) not in _floor_cuts:
+            continue  # study mcfloor
         cuts_passing_mc_threshold += 1
 
         raw_combined_b_error = np.sum(background_error, axis=0)
