@@ -12,6 +12,11 @@ variant at EXPOSURE years:
   X3   same with >= 3
   F    no tails, every external component gets a one-event floor (1.14 x its mean event weight at the cut) in the
        bins where the cut leaves it no simulated cluster, up to its loosest-cut endpoint
+  LF   no tails, one-event floor (1.14 x the loosest-cut mean event weight) only in the bins the cut empties although
+       the loosest cut populates them; bins beyond the loosest-cut endpoint stay background free
+  LS   no tails, each external spectrum = its loosest-cut shape scaled to the cut's total (no fit)
+  LS26 / LF26  LS / LF with the window upper edge at 26 MeV
+  LSX  LS, and a bin needs simulated external MC at the loosest cut
 Usage: hep_alt.py [EXPOSURE]
 """
 import json
@@ -38,7 +43,7 @@ edges = np.asarray(hep_rebin, dtype=float)
 centers = 0.5 * (edges[:-1] + edges[1:])
 mc_thr_default = float(info_all["ANALYSIS_THRESHOLDS"]["HEP"]["MC"])
 essential = [s for s, e in get_essential_backgrounds(str(root)).items() if e]
-VARIANTS = ["T", "N", "W25", "WE", "X1", "X3", "F"]
+VARIANTS = ["T", "N", "W25", "WE", "X1", "X3", "F", "LF", "LS", "LS26", "LF26", "LSX"]
 
 
 def rows(df, comp, osc):
@@ -63,11 +68,12 @@ for config in CONFIGS:
             bkgs[name] = rows(pd.read_pickle(p), name, "Truth")
     external = [n for n in bkgs if n.split("_")[0] in ("gamma", "neutron")]
     # loosest-cut tails and endpoints
-    tails, endpoint = {}, {}
+    tails, endpoint, loose_arr = {}, {}, {}
     for name in external:
         cuts = list(bkgs[name])
         loose = (min(c[0] for c in cuts), min(c[1] for c in cuts), max(c[2] for c in cuts))
         lc, lmc = bkgs[name][loose]
+        loose_arr[name] = (lc, lmc, lc.sum() / lmc.sum() if lmc.sum() > 0 else 0.0)
         pop = np.flatnonzero(lmc > 0)
         endpoint[name] = float(edges[pop.max() + 1]) if pop.size else 0.0
         if config in tail_cfg.get("ENABLED_CONFIGS", []) and name.split("_")[0] in tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
@@ -76,6 +82,9 @@ for config in CONFIGS:
     mc_by = {n: {c: float(v[1].sum()) for c, v in bkgs[n].items()} for n in bkgs}
     thresholds = adaptive_mc_thresholds(mc_by, essential, thr, thr)
     best = {v: (0.0, None) for v in VARIANTS}
+    default_cut = {"hd_1x2x6_centralAPA": (2, 8, 4), "hd_1x2x6_lateralAPA": (3, 6, 3), "vd_1x8x14_3view_30deg_nominal": (6, 4, 20),
+                   "vd_1x8x14_3view_30deg_shielded": (6, 8, 18)}[config]
+    at_default = {}
     for cut in hep:
         if cut not in b8 or any(cut not in bkgs[n] for n in bkgs):
             continue
@@ -88,13 +97,23 @@ for config in CONFIGS:
         b_nt = b_base.copy()
         b_t = b_base.copy()
         b_f = b_base.copy()
+        b_lf = b_base.copy()
+        b_ls = b_base.copy()
+        loose_ext_mc = np.zeros_like(mc_tot)
         for n in bkgs:
             c, mc = bkgs[n][cut]
             mc_tot += mc
             b_nt += factor * c
             b_t += factor * c
             b_f += factor * c
+            b_lf += factor * c
+            if n not in external:
+                b_ls += factor * c
             if n in external:
+                lc, lmc, wl = loose_arr[n]
+                loose_ext_mc += lmc
+                b_lf += factor * np.where((mc == 0) & (lmc > 0), 1.14 * wl, 0.0)
+                b_ls += factor * (lc * (c.sum() / lc.sum()) if lc.sum() > 0 else c)
                 ext_mc += mc
                 if tails.get(n) is not None:
                     b_t += factor * extrapolated_external_tail(c, mc, tails[n], edges, 0.0, tail_cfg.get("MODE", "endpoint"))
@@ -110,7 +129,14 @@ for config in CONFIGS:
             "X1": pl(s, b_nt, base & (ext_mc >= 1)),
             "X3": pl(s, b_nt, base & (ext_mc >= 3)),
             "F": pl(s, b_f, base),
+            "LF": pl(s, b_lf, base),
+            "LS": pl(s, b_ls, base),
+            "LS26": pl(s, b_ls, base & (edges[1:] <= 26)),
+            "LF26": pl(s, b_lf, base & (edges[1:] <= 26)),
+            "LSX": pl(s, b_ls, base & (loose_ext_mc >= 1)),
         }
+        if cut == default_cut:
+            at_default = dict(z)
         for v, val in z.items():
             if val > best[v][0]:
                 best[v] = (val, cut)
@@ -118,5 +144,5 @@ for config in CONFIGS:
           + f" MeV, tails {sorted(k for k, v in tails.items() if v is not None) or 'none'}")
     for v in VARIANTS:
         val, cut = best[v]
-        print(f"   {v:4s} Z {val:6.2f} at {cut}")
+        print(f"   {v:4s} Z {val:6.2f} at {cut}   (at the default cut {default_cut}: {at_default.get(v, float('nan')):.2f})")
 print("HEP ALT DONE")
