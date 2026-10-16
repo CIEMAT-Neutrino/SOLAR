@@ -380,6 +380,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "fidband": [
         {"label": "fid_oneband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--single_fiducial_band"]},
+        # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
+        # range the cut scan and the significances use; full chain re-optimised.
+        {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "ignore_energy_window": True, "extra": ["--single_fiducial_band"]},
     ],
     # fid_nosb: fiducial volumes scanned on SolarEnergyOffset (SolarEnergy without the signal/background classifier
     # stage); band assignment, cuts and significances on the default SolarEnergy; full chain re-optimised.
