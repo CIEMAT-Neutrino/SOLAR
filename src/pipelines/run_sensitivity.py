@@ -430,7 +430,7 @@ parser.add_argument("--mc_floor", type=float, default=None,
 parser.add_argument("--bkg_subsample", type=str, default=None,
     help="Study knob (SOLAR_BKG_SUBSAMPLE): F:SEED or match=<config>:SEED keeps a random fraction of the whole jobs of "
          "gamma_final/neutron_final in every stage (lib/subsample.py), see lib/study.py bkgsub.")
-parser.add_argument("--hep_bkg_shape", choices=["default", "loose"], default=None,
+parser.add_argument("--hep_bkg_shape", choices=["default", "loose", "loose_nhits"], default=None,
     help="Study knob (SOLAR_HEP_BKG_SHAPE): loose gives every external HEP background the spectral shape of its loosest "
          "cut, normalised to the cut's total (01_hep.py), see lib/study.py hep_looseshape.")
 parser.add_argument("--hep_bin_mask", choices=["default", "external"], default=None,

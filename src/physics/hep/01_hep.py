@@ -469,8 +469,25 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # study hep_looseshape (run_sensitivity --hep_bkg_shape loose, SOLAR_HEP_BKG_SHAPE): every external component takes
     # the spectral shape of its loosest cut of the scan (same fiducial volume, most simulated events), normalised to the
     # cut's own total; no fit, no extrapolation beyond the bins the loosest cut populates.
+    # loose_nhits (study hep_looseshape_nh): the shape comes from the loosest OpHits/AdjCl cut at the SAME NHits as the
+    # cut, since NHits is the cut variable correlated with energy (a tighter NHits keeps a harder external spectrum).
     _loose_shapes = {}
-    if os.environ.get("SOLAR_HEP_BKG_SHAPE") == "loose":
+    _shape_mode = os.environ.get("SOLAR_HEP_BKG_SHAPE")
+    if _shape_mode == "loose_nhits":
+        for _comp in _hep_bkg_components:
+            if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
+                continue
+            _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
+            _per_nhits = {}
+            for _nh in sorted(_cdf["NHits"].unique()):
+                _sub = _cdf.loc[_cdf["NHits"] == _nh]
+                _loose = _sub.loc[(_sub["OpHits"] == _sub["OpHits"].min()) & (_sub["AdjCl"] == _sub["AdjCl"].max())]
+                if not _loose.empty:
+                    _per_nhits[int(_nh)] = (np.asarray(_loose.iloc[0]["Counts"], dtype=float), np.asarray(_loose.iloc[0]["Error"], dtype=float))
+            if _per_nhits:
+                _loose_shapes[_comp] = _per_nhits
+        rprint(f"[cyan][INFO][/cyan] HEP background shapes from the loosest OpHits/AdjCl cut at each NHits for {sorted(_loose_shapes)} ({config} {energy})")
+    if _shape_mode == "loose":
         for _comp in _hep_bkg_components:
             if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
                 continue
@@ -542,7 +559,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             errors = np.asarray(this_comp_df["Error"].values[0][threshold_idx:], dtype=float)
             mc_counts = np.asarray(this_comp_df["MCCounts"].values[0][threshold_idx:], dtype=float)
             if component in _loose_shapes:
-                _lc, _le = _loose_shapes[component]
+                _lc, _le = (_loose_shapes[component][int(nhit)] if _shape_mode == "loose_nhits" else _loose_shapes[component])
                 _ratio = float(np.nansum(this_comp_df["Counts"].values[0])) / float(np.nansum(_lc)) if np.nansum(_lc) > 0 else 0.0
                 counts = (_lc * _ratio)[threshold_idx:]
                 errors = (_le * _ratio)[threshold_idx:]

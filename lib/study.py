@@ -362,6 +362,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "sboff": [
         {"label": "sb_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier", "--no-ncveto"]},
+        # the neutron-capture veto on its own: classifier off, veto as in the default (2026-10-17, user)
+        {"label": "sb_off_veto", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
@@ -449,6 +452,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_looseshape_plain", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
          "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose", "--hep_energy", "SolarEnergy"]},
+        # shape from the loosest OpHits/AdjCl cut at the same NHits (2026-10-17, user: the energy-correlated cut stays fixed)
+        {"label": "hep_looseshape_nh", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose_nhits"]},
     ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,

@@ -145,6 +145,8 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "hep_extmask": {"*": ("default", None)},
     "hep_looseshape": {"*": ("default", None)},
     "hep_looseshape_plain": {"*": ("default", None)},
+    "hep_looseshape_nh": {"*": ("default", None)},
+    "sb_off_veto": {"*": ("default", None)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},
