@@ -384,6 +384,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # picked only because its range is longer); full chain re-optimised.
         {"label": "fid_zlim", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_limit_y"]},
+        # fid_hepbands22 (user, 2026-10-17): HEP fiducial bands 14-22 and 22-30 MeV instead of 14-20 and 20-30; HEP only.
+        {"label": "fid_hepbands22", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--fiducial_bands", "HEP=14-22,22-30"]},
         # fid_bandmin1 / fid_bandrel5 (user, 2026-10-17): a band keeps its own volume only if its best fiducial-stage
         # significance is >= 1 (absolute) / >= 5 % of the full-window one; otherwise it takes the full-window volume.
         {"label": "fid_bandmin1", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

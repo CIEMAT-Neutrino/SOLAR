@@ -471,6 +471,18 @@ for config in configs:
         for analysis_name in args.analysis:
             analysis_key = analysis_name.upper()
             analysis_config = get_fiducialization_config(str(root), analysis_key)
+            # Study knob SOLAR_FIDUCIAL_BANDS="HEP=14-22,22-30;DAYNIGHT=6-12,12-18" (fid_hepbands22): replace the energy bands of
+            # the listed analyses (the bands are written into the records, so the analysis mask follows them).
+            _bands_env = os.environ.get("SOLAR_FIDUCIAL_BANDS")
+            if _bands_env:
+                for _spec in _bands_env.split(";"):
+                    _ana, _, _ranges = _spec.partition("=")
+                    if _ana.strip().upper() == analysis_key:
+                        analysis_config = dict(analysis_config)
+                        analysis_config["energy_bands"] = [
+                            {"label": f"b{i}", "energy_min": float(r.split("-")[0]), "energy_max": float(r.split("-")[1])}
+                            for i, r in enumerate(_ranges.split(","))]
+                        rprint(f"[cyan][INFO][/cyan] {analysis_key}: energy bands {_ranges} (SOLAR_FIDUCIAL_BANDS)")
             _sig_ref = str(
                 _analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get(analysis_key, "")
             ).lower()
