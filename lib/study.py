@@ -407,6 +407,20 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # every event (one volume per analysis); full chain re-optimised.
         {"label": "fid_bestband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "best"]},
+        # Single-volume candidates for Day-Night (user, 2026-10-17: one volume per analysis without losing HD Central
+        # Day-Night). fid_lowband: the 6-12 MeV band volume for every event; fid_v*: fixed volumes X_Y_Z in cm (HD Central:
+        # X/Y of the low band with the high-band Z, the midpoint, the high-band X/Y with the low-band Z; VD Top: both bands'
+        # margins combined). Run with --analysis DayNight on the config named in the comment.
+        {"label": "fid_lowband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "low"]},
+        {"label": "fid_v140_300_60", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:140,300,60"]},
+        {"label": "fid_v70_250_160", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:70,250,160"]},
+        {"label": "fid_v0_200_260", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,200,260"]},
+        {"label": "fid_v100_60_480", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,60,480"]},
         # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
         # range the cut scan and the significances use; full chain re-optimised.
         {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

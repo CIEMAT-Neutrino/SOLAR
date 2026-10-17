@@ -670,7 +670,14 @@ for config in configs:
             # for that energy band (best: the band with the highest fiducial-stage significance) to every event (EnergyBands
             # written empty), instead of per-band volumes plus the full-window volume elsewhere.
             _force = os.environ.get("SOLAR_FIDUCIAL_FORCE_BAND")
-            if _force and band_results:
+            if _force and _force.startswith("vol:"):
+                # vol:X,Y,Z (fid_v*): a fixed volume for every event of the analysis, to test single volumes on the final score
+                _fx, _fy, _fz = (int(v) for v in _force[4:].split(","))
+                best_fiducials[config][analysis_key][energy_label].update(
+                    {"FiducialX": _fx, "FiducialY": _fy, "FiducialZ": _fz, "EnergyBands": [], "ForcedBand": _force})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: fixed volume X={_fx} Y={_fy} Z={_fz} "
+                       f"applied to every event")
+            elif _force and band_results:
                 _best = max(range(len(band_results)), key=lambda i: band_results[i]["SmoothedSignificance"])
                 _idx = {"low": 0, "high": len(band_results) - 1, "best": _best}.get(_force, None)
                 _idx = int(_force) if _idx is None else _idx
