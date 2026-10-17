@@ -201,7 +201,15 @@ def fiducial_profile_rows(plot_df: pd.DataFrame, gated_plot_df: pd.DataFrame, an
                        "SelectedX": int(chosen[0]), "SelectedY": int(chosen[1]), "SelectedZ": int(chosen[2])}
                 for c in essential:
                     row[f"MC_{c}"] = float(mc[c].get(key, 0.0)) if len(mc[c]) else 0.0
+                row["MC_essential"] = float(sum(row[f"MC_{c}"] for c in essential))
                 rows.append(row)
+    # Z relative to its value at the reference point (the curve passes through 1 there): readable across configs.
+    for ref_name in ("Origin", "Optimum"):
+        at_ref = [r for r in rows if r["Reference"] == ref_name and r["AtReference"]]
+        z_ref = at_ref[0]["SmoothedSignificance"] if at_ref else float("nan")
+        for r in rows:
+            if r["Reference"] == ref_name:
+                r["RelativeSignificance"] = r["SmoothedSignificance"] / z_ref if z_ref else float("nan")
     return rows
 
 
