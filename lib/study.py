@@ -384,6 +384,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # picked only because its range is longer); full chain re-optimised.
         {"label": "fid_zlim", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_limit_y"]},
+        # fid_exp30 (user, 2026-10-17): fiducial figure of merit at 30 yr (the analysis benchmark) instead of 100 yr.
+        {"label": "fid_exp30", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_exposure", "30"]},
         # fid_hepbands22 (user, 2026-10-17): HEP fiducial bands 14-22 and 22-30 MeV instead of 14-20 and 20-30; HEP only.
         {"label": "fid_hepbands22", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--fiducial_bands", "HEP=14-22,22-30"]},

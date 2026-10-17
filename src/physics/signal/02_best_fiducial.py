@@ -396,6 +396,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+# Study knob SOLAR_FIDUCIAL_EXPOSURE=<years> (fid_exp30): exposure of the fiducial figure of merit (default --exposure 100).
+if os.environ.get("SOLAR_FIDUCIAL_EXPOSURE"):
+    args.exposure = float(os.environ["SOLAR_FIDUCIAL_EXPOSURE"])
+    rprint(f"[cyan][INFO][/cyan] fiducial figure of merit at {args.exposure:g} yr (SOLAR_FIDUCIAL_EXPOSURE)")
 if args.exclude_radiological_from_scan is None:
     args.exclude_radiological_from_scan = bool(args.truth_fiducial)
 config = args.config

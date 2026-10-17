@@ -445,6 +445,9 @@ parser.add_argument("--fiducial_energy_branch", type=str, default=None,
 parser.add_argument("--fiducial_z_limit_y", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: the fiducial scan may not use beam-direction margins larger than the largest vertical margin "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_Z_LIMIT_Y), see lib/study.py fid_zlim.")
+parser.add_argument("--fiducial_exposure", type=float, default=None,
+    help="Study knob: exposure (years) of the fiducial figure of merit, default 100 (02_best_fiducial.py, "
+         "SOLAR_FIDUCIAL_EXPOSURE), see lib/study.py fid_exp30.")
 parser.add_argument("--fiducial_bands", type=str, default=None,
     help="Study knob: replace fiducial energy bands, e.g. 'HEP=14-22,22-30' (02_best_fiducial.py, SOLAR_FIDUCIAL_BANDS), "
          "see lib/study.py fid_hepbands22.")
@@ -1048,6 +1051,11 @@ if args.fiducial_z_limit_y is not None:  # 02_best_fiducial.py follows the study
     if args.fiducial_z_limit_y and not args.study_label:
         raise SystemExit("[ERROR] --fiducial_z_limit_y is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_FIDUCIAL_Z_LIMIT_Y"] = "1" if args.fiducial_z_limit_y else "0"
+
+if args.fiducial_exposure:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_exposure is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_EXPOSURE"] = str(args.fiducial_exposure)
 
 if args.fiducial_bands:  # 02_best_fiducial.py follows the study knob
     if not args.study_label:
