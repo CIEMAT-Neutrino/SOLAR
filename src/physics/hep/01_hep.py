@@ -487,7 +487,19 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             if _per_nhits:
                 _loose_shapes[_comp] = _per_nhits
         rprint(f"[cyan][INFO][/cyan] HEP background shapes from the loosest OpHits/AdjCl cut at each NHits for {sorted(_loose_shapes)} ({config} {energy})")
-    if _shape_mode == "loose":
+    # loose_window (study hep_looseshape_win): the loosest-cut shape is used only inside the HEP window
+    # [EnergyMin, 30) of the fiducial entry and normalised to the cut's own counts there. The cuts remove the low-energy
+    # background much more than the high-energy one (loosest cut: < 1 % of the counts above 14 MeV; selected cuts 1-45 %),
+    # so normalising to the full spectrum (loose, loose_nhits) underestimates the window background many times over.
+    _shape_win_min = 14.0
+    if _shape_mode == "loose_window":
+        try:
+            from lib.fiducial_entries import best_fiducials_stem
+            _fid = json.load(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{best_fiducials_stem()}.json"))
+            _shape_win_min = float(_fid[config]["HEP"][energy].get("EnergyMin", 14.0))
+        except Exception as _err:
+            rprint(f"[yellow][WARNING][/yellow] HEP window for the loose shape not found ({_err}); using {_shape_win_min} MeV")
+    if _shape_mode in ("loose", "loose_window"):
         for _comp in _hep_bkg_components:
             if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
                 continue
@@ -560,9 +572,16 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             mc_counts = np.asarray(this_comp_df["MCCounts"].values[0][threshold_idx:], dtype=float)
             if component in _loose_shapes:
                 _lc, _le = (_loose_shapes[component][int(nhit)] if _shape_mode == "loose_nhits" else _loose_shapes[component])
-                _ratio = float(np.nansum(this_comp_df["Counts"].values[0])) / float(np.nansum(_lc)) if np.nansum(_lc) > 0 else 0.0
-                counts = (_lc * _ratio)[threshold_idx:]
-                errors = (_le * _ratio)[threshold_idx:]
+                _full = np.asarray(this_comp_df["Counts"].values[0], dtype=float)
+                if _shape_mode == "loose_window":
+                    _win = np.asarray(hep_rebin_centers) >= _shape_win_min
+                    _ratio = float(np.nansum(_full[_win])) / float(np.nansum(_lc[_win])) if np.nansum(_lc[_win]) > 0 else 0.0
+                    counts = np.where(_win, _lc * _ratio, _full)[threshold_idx:]
+                    errors = np.where(_win, _le * _ratio, np.asarray(this_comp_df["Error"].values[0], dtype=float))[threshold_idx:]
+                else:
+                    _ratio = float(np.nansum(_full)) / float(np.nansum(_lc)) if np.nansum(_lc) > 0 else 0.0
+                    counts = (_lc * _ratio)[threshold_idx:]
+                    errors = (_le * _ratio)[threshold_idx:]
             if _tail_models.get(component) is not None:
                 counts = counts + extrapolated_external_tail(
                     this_comp_df["Counts"].values[0], this_comp_df["MCCounts"].values[0], _tail_models[component],

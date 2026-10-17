@@ -456,6 +456,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "hep_looseshape_nh", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
          "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose_nhits"]},
+        # loosest-cut shape inside the HEP window only, normalised to the cut's own window counts (2026-10-17; the
+        # full-spectrum normalisation of hep_looseshape / hep_looseshape_nh underestimates the window background)
+        {"label": "hep_looseshape_win", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose_window"]},
     ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
