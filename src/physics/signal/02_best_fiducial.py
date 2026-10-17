@@ -624,6 +624,19 @@ for config in configs:
                 })
             if band_results:
                 best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
+            # Study knob SOLAR_FIDUCIAL_FORCE_BAND=<low|high|index> (fid_highband): apply the volume chosen for that energy band
+            # to every event (EnergyBands written empty), instead of per-band volumes plus the full-window volume elsewhere.
+            _force = os.environ.get("SOLAR_FIDUCIAL_FORCE_BAND")
+            if _force and band_results:
+                _idx = {"low": 0, "high": len(band_results) - 1}.get(_force, None)
+                _idx = int(_force) if _idx is None else _idx
+                _fb = band_results[_idx]
+                _entry = best_fiducials[config][analysis_key][energy_label]
+                _entry.update({"FiducialX": _fb["FiducialX"], "FiducialY": _fb["FiducialY"], "FiducialZ": _fb["FiducialZ"],
+                               "EnergyBands": [], "ForcedBand": _fb["label"]})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: volume of band {_fb['label']} "
+                       f"({_fb['energy_min']}-{_fb['energy_max']} MeV) applied to every event: "
+                       f"X={_fb['FiducialX']} Y={_fb['FiducialY']} Z={_fb['FiducialZ']}")
 
 if args.write_records:
     _merge_and_write_json(filename, best_fiducials)
