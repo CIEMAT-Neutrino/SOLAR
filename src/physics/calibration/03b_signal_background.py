@@ -84,6 +84,9 @@ parser.add_argument("--hep_model_gate_energy", type=float, default=12.0,
 parser.add_argument("--hep_model_completeness", type=float, default=0.80,
     help="--target hep: CC completeness above --hep_model_gate_energy of SB_HEP_MODEL_THRESHOLD.")
 parser.add_argument("--max_per_sample", type=int, default=300000)
+parser.add_argument("--ncap_dry_run", action=argparse.BooleanOptionalAction, default=False,
+                    help="--target ncap: print the summary (AUC, thresholds, neutrons kept) without saving models or json "
+                         "(training-size checks next to the models in use).")
 parser.add_argument("--rf_estimators", type=int, default=300)
 parser.add_argument("--rf_depth", type=int, default=10)
 parser.add_argument("--rf_min_leaf", type=int, default=20)
@@ -215,6 +218,10 @@ if NCAP:
                "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
                "NEUTRON_KEPT": {c: float(np.average(data.loc[~sig, "Score"] >= t, weights=data.loc[~sig, "W"])) for c, t in thresholds.items()}}
     rprint(json.dumps(summary, indent=2))
+    rprint(f"NCAP training clusters: CC {int(sig.sum())}, neutron {int((~sig).sum())}")
+    if args.ncap_dry_run:
+        rprint("[cyan][INFO][/cyan] --ncap_dry_run: models and json not written")
+        sys.exit(0)
     model_dir = f"{_models_base}/{config}/{args.name}/models"
     os.makedirs(model_dir, exist_ok=True)
     for fold, model in models.items():
