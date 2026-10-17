@@ -1,39 +1,52 @@
 {
   "FIDUCIALIZATION": {
+    "_doc": "2026-10-18 (user): one fiducial volume per analysis, optimised over the analysis window (energy_bands empty), with radiological energy bins backed by fewer than RADIOLOGICAL_MIN_MC_PER_BIN (backgrounds.json, the 03_analysis.py per-bin floor) simulated clusters left out of the figure of merit (02_best_fiducial.py). Study fid_radfloor_one: DayNight / HEP / Sensitivity vs the two-band default HD Central 4.51/11.86/5.95 (4.22/11.94/5.95), HD Lateral 1.66/1.59/1.01 (1.14/1.38/0.92), VD Top 1.79/1.75/1.27 (1.95/1.73/1.12), VD Shielded 3.60/1.91/3.97 (3.88/1.96/4.25). Before: per-band volumes (DAYNIGHT 6-12/12-18, HEP 14-20/20-30, SENSITIVITY 10-20/20-30 MeV).",
     "combine_mode": "quadrature",
     "ANALYSES": {
       "DAYNIGHT": {
         "significance_type": "asimov",
         "energy_min": 6,
         "energy_max": 18,
-        "energy_bands": [
-          {"label": "low",  "energy_min": 6,  "energy_max": 12},
-          {"label": "high", "energy_min": 12, "energy_max": 18}
+        "energy_bands": [],
+        "signal_components": [
+          "8B",
+          "hep"
         ],
-        "signal_components":     ["8B", "hep"],
-        "background_components": ["gamma", "neutron", "radiological"]
+        "background_components": [
+          "gamma",
+          "neutron",
+          "radiological"
+        ]
       },
       "HEP": {
         "significance_type": "asimov",
         "energy_min": 14,
         "energy_max": 30,
-        "energy_bands": [
-          {"label": "low",  "energy_min": 14, "energy_max": 20},
-          {"label": "high", "energy_min": 20, "energy_max": 30}
+        "energy_bands": [],
+        "signal_components": [
+          "hep"
         ],
-        "signal_components":     ["hep"],
-        "background_components": ["gamma", "neutron", "radiological", "8B"]
+        "background_components": [
+          "gamma",
+          "neutron",
+          "radiological",
+          "8B"
+        ]
       },
       "SENSITIVITY": {
         "significance_type": "asimov",
         "energy_min": 10,
         "energy_max": 30,
-        "energy_bands": [
-          {"label": "low",  "energy_min": 10, "energy_max": 20},
-          {"label": "high", "energy_min": 20, "energy_max": 30}
+        "energy_bands": [],
+        "signal_components": [
+          "hep",
+          "8B"
         ],
-        "signal_components":     ["hep", "8B"],
-        "background_components": ["gamma", "neutron", "radiological"]
+        "background_components": [
+          "gamma",
+          "neutron",
+          "radiological"
+        ]
       }
     }
   }

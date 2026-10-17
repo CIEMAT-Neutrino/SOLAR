@@ -460,7 +460,13 @@ for config in configs:
         # energy bin backed by fewer than N simulated clusters (scan MCCounts, i.e. after the 01_fiducialize gap filling)
         # is zeroed, as 03_analysis.py does with RADIOLOGICAL_MIN_MC_PER_BIN. A lone heavy cluster then cannot switch a
         # bin on and off as the margin moves.
-        _mc_floor = _parse_bin_mc_floor(os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR", ""))
+        # Default (2026-10-18, user): radiological bins need RADIOLOGICAL_MIN_MC_PER_BIN simulated clusters, the floor that
+        # 03_analysis.py applies; the env knob replaces it ("none" switches every floor off).
+        _floor_env = os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR")
+        if _floor_env is None:
+            _rad_floor = _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN")
+            _floor_env = f"radiological:{_rad_floor}" if _rad_floor else ""
+        _mc_floor = {} if _floor_env.strip().lower() == "none" else _parse_bin_mc_floor(_floor_env)
         if _mc_floor:
             plot_df = apply_bin_mc_floor(plot_df, _mc_floor)
         # Study knob SOLAR_FIDUCIAL_MARGIN_SMOOTH=<sigma in grid steps> (fidsmooth study, default off): Gaussian smoothing of
@@ -664,8 +670,8 @@ for config in configs:
                     "FiducialZ": int(band_best["FiducializedZ"]),
                     "SmoothedSignificance": float(band_best["SmoothedSignificance"]),
                 })
-            if band_results:
-                best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
+            # Written also when empty, so per-band volumes of an earlier record do not survive the merge.
+            best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
             # Study knob SOLAR_FIDUCIAL_FORCE_BAND=<low|high|best|index> (fid_highband, fid_bestband): apply the volume chosen
             # for that energy band (best: the band with the highest fiducial-stage significance) to every event (EnergyBands
             # written empty), instead of per-band volumes plus the full-window volume elsewhere.
