@@ -411,6 +411,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # Day-Night). fid_lowband: the 6-12 MeV band volume for every event; fid_v*: fixed volumes X_Y_Z in cm (HD Central:
         # X/Y of the low band with the high-band Z, the midpoint, the high-band X/Y with the low-band Z; VD Top: both bands'
         # margins combined). Run with --analysis DayNight on the config named in the comment.
+        # fid_dn616 (user, 2026-10-17): one Day-Night volume, optimised on 6-16 MeV (the 16-18 MeV bins, almost free of
+        # background, otherwise pull the optimum to the loosest volume) and applied to every event. Day-Night only.
+        {"label": "fid_dn616", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["DayNight"],
+         "extra": ["--fiducial_bands", "DAYNIGHT=6-16", "--fiducial_force_band", "low"]},
         # fid_bandmax: the intersection of the band volumes (largest margin of the bands per coordinate) for every event.
         {"label": "fid_bandmax", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "max"]},
