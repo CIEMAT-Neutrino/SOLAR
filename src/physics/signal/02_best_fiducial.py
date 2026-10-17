@@ -666,11 +666,13 @@ for config in configs:
                 })
             if band_results:
                 best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
-            # Study knob SOLAR_FIDUCIAL_FORCE_BAND=<low|high|index> (fid_highband): apply the volume chosen for that energy band
-            # to every event (EnergyBands written empty), instead of per-band volumes plus the full-window volume elsewhere.
+            # Study knob SOLAR_FIDUCIAL_FORCE_BAND=<low|high|best|index> (fid_highband, fid_bestband): apply the volume chosen
+            # for that energy band (best: the band with the highest fiducial-stage significance) to every event (EnergyBands
+            # written empty), instead of per-band volumes plus the full-window volume elsewhere.
             _force = os.environ.get("SOLAR_FIDUCIAL_FORCE_BAND")
             if _force and band_results:
-                _idx = {"low": 0, "high": len(band_results) - 1}.get(_force, None)
+                _best = max(range(len(band_results)), key=lambda i: band_results[i]["SmoothedSignificance"])
+                _idx = {"low": 0, "high": len(band_results) - 1, "best": _best}.get(_force, None)
                 _idx = int(_force) if _idx is None else _idx
                 _fb = band_results[_idx]
                 _entry = best_fiducials[config][analysis_key][energy_label]

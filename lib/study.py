@@ -403,6 +403,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # HEP, where the full-window volume is the 14-20 MeV band's); full chain re-optimised.
         {"label": "fid_highband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "high"]},
+        # fid_bestband (user, 2026-10-17): the volume of the band with the highest fiducial-stage significance applied to
+        # every event (one volume per analysis); full chain re-optimised.
+        {"label": "fid_bestband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "best"]},
         # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
         # range the cut scan and the significances use; full chain re-optimised.
         {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

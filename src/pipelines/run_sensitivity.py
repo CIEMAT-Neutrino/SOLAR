@@ -455,7 +455,7 @@ parser.add_argument("--fiducial_band_min_z", type=str, default=None,
     help="Study knob: 'abs:Z' or 'rel:f'; an energy band whose best fiducial significance is below Z (or f x the "
          "full-window one) takes the full-window volume (02_best_fiducial.py, SOLAR_FIDUCIAL_BAND_MIN_Z), see lib/study.py fid_bandmin.")
 parser.add_argument("--fiducial_force_band", type=str, default=None,
-    help="Study knob: apply the fiducial volume of one energy band (low, high or its index) to every event "
+    help="Study knob: apply the fiducial volume of one energy band (low, high, best or its index) to every event "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_FORCE_BAND), see lib/study.py fid_highband.")
 parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
