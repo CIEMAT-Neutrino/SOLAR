@@ -457,6 +457,9 @@ parser.add_argument("--fiducial_band_min_z", type=str, default=None,
 parser.add_argument("--fiducial_force_band", type=str, default=None,
     help="Study knob: apply the fiducial volume of one energy band (low, high, best or its index) to every event "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_FORCE_BAND), see lib/study.py fid_highband.")
+parser.add_argument("--fiducial_bin_mc_floor", type=str, default=None,
+    help="Study knob: per-bin MC floor of the fiducial figure of merit, e.g. 'radiological:2' (02_best_fiducial.py, through "
+         "SOLAR_FIDUCIAL_BIN_MC_FLOOR), the same floor 03_analysis.py applies with RADIOLOGICAL_MIN_MC_PER_BIN; see lib/study.py fid_radfloor.")
 parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
          "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
@@ -1071,6 +1074,11 @@ if args.fiducial_force_band:  # 02_best_fiducial.py follows the study knob
     if not args.study_label:
         raise SystemExit("[ERROR] --fiducial_force_band is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_FIDUCIAL_FORCE_BAND"] = args.fiducial_force_band
+
+if args.fiducial_bin_mc_floor:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_bin_mc_floor is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_BIN_MC_FLOOR"] = args.fiducial_bin_mc_floor
 
 if args.single_fiducial_band is not None:  # 02_best_fiducial.py follows the study knob
     if args.single_fiducial_band and not args.study_label:

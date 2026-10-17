@@ -411,6 +411,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # Day-Night). fid_lowband: the 6-12 MeV band volume for every event; fid_v*: fixed volumes X_Y_Z in cm (HD Central:
         # X/Y of the low band with the high-band Z, the midpoint, the high-band X/Y with the low-band Z; VD Top: both bands'
         # margins combined). Run with --analysis DayNight on the config named in the comment.
+        # fid_radfloor / fid_radfloor_one (2026-10-17): the fiducial figure of merit ignores radiological bins backed by fewer
+        # than 2 simulated clusters, as 03_analysis.py does (RADIOLOGICAL_MIN_MC_PER_BIN); with the default bands, or with one
+        # volume over the full window. Full chain re-optimised.
+        {"label": "fid_radfloor", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2"]},
+        {"label": "fid_radfloor_one", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2", "--single_fiducial_band"]},
         # fid_dn616 (user, 2026-10-17): one Day-Night volume, optimised on 6-16 MeV (the 16-18 MeV bins, almost free of
         # background, otherwise pull the optimum to the loosest volume) and applied to every event. Day-Night only.
         {"label": "fid_dn616", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
