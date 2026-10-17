@@ -171,7 +171,7 @@ parser.add_argument("--hep_energy", type=str, default="SolarEnergyHEP", choices=
     help="Energy of the HEP analysis when --energy is SolarEnergy. SolarEnergyHEPModel (study knob, needs --study_label): "
          "the alternative HEP-trained S/B classifier (03b_signal_background.py --target hep).")
 parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=None,
-    help="Neutron-capture veto (config NEUTRON_CAPTURE_VETO) in DayNight/Sensitivity: default from ENABLED_CONFIGS; "
+    help="Neutron-capture veto (config NEUTRON_CAPTURE_VETO): default from ENABLED_CONFIGS; "
          "--ncveto forces it on (study knob, needs --study_label).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
@@ -320,6 +320,9 @@ if args.sb_completeness_high is not None:
     workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
 if args.ncveto is not None and not args.study_label:
     raise SystemExit("[ERROR] --ncveto / --no-ncveto is a study knob: pass --study_label so the Rebin pkls are labeled.")
+if args.ncveto is not None:
+    # ACTION "no_offset" acts in the calibration (lib/cluster.py), which reads the switch from the environment.
+    os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"
 if args.hep_energy != "SolarEnergyHEP":
     if not args.study_label:
         raise SystemExit("[ERROR] --hep_energy is a study knob: pass --study_label so the Rebin pkls are labeled.")
@@ -404,7 +407,8 @@ for config in configs:
                     pos_keys=_pos_keys,
                 ), dtype=bool)
 
-        # Neutron-capture veto (config NEUTRON_CAPTURE_VETO): small main cluster at a large analysis energy.
+        # Neutron-capture veto (config NEUTRON_CAPTURE_VETO) with ACTION "remove"; ACTION "no_offset" already acted on
+        # SolarEnergy in the calibration (lib/cluster.py) and keeps every cluster here.
         _ncveto_masks = {}
         for _an in args.analysis:
             _keep = neutron_capture_veto_keep(str(root), config, _an, run["Reco"][_energy_key[_an]], run["Reco"]["Energy"], args.ncveto,

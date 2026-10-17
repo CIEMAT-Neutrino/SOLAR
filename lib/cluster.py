@@ -8,6 +8,7 @@ from typing import Optional
 from itertools import product
 from .formatting import remove_branches, get_param_dict, reshape_array
 from .defaults import get_default_info, load_analysis_info
+from .background import neutron_capture_no_offset, neutron_capture_veto_params
 from .fitting import calibration_func
 from .dataframe import npy2df
 
@@ -70,11 +71,13 @@ def _signal_background_hep_model(run, config, name, idx):
 def _neutron_capture_scores(run, config, name, idx, offset_energy):
     """Scores of the neutron-capture classifier (03b_signal_background.py --target ncap) for the clusters in its region
     (SolarEnergy with the offset in [NCAP_ENERGY_MIN, NCAP_ENERGY_MAX)); 1 elsewhere. (None, None) without a classifier."""
+    veto = load_analysis_info(str(root)).get("NEUTRON_CAPTURE_VETO", {})
+    model = veto.get("PER_CONFIG", {}).get(config, {}).get("MODEL", veto.get("MODEL", "neutron_capture"))
     for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
         if not sample:
             continue
-        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_neutron_capture.json"
-        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_neutron_capture_fold{k}.pkl" for k in (0, 1)]
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_{model}.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_{model}_fold{k}.pkl" for k in (0, 1)]
         if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
             break
     else:
@@ -850,6 +853,15 @@ def compute_energy_calibration(
                     if "NeutronCaptureScore" not in run["Reco"]:
                         run["Reco"]["NeutronCaptureScore"] = np.ones(len(run["Reco"]["Event"]))
                     run["Reco"]["NeutronCaptureScore"][rows] = nc_score
+                    # Neutron-capture veto with ACTION "no_offset" (config NEUTRON_CAPTURE_VETO): capture-like clusters of the
+                    # classifier region are treated as background-like, i.e. SolarEnergy without the offset (SolarEnergyHEP,
+                    # set above, is not touched).
+                    nc_flag = neutron_capture_no_offset(str(root), config, nc_score)
+                    if nc_flag is not None:
+                        run["Reco"]["SolarEnergy"][rows[nc_flag]] = no_offset[nc_flag]
+                        output += f"\t\t[cyan][INFO][/cyan] {name}: neutron-capture veto, {np.mean(nc_flag):.1%} of clusters without offset\n"
+                elif neutron_capture_veto_params(str(root), config).get("MODE") == "classifier":
+                    raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config} {name}: no neutron-capture classifier")
                 # Alternative HEP energy (study variant hep_sbmodel): above SB_HEP_MODEL_GATE_ENERGY the HEP-trained
                 # classifier decides the offset; below it SolarEnergy is unchanged. Built only on request.
                 if this_params is not None and this_params.get("SB_HEP_MODEL", False):

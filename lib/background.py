@@ -169,35 +169,78 @@ def get_component_model_factor(root: str, folder: str, component: str, config: O
     return _component_factor(factors, folder, component, config, "background-model factor")
 
 
-def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
-    """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
+def neutron_capture_veto_params(root: str, config: str, override=None) -> dict:
+    """Parameters of the neutron-capture veto (config NEUTRON_CAPTURE_VETO) for config, or {} when it is off.
 
-    Removed: ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN. On for the configs in
-    ENABLED_CONFIGS; override (True/False) or the environment variable SOLAR_NCVETO (1/0, set by run_sensitivity for
-    the study variants) takes precedence. Returns an all-True mask when off or for analyses not listed.
+    On for the configs in ENABLED_CONFIGS; override (True/False) or the environment variable SOLAR_NCVETO (1/0, set by
+    run_sensitivity and 03_analysis.py --ncveto for the study variants) takes precedence. The top-level keys are the
+    defaults and PER_CONFIG.<config> overrides them.
     """
     import os
-    import numpy as np
 
-    energy = np.asarray(energy, dtype=float)
-    keep = np.ones(len(energy), dtype=bool)
     veto = load_analysis_info(root).get("NEUTRON_CAPTURE_VETO", {})
-    if not veto or analysis not in veto.get("ANALYSES", []):
-        return keep
+    if not veto:
+        return {}
     if override is None and os.environ.get("SOLAR_NCVETO") in ("0", "1"):
         override = os.environ["SOLAR_NCVETO"] == "1"
     on = (config in veto.get("ENABLED_CONFIGS", [])) if override is None else bool(override)
     if not on:
+        return {}
+    keys = ("MODE", "ACTION", "MODEL", "COMPLETENESS", "ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN", "ANALYSES")
+    par = {k: veto[k] for k in keys if k in veto}
+    par.update(veto.get("PER_CONFIG", {}).get(config, {}))
+    par.setdefault("MODE", "window")
+    par.setdefault("ACTION", "remove")
+    par.setdefault("MODEL", "neutron_capture")
+    return par
+
+
+def neutron_capture_threshold(root: str, config: str, par: dict) -> float:
+    """Score threshold of the neutron-capture classifier at the CC completeness par["COMPLETENESS"] (03b --target ncap)."""
+    import json as _json
+    import os
+
+    jpath = f"{root}/config/{config}/marley_final/{config}_calib/{config}_{par['MODEL']}.json"
+    if not os.path.isfile(jpath):
+        raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: {jpath} missing "
+                                f"(03b_signal_background.py --target ncap --ncap_model {par['MODEL']})")
+    return float(_json.load(open(jpath))["NCAP_THRESHOLDS"][f"{float(par['COMPLETENESS']):.2f}"])
+
+
+def neutron_capture_no_offset(root: str, config: str, score):
+    """Clusters that lose the de-excitation offset under the neutron-capture veto with ACTION "no_offset": the clusters of
+    the classifier region (score < 1 there; 1 outside) scored below the threshold. None when the veto is off or acts by
+    removal. Called by lib/cluster.py after the signal/background stage, so SolarEnergy (DayNight, Sensitivity and every
+    other user of SolarEnergy) changes and SolarEnergyHEP does not."""
+    import numpy as np
+
+    par = neutron_capture_veto_params(root, config)
+    if not par or par["ACTION"] != "no_offset":
+        return None
+    if par["MODE"] != "classifier":
+        raise ValueError(f"Neutron-capture veto for {config}: ACTION no_offset needs MODE classifier")
+    return np.asarray(score, dtype=float) < neutron_capture_threshold(root, config, par)
+
+
+def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
+    """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
+
+    ACTION "remove" only (ACTION "no_offset" acts in the calibration, lib/cluster.py, and keeps every cluster here).
+    MODE "window": removed ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN; MODE
+    "classifier": removed the region clusters scored below the threshold of COMPLETENESS. On/off as in
+    neutron_capture_veto_params. Returns an all-True mask when off or for analyses not in ANALYSES.
+    """
+    import numpy as np
+
+    energy = np.asarray(energy, dtype=float)
+    keep = np.ones(len(energy), dtype=bool)
+    par = neutron_capture_veto_params(root, config, override)
+    if not par or par["ACTION"] != "remove" or analysis not in par.get("ANALYSES", []):
         return keep
-    par = {**{k: veto[k] for k in ("ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN")}, **veto.get("PER_CONFIG", {}).get(config, {})}
-    if par.get("MODE") == "classifier":
-        # Neutron-capture classifier (03b --target ncap): drop its region clusters scored below the threshold of COMPLETENESS.
-        import json as _json
-        jpath = f"{root}/config/{config}/marley_final/{config}_calib/{config}_neutron_capture.json"
-        if reco is None or "NeutronCaptureScore" not in reco or not os.path.isfile(jpath):
-            raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: NeutronCaptureScore or {jpath} missing")
-        info = _json.load(open(jpath))
-        t = float(info["NCAP_THRESHOLDS"][f"{float(par['COMPLETENESS']):.2f}"])
+    if par["MODE"] == "classifier":
+        if reco is None or "NeutronCaptureScore" not in reco:
+            raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: NeutronCaptureScore missing")
+        t = neutron_capture_threshold(root, config, par)
         score = np.asarray(reco["NeutronCaptureScore"], dtype=float)
         if rows is not None:
             score = score[rows]
