@@ -677,6 +677,14 @@ for config in configs:
                     {"FiducialX": _fx, "FiducialY": _fy, "FiducialZ": _fz, "EnergyBands": [], "ForcedBand": _force})
                 rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: fixed volume X={_fx} Y={_fy} Z={_fz} "
                        f"applied to every event")
+            elif _force == "max" and band_results:
+                # max (fid_bandmax): one volume with each margin the largest of the band volumes (their intersection), so
+                # every band's cut is applied to every event
+                _fx, _fy, _fz = (max(r[k] for r in band_results) for k in ("FiducialX", "FiducialY", "FiducialZ"))
+                best_fiducials[config][analysis_key][energy_label].update(
+                    {"FiducialX": _fx, "FiducialY": _fy, "FiducialZ": _fz, "EnergyBands": [], "ForcedBand": "max"})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: intersection of the band volumes "
+                       f"X={_fx} Y={_fy} Z={_fz} applied to every event")
             elif _force and band_results:
                 _best = max(range(len(band_results)), key=lambda i: band_results[i]["SmoothedSignificance"])
                 _idx = {"low": 0, "high": len(band_results) - 1, "best": _best}.get(_force, None)
