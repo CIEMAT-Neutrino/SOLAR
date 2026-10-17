@@ -384,6 +384,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # picked only because its range is longer); full chain re-optimised.
         {"label": "fid_zlim", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_limit_y"]},
+        # fid_bandmin1 / fid_bandrel5 (user, 2026-10-17): a band keeps its own volume only if its best fiducial-stage
+        # significance is >= 1 (absolute) / >= 5 % of the full-window one; otherwise it takes the full-window volume.
+        {"label": "fid_bandmin1", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_band_min_z", "abs:1.0"]},
+        {"label": "fid_bandrel5", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_band_min_z", "rel:0.05"]},
         # fid_highband: the volume chosen for the highest energy band applied to every event (user, 2026-10-17: HD Central
         # HEP, where the full-window volume is the 14-20 MeV band's); full chain re-optimised.
         {"label": "fid_highband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

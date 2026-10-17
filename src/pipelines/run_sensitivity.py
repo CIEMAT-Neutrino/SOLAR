@@ -445,6 +445,9 @@ parser.add_argument("--fiducial_energy_branch", type=str, default=None,
 parser.add_argument("--fiducial_z_limit_y", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: the fiducial scan may not use beam-direction margins larger than the largest vertical margin "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_Z_LIMIT_Y), see lib/study.py fid_zlim.")
+parser.add_argument("--fiducial_band_min_z", type=str, default=None,
+    help="Study knob: 'abs:Z' or 'rel:f'; an energy band whose best fiducial significance is below Z (or f x the "
+         "full-window one) takes the full-window volume (02_best_fiducial.py, SOLAR_FIDUCIAL_BAND_MIN_Z), see lib/study.py fid_bandmin.")
 parser.add_argument("--fiducial_force_band", type=str, default=None,
     help="Study knob: apply the fiducial volume of one energy band (low, high or its index) to every event "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_FORCE_BAND), see lib/study.py fid_highband.")
@@ -1042,6 +1045,11 @@ if args.fiducial_z_limit_y is not None:  # 02_best_fiducial.py follows the study
     if args.fiducial_z_limit_y and not args.study_label:
         raise SystemExit("[ERROR] --fiducial_z_limit_y is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_FIDUCIAL_Z_LIMIT_Y"] = "1" if args.fiducial_z_limit_y else "0"
+
+if args.fiducial_band_min_z:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_band_min_z is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_BAND_MIN_Z"] = args.fiducial_band_min_z
 
 if args.fiducial_force_band:  # 02_best_fiducial.py follows the study knob
     if not args.study_label:

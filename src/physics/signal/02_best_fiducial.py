@@ -601,6 +601,24 @@ for config in configs:
                     continue
                 band_best = band_sig_df.loc[band_sig_df["SmoothedSignificance"].idxmax()]
                 band_label = band.get("label", f"{band['energy_min']}-{band['energy_max']}")
+                # Study knob SOLAR_FIDUCIAL_BAND_MIN_Z="abs:<Z>" or "rel:<f>" (fid_bandmin*): a band whose best fiducial-stage
+                # significance is below Z (or below f x the full-window significance) carries no information to choose a
+                # volume, so it takes the full-window volume instead of its own optimum.
+                _bmin = os.environ.get("SOLAR_FIDUCIAL_BAND_MIN_Z")
+                if _bmin:
+                    _mode, _val = _bmin.split(":")
+                    _limit = float(_val) * (float(max_row["SmoothedSignificance"]) if _mode == "rel" else 1.0)
+                    if float(band_best["SmoothedSignificance"]) < _limit:
+                        rprint(f"  [{band_label}] significance {band_best['SmoothedSignificance']:.3f} < {_limit:.3f} ({_bmin}): "
+                               f"full-window volume X={int(max_row['FiducializedX'])} Y={int(max_row['FiducializedY'])} "
+                               f"Z={int(max_row['FiducializedZ'])} instead of its own optimum")
+                        _full = (band_sig_df["FiducializedX"] == max_row["FiducializedX"]) & \
+                                (band_sig_df["FiducializedY"] == max_row["FiducializedY"]) & \
+                                (band_sig_df["FiducializedZ"] == max_row["FiducializedZ"])
+                        if _full.any():
+                            band_best = band_sig_df.loc[_full].iloc[0]
+                        else:
+                            band_best = max_row
                 if args.export_profiles:
                     _profile_rows.extend(fiducial_profile_rows(
                         plot_df, gated_plot_df, band_config, smoothing_config, args.exposure, str(root),
