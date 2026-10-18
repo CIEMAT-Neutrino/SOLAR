@@ -369,6 +369,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_low_threshold"]},
         {"label": "ncveto_618", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--ncveto_model", "neutron_capture_6_18"]},
+        # the previous default (2026-10-04 to 2026-10-18): SB_THRESHOLD below the 12 MeV gate as well (config SB_LOW_THRESHOLD
+        # false since 2026-10-18, so sb_gateonly equals the default from then on)
+        {"label": "sb_lowthr", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--sb_low_threshold"]},
         # the simplified set with the HEP background of hep_looseshape_win (no tail extrapolation)
         {"label": "sb_simple_hepwin", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],

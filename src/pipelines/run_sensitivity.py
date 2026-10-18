@@ -470,8 +470,9 @@ parser.add_argument("--sb_classifier", action=argparse.BooleanOptionalAction, de
     help="Study knob: --no-sb_classifier switches the signal/background classifier off for every step (no SolarEnergy "
          "first stage, no Sensitivity score categories; through SOLAR_SB_CLASSIFIER), see lib/study.py sb_off.")
 parser.add_argument("--sb_low_threshold", action=argparse.BooleanOptionalAction, default=None,
-    help="Study knob: --no-sb_low_threshold drops the S/B decision below SB_GATE_ENERGY (only the high-energy and HEP "
-         "thresholds act; through SOLAR_SB_LOW_THRESHOLD), see lib/study.py sbsimple.")
+    help="Study knob overriding config SB_LOW_THRESHOLD (default false since 2026-10-18: no S/B decision below "
+         "SB_GATE_ENERGY): --sb_low_threshold restores SB_THRESHOLD below the gate (study sb_lowthr), --no-sb_low_threshold "
+         "forces it off; through SOLAR_SB_LOW_THRESHOLD, see lib/study.py sbsimple.")
 parser.add_argument("--ncveto_model", type=str, default=None,
     help="Study knob: neutron-capture classifier files of the veto (03b --target ncap --ncap_model NAME, with its own "
          "region; through SOLAR_NCVETO_MODEL), see lib/study.py sbsimple.")
@@ -1102,8 +1103,8 @@ if args.sb_classifier is not None:  # every child process follows the study knob
     os.environ["SOLAR_SB_CLASSIFIER"] = "1" if args.sb_classifier else "0"
 
 if args.sb_low_threshold is not None:  # every child process follows the study knob (lib/cluster.py)
-    if not args.sb_low_threshold and not args.study_label:
-        raise SystemExit("[ERROR] --no-sb_low_threshold is a study knob: pass --study_label so the outputs are labeled.")
+    if not args.study_label:
+        raise SystemExit("[ERROR] --[no-]sb_low_threshold is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_SB_LOW_THRESHOLD"] = "1" if args.sb_low_threshold else "0"
 
 if args.ncveto_model is not None:  # every child process follows the study knob (lib/cluster.py, lib/background.py)

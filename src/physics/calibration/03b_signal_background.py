@@ -54,6 +54,8 @@ upper/lower branch classifier as before.
   gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
   external gammas and neutron captures, and the CC clusters there are the most signal-like, so a stricter
   cut costs little signal (study of 2026-10-07, _xchk/hep). --gate_energy 0 switches it off.
+- Since 2026-10-18 the analysis applies SB_THRESHOLD only with config SB_LOW_THRESHOLD true (default false): below
+  SB_GATE_ENERGY every cluster keeps the offset, and SB_THRESHOLD only floors SB_THRESHOLD_HIGH / SB_THRESHOLD_HEP.
 """
 
 parser = argparse.ArgumentParser(description="Train the signal/background cluster classifier")

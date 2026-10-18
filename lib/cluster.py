@@ -174,11 +174,14 @@ def _signal_background_flags(run, config, name, idx, this_params):
             threshold_high = float(table[key])
         solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
         threshold[solar >= float(info["SB_GATE_ENERGY"])] = threshold_high
-    if os.environ.get("SOLAR_SB_LOW_THRESHOLD") == "0":
-        # Study knob (run_sensitivity --no-sb_low_threshold, lib/study.py sbsimple): no S/B decision below SB_GATE_ENERGY;
-        # only SB_THRESHOLD_HIGH above the gate (and SB_THRESHOLD_HEP for SolarEnergyHEP) act.
+    _low_env = os.environ.get("SOLAR_SB_LOW_THRESHOLD")
+    low_on = (_low_env == "1") if _low_env in ("0", "1") else bool(load_analysis_info(str(root)).get("SB_LOW_THRESHOLD", True))
+    if not low_on:
+        # Default since 2026-10-18 (config SB_LOW_THRESHOLD false): no S/B decision below SB_GATE_ENERGY; only
+        # SB_THRESHOLD_HIGH above the gate (and SB_THRESHOLD_HEP for SolarEnergyHEP) act. SOLAR_SB_LOW_THRESHOLD (1/0,
+        # run_sensitivity --[no-]sb_low_threshold, study sb_lowthr) overrides the config.
         if "SB_THRESHOLD_HIGH" not in info:
-            raise KeyError(f"SOLAR_SB_LOW_THRESHOLD=0 needs SB_THRESHOLD_HIGH in the classifier json of {config} {name}")
+            raise KeyError(f"SB_LOW_THRESHOLD off needs SB_THRESHOLD_HIGH in the classifier json of {config} {name}")
         solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
         threshold[solar < float(info["SB_GATE_ENERGY"])] = -np.inf
     return score >= threshold
