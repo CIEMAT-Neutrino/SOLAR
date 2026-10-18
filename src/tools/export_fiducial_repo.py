@@ -69,9 +69,12 @@ def produce(configs):
             e = dict(os.environ, **env)
             if suffix:
                 e["SOLAR_FIDUCIAL_PROFILE_SUFFIX"] = suffix
+            # the fiducial MC requirement of the analysis (run_sensitivity.py: MC_THRESHOLDS_PER_CONFIG, else the global one)
+            mc = INFO.get("MC_THRESHOLDS_PER_CONFIG", {}).get(cfg, {}).get(
+                "FIDUCIALIZATION", INFO.get("ANALYSIS_THRESHOLDS", {}).get("FIDUCIALIZATION", {}).get("MC", 100))
             cmd = [sys.executable, "src/physics/signal/02_best_fiducial.py", "--config", cfg, "--folder", "Truncated",
                    "--no-debug", "--no-plot", "--signal", NAME, "--energy", "SolarEnergy", "--analysis", *analyses,
-                   "--no-write_records", "--export_profiles"]
+                   "--no-write_records", "--export_profiles", "--mc_threshold", str(mc)]
             print(f"[produce] {cfg} {suffix or 'default'}: {' '.join(cmd[1:])}", flush=True)
             subprocess.run(cmd, cwd=ROOT, env=e, check=True)
 
