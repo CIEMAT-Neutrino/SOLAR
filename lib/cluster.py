@@ -868,6 +868,10 @@ def compute_energy_calibration(
                     # classifier region are treated as background-like, i.e. SolarEnergy without the offset (SolarEnergyHEP,
                     # set above, is not touched).
                     nc_flag = neutron_capture_no_offset(str(root), config, nc_score)
+                    # SolarEnergy before the veto shift: the fiducial volume scan reads it (01_fiducialize.py, 2026-10-18)
+                    if "SolarEnergyNoVeto" not in run["Reco"]:
+                        run["Reco"]["SolarEnergyNoVeto"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
+                    run["Reco"]["SolarEnergyNoVeto"][rows] = run["Reco"]["SolarEnergy"][rows]
                     if nc_flag is not None:
                         run["Reco"]["SolarEnergy"][rows[nc_flag]] = no_offset[nc_flag]
                         output += f"\t\t[cyan][INFO][/cyan] {name}: neutron-capture veto, {np.mean(nc_flag):.1%} of clusters without offset\n"

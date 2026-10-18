@@ -1,4 +1,4 @@
-import os
+import json, os
 import sys
 
 # Add the absolute path to the lib directory
@@ -226,18 +226,34 @@ for config in configs:
             _reco_x_arr = run["Reco"]["RecoX"]
             _reco_y_arr = run["Reco"]["RecoY"]
             _reco_z_arr = run["Reco"]["RecoZ"]
-        # Study knob SOLAR_FIDUCIAL_ENERGY_BRANCH (fid_nosb): the volume scan of the SolarEnergy analyses reads another
-        # energy branch, e.g. SolarEnergyOffset (the SolarEnergy without the signal/background classifier stage). The scan
-        # is still saved under the analysis energy, so the band assignment downstream keeps using SolarEnergy.
-        _fid_branch = os.environ.get("SOLAR_FIDUCIAL_ENERGY_BRANCH") if energy == "SolarEnergy" else None
+        # Fiducial energy (2026-10-18, user): the volume scan of the SolarEnergy analyses reads SolarEnergy before the
+        # neutron-capture veto shift (SolarEnergyNoVeto: S/B classifier stage applied, veto not), so the volume follows where
+        # the external background enters and the MC gate counts the simulated events of the volume; cuts and significances
+        # use the vetoed SolarEnergy. Study knob SOLAR_FIDUCIAL_ENERGY_BRANCH replaces it (fid_nosb: SolarEnergyOffset;
+        # "SolarEnergy": the vetoed energy). The scan is saved under the analysis energy.
+        _fid_branch = os.environ.get("SOLAR_FIDUCIAL_ENERGY_BRANCH", "SolarEnergyNoVeto") if energy == "SolarEnergy" else None
+        if _fid_branch == "SolarEnergy":
+            _fid_branch = None
         if _fid_branch == "SolarEnergyNoVeto" and "SolarEnergyNoVeto" not in run["Reco"]:
-            # SolarEnergy before the neutron-capture veto shift (study fid_noveto). The veto only acts on clusters whose
-            # SolarEnergy with the offset is below NCAP_ENERGY_MAX (14 MeV), where SolarEnergyHEP (copied before the veto,
-            # changed only at or above SB_HEP_GATE_ENERGY, also 14 MeV) is the pre-veto value; elsewhere SolarEnergy is.
-            _nv_emax = float(os.environ.get("SOLAR_FIDUCIAL_NOVETO_EMAX", "14"))
-            run["Reco"]["SolarEnergyNoVeto"] = np.where(
-                np.asarray(run["Reco"]["SolarEnergyOffset"], dtype=float) < _nv_emax,
-                np.asarray(run["Reco"]["SolarEnergyHEP"], dtype=float), np.asarray(run["Reco"]["SolarEnergy"], dtype=float))
+            # The veto only shifts clusters whose SolarEnergy with the offset is below NCAP_ENERGY_MAX of its model; there
+            # SolarEnergyHEP (copied before the veto, changed only at or above SB_HEP_GATE_ENERGY) is the pre-veto value,
+            # elsewhere SolarEnergy is. Exact while NCAP_ENERGY_MAX <= SB_HEP_GATE_ENERGY (both 14 MeV by default).
+            from lib.background import neutron_capture_veto_params
+            _veto = neutron_capture_veto_params(str(root), config)
+            if not _veto or not {"SolarEnergyHEP", "SolarEnergyOffset"} <= set(run["Reco"]):
+                run["Reco"]["SolarEnergyNoVeto"] = np.asarray(run["Reco"]["SolarEnergy"], dtype=float)
+            else:
+                _cal = f"{root}/config/{config}/marley_final/{config}_calib/{config}"
+                _nv_emax = float(json.load(open(f"{_cal}_{_veto.get('MODEL', 'neutron_capture')}.json")).get("NCAP_ENERGY_MAX", 14.0))
+                _hep_gate = float(json.load(open(f"{_cal}_signal_background.json")).get("SB_HEP_GATE_ENERGY", 14.0))
+                if _nv_emax > _hep_gate:  # e.g. study veto models over 6-18 MeV: scan on the vetoed SolarEnergy instead
+                    rprint(f"[yellow][WARNING][/yellow] {config}: veto region up to {_nv_emax} MeV is above SB_HEP_GATE_ENERGY "
+                           f"{_hep_gate}; SolarEnergyNoVeto cannot be rebuilt, fiducial scan on the vetoed SolarEnergy")
+                    run["Reco"]["SolarEnergyNoVeto"] = np.asarray(run["Reco"]["SolarEnergy"], dtype=float)
+                else:
+                    run["Reco"]["SolarEnergyNoVeto"] = np.where(
+                        np.asarray(run["Reco"]["SolarEnergyOffset"], dtype=float) < _nv_emax,
+                        np.asarray(run["Reco"]["SolarEnergyHEP"], dtype=float), np.asarray(run["Reco"]["SolarEnergy"], dtype=float))
             rprint(f"[cyan][INFO][/cyan] {config} {name}: SolarEnergyNoVeto differs from SolarEnergy for "
                    f"{np.mean(run['Reco']['SolarEnergyNoVeto'] != run['Reco']['SolarEnergy']):.1%} of clusters")
         if _fid_branch:
