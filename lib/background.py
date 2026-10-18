@@ -192,6 +192,8 @@ def neutron_capture_veto_params(root: str, config: str, override=None) -> dict:
     par.setdefault("MODE", "window")
     par.setdefault("ACTION", "remove")
     par.setdefault("MODEL", "neutron_capture")
+    if os.environ.get("SOLAR_NCVETO_MODEL"):  # study knob run_sensitivity --ncveto_model (lib/study.py sbsimple)
+        par["MODEL"] = os.environ["SOLAR_NCVETO_MODEL"]
     return par
 
 

@@ -469,6 +469,12 @@ parser.add_argument("--radiological_smoothing", action=argparse.BooleanOptionalA
 parser.add_argument("--sb_classifier", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --no-sb_classifier switches the signal/background classifier off for every step (no SolarEnergy "
          "first stage, no Sensitivity score categories; through SOLAR_SB_CLASSIFIER), see lib/study.py sb_off.")
+parser.add_argument("--sb_low_threshold", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-sb_low_threshold drops the S/B decision below SB_GATE_ENERGY (only the high-energy and HEP "
+         "thresholds act; through SOLAR_SB_LOW_THRESHOLD), see lib/study.py sbsimple.")
+parser.add_argument("--ncveto_model", type=str, default=None,
+    help="Study knob: neutron-capture classifier files of the veto (03b --target ncap --ncap_model NAME, with its own "
+         "region; through SOLAR_NCVETO_MODEL), see lib/study.py sbsimple.")
 parser.add_argument("--sb_completeness_high", type=float, default=None,
     help="Study knob passed to 03_analysis.py: S/B classifier working point above the gate energy (see lib/study.py sb_hep90).")
 parser.add_argument(
@@ -1094,6 +1100,16 @@ if args.sb_classifier is not None:  # every child process follows the study knob
     if not args.sb_classifier and not args.study_label:
         raise SystemExit("[ERROR] --no-sb_classifier is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_SB_CLASSIFIER"] = "1" if args.sb_classifier else "0"
+
+if args.sb_low_threshold is not None:  # every child process follows the study knob (lib/cluster.py)
+    if not args.sb_low_threshold and not args.study_label:
+        raise SystemExit("[ERROR] --no-sb_low_threshold is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_SB_LOW_THRESHOLD"] = "1" if args.sb_low_threshold else "0"
+
+if args.ncveto_model is not None:  # every child process follows the study knob (lib/cluster.py, lib/background.py)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --ncveto_model is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_NCVETO_MODEL"] = args.ncveto_model
 
 if args.ncveto is not None:  # every child process (templates included) follows the study knob
     os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"

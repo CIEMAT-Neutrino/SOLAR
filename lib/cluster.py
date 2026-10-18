@@ -73,6 +73,7 @@ def _neutron_capture_scores(run, config, name, idx, offset_energy):
     (SolarEnergy with the offset in [NCAP_ENERGY_MIN, NCAP_ENERGY_MAX)); 1 elsewhere. (None, None) without a classifier."""
     veto = load_analysis_info(str(root)).get("NEUTRON_CAPTURE_VETO", {})
     model = veto.get("PER_CONFIG", {}).get(config, {}).get("MODEL", veto.get("MODEL", "neutron_capture"))
+    model = os.environ.get("SOLAR_NCVETO_MODEL") or model  # study knob run_sensitivity --ncveto_model
     for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
         if not sample:
             continue
@@ -173,6 +174,13 @@ def _signal_background_flags(run, config, name, idx, this_params):
             threshold_high = float(table[key])
         solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
         threshold[solar >= float(info["SB_GATE_ENERGY"])] = threshold_high
+    if os.environ.get("SOLAR_SB_LOW_THRESHOLD") == "0":
+        # Study knob (run_sensitivity --no-sb_low_threshold, lib/study.py sbsimple): no S/B decision below SB_GATE_ENERGY;
+        # only SB_THRESHOLD_HIGH above the gate (and SB_THRESHOLD_HEP for SolarEnergyHEP) act.
+        if "SB_THRESHOLD_HIGH" not in info:
+            raise KeyError(f"SOLAR_SB_LOW_THRESHOLD=0 needs SB_THRESHOLD_HIGH in the classifier json of {config} {name}")
+        solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
+        threshold[solar < float(info["SB_GATE_ENERGY"])] = -np.inf
     return score >= threshold
 
 def _adjcl_slots(run, idx):

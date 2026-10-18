@@ -359,6 +359,22 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # Analysis without the signal/background classifier (user, 2026-10-15, comparison page): SolarEnergy keeps the
     # de-excitation offset for every cluster and the Sensitivity fit has no score categories; the neutron-capture veto
     # is off as well (user). Full chain re-optimised (volume, cuts, sigmas), as the 2026-10-08 diag_sboff.
+    # Simplified S/B + neutron-capture set (2026-10-18, user; cluster-level scan SOLAR-sb _runs/sbeval_20261017/sbscan):
+    # no S/B decision below the 12 MeV gate, and/or the veto classifier over the Day-Night window 6-18 MeV (model
+    # neutron_capture_6_18, 03b --target ncap --ncap_energy_max 18). Full chains re-optimised.
+    "sbsimple": [
+        {"label": "sb_simple", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_low_threshold", "--ncveto_model", "neutron_capture_6_18"]},
+        {"label": "sb_gateonly", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_low_threshold"]},
+        {"label": "ncveto_618", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--ncveto_model", "neutron_capture_6_18"]},
+        # the simplified set with the HEP background of hep_looseshape_win (no tail extrapolation)
+        {"label": "sb_simple_hepwin", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-sb_low_threshold", "--ncveto_model", "neutron_capture_6_18", "--no-hep_tail_extrapolation",
+                   "--hep_bkg_shape", "loose_window"]},
+    ],
     "sboff": [
         {"label": "sb_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier", "--no-ncveto"]},
@@ -681,7 +697,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape", "sbsimple"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 
