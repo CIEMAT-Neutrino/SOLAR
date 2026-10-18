@@ -418,6 +418,15 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2"]},
         {"label": "fid_radfloor_one", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2", "--single_fiducial_band"]},
+        # fid_oldrule (2026-10-18): the fiducial rule before 5a97226 (per-band volumes, no radiological floor) on the current
+        # analysis (no-offset neutron-capture veto), to separate the effect of the veto from that of the fiducial rule.
+        {"label": "fid_oldrule", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True,
+         "extra": ["--fiducial_bands", "DAYNIGHT=6-12,12-18;HEP=14-20,20-30;SENSITIVITY=10-20,20-30", "--fiducial_bin_mc_floor", "none"]},
+        {"label": "fid_v100_300_60", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,300,60"]},
+        {"label": "fid_v0_300_0", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,300,0"]},
         # fid_dn616 (user, 2026-10-17): one Day-Night volume, optimised on 6-16 MeV (the 16-18 MeV bins, almost free of
         # background, otherwise pull the optimum to the loosest volume) and applied to every event. Day-Night only.
         {"label": "fid_dn616", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
