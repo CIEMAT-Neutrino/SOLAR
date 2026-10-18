@@ -184,6 +184,8 @@
   },
   "HEP_TAIL_EXTRAPOLATION": {
     "_doc": "HEP (01_hep.py, 02_hep_energy_limit.py): in the bins a cut leaves without simulated events, the external spectrum of COMPONENTS gets the tail of the same sample at the loosest cut of the scan (exponential fit, endpoint mode). 2026-10-14 (user): every config, gammas only; the neutron-capture spectra are over-calibrated by the Geant4 capture bug, so their tails are not extrapolated. Kept here rather than in config.json (it overrides the config.json entry, load_analysis_info merges this file later) because config.json is an input of the Sensitivity template staleness guard and studies were running.",
+    "IN_ANALYSIS": false,
+    "_IN_ANALYSIS_doc": "2026-10-18 (user): the HEP analysis (01_hep.py) uses no tail treatment; empty bins stay empty. With the enlarged VD Top samples (rerun 38) VD Shielded is above VD Top without tails. The tails of ENABLED_CONFIGS/COMPONENTS remain the cross-check of 02_hep_energy_limit.py (ch. 8 energy-limit figure). run_sensitivity --hep_tail_extrapolation (study) turns them on.",
     "ENABLED_CONFIGS": [
       "hd_1x2x6_centralAPA",
       "hd_1x2x6_lateralAPA",

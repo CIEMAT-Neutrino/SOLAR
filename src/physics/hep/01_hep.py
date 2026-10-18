@@ -450,8 +450,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # HEP_TAIL_EXTRAPOLATION: external gamma/neutron tails from the loosest cut fill the bins a cut leaves empty.
     _tail_cfg = load_analysis_info(str(root)).get("HEP_TAIL_EXTRAPOLATION", {})
     _tail_models = {}
-    # study hep_notail (run_sensitivity --no-hep_tail_extrapolation) switches it off through SOLAR_HEP_TAIL_EXTRAPOLATION=0
-    if config in _tail_cfg.get("ENABLED_CONFIGS", []) and os.environ.get("SOLAR_HEP_TAIL_EXTRAPOLATION") != "0":
+    # IN_ANALYSIS false (default since 2026-10-18): the analysis uses no tails; the tails remain the cross-check of
+    # 02_hep_energy_limit.py. SOLAR_HEP_TAIL_EXTRAPOLATION (run_sensitivity --[no-]hep_tail_extrapolation) overrides.
+    _tail_env = os.environ.get("SOLAR_HEP_TAIL_EXTRAPOLATION")
+    _tail_on = _tail_env == "1" or (_tail_env != "0" and bool(_tail_cfg.get("IN_ANALYSIS", True)))
+    if config in _tail_cfg.get("ENABLED_CONFIGS", []) and _tail_on:
         for _comp in _hep_bkg_components:
             if _comp.split("_")[0] not in _tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
                 continue
