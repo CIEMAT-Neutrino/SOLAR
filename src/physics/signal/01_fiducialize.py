@@ -230,6 +230,16 @@ for config in configs:
         # energy branch, e.g. SolarEnergyOffset (the SolarEnergy without the signal/background classifier stage). The scan
         # is still saved under the analysis energy, so the band assignment downstream keeps using SolarEnergy.
         _fid_branch = os.environ.get("SOLAR_FIDUCIAL_ENERGY_BRANCH") if energy == "SolarEnergy" else None
+        if _fid_branch == "SolarEnergyNoVeto" and "SolarEnergyNoVeto" not in run["Reco"]:
+            # SolarEnergy before the neutron-capture veto shift (study fid_noveto). The veto only acts on clusters whose
+            # SolarEnergy with the offset is below NCAP_ENERGY_MAX (14 MeV), where SolarEnergyHEP (copied before the veto,
+            # changed only at or above SB_HEP_GATE_ENERGY, also 14 MeV) is the pre-veto value; elsewhere SolarEnergy is.
+            _nv_emax = float(os.environ.get("SOLAR_FIDUCIAL_NOVETO_EMAX", "14"))
+            run["Reco"]["SolarEnergyNoVeto"] = np.where(
+                np.asarray(run["Reco"]["SolarEnergyOffset"], dtype=float) < _nv_emax,
+                np.asarray(run["Reco"]["SolarEnergyHEP"], dtype=float), np.asarray(run["Reco"]["SolarEnergy"], dtype=float))
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: SolarEnergyNoVeto differs from SolarEnergy for "
+                   f"{np.mean(run['Reco']['SolarEnergyNoVeto'] != run['Reco']['SolarEnergy']):.1%} of clusters")
         if _fid_branch:
             if _fid_branch not in run["Reco"]:
                 raise SystemExit(f"[ERROR] SOLAR_FIDUCIAL_ENERGY_BRANCH={_fid_branch} is not a Reco branch of {config} {name}")

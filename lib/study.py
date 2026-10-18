@@ -443,6 +443,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,300,60"]},
         {"label": "fid_v0_300_0", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,300,0"]},
+        # fid_noveto (user, 2026-10-18): fiducial volumes chosen on SolarEnergy before the neutron-capture veto shift
+        # (SolarEnergyNoVeto); cuts and significances on the default SolarEnergy (veto applied). Full chain re-optimised.
+        {"label": "fid_noveto", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_energy_branch", "SolarEnergyNoVeto"]},
         # fid_dn616 (user, 2026-10-17): one Day-Night volume, optimised on 6-16 MeV (the 16-18 MeV bins, almost free of
         # background, otherwise pull the optimum to the loosest volume) and applied to every event. Day-Night only.
         {"label": "fid_dn616", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
