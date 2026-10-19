@@ -391,6 +391,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     "sbremove": [
         {"label": "sb_remove", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
+        # the same with the radiological component of the Sensitivity background template smoothed (as rad_smooth; user,
+        # 2026-10-19). Sensitivity only; full chain re-optimised.
+        {"label": "sb_remove_radsmooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
