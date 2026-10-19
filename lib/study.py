@@ -400,6 +400,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # change from the removal itself (user, 2026-10-19)
         {"label": "sb_remove_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
+        # final candidate (user, 2026-10-19): sb_remove with the radiological Sensitivity smoothing, and the fiducial volume
+        # scanned without the radiological background (02_best_fiducial.py --exclude_radiological_from_scan: dropped from the
+        # significance sum and the MC-support gate). All analyses; full chain re-optimised.
+        {"label": "sb_remove_rs_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True,
+         "extra": ["--remove_no_offset", "--radiological_smoothing", "--exclude_radiological_from_scan"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
