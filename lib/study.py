@@ -406,6 +406,11 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_remove_rs_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True,
          "extra": ["--remove_no_offset", "--radiological_smoothing", "--exclude_radiological_from_scan"]},
+        # fallback for the Sensitivity if the full smoothing costs too much (user, 2026-10-19): the radiological smoothing
+        # stopped at its MC endpoint (as rad_smooth_end), otherwise as sb_remove_rs_noradfid. Sensitivity only.
+        {"label": "sb_remove_rse_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint", "--exclude_radiological_from_scan"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
