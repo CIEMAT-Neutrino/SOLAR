@@ -411,6 +411,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_remove_rse_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
          "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint", "--exclude_radiological_from_scan"]},
+        # final candidate 2 (2026-10-19): the default fiducial volumes (as sb_remove_fixfid, which reproduces rerun 38 in HD
+        # Central Day-Night, 5.50 vs 5.52) with the radiological smoothing stopped at its MC endpoint (full smoothing costs
+        # HD Central Sensitivity 5.70 -> 3.09). Sensitivity only: Day-Night / HEP are sb_remove_fixfid (the smoothing knob
+        # only reaches the Sensitivity background template).
+        {"label": "sb_remove_rse_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
