@@ -224,7 +224,36 @@ def neutron_capture_no_offset(root: str, config: str, score):
     return np.asarray(score, dtype=float) < neutron_capture_threshold(root, config, par)
 
 
+def no_offset_removal_keep(analysis: str, reco, rows=None):
+    """Clusters kept by the study knob SOLAR_REMOVE_NO_OFFSET=1 (run_sensitivity --remove_no_offset, lib/study.py sb_remove):
+    every cluster that the analysis energy carries without the de-excitation offset is removed instead, i.e. the clusters
+    the signal/background classifier calls background-like and the neutron-capture veto flags (SolarEnergy for DayNight
+    and Sensitivity, SolarEnergyHEP, the HEP working point of the classifier, for HEP). None when the knob is off."""
+    import os
+
+    import numpy as np
+
+    if os.environ.get("SOLAR_REMOVE_NO_OFFSET") != "1":
+        return None
+    if reco is None or "SolarEnergyOffset" not in reco:
+        raise KeyError("SOLAR_REMOVE_NO_OFFSET: SolarEnergyOffset missing (signal/background classifier stage off?)")
+    branch = "SolarEnergyHEP" if analysis == "HEP" and "SolarEnergyHEP" in reco else "SolarEnergy"
+    energy = np.asarray(reco[branch], dtype=float)
+    offset = np.asarray(reco["SolarEnergyOffset"], dtype=float)
+    if rows is not None:
+        energy, offset = energy[rows], offset[rows]
+    return energy == offset
+
+
 def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
+    """Clusters kept by the neutron-capture veto (neutron_capture_veto_keep_rule) and, with the study knob
+    SOLAR_REMOVE_NO_OFFSET=1, by the removal of every no-offset cluster (no_offset_removal_keep)."""
+    keep = neutron_capture_veto_keep_rule(root, config, analysis, energy, main_energy, override, reco, rows)
+    removal = no_offset_removal_keep(analysis, reco, rows)
+    return keep if removal is None else keep & removal
+
+
+def neutron_capture_veto_keep_rule(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
     """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
 
     ACTION "remove" only (ACTION "no_offset" acts in the calibration, lib/cluster.py, and keeps every cluster here).

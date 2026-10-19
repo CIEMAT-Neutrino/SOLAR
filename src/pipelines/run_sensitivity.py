@@ -416,6 +416,10 @@ parser.add_argument("--mc_filter_threshold", type=int, default=None,
 parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: neutron-capture veto on/off for every step (03_analysis.py, signal templates; through "
          "SOLAR_NCVETO), see lib/study.py ncveto / ncveto_off.")
+parser.add_argument("--remove_no_offset", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: remove every cluster the analysis energy carries without the de-excitation offset (S/B background-like "
+         "or neutron-capture veto) from every step instead of keeping it without the offset (through SOLAR_REMOVE_NO_OFFSET, "
+         "lib/background.py no_offset_removal_keep), see lib/study.py sb_remove.")
 parser.add_argument("--hep_energy", type=str, default=None,
     help="Study knob passed to 03_analysis.py: energy of the HEP analysis (see lib/study.py hep_sbmodel).")
 parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAction, default=True,
@@ -1111,6 +1115,11 @@ if args.ncveto_model is not None:  # every child process follows the study knob 
     if not args.study_label:
         raise SystemExit("[ERROR] --ncveto_model is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_NCVETO_MODEL"] = args.ncveto_model
+
+if args.remove_no_offset is not None:  # every child process follows the study knob (lib/background.py)
+    if args.remove_no_offset and not args.study_label:
+        raise SystemExit("[ERROR] --remove_no_offset is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_REMOVE_NO_OFFSET"] = "1" if args.remove_no_offset else "0"
 
 if args.ncveto is not None:  # every child process (templates included) follows the study knob
     os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"

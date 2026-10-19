@@ -386,6 +386,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_off_veto", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier"]},
     ],
+    # Every no-offset cluster (S/B background-like or neutron-capture veto) removed instead of kept without the offset
+    # (user, 2026-10-19, after the cut-flow display variant mcfilter_noflag). Full chain re-optimised (volume, cuts, sigmas).
+    "sbremove": [
+        {"label": "sb_remove", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
+    ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
     "radsmooth": [
@@ -705,7 +711,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape", "sbsimple"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape", "sbsimple", "sbremove"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

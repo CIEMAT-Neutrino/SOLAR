@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.background import no_offset_removal_keep
 from lib.fiducial import truth_containment_mask, truth_match_purity_mask
 
 analysis_info = load_analysis_info(str(root))
@@ -277,6 +278,12 @@ for config in configs:
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
             & (_op_pe_arr > 0)
         )
+        # Study knob SOLAR_REMOVE_NO_OFFSET (sb_remove): the no-offset clusters are removed from the volume scan as well
+        # (SolarEnergy definition; with them removed SolarEnergyNoVeto equals SolarEnergy).
+        _removal = no_offset_removal_keep("DayNight", run["Reco"])
+        if _removal is not None:
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: {np.mean(~_removal):.1%} of clusters without offset removed")
+            _quality_mask = _quality_mask & _removal
         if args.truth_fiducial and args.truth_purity:
             # Truth study: the flash match must be pure and agree with the true position, so the
             # background rejection the reco fiducial cut gets from wrong matches stays explicit.
