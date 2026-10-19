@@ -21,12 +21,20 @@ for the configs in HEP_TAIL_EXTRAPOLATION.ENABLED_CONFIGS, the external tails of
 (lib.background external_tail_model / extrapolated_external_tail, fit from FIT_THRESHOLD - 4 MeV): where the analysis
 selection leaves a bin of an external sample empty, its expectation is the exponential tail of the same sample at the
 loosest cut of the scan (same fiducial volume, far more simulated events), scaled to the analysis cut and stopped one
-bin above the last bin the loosest cut populates. At the full window it reproduces the quoted HEP result.
+bin above the last bin the loosest cut populates (the quoted HEP result until SOLAR-sb e29f196).
 
 Band (2026-10-14): 16-84% interval of a bootstrap of the analysis curve. Each replicate rescales every component bin by
 N'/N with N' ~ Poisson(N), N = (Counts / Error)^2 the effective number of simulated events (a bin of 400 marley events
 carries the hep weight of only one or two of them above the hep endpoint), and draws the slope of every extrapolated
 tail from its fit uncertainty (pivot at the centre of the fitted range). Components are drawn independently.
+
+Cross-check (--cross_check, default loose_window since 2026-10-19; the HEP analysis itself uses no tail treatment since
+SOLAR-sb e29f196, so the quoted result is SignificanceNoTail): the curve in Significance / SignificanceLow / SignificanceHigh
+is the 01_hep.py model with the bins the selection leaves empty filled by
+  loose_window  the external gamma and neutron spectra replaced, inside the HEP window [EnergyMin, 30) of the fiducial entry,
+                by the loosest-cut shape normalised to the cut's own counts there (as study hep_looseshape_win,
+                01_hep.py --hep_bkg_shape loose_window); bootstrap: cut and loosest-cut spectra resampled independently
+  tails         the loosest-cut exponential tails described above (HEP_TAIL_EXTRAPOLATION)
 
 SignificanceNoTail: the same metric without the tail extrapolation (bins the selection leaves empty enter as
 background free), which shows how much of the reach would otherwise rest on the empty bins.
@@ -53,6 +61,8 @@ parser.add_argument("--seed", type=int, default=12345)
 parser.add_argument("--tail_mode", choices=["endpoint", "exponential"], default="endpoint",
     help="endpoint: the extrapolated external tail stops one bin above the last bin the loosest cut populates (true "
          "endpoint of the gamma/neutron response); exponential: the fitted tail continues to the end of the window.")
+parser.add_argument("--cross_check", choices=["loose_window", "tails"], default="loose_window",
+    help="Background of the cross-check curve (Significance and its band): loosest-cut shape in the HEP window, or the extrapolated tails")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 args = parser.parse_args()
@@ -111,7 +121,28 @@ for config in args.config:
     from lib.background import external_tail_model, extrapolated_external_tail
     fit_thr = float(tail_cfg.get("FIT_THRESHOLD", args.threshold))
     tails = {}
+    loose_shapes = {}
+    win_min = 14.0
+    if args.cross_check == "loose_window":
+        try:
+            from lib.fiducial_entries import best_fiducials_stem
+            _fid = json.load(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{best_fiducials_stem()}.json"))
+            win_min = float(_fid[config]["HEP"][args.energy].get("EnergyMin", 14.0))
+        except Exception as _err:
+            rprint(f"[yellow][WARNING][/yellow] HEP window for the loose shape not found ({_err}); using {win_min} MeV")
+        for name, c, mc, _ in bkg_counts:
+            if name.split("_")[0] not in ("gamma", "neutron"):
+                continue
+            df = pd.read_pickle(f"{pnfs}/background/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{args.energy}_Rebin.pkl")
+            df = df[(df["Component"] == name) & (df["Oscillation"] == "Truth") & (df["Mean"] == "Mean")]
+            loose = df[(df["NHits"] == df["NHits"].min()) & (df["OpHits"] == df["OpHits"].min()) & (df["AdjCl"] == df["AdjCl"].max())].iloc[0]
+            lc = np.asarray(loose["Counts"], dtype=float); le = np.asarray(loose["Error"], dtype=float)
+            loose_shapes[name] = (lc, np.divide(lc * lc, le * le, out=np.zeros_like(lc), where=le > 0))
+        rprint(f"   {config}: cross-check with the loosest-cut shape of {sorted(loose_shapes)} in [{win_min:g}, 30) MeV")
+    win = 0.5 * (edges[:-1] + edges[1:]) >= win_min
     for name, c, mc, _ in bkg_counts:
+        if args.cross_check != "tails":
+            continue
         if config not in tail_cfg.get("ENABLED_CONFIGS", []) or name.split("_")[0] not in tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
             continue
         df = pd.read_pickle(f"{pnfs}/background/{args.folder.lower()}/HEP/{config}/{name}/{config}_{name}_{args.energy}_Rebin.pkl")
@@ -142,6 +173,10 @@ for config in args.config:
             if with_tails and name in tails:
                 # the tail fills bins without simulated events, so its spread is the fit uncertainty of the slope only
                 cc = cc + tail_of(name, c, mc, 0.0 if dslope is None else dslope[name])
+            if with_tails and name in loose_shapes:
+                ls = loose_shapes[name][0] * (1.0 if scale is None else scale[name + "@loose"])
+                norm = float(ls[win].sum())
+                cc = np.where(win, ls * (float(cc[win].sum()) / norm if norm > 0 else 0.0), cc)
             b = b + factor * cc
         return s, b
 
@@ -155,6 +190,8 @@ for config in args.config:
         scale = {"hep": draw(hep_neff), "8B": draw(b8_neff)}
         for name, _, _, neff in bkg_counts:
             scale[name] = draw(neff)
+        for name, (_, lneff) in loose_shapes.items():
+            scale[name + "@loose"] = draw(lneff)
         dslope = {name: float(rng.normal(0.0, t[1])) for name, t in tails.items()}
         s, b = spectra(scale, dslope)
         boot[k] = [significance(s, b, mc_total, e) for e in emax_grid]
@@ -165,7 +202,7 @@ for config in args.config:
     chosen = float(emax_grid[ok.max()]) if ok.size else float("nan")
     b8_window = np.array([float(factor * b8[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
     hep_mc_above = np.array([float(hep_neff[(edges[:-1] >= e - 1) & (edges[1:] <= e)].sum()) for e in emax_grid])
-    rprint(f"\n## {config} ({args.signal}, cut {cut}, {exposure:g} yr, tails {sorted(tails) or 'none'}): recommended E_max {chosen:g} MeV (relative error <= {args.max_relative_error:g})")
+    rprint(f"\n## {config} ({args.signal}, cut {cut}, {exposure:g} yr, cross-check {args.cross_check}{(' ' + str(sorted(tails))) if tails else ''}): recommended E_max {chosen:g} MeV (relative error <= {args.max_relative_error:g})")
     for e, z, l_, c, f_, r_, n, b8w in zip(emax_grid, nominal, low, p84, notail, rel, hep_mc_above, b8_window):
         rprint(f"   E_max {e:4.0f}  Z {z:6.2f}  band {l_:6.2f} - {c:6.2f}  (no tails {f_:6.2f})  rel {r_:5.2f}  hep N_eff in last bin {n:6.1f}  8B in last bin {b8w:.2g}")
     floored = nominal  # kept for the SignificanceTail column (the analysis now includes the configured tails)
@@ -178,7 +215,7 @@ for config in args.config:
         "SignificanceLow": low, "SignificanceHigh": p84, "SignificanceTail": floored, "SignificanceNoTail": notail, "SignificanceP16": p16,
         "SignificanceP50": p50, "SignificanceP84": p84, "RelativeError": rel, "TailBackground": tail_bkg, "TailComponents": sorted(tails), "SignalScale": signal_scale,
         "HepEffectiveMCLastBin": hep_mc_above, "B8LastBin": b8_window, "RecommendedEnergyMax": chosen, "MaxRelativeError": args.max_relative_error,
-        "Bootstrap": args.bootstrap,
+        "Bootstrap": args.bootstrap, "CrossCheck": args.cross_check, "CrossCheckWindowMin": win_min if loose_shapes else float("nan"),
     })
     data_path = f"{root}/output/data/analysis/hep"
     save_df(pd.DataFrame([rows_out[-1]]), data_path, config, args.signal, subfolder=f"{args.folder.lower()}/default",
