@@ -408,9 +408,23 @@ def _smoothed_component(y, component):
     """Smoothed spectrum of one background component (2026-10-13). Radiological is never smoothed: its falling spectrum
     peaks at ~5.5 MeV with ~1e8 counts/yr, and Gaussian smoothing leaked it into the 6.5-7.5 MeV bins by up to 1e5
     (the old code smoothed the TOTAL spectrum), which dominated the background exactly where the solar signal starts."""
-    if "radiological" in str(component) and os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") != "1":
+    _rad_mode = os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING")
+    _is_rad = "radiological" in str(component)
+    if _is_rad and _rad_mode not in ("1", "endpoint"):
         return np.asarray(y, dtype=float)  # study rad_smooth (SOLAR_RADIOLOGICAL_SMOOTHING=1) smooths it as configured
-    return smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
+    ys = smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
+    if _is_rad and _rad_mode == "endpoint":
+        # study rad_smooth_end (2026-10-19): smoothed, but nothing above the last bin with simulated radiological counts
+        # (the MC endpoint of this cut); the spectrum keeps the raw integral.
+        raw = np.nan_to_num(np.asarray(y, dtype=float))
+        pop = np.flatnonzero(raw > 0)
+        if pop.size == 0:
+            return raw
+        ys = np.nan_to_num(np.asarray(ys, dtype=float)).copy()
+        ys[pop.max() + 1:] = 0.0
+        if ys.sum() > 0:
+            ys *= raw.sum() / ys.sum()
+    return ys
 
 
 def _category_total_smoothed(category_df, nhits, adjcl, ophits):
