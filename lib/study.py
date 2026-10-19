@@ -396,6 +396,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_remove_radsmooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
          "extra": ["--remove_no_offset", "--radiological_smoothing"]},
+        # sb_remove at the default fiducial volumes (no volume scan; cuts and sigmas re-optimised), to separate the volume
+        # change from the removal itself (user, 2026-10-19)
+        {"label": "sb_remove_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
