@@ -410,7 +410,7 @@ def _smoothed_component(y, component):
     (the old code smoothed the TOTAL spectrum), which dominated the background exactly where the solar signal starts."""
     _rad_mode = os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING")
     _is_rad = "radiological" in str(component)
-    if _is_rad and _rad_mode not in ("1", "endpoint"):
+    if _is_rad and _rad_mode not in ("1", "endpoint", "full"):
         return np.asarray(y, dtype=float)  # study rad_smooth (SOLAR_RADIOLOGICAL_SMOOTHING=1) smooths it as configured
     ys = smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
     if _is_rad and _rad_mode == "endpoint":

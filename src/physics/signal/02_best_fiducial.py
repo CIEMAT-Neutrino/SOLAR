@@ -50,7 +50,7 @@ def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing
         plot_df,
         analysis_config.get("background_components", []),
     )
-    if os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") == "endpoint":
+    if os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") in ("endpoint", "full"):
         # study rad_unified: the background is smoothed component by component, the radiological one up to its MC endpoint
         from lib.fiducial_significance import smoothed_component_background
         background_df = background_df.merge(

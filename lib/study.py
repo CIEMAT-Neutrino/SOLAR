@@ -446,6 +446,9 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # radiological_endpoint_smoothing). The hep profile likelihood stays on the raw spectra.
         {"label": "rad_unified", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
+        # the same with the regular smoothing (no endpoint stop) for the radiological background in every stage
+        {"label": "rad_unified_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_unified"]},
     ],
     # HEP without the external-tail extrapolation (HEP_TAIL_EXTRAPOLATION off; user, 2026-10-16, comparison page).
     # HEP only, full chain re-optimised.

@@ -665,9 +665,11 @@ def get_component_smoothing_config(
     component_config = deepcopy(config)
     enabled = should_smooth_component(component_config, component)
     endpoint = False
-    if component is not None and "radiological" in str(component).lower() and radiological_endpoint_smoothing():
+    _rad_mode = os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING")
+    if component is not None and "radiological" in str(component).lower() and _rad_mode in ("endpoint", "full"):
+        # endpoint: study rad_unified; full (study rad_unified_smooth): the same in every stage without the endpoint stop
         enabled = _normalize_method(component_config.get("method"), component_config.get("enabled", False)) != "none"
-        endpoint = enabled
+        endpoint = enabled and _rad_mode == "endpoint"
     component_config["endpoint"] = endpoint
     component_config["enabled"] = enabled
     component_config["method"] = _normalize_method(
