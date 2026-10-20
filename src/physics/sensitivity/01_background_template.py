@@ -405,26 +405,15 @@ for _k in range(n_score_categories(str(root), args.config) if score_categories(s
 
 
 def _smoothed_component(y, component):
-    """Smoothed spectrum of one background component (2026-10-13). Radiological is never smoothed: its falling spectrum
-    peaks at ~5.5 MeV with ~1e8 counts/yr, and Gaussian smoothing leaked it into the 6.5-7.5 MeV bins by up to 1e5
-    (the old code smoothed the TOTAL spectrum), which dominated the background exactly where the solar signal starts."""
-    _rad_mode = os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING")
-    _is_rad = "radiological" in str(component)
-    if _is_rad and _rad_mode not in ("1", "endpoint", "full"):
-        return np.asarray(y, dtype=float)  # study rad_smooth (SOLAR_RADIOLOGICAL_SMOOTHING=1) smooths it as configured
-    ys = smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
-    if _is_rad and _rad_mode == "endpoint":
-        # study rad_smooth_end (2026-10-19): smoothed, but nothing above the last bin with simulated radiological counts
-        # (the MC endpoint of this cut); the spectrum keeps the raw integral.
-        raw = np.nan_to_num(np.asarray(y, dtype=float))
-        pop = np.flatnonzero(raw > 0)
-        if pop.size == 0:
-            return raw
-        ys = np.nan_to_num(np.asarray(ys, dtype=float)).copy()
-        ys[pop.max() + 1:] = 0.0
-        if ys.sum() > 0:
-            ys *= raw.sum() / ys.sum()
-    return ys
+    """Smoothed spectrum of one background component. Since 2026-10-20 (user) the radiological component is smoothed with
+    the kernel of the external backgrounds (lib/smoothing.radiological_smoothing_mode; study knob SOLAR_RADIOLOGICAL_SMOOTHING
+    =endpoint stops it at its MC endpoint, =0 leaves it raw). Its bins need RADIOLOGICAL_MIN_MC_PER_BIN = 3 simulated
+    clusters (03_analysis.py), so no 2-cluster radiological bin is spread into the empty signal bins."""
+    from lib.smoothing import radiological_smoothing_mode
+    if "radiological" in str(component) and radiological_smoothing_mode() == "off":
+        return np.asarray(y, dtype=float)
+    # the endpoint stop of radiological_smoothing_mode "endpoint" is applied by smooth_histogram_with_config
+    return smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
 
 
 def _category_total_smoothed(category_df, nhits, adjcl, ophits):

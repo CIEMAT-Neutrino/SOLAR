@@ -651,12 +651,36 @@ def should_smooth_component(
     return True
 
 
+def radiological_smoothing_mode() -> str:
+    """Treatment of the radiological background wherever backgrounds are smoothed (DayNight, the Sensitivity background
+    template, the fiducial figure of merit component by component, the displayed spectra; the hep profile likelihood uses
+    raw spectra). Default (user, 2026-10-20): "full", smoothed with the kernel of the stage like the external backgrounds,
+    together with the per-bin MC floor RADIOLOGICAL_MIN_MC_PER_BIN = 3 (backgrounds.json). Study knob
+    SOLAR_RADIOLOGICAL_SMOOTHING: "endpoint" stops the smoothing at the radiological MC endpoint (last bin with simulated
+    clusters, raw integral kept; run_sensitivity --radiological_smoothing_endpoint), "0"/"off" leaves it raw (rerun-39
+    treatment; run_sensitivity --no-radiological_smoothing)."""
+    value = str(os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING", "")).strip().lower()
+    if value in ("0", "off", "none", "raw", "false"):
+        return "off"
+    if value == "endpoint":
+        return "endpoint"
+    return "full"
+
+
 def radiological_endpoint_smoothing() -> bool:
-    """Study rad_unified (SOLAR_RADIOLOGICAL_SMOOTHING=endpoint, run_sensitivity --radiological_smoothing_endpoint): the
-    radiological component is smoothed in every analysis and stage that smooths (DayNight, Sensitivity template, fiducial
-    figure of merit, the smoothed HEP spectra) with the kernel of that stage, but nothing above its MC endpoint (the last
-    bin with simulated radiological counts; raw integral kept)."""
-    return os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") == "endpoint"
+    """Study knob SOLAR_RADIOLOGICAL_SMOOTHING=endpoint (radiological_smoothing_mode)."""
+    return radiological_smoothing_mode() == "endpoint"
+
+
+def radiological_min_mc(root: Optional[str] = None) -> int:
+    """Per-bin MC floor of the radiological background: RADIOLOGICAL_MIN_MC_PER_BIN (backgrounds.json, 3 since 2026-10-20)
+    or the study knob SOLAR_RADIOLOGICAL_MIN_MC (run_sensitivity --radiological_min_mc)."""
+    env = os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC")
+    if env:
+        return int(env)
+    if root is None:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return int(load_analysis_info(root).get("RADIOLOGICAL_MIN_MC_PER_BIN", 1))
 
 
 def get_component_smoothing_config(
@@ -665,10 +689,11 @@ def get_component_smoothing_config(
     component_config = deepcopy(config)
     enabled = should_smooth_component(component_config, component)
     endpoint = False
-    _rad_mode = os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING")
-    if component is not None and "radiological" in str(component).lower() and _rad_mode in ("endpoint", "full"):
-        # endpoint: study rad_unified; full (study rad_unified_smooth): the same in every stage without the endpoint stop
-        enabled = _normalize_method(component_config.get("method"), component_config.get("enabled", False)) != "none"
+    if component is not None and "radiological" in str(component).lower():
+        # radiological_smoothing_mode: smoothed with the kernel of the stage (default), stopped at the MC endpoint or raw
+        _rad_mode = radiological_smoothing_mode()
+        enabled = (_rad_mode != "off"
+                   and _normalize_method(component_config.get("method"), component_config.get("enabled", False)) != "none")
         endpoint = enabled and _rad_mode == "endpoint"
     component_config["endpoint"] = endpoint
     component_config["enabled"] = enabled
@@ -897,33 +922,13 @@ def smooth_histogram_errors(
 def display_smoothed_background(counts, mc_counts, component, smoothing_config, threshold_idx=0, min_mc=2):
     """Smoothed background spectrum for the figures (cut flows, component spectra); never used by an analysis.
 
-    Bins with fewer than min_mc simulated clusters are not shown. The external components are smoothed as configured. The
-    radiological component, unsmoothed in every analysis (smoothing.json), is shown smoothed with the kernel of the external
-    gamma background but only up to its MC endpoint: nothing above the last bin with simulated clusters, raw integral kept.
+    Bins with fewer than min_mc simulated clusters are not shown; radiological bins need the analysis floor
+    (radiological_min_mc, RADIOLOGICAL_MIN_MC_PER_BIN). Every component is then drawn as the analysis treats it: smoothed
+    with the component smoothing config of the stage (the radiological one following radiological_smoothing_mode).
     """
     counts = np.nan_to_num(np.asarray(counts, dtype=float)).copy()
     is_radiological = "radiological" in str(component).lower()
     if mc_counts is not None:
-        # radiological: the per-bin floor of the run (study knob SOLAR_RADIOLOGICAL_MIN_MC) when it is stricter
-        thr = max(min_mc, int(os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or 0)) if is_radiological else min_mc
+        thr = max(min_mc, radiological_min_mc()) if is_radiological else min_mc
         counts[np.asarray(mc_counts, dtype=float) < thr] = 0.0
-    if not is_radiological:
-        return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))
-    if os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") in ("full", "endpoint"):
-        # studies rad_unified(_smooth): the display follows the radiological treatment of the analysis (regular or endpoint
-        # smoothing through get_component_smoothing_config)
-        return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))
-    ext_cfg = None
-    for ext in ("gamma_final", "gamma"):
-        cfg = get_component_smoothing_config(smoothing_config, ext)
-        if cfg.get("enabled"):
-            ext_cfg = cfg
-            break
-    pop = np.flatnonzero(counts > 0)
-    if ext_cfg is None or pop.size == 0:
-        return counts
-    smoothed = np.nan_to_num(np.asarray(smooth_threshold_slice(counts, threshold_idx, ext_cfg), dtype=float)).copy()
-    smoothed[pop.max() + 1:] = 0.0
-    if smoothed.sum() > 0:
-        smoothed *= counts.sum() / smoothed.sum()
-    return smoothed
+    return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))

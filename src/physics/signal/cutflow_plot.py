@@ -566,8 +566,8 @@ for _name in args.signal:
         for stage, (h, h_err, mc) in _active_stage_pairs:
             h_scaled   = h     * _comp_scale   # events/(kT·yr) × kT·yr → events/MeV (1 MeV bins)
             err_scaled = h_err * _comp_scale
-            # Displayed spectrum (lib/smoothing.display_smoothed_background): backgrounds without single-cluster bins, the
-            # radiological component smoothed only up to its MC endpoint; Counts keeps the raw histogram.
+            # Displayed spectrum (lib/smoothing.display_smoothed_background): backgrounds without single-cluster bins (the
+            # radiological ones need the analysis floor) and smoothed as the analysis does; Counts keeps the raw histogram.
             sh_scaled  = (display_smoothed_background(h, mc, _component_label, _smoothing_cfg) if not _is_signal
                           else _smooth(h, _component_label)) * _comp_scale
             se_scaled  = _smooth(h_err, _component_label) * _comp_scale

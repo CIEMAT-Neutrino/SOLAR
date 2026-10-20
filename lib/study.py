@@ -220,6 +220,7 @@ class StudyVariant(TypedDict):
     excluded_configs:     NotRequired[List[str]]       # configs this variant does not run for
     extra:                NotRequired[List[str]]       # verbatim flags appended last
     labeled_rebin:        NotRequired[bool]            # the variant changes the Rebin contents through its extra flags
+    superseded:           NotRequired[bool]            # replaced by a later default; runs only when named with --variant
 
 
 # ---------------------------------------------------------------------------
@@ -423,32 +424,40 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "fid_rescan", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": []},
     ],
-    # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
-    # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
+    # Radiological treatment (user, 2026-10-20): the default is the per-bin MC floor 3 (backgrounds.json
+    # RADIOLOGICAL_MIN_MC_PER_BIN) with the regular radiological smoothing in every stage (smoothing.json,
+    # lib/smoothing.radiological_smoothing_mode); the hep profile likelihood stays on raw spectra.
+    # SUPERSEDED by that default (kept to read their old labelled outputs; their results ran on the rerun-38/39 defaults,
+    # floor 2 and the radiological background unsmoothed, so rerunning them now measures something else):
+    #   rad_smooth (Sensitivity template smoothed, 2026-10-15), rad_smooth_end (the same stopped at the MC endpoint,
+    #   2026-10-19), rad_floor3 / rad_floor3_smooth / rad_floor3_smooth_end (floor 3 without / with / with endpoint-stopped
+    #   Sensitivity smoothing, 2026-10-20), rad_unified_smooth (floor 3 + regular smoothing everywhere = the default since
+    #   2026-10-20; validated configuration, SOLAR-sb bf1446a).
     "radsmooth": [
-        {"label": "rad_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+        {"label": "rad_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing"]},
-        # 2026-10-19 (user): the same smoothing stopped at the radiological MC endpoint of each cut (integral kept)
-        {"label": "rad_smooth_end", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+        {"label": "rad_smooth_end", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing_endpoint"]},
-        # 2026-10-20 (user): radiological per-bin MC floor 3 instead of 2 (backgrounds.json RADIOLOGICAL_MIN_MC_PER_BIN), without
-        # and with the radiological smoothing: removes the 2-cluster radiological bins (HD Central 11-12 MeV) whose smearing
-        # into the neighbouring bins drove the smoothing loss
-        {"label": "rad_floor3", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+        {"label": "rad_floor3", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3"]},
-        {"label": "rad_floor3_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+        {"label": "rad_floor3_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing"]},
-        {"label": "rad_floor3_smooth_end", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+        {"label": "rad_floor3_smooth_end", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
-        # 2026-10-20 (user): unified radiological treatment in every analysis and stage: per-bin MC floor 3 (03_analysis and
-        # the fiducial figure of merit) and smoothing up to the radiological MC endpoint wherever the other backgrounds are
-        # smoothed (DayNight, Sensitivity template, fiducial figure of merit component by component; lib/smoothing
-        # radiological_endpoint_smoothing). The hep profile likelihood stays on the raw spectra.
+        {"label": "rad_unified_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_unified"]},
+        # rad_default_check: the default with labelled outputs (validation of the promoted default against rad_unified_smooth,
+        # 2026-10-20); runs only when named.
+        {"label": "rad_default_check", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
+         "skip_best_sigmas": False, "skip_templates": False, "labeled_rebin": True, "extra": []},
+        # Variations of the default, all analyses, full chain re-optimised:
+        # rad_unified: the radiological smoothing stopped at its MC endpoint in every stage (floor 3 kept).
         {"label": "rad_unified", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
-        # the same with the regular smoothing (no endpoint stop) for the radiological background in every stage
-        {"label": "rad_unified_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
-         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_unified"]},
+        # rad_off: the rerun-39 radiological treatment (floor 2, radiological never smoothed, summed-background smoothing in
+        # the fiducial figure of merit) on the current analysis.
+        {"label": "rad_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "2", "--no-radiological_smoothing"]},
     ],
     # HEP without the external-tail extrapolation (HEP_TAIL_EXTRAPOLATION off; user, 2026-10-16, comparison page).
     # HEP only, full chain re-optimised.
@@ -490,8 +499,8 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # X/Y of the low band with the high-band Z, the midpoint, the high-band X/Y with the low-band Z; VD Top: both bands'
         # margins combined). Run with --analysis DayNight on the config named in the comment.
         # fid_radfloor / fid_radfloor_one (2026-10-17): the fiducial figure of merit ignores radiological bins backed by fewer
-        # than 2 simulated clusters, as 03_analysis.py does (RADIOLOGICAL_MIN_MC_PER_BIN); with the default bands, or with one
-        # volume over the full window. Full chain re-optimised.
+        # than 2 simulated clusters, as 03_analysis.py then did (RADIOLOGICAL_MIN_MC_PER_BIN, 3 since 2026-10-20: these
+        # studies now loosen the fiducial floor to 2); with the default bands, or with one volume over the full window.
         {"label": "fid_radfloor", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2"]},
         {"label": "fid_radfloor_one", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

@@ -1,5 +1,5 @@
 {
-  "_SMOOTHING_RADIOLOGICAL_comment": "2026-10-20 (user): the radiological background is never smoothed, in any analysis or stage (removed from every components list; the Sensitivity background template already left it unsmoothed since 623b2ce). Smoothing spread MC-sparse radiological bins (e.g. HD Central, 3 clusters at 11.5 MeV) into empty signal bins.",
+  "_SMOOTHING_RADIOLOGICAL_comment": "2026-10-20 (user): the radiological background is smoothed like the external backgrounds, with the kernel of each analysis and stage and no stop at its MC endpoint (DayNight, the Sensitivity background template, the fiducial figure of merit component by component, the HEP smoothed spectra and the displayed spectra; the hep profile likelihood uses raw spectra). Its bins need RADIOLOGICAL_MIN_MC_PER_BIN = 3 simulated clusters (backgrounds.json), so the 2-cluster bins that the smoothing spread into empty signal bins are removed first; the smoothing brings back the effect of the removed bins in a predictable and stable way. Study knob SOLAR_RADIOLOGICAL_SMOOTHING (lib/smoothing.radiological_smoothing_mode): endpoint stops at the MC endpoint, 0 leaves it raw.",
   "SMOOTHING": {
     "preserve_integral": true,
     "qa": true,
@@ -13,7 +13,8 @@
             "component_mode": "only",
             "components": [
               "gamma_final",
-              "neutron_final"
+              "neutron_final",
+              "radiological_final"
             ],
             "dimensions": {
               "1d": {
@@ -25,7 +26,8 @@
             "component_mode": "only",
             "components": [
               "gamma_final",
-              "neutron_final"
+              "neutron_final",
+              "radiological_final"
             ],
             "dimensions": {
               "1d": {
@@ -44,6 +46,7 @@
             "components": [
               "gamma_final",
               "neutron_final",
+              "radiological_final",
               "8B"
             ],
             "dimensions": {
@@ -57,6 +60,7 @@
             "components": [
               "gamma_final",
               "neutron_final",
+              "radiological_final",
               "8B"
             ],
             "dimensions": {
@@ -75,7 +79,8 @@
             "component_mode": "only",
             "components": [
               "gamma_final",
-              "neutron_final"
+              "neutron_final",
+              "radiological_final"
             ],
             "dimensions": {
               "1d": {
@@ -87,7 +92,8 @@
             "component_mode": "only",
             "components": [
               "gamma_final",
-              "neutron_final"
+              "neutron_final",
+              "radiological_final"
             ],
             "dimensions": {
               "1d": {

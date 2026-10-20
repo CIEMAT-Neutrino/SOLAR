@@ -468,19 +468,20 @@ parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAct
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
          "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
 parser.add_argument("--radiological_min_mc", type=int, default=None,
-    help="Study knob: minimum number of simulated radiological clusters per energy bin, replacing RADIOLOGICAL_MIN_MC_PER_BIN "
+    help="Study knob: minimum number of simulated radiological clusters per energy bin, replacing RADIOLOGICAL_MIN_MC_PER_BIN = 3 "
          "(backgrounds.json) in 03_analysis.py and in the fiducial figure of merit of 02_best_fiducial.py (through "
          "SOLAR_RADIOLOGICAL_MIN_MC), see lib/study.py rad_floor3.")
 parser.add_argument("--radiological_smoothing_unified", action=argparse.BooleanOptionalAction, default=None,
-    help="Study knob: the radiological background smoothed like the other backgrounds in every analysis and stage, without "
-         "the endpoint stop (SOLAR_RADIOLOGICAL_SMOOTHING=full), see lib/study.py rad_unified_smooth.")
+    help="The radiological background smoothed like the other backgrounds in every analysis and stage, without the endpoint "
+         "stop (SOLAR_RADIOLOGICAL_SMOOTHING=full); the default since 2026-10-20 (lib/smoothing.radiological_smoothing_mode).")
 parser.add_argument("--radiological_smoothing_endpoint", action=argparse.BooleanOptionalAction, default=None,
-    help="Study knob: --radiological_smoothing_endpoint smooths the radiological component of the Sensitivity background template "
-         "but sets it to zero above the last bin with simulated radiological counts, keeping the raw integral "
-         "(SOLAR_RADIOLOGICAL_SMOOTHING=endpoint), see lib/study.py rad_smooth_end.")
+    help="Study knob: --radiological_smoothing_endpoint smooths the radiological component in every stage but sets it to zero "
+         "above the last bin with simulated radiological counts, keeping the raw integral (SOLAR_RADIOLOGICAL_SMOOTHING=endpoint), "
+         "see lib/study.py rad_unified.")
 parser.add_argument("--radiological_smoothing", action=argparse.BooleanOptionalAction, default=None,
-    help="Study knob: --radiological_smoothing smooths the radiological component of the Sensitivity background template "
-         "as configured (unsmoothed by default since 623b2ce; through SOLAR_RADIOLOGICAL_SMOOTHING), see lib/study.py rad_smooth.")
+    help="Study knob: --no-radiological_smoothing leaves the radiological background raw in every stage (SOLAR_RADIOLOGICAL_"
+         "SMOOTHING=0; the summed background is then smoothed in the fiducial figure of merit, the rerun-39 treatment), see "
+         "lib/study.py rad_off; --radiological_smoothing is the default (smoothed in every stage since 2026-10-20).")
 parser.add_argument("--sb_classifier", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --no-sb_classifier switches the signal/background classifier off for every step (no SolarEnergy "
          "first stage, no Sensitivity score categories; through SOLAR_SB_CLASSIFIER), see lib/study.py sb_off.")
@@ -1108,18 +1109,16 @@ if args.single_fiducial_band is not None:  # 02_best_fiducial.py follows the stu
     os.environ["SOLAR_FIDUCIAL_SINGLE_BAND"] = "1" if args.single_fiducial_band else "0"
 
 if args.radiological_smoothing is not None:  # every child process follows the study knob (01_background_template.py)
-    if args.radiological_smoothing and not args.study_label:
-        raise SystemExit("[ERROR] --radiological_smoothing is a study knob: pass --study_label so the outputs are labeled.")
-    os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "1" if args.radiological_smoothing else "0"
+    if not args.radiological_smoothing and not args.study_label:
+        raise SystemExit("[ERROR] --no-radiological_smoothing is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "full" if args.radiological_smoothing else "0"
 if args.radiological_min_mc is not None:  # 03_analysis.py and 02_best_fiducial.py follow the study knob
     if not args.study_label:
         raise SystemExit("[ERROR] --radiological_min_mc is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_RADIOLOGICAL_MIN_MC"] = str(int(args.radiological_min_mc))
-if args.radiological_smoothing_unified:  # every stage (lib/smoothing) follows the study knob
-    if not args.study_label:
-        raise SystemExit("[ERROR] --radiological_smoothing_unified is a study knob: pass --study_label so the outputs are labeled.")
+if args.radiological_smoothing_unified:  # the default treatment, set explicitly (lib/smoothing.radiological_smoothing_mode)
     os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "full"
-if args.radiological_smoothing_endpoint:  # 01_background_template.py follows the study knob
+if args.radiological_smoothing_endpoint:  # every stage (lib/smoothing) follows the study knob
     if not args.study_label:
         raise SystemExit("[ERROR] --radiological_smoothing_endpoint is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "endpoint"

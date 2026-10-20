@@ -140,6 +140,8 @@ _variant_filter: Optional[set] = set(args.variant) if args.variant else None
 
 
 def _matches_variant_filter(variant: StudyVariant) -> bool:
+    if variant.get("superseded") and _variant_filter is None:
+        return False  # superseded variants (lib/study.py) run only when named with --variant
     if _variant_filter is not None:
         label  = variant.get("label")
         folder = variant.get("folder")
