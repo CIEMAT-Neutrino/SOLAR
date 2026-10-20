@@ -10,12 +10,14 @@
 #   -f sb       : from 03b (only the S/B classifier and the steps after it change)
 #   -f analysis : calibration unchanged
 #   -E          : extras and staging only (analysis outputs already there)
+#   -F          : no fiducial-volume scan in the default run: the volumes held in BestFiducials.json are used (run_sensitivity
+#                 --no-fiducialization; 2026-10-20, rerun39_final keeps the rerun-38 volumes)
 # Analysis: run_sensitivity Truncated (default background model) and the bkgmodel_pessimistic study, then
 # study_status, a snapshot of config, output/logs and output/data on pnfs (SOLAR_SNAPSHOT_DIR, linked as _runs/LABEL;
 # 2026-10-18: copies on /pc filled the shared disk), weighted extras and the staging for the plotting repository.
 # Logs: SOLAR-sb/output/logs/LABEL_{calib,ana,realistic}; driver log next to this script (LABEL.log).
-LABEL=""; FROM=analysis; PS=3; ONLY=""; XHDC=0; EXTRAS_ONLY=0  # 2026-10-09: HD Central on the new PIC samples (light overlay): S/B classifier with the matched-flash inputs
-while getopts l:f:p:c:x:E o; do case $o in l) LABEL=$OPTARG;; f) FROM=$OPTARG;; p) PS=$OPTARG;; c) ONLY=$OPTARG;; x) XHDC=$OPTARG;; E) EXTRAS_ONLY=1;; esac; done
+LABEL=""; FROM=analysis; PS=3; ONLY=""; XHDC=0; EXTRAS_ONLY=0; FIDARG=""  # 2026-10-09: HD Central on the new PIC samples (light overlay): S/B classifier with the matched-flash inputs
+while getopts l:f:p:c:x:EF o; do case $o in l) LABEL=$OPTARG;; f) FROM=$OPTARG;; p) PS=$OPTARG;; c) ONLY=$OPTARG;; x) XHDC=$OPTARG;; E) EXTRAS_ONLY=1;; F) FIDARG="--no-fiducialization";; esac; done
 [ -n "$LABEL" ] || { echo "usage: $0 -l LABEL [-f calib|sb|analysis] [-p N]"; exit 1; }
 D=$(cd $(dirname $0) && pwd)
 B=${SOLAR_ROOT:-$(cd $D/../.. && pwd)}; S=${SOLAR_CONTAINER_ROOT:-/pc/choozdsk01/users/manthey/SOLAR}
@@ -27,7 +29,7 @@ log(){ echo "$(date "+%F %T") $*"; }
 CONFIGS="hd_1x2x6_centralAPA hd_1x2x6_lateralAPA vd_1x8x14_3view_30deg_nominal vd_1x8x14_3view_30deg_shielded"
 [ -n "$ONLY" ] && CONFIGS=$ONLY
 cd $B
-log "== $LABEL (commit $(git rev-parse --short HEAD), from $FROM, parallel_samples $PS, configs $CONFIGS, hdc flash exclusion $XHDC)"
+log "== $LABEL (commit $(git rev-parse --short HEAD), from $FROM, parallel_samples $PS, configs $CONFIGS, hdc flash exclusion $XHDC${FIDARG:+, $FIDARG})"
 if [ "$EXTRAS_ONLY" = 1 ]; then L=$B/output/logs/${LABEL}_ana; mkdir -p $L; log "extras and staging only"; fi
 if [ "$FROM" != analysis ] && [ "$EXTRAS_ONLY" = 0 ]; then
   L=$B/output/logs/${LABEL}_calib; mkdir -p $L
@@ -54,7 +56,7 @@ fi
 if [ "$EXTRAS_ONLY" = 0 ]; then
 L=$B/output/logs/${LABEL}_ana; R=$B/output/logs/${LABEL}_pessimistic; mkdir -p $L $R
 for cfg in $CONFIGS; do
-  $IMG python3 src/pipelines/run_sensitivity.py --rewrite --config $cfg --folder Truncated --parallel_samples $PS > $L/$cfg.log 2>&1 &
+  $IMG python3 src/pipelines/run_sensitivity.py --rewrite --config $cfg --folder Truncated --parallel_samples $PS $FIDARG > $L/$cfg.log 2>&1 &
   $IMG python3 src/pipelines/run_studies.py --study bkgmodel --variant bkgmodel_pessimistic --config $cfg --signals marley_final --parallel_samples $PS > $R/$cfg.log 2>&1 &
 done; wait
 log "  failure check:"; grep -l "Traceback\|Workflow stopped" $L/*.log $R/*.log | sed "s/^/    /"

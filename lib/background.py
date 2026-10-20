@@ -224,19 +224,30 @@ def neutron_capture_no_offset(root: str, config: str, score):
     return np.asarray(score, dtype=float) < neutron_capture_threshold(root, config, par)
 
 
-def no_offset_removal_keep(analysis: str, reco, rows=None):
-    """Clusters kept by the study knob SOLAR_REMOVE_NO_OFFSET=1 (run_sensitivity --remove_no_offset, lib/study.py sb_remove):
-    every cluster that the analysis energy carries without the de-excitation offset is removed instead, i.e. the clusters
-    the signal/background classifier calls background-like and the neutron-capture veto flags (SolarEnergy for DayNight
-    and Sensitivity, SolarEnergyHEP, the HEP working point of the classifier, for HEP). None when the knob is off."""
+def no_offset_removal_keep(analysis: str, reco, rows=None, root=None):
+    """Clusters kept by the removal of the no-offset clusters (config REMOVE_NO_OFFSET_CLUSTERS, default since 2026-10-20;
+    the environment variable SOLAR_REMOVE_NO_OFFSET 1/0, run_sensitivity --[no-]remove_no_offset, overrides it): every
+    cluster that the analysis energy carries without the de-excitation offset is removed, i.e. the clusters the
+    signal/background classifier calls background-like and the neutron-capture veto flags (SolarEnergy for DayNight and
+    Sensitivity, SolarEnergyHEP, the HEP working point of the classifier, for HEP). None when the removal is off, and, unless
+    forced through the environment, when the classifier stage is off (no SolarEnergyOffset, e.g. study sb_off)."""
     import os
 
     import numpy as np
 
-    if os.environ.get("SOLAR_REMOVE_NO_OFFSET") != "1":
+    env = os.environ.get("SOLAR_REMOVE_NO_OFFSET")
+    explicit = env in ("0", "1")
+    if explicit:
+        on = env == "1"
+    else:
+        _root = root or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        on = bool(load_analysis_info(_root).get("REMOVE_NO_OFFSET_CLUSTERS", False))
+    if not on:
         return None
     if reco is None or "SolarEnergyOffset" not in reco:
-        raise KeyError("SOLAR_REMOVE_NO_OFFSET: SolarEnergyOffset missing (signal/background classifier stage off?)")
+        if explicit:
+            raise KeyError("SOLAR_REMOVE_NO_OFFSET: SolarEnergyOffset missing (signal/background classifier stage off?)")
+        return None
     branch = "SolarEnergyHEP" if analysis == "HEP" and "SolarEnergyHEP" in reco else "SolarEnergy"
     energy = np.asarray(reco[branch], dtype=float)
     offset = np.asarray(reco["SolarEnergyOffset"], dtype=float)
@@ -249,7 +260,7 @@ def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, mai
     """Clusters kept by the neutron-capture veto (neutron_capture_veto_keep_rule) and, with the study knob
     SOLAR_REMOVE_NO_OFFSET=1, by the removal of every no-offset cluster (no_offset_removal_keep)."""
     keep = neutron_capture_veto_keep_rule(root, config, analysis, energy, main_energy, override, reco, rows)
-    removal = no_offset_removal_keep(analysis, reco, rows)
+    removal = no_offset_removal_keep(analysis, reco, rows, root=root)
     return keep if removal is None else keep & removal
 
 

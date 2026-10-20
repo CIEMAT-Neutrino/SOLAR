@@ -395,6 +395,16 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     # --remove_no_offset: keep only the clusters whose SolarEnergy carries the de-excitation offset. A cluster
     # flagged by the signal/background classifier or the neutron-capture veto has SolarEnergy == SolarEnergyNoOffset.
     keep = np.ones(len(reco), dtype=bool)
+    # Clusters the analysis keeps (03_analysis.py AnalysisKeep export: neutron-capture veto with ACTION remove and the default
+    # removal of the no-offset clusters, REMOVE_NO_OFFSET_CLUSTERS): removed from every stage, as in the analysis. Older
+    # exports have no such file and keep every cluster.
+    _keep_pkl = _ref_pkl(name, f"AnalysisKeep_{args.energy}_{args.analysis.upper()}")
+    if os.path.exists(_keep_pkl):
+        _keep_file = np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
+        if len(_keep_file) != len(reco):
+            raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(_keep_file)} clusters, SolarEnergy {len(reco)}.")
+        keep &= _keep_file
+        rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~_keep_file):.2%} of clusters removed by the analysis (AnalysisKeep)")
     if args.remove_no_offset:
         _off_pkl  = _ref_pkl(name, "AnalysisData_SolarEnergyOffset_Ref")
         _noff_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNoOffset_Ref")

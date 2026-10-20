@@ -470,6 +470,14 @@ for config in configs:
                     filename=f"FiducializationMask_{energy}_{_an.upper()}{_ref_sfx}",
                     rm=user_input["rewrite"], debug=args.debug,
                 )
+                # Clusters kept by the neutron-capture veto (ACTION remove) and the removal of the no-offset clusters
+                # (REMOVE_NO_OFFSET_CLUSTERS): applied by cutflow_plot.py and 04_weighted.py as in the analysis.
+                save_pkl(
+                    np.asarray(_ncveto_masks[_an], dtype=bool), export_path, config, name,
+                    subfolder=args.folder.lower(),
+                    filename=f"AnalysisKeep_{energy}_{_an.upper()}{_ref_sfx}",
+                    rm=user_input["rewrite"], debug=args.debug,
+                )
         if args.skip_scan:
             continue
 
@@ -560,12 +568,14 @@ for config in configs:
                 _w_tpc = np.asarray(run["Reco"][_wname]) / _divisor
                 for _an in args.analysis:
                     _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
-                    _valid = (_bidx >= 0) & (_bidx < _n_bins) & _tpc_keep
+                    # The clusters the analysis removes (neutron-capture veto ACTION remove, no-offset removal) leave every
+                    # stage, as in the cut flow (cutflow_plot.py AnalysisKeep).
+                    _valid = (_bidx >= 0) & (_bidx < _n_bins) & _tpc_keep & np.asarray(_ncveto_masks[_an], dtype=bool)
                     _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
                                         _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0), _comp)
                     # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
                     # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
-                    # cut, no neutron-capture veto, no MC filter.
+                    # cut, no MC filter; the removed clusters are already out of _valid.
                     _fid = _surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _split_spatial[_an]
                     _fr, _ft = _valid & _fid, _tvalid & _fid
                     _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
