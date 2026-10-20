@@ -51,6 +51,9 @@ def _group_tail_values(tail_energy, tail_values, grouped_centers, grouped_widths
     return np.asarray(grouped, dtype=float)
 
 
+_SIGNAL_DISPLAY_COMPONENTS = {"Solar", "Solar Day", "Solar Night", "8B", "hep", "marley", "marley_final"}
+
+
 def _process_component_df(comp_df, component, smoothing_config, scale=1.0, threshold_idx=0):
     counts = _safe_array(comp_df["Counts"].values[0])
     errors = _safe_array(comp_df["Error"].values[0])
@@ -59,7 +62,9 @@ def _process_component_df(comp_df, component, smoothing_config, scale=1.0, thres
         if "MCCounts" in comp_df.columns else np.zeros_like(counts)
     )
     cfg = get_component_smoothing_config(smoothing_config, component)
-    smoothed_counts = smooth_threshold_slice(counts, threshold_idx, cfg)
+    # Displayed spectrum only (lib/smoothing.display_smoothed_background); the significances come from the analysis payloads.
+    smoothed_counts = (smooth_threshold_slice(counts, threshold_idx, cfg) if component in _SIGNAL_DISPLAY_COMPONENTS
+                       else display_smoothed_background(counts, mc_counts, component, smoothing_config, threshold_idx))
     smoothed_errors = smooth_histogram_errors(errors, cfg, counts=counts, mc_counts=mc_counts)
     return {
         "counts": counts, "errors": errors,
@@ -744,7 +749,11 @@ for _sl in _study_labels_to_run:
                     * np.asarray(comp_df["Counts/Energy"].values[0], dtype=float),
                     nan=0.0, posinf=0.0, neginf=0.0,
                 )
-                smoothed_counts = smooth_threshold_slice(counts, threshold_idx, component_smoothing_config)
+                # Displayed spectrum only (lib/smoothing.display_smoothed_background); the per-bin significances come from the
+                # analysis payload above, not from these counts.
+                smoothed_counts = (display_smoothed_background(counts, mc_counts, component, smoothing_config, threshold_idx)
+                                   if legend_group_title == "Background" else
+                                   smooth_threshold_slice(counts, threshold_idx, component_smoothing_config))
                 smoothed_errors = errors.copy()
                 smoothed_errors[threshold_idx:] = smooth_histogram_errors(
                     errors[threshold_idx:], component_smoothing_config,

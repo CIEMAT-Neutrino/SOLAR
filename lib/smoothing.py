@@ -866,3 +866,31 @@ def smooth_histogram_errors(
             propagated_variance *= (original_integral / smoothed_integral) ** 2
 
     return np.sqrt(np.clip(propagated_variance, 0.0, None))
+
+
+def display_smoothed_background(counts, mc_counts, component, smoothing_config, threshold_idx=0, min_mc=2):
+    """Smoothed background spectrum for the figures (cut flows, component spectra); never used by an analysis.
+
+    Bins with fewer than min_mc simulated clusters are not shown. The external components are smoothed as configured. The
+    radiological component, unsmoothed in every analysis (smoothing.json), is shown smoothed with the kernel of the external
+    gamma background but only up to its MC endpoint: nothing above the last bin with simulated clusters, raw integral kept.
+    """
+    counts = np.nan_to_num(np.asarray(counts, dtype=float)).copy()
+    if mc_counts is not None:
+        counts[np.asarray(mc_counts, dtype=float) < min_mc] = 0.0
+    if "radiological" not in str(component).lower():
+        return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))
+    ext_cfg = None
+    for ext in ("gamma_final", "gamma"):
+        cfg = get_component_smoothing_config(smoothing_config, ext)
+        if cfg.get("enabled"):
+            ext_cfg = cfg
+            break
+    pop = np.flatnonzero(counts > 0)
+    if ext_cfg is None or pop.size == 0:
+        return counts
+    smoothed = np.nan_to_num(np.asarray(smooth_threshold_slice(counts, threshold_idx, ext_cfg), dtype=float)).copy()
+    smoothed[pop.max() + 1:] = 0.0
+    if smoothed.sum() > 0:
+        smoothed *= counts.sum() / smoothed.sum()
+    return smoothed
