@@ -440,6 +440,12 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing"]},
         {"label": "rad_floor3_smooth_end", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
+        # 2026-10-20 (user): unified radiological treatment in every analysis and stage: per-bin MC floor 3 (03_analysis and
+        # the fiducial figure of merit) and smoothing up to the radiological MC endpoint wherever the other backgrounds are
+        # smoothed (DayNight, Sensitivity template, fiducial figure of merit component by component; lib/smoothing
+        # radiological_endpoint_smoothing). The hep profile likelihood stays on the raw spectra.
+        {"label": "rad_unified", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
     ],
     # HEP without the external-tail extrapolation (HEP_TAIL_EXTRAPOLATION off; user, 2026-10-16, comparison page).
     # HEP only, full chain re-optimised.

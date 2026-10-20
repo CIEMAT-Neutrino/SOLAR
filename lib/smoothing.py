@@ -651,11 +651,24 @@ def should_smooth_component(
     return True
 
 
+def radiological_endpoint_smoothing() -> bool:
+    """Study rad_unified (SOLAR_RADIOLOGICAL_SMOOTHING=endpoint, run_sensitivity --radiological_smoothing_endpoint): the
+    radiological component is smoothed in every analysis and stage that smooths (DayNight, Sensitivity template, fiducial
+    figure of merit, the smoothed HEP spectra) with the kernel of that stage, but nothing above its MC endpoint (the last
+    bin with simulated radiological counts; raw integral kept)."""
+    return os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") == "endpoint"
+
+
 def get_component_smoothing_config(
     config: Dict[str, Any], component: Optional[str] = None
 ) -> Dict[str, Any]:
     component_config = deepcopy(config)
     enabled = should_smooth_component(component_config, component)
+    endpoint = False
+    if component is not None and "radiological" in str(component).lower() and radiological_endpoint_smoothing():
+        enabled = _normalize_method(component_config.get("method"), component_config.get("enabled", False)) != "none"
+        endpoint = enabled
+    component_config["endpoint"] = endpoint
     component_config["enabled"] = enabled
     component_config["method"] = _normalize_method(
         component_config.get("method"), enabled
@@ -726,12 +739,23 @@ def smooth_histogram(
 def smooth_histogram_with_config(
     data: np.ndarray, config: Dict[str, Any]
 ) -> np.ndarray:
-    return smooth_histogram(
+    smoothed = smooth_histogram(
         data,
         method=config.get("method", "none"),
         preserve_integral=config.get("preserve_integral", True),
         **config.get("params", {}),
     )
+    if config.get("endpoint") and np.ndim(data) == 1:
+        # radiological endpoint smoothing (radiological_endpoint_smoothing): nothing above the last populated raw bin
+        raw = np.nan_to_num(np.asarray(data, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        populated = np.flatnonzero(raw > 0)
+        if populated.size == 0:
+            return np.clip(raw, 0.0, None)
+        smoothed = np.asarray(smoothed, dtype=float).copy()
+        smoothed[populated.max() + 1:] = 0.0
+        if smoothed.sum() > 0:
+            smoothed *= raw.sum() / smoothed.sum()
+    return smoothed
 
 
 def smooth_threshold_slice(

@@ -10,7 +10,7 @@ import pandas as pd
 
 from .background import get_background_config
 from .sigma import evaluate_significance
-from .smoothing import smooth_histogram_with_config, smooth_histogram_errors
+from .smoothing import smooth_histogram_with_config, smooth_histogram_errors, get_component_smoothing_config
 
 GROUP_COLUMNS = ["Energy", "FiducializedX", "FiducializedY", "FiducializedZ"]
 FIDUCIAL_COLUMNS = ["FiducializedX", "FiducializedY", "FiducializedZ"]
@@ -30,6 +30,23 @@ def combine_components(df: pd.DataFrame, components: List[str]) -> pd.DataFrame:
         })
         .reset_index()
     )
+
+
+def smoothed_component_background(df: pd.DataFrame, components: List[str], smoothing_config: dict) -> pd.DataFrame:
+    """Background smoothed component by component (component smoothing config of the stage, e.g. the radiological endpoint
+    smoothing of study rad_unified) and summed per GROUP_COLUMNS, as column CountsBackgroundSmoothed. Used instead of
+    smoothing the summed background when the components must be treated differently."""
+    component_df = df[df["Component"].isin(components)]
+    rows = []
+    for (fx, fy, fz, comp), group in component_df.groupby(["FiducializedX", "FiducializedY", "FiducializedZ", "Component"]):
+        g = group.groupby("Energy", as_index=False)["Counts"].sum().sort_values("Energy")
+        counts = np.nan_to_num(g["Counts"].to_numpy(dtype=float), nan=0.0)
+        smoothed = smooth_histogram_with_config(counts, get_component_smoothing_config(smoothing_config, comp))
+        rows.append(pd.DataFrame({"Energy": g["Energy"].to_numpy(), "FiducializedX": fx, "FiducializedY": fy,
+                                  "FiducializedZ": fz, "CountsBackgroundSmoothed": smoothed}))
+    if not rows:
+        return pd.DataFrame(columns=GROUP_COLUMNS + ["CountsBackgroundSmoothed"])
+    return pd.concat(rows, ignore_index=True).groupby(GROUP_COLUMNS, as_index=False)["CountsBackgroundSmoothed"].sum()
 
 
 def aggregate_significance(significance: np.ndarray, mode: str) -> float:
@@ -60,7 +77,10 @@ def build_significance_payload(
     background_mc = np.nan_to_num(ordered["MCCountsBackground"].to_numpy(dtype=float), nan=0.0)
 
     smoothed_signal_counts = smooth_histogram_with_config(signal_counts, smoothing_config)
-    smoothed_background_counts = smooth_histogram_with_config(background_counts, smoothing_config)
+    if "CountsBackgroundSmoothed" in ordered.columns:  # component-wise smoothing (smoothed_component_background)
+        smoothed_background_counts = np.nan_to_num(ordered["CountsBackgroundSmoothed"].to_numpy(dtype=float), nan=0.0)
+    else:
+        smoothed_background_counts = smooth_histogram_with_config(background_counts, smoothing_config)
     smoothed_signal_errors = smooth_histogram_errors(
         signal_errors, smoothing_config, counts=signal_counts, mc_counts=signal_mc
     )
