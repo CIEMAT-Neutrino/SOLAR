@@ -396,15 +396,15 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     # flagged by the signal/background classifier or the neutron-capture veto has SolarEnergy == SolarEnergyNoOffset.
     keep = np.ones(len(reco), dtype=bool)
     # Clusters the analysis keeps (03_analysis.py AnalysisKeep export: neutron-capture veto with ACTION remove and the default
-    # removal of the no-offset clusters, REMOVE_NO_OFFSET_CLUSTERS): removed from every stage, as in the analysis. Older
-    # exports have no such file and keep every cluster.
+    # removal of the no-offset clusters, REMOVE_NO_OFFSET_CLUSTERS): they leave at the Fiducial stage, with the fiducial cut;
+    # Raw and TPC-PDS Matching keep every reconstructed cluster. Older exports have no such file and keep every cluster.
+    fid_keep = np.ones(len(reco), dtype=bool)
     _keep_pkl = _ref_pkl(name, f"AnalysisKeep_{args.energy}_{args.analysis.upper()}")
     if os.path.exists(_keep_pkl):
-        _keep_file = np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
-        if len(_keep_file) != len(reco):
-            raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(_keep_file)} clusters, SolarEnergy {len(reco)}.")
-        keep &= _keep_file
-        rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~_keep_file):.2%} of clusters removed by the analysis (AnalysisKeep)")
+        fid_keep = np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
+        if len(fid_keep) != len(reco):
+            raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(fid_keep)} clusters, SolarEnergy {len(reco)}.")
+        rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~fid_keep):.2%} of clusters removed by the analysis at the Fiducial stage (AnalysisKeep)")
     if args.remove_no_offset:
         _off_pkl  = _ref_pkl(name, "AnalysisData_SolarEnergyOffset_Ref")
         _noff_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNoOffset_Ref")
@@ -430,7 +430,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
                f"({np.mean(is_off & is_noff):.2%} with equal offset and no-offset energy kept)")
 
     flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0) & keep
-    fid        = geo_fid & flash_mask
+    fid        = geo_fid & flash_mask & fid_keep
     pre_mask   = keep.copy()
     nhits_mask = fid & (nhits  >= _nhits)
     op_mask    = nhits_mask & (ophits >= _ophits)

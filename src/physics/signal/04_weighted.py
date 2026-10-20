@@ -319,11 +319,10 @@ for config in configs:
         )
         _fid_mask = _geo_fid & _flash_mask
         # Clusters the analysis removes (03_analysis.py AnalysisKeep export: neutron-capture veto with ACTION remove, removal of
-        # the no-offset clusters) leave every stage; older exports have no such file.
+        # the no-offset clusters) leave at the Fiducial stage, as in cutflow_plot.py; older exports have no such file.
         _keep_pkl = _fid_pkl.replace("_FiducializationMask_", "_AnalysisKeep_")
         if os.path.exists(_keep_pkl):
-            _keep = np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
-            _fid_mask, _all_mask = _fid_mask & _keep, _all_mask & _keep
+            _fid_mask = _fid_mask & np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
 
         # Global threshold ranges (full dataset so all stages share the same x-axis)
         _t_nhits  = np.arange(0, int(np.max(_reco["NHits"]))               + 2)
