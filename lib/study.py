@@ -418,6 +418,10 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         {"label": "sb_remove_rse_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
          "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint"]},
+        # the default (no-offset removal, no radiological smoothing) with the fiducial volumes re-optimised instead of held at
+        # the rerun-38 volumes (final_run.sh -F): which volumes the optimiser would choose under the rerun-39 settings (2026-10-20)
+        {"label": "fid_rescan", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": []},
     ],
     # Sensitivity with the radiological component of the background template smoothed again (user, 2026-10-15, comparison
     # page; unsmoothed since 623b2ce). Sensitivity only (DayNight/HEP do not use that template); full chain re-optimised.
