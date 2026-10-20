@@ -902,9 +902,16 @@ def display_smoothed_background(counts, mc_counts, component, smoothing_config, 
     gamma background but only up to its MC endpoint: nothing above the last bin with simulated clusters, raw integral kept.
     """
     counts = np.nan_to_num(np.asarray(counts, dtype=float)).copy()
+    is_radiological = "radiological" in str(component).lower()
     if mc_counts is not None:
-        counts[np.asarray(mc_counts, dtype=float) < min_mc] = 0.0
-    if "radiological" not in str(component).lower():
+        # radiological: the per-bin floor of the run (study knob SOLAR_RADIOLOGICAL_MIN_MC) when it is stricter
+        thr = max(min_mc, int(os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or 0)) if is_radiological else min_mc
+        counts[np.asarray(mc_counts, dtype=float) < thr] = 0.0
+    if not is_radiological:
+        return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))
+    if os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING") in ("full", "endpoint"):
+        # studies rad_unified(_smooth): the display follows the radiological treatment of the analysis (regular or endpoint
+        # smoothing through get_component_smoothing_config)
         return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))
     ext_cfg = None
     for ext in ("gamma_final", "gamma"):
