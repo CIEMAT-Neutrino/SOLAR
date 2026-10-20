@@ -431,6 +431,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
         # 2026-10-19 (user): the same smoothing stopped at the radiological MC endpoint of each cut (integral kept)
         {"label": "rad_smooth_end", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing_endpoint"]},
+        # 2026-10-20 (user): radiological per-bin MC floor 3 instead of 2 (backgrounds.json RADIOLOGICAL_MIN_MC_PER_BIN), without
+        # and with the radiological smoothing: removes the 2-cluster radiological bins (HD Central 11-12 MeV) whose smearing
+        # into the neighbouring bins drove the smoothing loss
+        {"label": "rad_floor3", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3"]},
+        {"label": "rad_floor3_smooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing"]},
     ],
     # HEP without the external-tail extrapolation (HEP_TAIL_EXTRAPOLATION off; user, 2026-10-16, comparison page).
     # HEP only, full chain re-optimised.

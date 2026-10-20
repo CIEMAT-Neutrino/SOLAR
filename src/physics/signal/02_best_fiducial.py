@@ -464,7 +464,7 @@ for config in configs:
         # 03_analysis.py applies; the env knob replaces it ("none" switches every floor off).
         _floor_env = os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR")
         if _floor_env is None:
-            _rad_floor = _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN")
+            _rad_floor = os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN")
             _floor_env = f"radiological:{_rad_floor}" if _rad_floor else ""
         _mc_floor = {} if _floor_env.strip().lower() == "none" else _parse_bin_mc_floor(_floor_env)
         if _mc_floor:

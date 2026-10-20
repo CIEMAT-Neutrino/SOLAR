@@ -467,6 +467,10 @@ parser.add_argument("--fiducial_bin_mc_floor", type=str, default=None,
 parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
          "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
+parser.add_argument("--radiological_min_mc", type=int, default=None,
+    help="Study knob: minimum number of simulated radiological clusters per energy bin, replacing RADIOLOGICAL_MIN_MC_PER_BIN "
+         "(backgrounds.json) in 03_analysis.py and in the fiducial figure of merit of 02_best_fiducial.py (through "
+         "SOLAR_RADIOLOGICAL_MIN_MC), see lib/study.py rad_floor3.")
 parser.add_argument("--radiological_smoothing_endpoint", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: --radiological_smoothing_endpoint smooths the radiological component of the Sensitivity background template "
          "but sets it to zero above the last bin with simulated radiological counts, keeping the raw integral "
@@ -1104,6 +1108,10 @@ if args.radiological_smoothing is not None:  # every child process follows the s
     if args.radiological_smoothing and not args.study_label:
         raise SystemExit("[ERROR] --radiological_smoothing is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "1" if args.radiological_smoothing else "0"
+if args.radiological_min_mc is not None:  # 03_analysis.py and 02_best_fiducial.py follow the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --radiological_min_mc is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_RADIOLOGICAL_MIN_MC"] = str(int(args.radiological_min_mc))
 if args.radiological_smoothing_endpoint:  # 01_background_template.py follows the study knob
     if not args.study_label:
         raise SystemExit("[ERROR] --radiological_smoothing_endpoint is a study knob: pass --study_label so the outputs are labeled.")

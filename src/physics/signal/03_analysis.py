@@ -749,7 +749,8 @@ for config in configs:
                     # cluster in an otherwise empty bin is not a valid background estimate (HD Central runs with MC_FILTER 1).
                     _mc_thr = args.mc_filter_threshold
                     if str(name).split("_")[0].lower() == "radiological":
-                        _mc_thr = max(_mc_thr, int(_analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN", 1)))
+                        # study knob SOLAR_RADIOLOGICAL_MIN_MC (run_sensitivity --radiological_min_mc) replaces the floor
+                        _mc_thr = max(_mc_thr, int(os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN", 1)))
                     _mc_filter_rb = _mc_counts_rb >= _mc_thr
                     # Expand from 30-bin to 60-bin: find parent 30-bin for each 60-bin center
                     _bin_centers_60 = (true_energy_edges[:-1] + true_energy_edges[1:]) / 2
