@@ -97,6 +97,13 @@ parser.add_argument(
     help="Suffix of the output pkl/png names (_Cutflow{study}_{label}) so a display variant does not overwrite "
          "the default cut flow.",
 )
+parser.add_argument(
+    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=True,
+    help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): apply the neutron-capture veto also below its "
+         "classifier region, from the AnalysisData_SolarEnergyNCapLow_Ref export (03_analysis.py --energy SolarEnergyNCapLow "
+         "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "
+         "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export.",
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
@@ -416,6 +423,18 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
         if len(fid_keep) != len(reco):
             raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(fid_keep)} clusters, SolarEnergy {len(reco)}.")
         rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~fid_keep):.2%} of clusters removed by the analysis at the Fiducial stage (AnalysisKeep)")
+    if args.ncap_display_low and args.analysis != "HEP" and args.energy == "SolarEnergy" and not args.study_label:
+        _low_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNCapLow_Ref")
+        if os.path.exists(_low_pkl):
+            _display = np.asarray(pickle.load(open(_low_pkl, "rb")), dtype=float)
+            if len(_display) != len(reco):
+                raise SystemExit(f"[ERROR] {name}: {_low_pkl} has {len(_display)} clusters, SolarEnergy {len(reco)}.")
+            _low = _display != reco
+            reco = np.where(_low, _display, reco)
+            fid_keep = fid_keep & ~_low
+            rprint(f"[cyan][INFO][/cyan] {name}: display veto below the neutron-capture region, {np.mean(_low):.2%} of clusters")
+        else:
+            rprint(f"[yellow][WARNING][/yellow] {name}: no {_low_pkl}; cut flow without the display veto below the region")
     if args.remove_no_offset:
         _off_pkl  = _ref_pkl(name, "AnalysisData_SolarEnergyOffset_Ref")
         _noff_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNoOffset_Ref")

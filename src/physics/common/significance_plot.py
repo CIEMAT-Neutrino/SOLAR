@@ -417,6 +417,13 @@ parser.add_argument(
     help="Energy threshold; resolved per-analysis from config/analysis/config.json if not set",
 )
 parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument(
+    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=True,
+    help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): the Day-Night spectra drop the clusters the "
+         "neutron-capture veto flags below its classifier region (lib/background.ncap_display_low_scale, needs the "
+         "SolarEnergyNCapLow export of 03_analysis.py), as the analysis drops the flagged clusters inside the region. "
+         "The per-bin significance and every result are unchanged.",
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
@@ -719,6 +726,23 @@ for _sl in _study_labels_to_run:
                     (bkg, style.get("label", bkg).title(), "Truth", "Mean", 1, "Background", style.get("color", "grey"))
                 )
 
+            # Display veto below the neutron-capture region (--ncap_display_low): per-bin factor of each drawn component.
+            _dn_display_scale = {}
+            if args.ncap_display_low and energy == "SolarEnergy" and not args.study_label:
+                _edges = np.append(energy_axis - bin_width / 2, energy_axis[-1] + bin_width / 2)
+                _samples = [("Solar Day", name, "AnalysisWeightsSolarDay"), ("Solar Night", name, "AnalysisWeightsSolarNight"),
+                            ("Solar", name, "AnalysisWeightsSolar")]
+                for _bkg, _path in load_available_background_dataframes(str(root), "DAYNIGHT", args.folder, config, energy):
+                    _samples.append((get_background_style(str(root), _bkg).get("label", _bkg).title(),
+                                     os.path.basename(os.path.dirname(_path)), "AnalysisWeights"))
+                for _label, _sample, _wfile in _samples:
+                    _dn_display_scale[_label] = ncap_display_low_scale(
+                        f"{root}/output/data/results/{config}/{_sample}/{args.folder.lower()}/{config}_{_sample}_",
+                        "DayNight", _wfile, _edges, nhits_value, ophits_value, adjcl_value, str(root))
+                    if _dn_display_scale[_label] is None:
+                        rprint(f"[yellow][WARNING][/yellow] {config} {_sample}: no SolarEnergyNCapLow export, "
+                               "spectrum drawn without the display veto below the neutron-capture region")
+
             for component, component_label, osc, mean, legend_group, legend_group_title, color in dn_component_specs:
                 comp_df = this_plot_df.loc[
                     (this_plot_df["Component"] == component)
@@ -769,6 +793,12 @@ for _sl in _study_labels_to_run:
                 positive_count_values.extend(raw_counts_per_energy[raw_counts_per_energy > 0])
                 positive_count_values.extend(smoothed_counts_per_energy[smoothed_counts_per_energy > 0])
 
+                _display_scale = _dn_display_scale.get(component_label)
+                if _display_scale is not None:
+                    raw_counts_per_energy = raw_counts_per_energy * _display_scale
+                    smoothed_counts_per_energy = smoothed_counts_per_energy * _display_scale
+                    smoothed_errors_per_energy = smoothed_errors_per_energy * _display_scale
+
                 _dn_render.append({
                     "component_label": component_label, "legend_group": legend_group,
                     "legend_group_title": legend_group_title, "color": color, "opacity": 0.45,
@@ -780,6 +810,8 @@ for _sl in _study_labels_to_run:
                 raw_errors_per_energy = np.nan_to_num(
                     detector_mass * args.exposure * errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0,
                 )
+                if _display_scale is not None:
+                    raw_errors_per_energy = raw_errors_per_energy * _display_scale
                 for counts_per_energy, errors_per_energy, spectrum_type in [
                     (raw_counts_per_energy, raw_errors_per_energy, "Raw"),
                     (smoothed_counts_per_energy, smoothed_errors_per_energy, "Smoothed"),
@@ -877,6 +909,9 @@ for _sl in _study_labels_to_run:
                         np.nan_to_num(_sm_scale * _sm_smoothed_errors / bin_width, nan=0.0, posinf=0.0, neginf=0.0),
                     ),
                 }
+                if _dn_display_scale.get("Solar") is not None:
+                    _sm_by_spectrum = {k: (c * _dn_display_scale["Solar"], e * _dn_display_scale["Solar"])
+                                       for k, (c, e) in _sm_by_spectrum.items()}
                 for _spec_type in ("Raw", "Smoothed"):
                     _day_c = _dn_day_by_spectrum.get(_spec_type)
                     _night_c = _dn_night_by_spectrum.get(_spec_type)

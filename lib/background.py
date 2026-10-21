@@ -224,6 +224,52 @@ def neutron_capture_no_offset(root: str, config: str, score):
     return np.asarray(score, dtype=float) < neutron_capture_threshold(root, config, par)
 
 
+def ncap_display_low_scale(ref_prefix: str, analysis: str, weight_file: str, edges, nhits: int, ophits: int, adjcl: int,
+                           root: str, membrane_veto: bool = True):
+    """Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): per-bin factor of a SolarEnergy spectrum at the
+    selected cut that removes the clusters the neutron-capture veto flags below its classifier region (the
+    SolarEnergyNCapLow export of 03_analysis.py, written with SOLAR_NCAP_DISPLAY=1), as the analysis removes the flagged
+    clusters inside the region: 1 - (weight of those clusters) / (weight of all selected clusters) per bin, 1 where the bin
+    is empty. Empty bins below the highest flagged cluster get 0, so a smoothed spectrum does not spill back into the
+    vetoed range. ref_prefix is the export path up to the file stem ({...}/{config}_{name}_). None without the export."""
+    import os
+    import pickle
+
+    import numpy as np
+
+    from .fiducial import accepted_flash_planes
+
+    if not os.path.exists(f"{ref_prefix}AnalysisData_SolarEnergyNCapLow_Ref.pkl"):
+        return None
+
+    def _load(stem, dtype):
+        return np.asarray(pickle.load(open(f"{ref_prefix}{stem}.pkl", "rb")), dtype=dtype)
+
+    reco = _load("AnalysisData_SolarEnergy_Ref", float)
+    display = _load("AnalysisData_SolarEnergyNCapLow_Ref", float)
+    weights = _load(f"{weight_file}_SolarEnergy_Ref", float)
+    if len(display) != len(reco) or len(weights) != len(reco):
+        raise ValueError(f"{ref_prefix}: SolarEnergyNCapLow / weight exports do not match the SolarEnergy export")
+    selected = (
+        _load(f"FiducializationMask_SolarEnergy_{analysis.upper()}", bool)
+        & accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), root, membrane_veto)
+        & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0)
+        & (_load("AnalysisNHits_SolarEnergy_Ref", int) >= nhits)
+        & (_load("AnalysisOpHits_SolarEnergy_Ref", int) >= ophits)
+        & (_load("AnalysisAdjCl_SolarEnergy_Ref", int) < adjcl)
+    )
+    if os.path.exists(f"{ref_prefix}AnalysisKeep_SolarEnergy_{analysis.upper()}.pkl"):
+        selected &= _load(f"AnalysisKeep_SolarEnergy_{analysis.upper()}", bool)
+    low = selected & (display != reco)
+    w_all, _ = np.histogram(reco[selected], bins=edges, weights=weights[selected])
+    w_low, _ = np.histogram(reco[low], bins=edges, weights=weights[low])
+    scale = np.where(w_all > 0, 1.0 - w_low / np.where(w_all > 0, w_all, 1.0), 1.0)
+    if low.any():
+        edges = np.asarray(edges, dtype=float)
+        scale[(w_all <= 0) & (edges[1:] <= float(np.max(reco[low])) + 1e-9)] = 0.0
+    return scale
+
+
 def no_offset_removal_keep(analysis: str, reco, rows=None, root=None):
     """Clusters kept by the removal of the no-offset clusters (config REMOVE_NO_OFFSET_CLUSTERS, default since 2026-10-20;
     the environment variable SOLAR_REMOVE_NO_OFFSET 1/0, run_sensitivity --[no-]remove_no_offset, overrides it): every
