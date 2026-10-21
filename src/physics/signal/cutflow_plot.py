@@ -384,6 +384,17 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
             )
 
     reco     = np.asarray(pickle.load(open(required[0], "rb")), dtype=float)
+    # The HEP analysis reads SolarEnergyHEP (the S/B classifier at its HEP working point, no neutron-capture veto shift;
+    # 03_analysis.py _energy_key): its cut flow is drawn in that energy when the export exists
+    # (03_analysis.py --energy SolarEnergyHEP --skip_scan --no-export_fiducial). Same clusters, same order.
+    if args.analysis == "HEP" and args.energy == "SolarEnergy":
+        _hep_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyHEP_Ref")
+        if os.path.exists(_hep_pkl):
+            _hep = np.asarray(pickle.load(open(_hep_pkl, "rb")), dtype=float)
+            if len(_hep) != len(reco):
+                raise SystemExit(f"[ERROR] {name}: {_hep_pkl} has {len(_hep)} clusters, SolarEnergy {len(reco)}.")
+            rprint(f"[cyan][INFO][/cyan] {name}: HEP cut flow in SolarEnergyHEP ({np.mean(_hep != reco):.1%} of clusters differ from SolarEnergy)")
+            reco = _hep
     weights  = np.asarray(pickle.load(open(required[1], "rb")), dtype=float)
     geo_fid  = np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
     nhits    = np.asarray(pickle.load(open(required[3], "rb")), dtype=int)
