@@ -131,6 +131,7 @@ def _hep_display_spectrum(
     signal_uncertainty: float,
     detection_threshold: float,
     adaptive_rebin_config: dict,
+    bin_mask=None,
 ) -> dict:
     """Compute per-bin significance spectra at the full display exposure for plotting.
 
@@ -147,7 +148,11 @@ def _hep_display_spectrum(
     uncertainty = display_factor * bkg_error_rate
     detection_signal = signal * (1.0 - display_detection_requirement * signal_uncertainty)
 
-    no_rebin_mask = detection_signal >= detection_threshold
+    # bin_mask (2026-10-21, user): the per-bin values use the bins the profile likelihood keeps (pl_bin_mask, enough
+    # simulated background per bin) instead of the display detection requirement, which removed every bin of a weak signal
+    # (VD: all hep bins below 10 expected events)
+    no_rebin_mask = (np.asarray(bin_mask, dtype=bool) if bin_mask is not None
+                     else detection_signal >= detection_threshold)
     s_nr = np.where(no_rebin_mask, signal, 0.0)
     b_nr = np.where(no_rebin_mask, background, 0.0)
     u_nr = np.where(no_rebin_mask, uncertainty, 0.0)
@@ -833,18 +838,22 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Per-bin significance spectra — only needed when significance_bins is active.
         _n_energy_bins = len(hep_rebin_centers) - threshold_idx
         _zeros_bins = np.zeros(_n_energy_bins, dtype=float)
+        # analysis mask of the per-bin values (as pl_bin_mask)
+        _display_bin_mask = background_mc_counts >= args.min_mc_per_bin
+        if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
+            _display_bin_mask = _display_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
         if _compute_significance_bins:
             display_factor = args.exposure * detector_mass
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             smoothed_display = _hep_display_spectrum(
                 smoothed_signal_rate, smoothed_background_rate, smoothed_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             raw_asimov_spectrum            = raw_display["asimov_no_rebin"]
             raw_gaussian_spectrum          = raw_display["gaussian_no_rebin"]
@@ -864,12 +873,12 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             smoothed_display = _hep_display_spectrum(
                 smoothed_signal_rate, smoothed_background_rate, smoothed_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             raw_asimov_spectrum      = raw_display["asimov_no_rebin"]
             smoothed_asimov_spectrum = smoothed_display["asimov_no_rebin"]
