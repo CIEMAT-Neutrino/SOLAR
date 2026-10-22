@@ -8,42 +8,42 @@ Share of Σw by nearest wall of the truth position (walls: HD central x = ±360,
 
 | Config | Component | Stage | N_MC | Σw | X low [%] | X high [%] | Y [%] | Z [%] | outside active box [%] | Σw through entry X face(s) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| HD lateral APA | gamma | window | 128943 | 7.594e+04 | 42.1 | 0.0 | 55.2 | 2.6 | 9 | 3.2e+04 |
-| HD lateral APA | gamma | + analysis cut | 75268 | 2.747e+04 | 46.1 | 0.0 | 51.9 | 2.0 | 10 | 1.265e+04 |
-| HD lateral APA | gamma | + cut + reco fiducial | 2095 | 518.5 | 93.8 | 0.0 | 0.1 | 6.1 | 2 | 486.5 |
-| HD lateral APA | neutron | window | 11472 | 1.33e+05 | 49.1 | 0.0 | 40.7 | 10.2 | 24 | 6.533e+04 |
-| HD lateral APA | neutron | + analysis cut | 2862 | 2.356e+04 | 43.6 | 0.0 | 48.4 | 8.0 | 38 | 1.027e+04 |
-| HD lateral APA | neutron | + cut + reco fiducial | 832 | 5020 | 74.2 | 0.0 | 8.3 | 17.5 | 24 | 3725 |
-| HD lateral APA | radiological | window | 14 | 1.495e+06 | 28.6 | 0.0 | 28.6 | 42.9 | 14 | 4.273e+05 |
-| HD lateral APA | radiological | + analysis cut | 4 | 4.273e+05 | 25.0 | 0.0 | 25.0 | 50.0 | 25 | 1.068e+05 |
-| HD lateral APA | radiological | + cut + reco fiducial | 3 | 3.204e+05 | 33.3 | 0.0 | 0.0 | 66.7 | 33 | 1.068e+05 |
-| VD nominal | gamma | window | 10121 | 2.612e+04 | 0.2 | 95.2 | 3.1 | 1.5 | 5 | 2.486e+04 |
-| VD nominal | gamma | + analysis cut | 1641 | 1372 | 2.5 | 88.9 | 7.5 | 1.1 | 5 | 1219 |
-| VD nominal | gamma | + cut + reco fiducial | 1636 | 1372 | 2.5 | 88.9 | 7.5 | 1.1 | 5 | 1219 |
-| VD nominal | neutron | window | 7742 | 1.162e+05 | 5.1 | 83.0 | 9.3 | 2.6 | 26 | 9.652e+04 |
-| VD nominal | neutron | + analysis cut | 298 | 2399 | 5.4 | 79.5 | 14.9 | 0.2 | 44 | 1907 |
-| VD nominal | neutron | + cut + reco fiducial | 293 | 2397 | 5.4 | 79.5 | 14.9 | 0.2 | 44 | 1905 |
-| VD nominal | radiological | window | 1293 | 1.566e+08 | 3.7 | 86.3 | 4.0 | 6.0 | 32 | 1.352e+08 |
-| VD nominal | radiological | + analysis cut | 3 | 3.634e+05 | 33.3 | 33.3 | 0.0 | 33.3 | 33 | 1.211e+05 |
-| VD nominal | radiological | + cut + reco fiducial | 3 | 3.634e+05 | 33.3 | 33.3 | 0.0 | 33.3 | 33 | 1.211e+05 |
-| VD shielded | gamma | window | 10383 | 3849 | 0.2 | 94.7 | 3.4 | 1.6 | 4 | 3646 |
-| VD shielded | gamma | + analysis cut | 1651 | 209.1 | 2.0 | 89.7 | 6.5 | 1.8 | 4 | 187.6 |
-| VD shielded | gamma | + cut + reco fiducial | 1646 | 209.1 | 2.0 | 89.7 | 6.5 | 1.8 | 4 | 187.5 |
-| VD shielded | neutron | window | 8771 | 2617 | 5.2 | 81.5 | 10.8 | 2.5 | 24 | 2134 |
-| VD shielded | neutron | + analysis cut | 320 | 51.9 | 5.2 | 73.5 | 21.0 | 0.3 | 40 | 38.16 |
-| VD shielded | neutron | + cut + reco fiducial | 315 | 51.85 | 5.2 | 73.5 | 21.0 | 0.2 | 40 | 38.12 |
-| VD shielded | radiological | window | 747 | 9.048e+07 | 9.5 | 81.7 | 3.3 | 5.5 | 24 | 7.388e+07 |
-| VD shielded | radiological | + analysis cut | 3 | 3.634e+05 | 33.3 | 33.3 | 0.0 | 33.3 | 33 | 1.211e+05 |
-| VD shielded | radiological | + cut + reco fiducial | 3 | 3.634e+05 | 33.3 | 33.3 | 0.0 | 33.3 | 33 | 1.211e+05 |
-| HD central APA | gamma | window | 49398 | 2.122e+04 | 0.6 | 0.8 | 95.9 | 2.7 | 3 | 287.6 |
-| HD central APA | gamma | + analysis cut | 115 | 15.67 | 0.0 | 0.0 | 99.9 | 0.1 | 0 | 0 |
-| HD central APA | gamma | + cut + reco fiducial | 45 | 1.694 | 0.0 | 0.0 | 99.5 | 0.5 | 0 | 0 |
-| HD central APA | neutron | window | 8719 | 5.879e+04 | 13.7 | 11.7 | 58.6 | 16.1 | 1 | 1.491e+04 |
-| HD central APA | neutron | + analysis cut | 25 | 97.08 | 0.1 | 0.8 | 1.8 | 97.3 | 0 | 0.87 |
-| HD central APA | neutron | + cut + reco fiducial | 18 | 3.303 | 3.0 | 23.3 | 41.8 | 31.9 | 0 | 0.87 |
-| HD central APA | radiological | window | 31 | 1.657e+06 | 22.6 | 25.8 | 16.1 | 35.5 | 16 | 8.017e+05 |
-| HD central APA | radiological | + analysis cut | 1 | 5.344e+04 | 100.0 | 0.0 | 0.0 | 0.0 | 0 | 5.344e+04 |
-| HD central APA | radiological | + cut + reco fiducial | 1 | 5.344e+04 | 100.0 | 0.0 | 0.0 | 0.0 | 0 | 5.344e+04 |
+| HD lateral APA | gamma | window | 92799 | 1.481e+06 | 50.6 | 0.0 | 45.7 | 3.7 | 9 | 7.489e+05 |
+| HD lateral APA | gamma | + analysis cut | 85929 | 1.329e+06 | 53.5 | 0.0 | 42.8 | 3.7 | 9 | 7.112e+05 |
+| HD lateral APA | gamma | + cut + reco fiducial | 3330 | 5.837e+04 | 99.8 | 0.0 | 0.1 | 0.0 | 5 | 5.828e+04 |
+| HD lateral APA | neutron | window | 8886 | 2.306e+05 | 49.1 | 0.0 | 39.1 | 11.8 | 30 | 1.132e+05 |
+| HD lateral APA | neutron | + analysis cut | 7277 | 1.988e+05 | 50.6 | 0.0 | 38.8 | 10.6 | 29 | 1.006e+05 |
+| HD lateral APA | neutron | + cut + reco fiducial | 1361 | 4.399e+04 | 86.8 | 0.0 | 3.8 | 9.4 | 16 | 3.818e+04 |
+| HD lateral APA | radiological | window | 22 | 2.37e+06 | 22.7 | 0.0 | 31.8 | 45.5 | 27 | 5.386e+05 |
+| HD lateral APA | radiological | + analysis cut | 16 | 1.724e+06 | 25.0 | 0.0 | 37.5 | 37.5 | 25 | 4.309e+05 |
+| HD lateral APA | radiological | + cut + reco fiducial | 1 | 1.077e+05 | 0.0 | 0.0 | 0.0 | 100.0 | 0 | 0 |
+| VD nominal | gamma | window | 1759 | 6.93e+05 | 0.1 | 94.0 | 5.0 | 0.9 | 4 | 6.517e+05 |
+| VD nominal | gamma | + analysis cut | 121 | 1.151e+04 | 0.2 | 98.1 | 1.7 | 0.0 | 3 | 1.129e+04 |
+| VD nominal | gamma | + cut + reco fiducial | 98 | 1.127e+04 | 0.0 | 99.9 | 0.1 | 0.0 | 3 | 1.125e+04 |
+| VD nominal | neutron | window | 1408 | 4.91e+05 | 4.9 | 85.8 | 6.7 | 2.6 | 15 | 4.212e+05 |
+| VD nominal | neutron | + analysis cut | 71 | 9353 | 3.1 | 48.4 | 48.4 | 0.0 | 47 | 4529 |
+| VD nominal | neutron | + cut + reco fiducial | 51 | 7052 | 4.0 | 64.2 | 31.8 | 0.0 | 62 | 4527 |
+| VD nominal | radiological | window | 24 | 8.341e+06 | 12.5 | 87.5 | 0.0 | 0.0 | 17 | 7.299e+06 |
+| VD nominal | radiological | + analysis cut | 1 | 3.475e+05 | 100.0 | 0.0 | 0.0 | 0.0 | 0 | 0 |
+| VD nominal | radiological | + cut + reco fiducial | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | n/a | 0 |
+| VD shielded | gamma | window | 9869 | 1.15e+05 | 0.2 | 95.1 | 3.5 | 1.2 | 4 | 1.093e+05 |
+| VD shielded | gamma | + analysis cut | 2101 | 1.954e+04 | 0.2 | 96.8 | 2.5 | 0.4 | 2 | 1.892e+04 |
+| VD shielded | gamma | + cut + reco fiducial | 2101 | 1.954e+04 | 0.2 | 96.8 | 2.5 | 0.4 | 2 | 1.892e+04 |
+| VD shielded | neutron | window | 6449 | 8461 | 5.2 | 80.2 | 9.5 | 5.1 | 26 | 6781 |
+| VD shielded | neutron | + analysis cut | 1350 | 1935 | 13.0 | 61.6 | 22.8 | 2.5 | 15 | 1192 |
+| VD shielded | neutron | + cut + reco fiducial | 1350 | 1935 | 13.0 | 61.6 | 22.8 | 2.5 | 15 | 1192 |
+| VD shielded | radiological | window | 17 | 3.09e+06 | 41.2 | 52.9 | 0.0 | 5.9 | 18 | 1.636e+06 |
+| VD shielded | radiological | + analysis cut | 3 | 5.453e+05 | 0.0 | 100.0 | 0.0 | 0.0 | 0 | 5.453e+05 |
+| VD shielded | radiological | + cut + reco fiducial | 3 | 5.453e+05 | 0.0 | 100.0 | 0.0 | 0.0 | 0 | 5.453e+05 |
+| HD central APA | gamma | window | 45663 | 7.393e+05 | 2.8 | 2.6 | 91.0 | 3.6 | 10 | 4.04e+04 |
+| HD central APA | gamma | + analysis cut | 36266 | 5.738e+05 | 2.5 | 2.5 | 91.3 | 3.7 | 10 | 2.87e+04 |
+| HD central APA | gamma | + cut + reco fiducial | 24 | 417 | 1.8 | 0.7 | 97.3 | 0.1 | 0 | 10.55 |
+| HD central APA | neutron | window | 9374 | 1.601e+05 | 17.3 | 19.1 | 53.2 | 10.4 | 34 | 5.827e+04 |
+| HD central APA | neutron | + analysis cut | 6367 | 9.814e+04 | 17.9 | 18.2 | 54.4 | 9.4 | 41 | 3.546e+04 |
+| HD central APA | neutron | + cut + reco fiducial | 1573 | 2.685e+04 | 34.2 | 38.4 | 9.2 | 18.2 | 22 | 1.951e+04 |
+| HD central APA | radiological | window | 27 | 1.447e+06 | 0.0 | 40.7 | 25.9 | 33.3 | 11 | 5.897e+05 |
+| HD central APA | radiological | + analysis cut | 19 | 1.019e+06 | 0.0 | 42.1 | 31.6 | 26.3 | 11 | 4.289e+05 |
+| HD central APA | radiological | + cut + reco fiducial | 7 | 3.753e+05 | 0.0 | 71.4 | 28.6 | 0.0 | 0 | 2.68e+05 |
 
 ## Table F2 — |RecoX − truth X| within 100 cm of the entry X face(s)
 
@@ -51,22 +51,22 @@ Gamma and neutron only. 'RecoX at the volume edge' is the clipped fraction.
 
 | Config | Component | Sample | N_MC | Σw | median |ΔX| [cm] | |ΔX| > 30 cm [%] | |ΔX| > 100 cm [%] | RecoX at the volume edge [%] |
 |---|---|---|---|---|---|---|---|---|
-| HD lateral APA | gamma | window | 77505 | 3.157e+04 | 2.9 | 10 | 3 | 0 |
-| HD lateral APA | neutron | window | 2144 | 3.862e+04 | 5.2 | 18 | 8 | 0 |
-| HD lateral APA | gamma | cut | 48740 | 1.255e+04 | 4.1 | 9 | 2 | 0 |
-| HD lateral APA | neutron | cut | 328 | 5438 | 5.5 | 8 | 2 | 0 |
-| VD nominal | gamma | window | 8932 | 2.387e+04 | 343.5 | 97 | 91 | 0 |
-| VD nominal | neutron | window | 5621 | 8.04e+04 | 459.0 | 99 | 97 | 1 |
-| VD nominal | gamma | cut | 1434 | 1212 | 233.7 | 82 | 73 | 0 |
-| VD nominal | neutron | cut | 161 | 1896 | 443.3 | 100 | 100 | 0 |
-| VD shielded | gamma | window | 9145 | 3522 | 345.1 | 97 | 91 | 0 |
-| VD shielded | neutron | window | 6216 | 1796 | 403.4 | 99 | 97 | 1 |
-| VD shielded | gamma | cut | 1438 | 186.6 | 241.6 | 88 | 75 | 0 |
-| VD shielded | neutron | cut | 165 | 37.93 | 443.3 | 100 | 100 | 0 |
-| HD central APA | gamma | window | 737 | 261 | 90.8 | 78 | 49 | 1 |
-| HD central APA | neutron | window | 488 | 1414 | 36.7 | 58 | 30 | 7 |
-| HD central APA | gamma | cut | 0 | – | – | – | – | – |
-| HD central APA | neutron | cut | 0 | – | – | – | – | – |
+| HD lateral APA | gamma | window | 50757 | 7.337e+05 | 7.4 | 22 | 14 | 0 |
+| HD lateral APA | neutron | window | 1417 | 6.504e+04 | 5.8 | 23 | 12 | 0 |
+| HD lateral APA | gamma | cut | 49453 | 6.974e+05 | 7.2 | 21 | 13 | 0 |
+| HD lateral APA | neutron | cut | 1208 | 5.593e+04 | 5.4 | 21 | 10 | 0 |
+| VD nominal | gamma | window | 1510 | 6.255e+05 | 321.8 | 98 | 93 | 0 |
+| VD nominal | neutron | window | 1018 | 3.489e+05 | 457.9 | 100 | 100 | 0 |
+| VD nominal | gamma | cut | 96 | 1.125e+04 | 427.1 | 97 | 96 | 0 |
+| VD nominal | neutron | cut | 25 | 4458 | 504.5 | 99 | 99 | 0 |
+| VD shielded | gamma | window | 8775 | 1.058e+05 | 317.8 | 95 | 86 | 0 |
+| VD shielded | neutron | window | 4673 | 5620 | 399.2 | 99 | 97 | 0 |
+| VD shielded | gamma | cut | 1808 | 1.815e+04 | 375.6 | 96 | 86 | 0 |
+| VD shielded | neutron | cut | 644 | 956.8 | 363.1 | 96 | 93 | 0 |
+| HD central APA | gamma | window | 2842 | 3.821e+04 | 50.5 | 69 | 30 | 1 |
+| HD central APA | neutron | window | 3081 | 3.9e+04 | 59.5 | 73 | 33 | 1 |
+| HD central APA | gamma | cut | 1999 | 2.657e+04 | 58.8 | 75 | 30 | 1 |
+| HD central APA | neutron | cut | 2078 | 2.455e+04 | 62.4 | 74 | 35 | 0 |
 
 ## Table F3 — Fiducial scans with truth and reco coordinates mixed
 
@@ -74,66 +74,66 @@ Grid FiducialX/FiducialY 0–340 cm in 20 cm steps, FiducialZ = 0 (Z is not appl
 
 | Config | Scan | Position source | Best X/Y [cm] | Signal eff. [%] | Σw γ+n | N_MC γ+n | Σw radiological (not in FoM) | S/√B (γ+n) |
 |---|---|---|---|---|---|---|---|---|
-| HD lateral APA | X and Y | reco X, reco Y/Z | 60/280 | 45.1 | 4611 | 2753 | 3.204e+05 | 8.98 |
-| HD lateral APA | X only (Y=0) | reco X, reco Y/Z | 20/0 | 94.9 | 3.986e+04 | 45146 | 4.273e+05 | 6.44 |
-| HD lateral APA | Y only (X=0) | reco X, reco Y/Z | 0/80 | 86.7 | 2.7e+04 | 47514 | 4.273e+05 | 7.14 |
-| HD lateral APA | X and Y | truth X, truth Y/Z | 60/280 | 45.6 | 3900 | 2837 | 3.204e+05 | 9.89 |
-| HD lateral APA | X only (Y=0) | truth X, truth Y/Z | 60/0 | 83.2 | 2.294e+04 | 23983 | 4.273e+05 | 7.43 |
-| HD lateral APA | Y only (X=0) | truth X, truth Y/Z | 0/60 | 90.2 | 2.6e+04 | 48901 | 4.273e+05 | 7.57 |
-| HD lateral APA | X and Y | truth X, reco Y/Z | 60/120 | 67.3 | 8565 | 4492 | 4.273e+05 | 9.85 |
-| HD lateral APA | X only (Y=0) | truth X, reco Y/Z | 20/0 | 95.5 | 3.58e+04 | 47239 | 4.273e+05 | 6.83 |
-| HD lateral APA | Y only (X=0) | truth X, reco Y/Z | 0/60 | 90.1 | 2.579e+04 | 48372 | 4.273e+05 | 7.59 |
-| HD lateral APA | X and Y | truth X (no containment), reco Y/Z | 60/280 | 45.6 | 4813 | 3300 | 3.204e+05 | 8.91 |
-| HD lateral APA | X only (Y=0) | truth X (no containment), reco Y/Z | 20/0 | 95.5 | 4.034e+04 | 48856 | 4.273e+05 | 6.44 |
-| HD lateral APA | Y only (X=0) | truth X (no containment), reco Y/Z | 0/80 | 86.7 | 2.7e+04 | 47514 | 4.273e+05 | 7.14 |
-| HD lateral APA | X and Y | reco X, truth Y/Z | 60/220 | 53.2 | 6469 | 3234 | 3.204e+05 | 8.95 |
-| HD lateral APA | X only (Y=0) | reco X, truth Y/Z | 40/0 | 87.8 | 2.899e+04 | 28746 | 4.273e+05 | 6.98 |
-| HD lateral APA | Y only (X=0) | reco X, truth Y/Z | 0/60 | 90.2 | 2.977e+04 | 50811 | 4.273e+05 | 7.07 |
-| VD nominal | X and Y | reco X, reco Y/Z | 300/20 | 78.5 | 1775 | 854 | 2.422e+05 | 3.72 |
-| VD nominal | X only (Y=0) | reco X, reco Y/Z | 300/0 | 80.0 | 1938 | 915 | 2.422e+05 | 3.62 |
-| VD nominal | Y only (X=0) | reco X, reco Y/Z | 0/20 | 98.0 | 3603 | 1857 | 3.634e+05 | 3.26 |
-| VD nominal | X and Y | truth X, truth Y/Z | 120/180 | 70.1 | 137.1 | 67 | 1.211e+05 | 11.94 |
-| VD nominal | X only (Y=0) | truth X, truth Y/Z | 100/0 | 93.6 | 584.7 | 287 | 1.211e+05 | 7.72 |
-| VD nominal | Y only (X=0) | truth X, truth Y/Z | 0/20 | 98.4 | 2496 | 1717 | 3.634e+05 | 3.93 |
-| VD nominal | X and Y | truth X, reco Y/Z | 340/100 | 58.8 | 134.2 | 67 | 1.211e+05 | 10.13 |
-| VD nominal | X only (Y=0) | truth X, reco Y/Z | 100/0 | 93.6 | 586.5 | 291 | 1.211e+05 | 7.71 |
-| VD nominal | Y only (X=0) | truth X, reco Y/Z | 0/20 | 98.3 | 2493 | 1717 | 3.634e+05 | 3.93 |
-| VD nominal | X and Y | truth X (no containment), reco Y/Z | 340/100 | 58.8 | 134.2 | 67 | 1.211e+05 | 10.13 |
-| VD nominal | X only (Y=0) | truth X (no containment), reco Y/Z | 100/0 | 93.6 | 586.5 | 292 | 1.211e+05 | 7.71 |
-| VD nominal | Y only (X=0) | truth X (no containment), reco Y/Z | 0/20 | 98.3 | 2493 | 1718 | 3.634e+05 | 3.93 |
-| VD nominal | X and Y | reco X, truth Y/Z | 300/20 | 78.6 | 1772 | 842 | 2.422e+05 | 3.72 |
-| VD nominal | X only (Y=0) | reco X, truth Y/Z | 300/0 | 80.0 | 1932 | 899 | 2.422e+05 | 3.63 |
-| VD nominal | Y only (X=0) | reco X, truth Y/Z | 0/20 | 98.1 | 3554 | 1837 | 3.634e+05 | 3.28 |
-| VD shielded | X and Y | reco X, reco Y/Z | 320/40 | 74.5 | 100.4 | 770 | 2.422e+05 | 14.81 |
-| VD shielded | X only (Y=0) | reco X, reco Y/Z | 320/0 | 77.3 | 117.3 | 885 | 2.422e+05 | 14.22 |
-| VD shielded | Y only (X=0) | reco X, reco Y/Z | 0/20 | 98.2 | 248.1 | 1886 | 3.634e+05 | 12.41 |
-| VD shielded | X and Y | truth X, truth Y/Z | 180/180 | 64.9 | 2.875 | 62 | 1.211e+05 | 76.23 |
-| VD shielded | X only (Y=0) | truth X, truth Y/Z | 120/0 | 92.1 | 26.34 | 279 | 1.211e+05 | 35.72 |
-| VD shielded | Y only (X=0) | truth X, truth Y/Z | 0/20 | 98.6 | 219.3 | 1746 | 3.634e+05 | 13.26 |
-| VD shielded | X and Y | truth X, reco Y/Z | 340/120 | 58.1 | 2.88 | 67 | 1.211e+05 | 68.16 |
-| VD shielded | X only (Y=0) | truth X, reco Y/Z | 120/0 | 92.1 | 26.41 | 283 | 1.211e+05 | 35.67 |
-| VD shielded | Y only (X=0) | truth X, reco Y/Z | 0/20 | 98.5 | 218.2 | 1746 | 3.634e+05 | 13.28 |
-| VD shielded | X and Y | truth X (no containment), reco Y/Z | 340/120 | 58.1 | 2.88 | 67 | 1.211e+05 | 68.16 |
-| VD shielded | X only (Y=0) | truth X (no containment), reco Y/Z | 120/0 | 92.1 | 26.41 | 284 | 1.211e+05 | 35.67 |
-| VD shielded | Y only (X=0) | truth X (no containment), reco Y/Z | 0/20 | 98.5 | 218.2 | 1747 | 3.634e+05 | 13.28 |
-| VD shielded | X and Y | reco X, truth Y/Z | 320/20 | 76.1 | 105.6 | 813 | 2.422e+05 | 14.75 |
-| VD shielded | X only (Y=0) | reco X, truth Y/Z | 320/0 | 77.3 | 117.1 | 871 | 2.422e+05 | 14.23 |
-| VD shielded | Y only (X=0) | reco X, truth Y/Z | 0/20 | 98.3 | 245.2 | 1866 | 3.634e+05 | 12.49 |
-| HD central APA | X and Y | reco X, reco Y/Z | 0/120 | 88.0 | 2.893 | 27 | 5.344e+04 | 491.01 |
-| HD central APA | X only (Y=0) | reco X, reco Y/Z | 0/0 | 100.0 | 19.27 | 133 | 5.344e+04 | 216.24 |
-| HD central APA | Y only (X=0) | reco X, reco Y/Z | 0/120 | 88.0 | 2.893 | 27 | 5.344e+04 | 491.01 |
-| HD central APA | X and Y | truth X, truth Y/Z | 0/300 | 54.5 | 1.862 | 10 | 5.344e+04 | 379.16 |
-| HD central APA | X only (Y=0) | truth X, truth Y/Z | 220/0 | 55.1 | 7.483 | 131 | 0 | 191.29 |
-| HD central APA | Y only (X=0) | truth X, truth Y/Z | 0/300 | 54.5 | 1.862 | 10 | 5.344e+04 | 379.16 |
-| HD central APA | X and Y | truth X, reco Y/Z | 220/120 | 47.6 | 2.893 | 27 | 0 | 265.43 |
-| HD central APA | X only (Y=0) | truth X, reco Y/Z | 220/0 | 55.1 | 7.451 | 130 | 0 | 191.71 |
-| HD central APA | Y only (X=0) | truth X, reco Y/Z | 0/20 | 98.7 | 100.2 | 124 | 5.344e+04 | 93.55 |
-| HD central APA | X and Y | truth X (no containment), reco Y/Z | 220/120 | 47.6 | 2.893 | 27 | 0 | 265.43 |
-| HD central APA | X only (Y=0) | truth X (no containment), reco Y/Z | 220/0 | 55.1 | 7.451 | 130 | 0 | 191.71 |
-| HD central APA | Y only (X=0) | truth X (no containment), reco Y/Z | 0/20 | 98.7 | 100.2 | 124 | 5.344e+04 | 93.55 |
-| HD central APA | X and Y | reco X, truth Y/Z | 0/120 | 88.4 | 2.917 | 30 | 5.344e+04 | 491.34 |
-| HD central APA | X only (Y=0) | reco X, truth Y/Z | 0/0 | 100.0 | 19.27 | 133 | 5.344e+04 | 216.24 |
-| HD central APA | Y only (X=0) | reco X, truth Y/Z | 0/120 | 88.4 | 2.917 | 30 | 5.344e+04 | 491.34 |
+| HD lateral APA | X and Y | reco X, reco Y/Z | 60/80 | 72.2 | 2.549e+05 | 12315 | 1.077e+06 | 4.57 |
+| HD lateral APA | X only (Y=0) | reco X, reco Y/Z | 40/0 | 89.4 | 9.351e+05 | 50338 | 1.616e+06 | 2.95 |
+| HD lateral APA | Y only (X=0) | reco X, reco Y/Z | 0/60 | 90.5 | 8.596e+05 | 55584 | 1.077e+06 | 3.12 |
+| HD lateral APA | X and Y | truth X, truth Y/Z | 120/140 | 48.6 | 6.518e+04 | 2062 | 3.232e+05 | 6.08 |
+| HD lateral APA | X only (Y=0) | truth X, truth Y/Z | 80/0 | 76.9 | 5.62e+05 | 30252 | 1.185e+06 | 3.28 |
+| HD lateral APA | Y only (X=0) | truth X, truth Y/Z | 0/80 | 87.1 | 7.8e+05 | 50059 | 9.695e+05 | 3.15 |
+| HD lateral APA | X and Y | truth X, reco Y/Z | 120/100 | 53.1 | 7.485e+04 | 2612 | 6.463e+05 | 6.20 |
+| HD lateral APA | X only (Y=0) | truth X, reco Y/Z | 60/0 | 83.4 | 7.272e+05 | 39633 | 1.293e+06 | 3.13 |
+| HD lateral APA | Y only (X=0) | truth X, reco Y/Z | 0/60 | 90.5 | 8.263e+05 | 53022 | 8.618e+05 | 3.18 |
+| HD lateral APA | X and Y | truth X (no containment), reco Y/Z | 100/100 | 58.8 | 1.057e+05 | 4843 | 8.618e+05 | 5.78 |
+| HD lateral APA | X only (Y=0) | truth X (no containment), reco Y/Z | 60/0 | 83.4 | 7.522e+05 | 41595 | 1.508e+06 | 3.07 |
+| HD lateral APA | Y only (X=0) | truth X (no containment), reco Y/Z | 0/60 | 90.5 | 8.596e+05 | 55586 | 1.077e+06 | 3.12 |
+| HD lateral APA | X and Y | reco X, truth Y/Z | 60/100 | 69.3 | 2.395e+05 | 11276 | 9.695e+05 | 4.52 |
+| HD lateral APA | X only (Y=0) | reco X, truth Y/Z | 40/0 | 89.4 | 8.607e+05 | 45986 | 1.4e+06 | 3.08 |
+| HD lateral APA | Y only (X=0) | reco X, truth Y/Z | 0/80 | 87.1 | 8.111e+05 | 52414 | 1.077e+06 | 3.09 |
+| VD nominal | X and Y | reco X, reco Y/Z | 320/20 | 96.0 | 1.65e+04 | 130 | 3.475e+05 | 3.56 |
+| VD nominal | X only (Y=0) | reco X, reco Y/Z | 300/0 | 96.9 | 1.896e+04 | 146 | 3.475e+05 | 3.36 |
+| VD nominal | Y only (X=0) | reco X, reco Y/Z | 0/20 | 99.6 | 1.861e+04 | 180 | 3.475e+05 | 3.48 |
+| VD nominal | X and Y | truth X, truth Y/Z | 340/220 | 66.7 | 225.3 | 13 | 0 | 21.20 |
+| VD nominal | X only (Y=0) | truth X, truth Y/Z | 80/0 | 97.8 | 5125 | 70 | 3.475e+05 | 6.52 |
+| VD nominal | Y only (X=0) | truth X, truth Y/Z | 0/20 | 99.6 | 1.386e+04 | 155 | 3.475e+05 | 4.03 |
+| VD nominal | X and Y | truth X, reco Y/Z | 340/200 | 69.6 | 226.2 | 14 | 0 | 22.05 |
+| VD nominal | X only (Y=0) | truth X, reco Y/Z | 80/0 | 97.8 | 5125 | 70 | 3.475e+05 | 6.52 |
+| VD nominal | Y only (X=0) | truth X, reco Y/Z | 0/20 | 99.6 | 1.387e+04 | 158 | 3.475e+05 | 4.03 |
+| VD nominal | X and Y | truth X (no containment), reco Y/Z | 340/200 | 69.6 | 250.5 | 15 | 0 | 20.95 |
+| VD nominal | X only (Y=0) | truth X (no containment), reco Y/Z | 80/0 | 97.8 | 5150 | 71 | 3.475e+05 | 6.50 |
+| VD nominal | Y only (X=0) | truth X (no containment), reco Y/Z | 0/20 | 99.6 | 1.389e+04 | 159 | 3.475e+05 | 4.03 |
+| VD nominal | X and Y | reco X, truth Y/Z | 320/20 | 95.9 | 1.649e+04 | 126 | 3.475e+05 | 3.56 |
+| VD nominal | X only (Y=0) | reco X, truth Y/Z | 300/0 | 96.9 | 1.896e+04 | 145 | 3.475e+05 | 3.36 |
+| VD nominal | Y only (X=0) | reco X, truth Y/Z | 0/20 | 99.6 | 1.859e+04 | 175 | 3.475e+05 | 3.48 |
+| VD shielded | X and Y | reco X, reco Y/Z | 340/0 | 89.6 | 1.289e+04 | 2058 | 3.635e+05 | 12.01 |
+| VD shielded | X only (Y=0) | reco X, reco Y/Z | 340/0 | 89.6 | 1.289e+04 | 2058 | 3.635e+05 | 12.01 |
+| VD shielded | Y only (X=0) | reco X, reco Y/Z | 0/0 | 100.0 | 2.148e+04 | 3451 | 5.453e+05 | 10.39 |
+| VD shielded | X and Y | truth X, truth Y/Z | 340/260 | 55.4 | 149.5 | 200 | 0 | 68.98 |
+| VD shielded | X only (Y=0) | truth X, truth Y/Z | 340/0 | 80.6 | 793.4 | 661 | 0 | 43.55 |
+| VD shielded | Y only (X=0) | truth X, truth Y/Z | 0/0 | 100.0 | 2.077e+04 | 3130 | 5.453e+05 | 10.56 |
+| VD shielded | X and Y | truth X, reco Y/Z | 340/260 | 55.4 | 149.4 | 200 | 0 | 69.05 |
+| VD shielded | X only (Y=0) | truth X, reco Y/Z | 340/0 | 80.6 | 820.7 | 674 | 0 | 42.84 |
+| VD shielded | Y only (X=0) | truth X, reco Y/Z | 0/0 | 100.0 | 2.08e+04 | 3147 | 5.453e+05 | 10.56 |
+| VD shielded | X and Y | truth X (no containment), reco Y/Z | 340/260 | 55.4 | 149.4 | 200 | 0 | 69.05 |
+| VD shielded | X only (Y=0) | truth X (no containment), reco Y/Z | 340/0 | 80.6 | 820.7 | 674 | 0 | 42.84 |
+| VD shielded | Y only (X=0) | truth X (no containment), reco Y/Z | 0/0 | 100.0 | 2.08e+04 | 3147 | 5.453e+05 | 10.56 |
+| VD shielded | X and Y | reco X, truth Y/Z | 340/0 | 89.5 | 1.286e+04 | 2034 | 3.635e+05 | 12.02 |
+| VD shielded | X only (Y=0) | reco X, truth Y/Z | 340/0 | 89.5 | 1.286e+04 | 2034 | 3.635e+05 | 12.02 |
+| VD shielded | Y only (X=0) | reco X, truth Y/Z | 0/0 | 100.0 | 2.137e+04 | 3408 | 5.453e+05 | 10.41 |
+| HD central APA | X and Y | reco X, reco Y/Z | 0/300 | 50.8 | 1.525e+04 | 1082 | 4.289e+05 | 13.45 |
+| HD central APA | X only (Y=0) | reco X, reco Y/Z | 0/0 | 99.8 | 6.687e+05 | 42421 | 1.019e+06 | 3.98 |
+| HD central APA | Y only (X=0) | reco X, reco Y/Z | 0/300 | 50.8 | 1.525e+04 | 1082 | 4.289e+05 | 13.45 |
+| HD central APA | X and Y | truth X, truth Y/Z | 0/280 | 54.2 | 1.4e+04 | 597 | 4.289e+05 | 14.97 |
+| HD central APA | X only (Y=0) | truth X, truth Y/Z | 0/0 | 99.5 | 5.728e+05 | 35455 | 9.114e+05 | 4.30 |
+| HD central APA | Y only (X=0) | truth X, truth Y/Z | 0/280 | 54.2 | 1.4e+04 | 597 | 4.289e+05 | 14.97 |
+| HD central APA | X and Y | truth X, reco Y/Z | 0/200 | 67.5 | 2.213e+04 | 1005 | 5.361e+05 | 14.81 |
+| HD central APA | X only (Y=0) | truth X, reco Y/Z | 0/0 | 99.5 | 6.492e+05 | 40462 | 9.65e+05 | 4.04 |
+| HD central APA | Y only (X=0) | truth X, reco Y/Z | 0/200 | 67.5 | 2.213e+04 | 1005 | 5.361e+05 | 14.81 |
+| HD central APA | X and Y | truth X (no containment), reco Y/Z | 0/200 | 67.5 | 2.213e+04 | 1005 | 5.361e+05 | 14.81 |
+| HD central APA | X only (Y=0) | truth X (no containment), reco Y/Z | 0/0 | 99.5 | 6.492e+05 | 40462 | 9.65e+05 | 4.04 |
+| HD central APA | Y only (X=0) | truth X (no containment), reco Y/Z | 0/200 | 67.5 | 2.213e+04 | 1005 | 5.361e+05 | 14.81 |
+| HD central APA | X and Y | reco X, truth Y/Z | 0/300 | 50.8 | 1.426e+04 | 1000 | 3.753e+05 | 13.91 |
+| HD central APA | X only (Y=0) | reco X, truth Y/Z | 0/0 | 99.7 | 5.914e+05 | 37228 | 9.65e+05 | 4.24 |
+| HD central APA | Y only (X=0) | reco X, truth Y/Z | 0/300 | 50.8 | 1.426e+04 | 1000 | 3.753e+05 | 13.91 |
 
 ## Table F4 — Flash-mismatch and saturation rates
 
@@ -141,38 +141,38 @@ Reco vs truth position disagreement per species. Position tolerances are the `tr
 
 | Config | Component | Sample | N_MC | RecoX at volume edge [%] | |ΔX| > 100 cm [%] | |ΔX| > 30 cm [%] | |ΔY| or |ΔZ| > 50 cm [%] | either position tolerance [%] | Pur = 0 or absent [%] | Pur < 0.5 [%] | Pur < 0.5 and |ΔX| > 100 [%] | Pur < 0.5 or |ΔX| > 100 [%] | P(|ΔX| > 100 | Pur < 0.5) [%] | P(Pur < 0.5 | |ΔX| > 100) [%] | |ΔX| > 100 among Pur ≥ 0.5 [%] |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| HD lateral APA | marley | window | 19123 | 0.2 | 15.6 | 28.3 | 0.1 | 15.6 | 35.0 | 35.3 | 15.5 | 35.3 | 44.1 | 99.9 | 0.0 |
-| HD lateral APA | marley | + cut | 12890 | 0.3 | 14.3 | 25.1 | 0.0 | 14.4 | 31.0 | 31.2 | 14.3 | 31.2 | 45.9 | 100.0 | 0.0 |
-| HD lateral APA | gamma | window | 128943 | 1.2 | 17.7 | 34.8 | 3.5 | 20.5 | 35.4 | 36.7 | 17.2 | 37.2 | 46.8 | 97.0 | 0.8 |
-| HD lateral APA | gamma | + cut | 75268 | 1.1 | 15.6 | 31.1 | 2.8 | 17.9 | 31.2 | 32.4 | 15.1 | 32.9 | 46.7 | 96.8 | 0.7 |
-| HD lateral APA | neutron | window | 11472 | 0.4 | 16.9 | 33.4 | 15.4 | 26.5 | 28.2 | 28.9 | 15.4 | 30.4 | 53.3 | 91.5 | 2.0 |
-| HD lateral APA | neutron | + cut | 2862 | 1.4 | 22.0 | 41.1 | 26.7 | 38.4 | 33.5 | 33.9 | 19.0 | 36.9 | 56.0 | 86.3 | 4.6 |
-| HD lateral APA | radiological | window | 14 | 0.0 | 35.7 | 42.9 | 7.1 | 35.7 | 85.7 | 85.7 | 21.4 | 100.0 | 25.0 | 60.0 | 100.0 |
-| HD lateral APA | radiological | + cut | 4 | 0.0 | 25.0 | 25.0 | 0.0 | 25.0 | 75.0 | 75.0 | 0.0 | 100.0 | 0.0 | 0.0 | 100.0 |
-| VD nominal | marley | window | 15503 | 0.1 | 44.6 | 56.4 | 0.8 | 44.8 | 61.5 | 91.5 | 44.6 | 91.5 | 48.8 | 100.0 | 0.0 |
-| VD nominal | marley | + cut | 5089 | 0.3 | 32.6 | 42.3 | 0.7 | 32.7 | 46.0 | 86.0 | 32.6 | 86.0 | 37.9 | 100.0 | 0.0 |
-| VD nominal | gamma | window | 10121 | 0.0 | 89.5 | 95.5 | 9.7 | 90.0 | 97.9 | 99.1 | 89.5 | 99.1 | 90.3 | 100.0 | 0.0 |
-| VD nominal | gamma | + cut | 1641 | 0.0 | 70.9 | 79.2 | 8.4 | 71.0 | 94.5 | 99.1 | 70.9 | 99.1 | 71.5 | 100.0 | 0.6 |
-| VD nominal | neutron | window | 7742 | 0.6 | 86.3 | 90.8 | 31.4 | 87.1 | 89.5 | 97.2 | 86.3 | 97.2 | 88.7 | 100.0 | 0.1 |
-| VD nominal | neutron | + cut | 298 | 0.1 | 93.8 | 94.2 | 63.1 | 93.9 | 94.1 | 95.2 | 93.8 | 95.2 | 98.5 | 100.0 | 0.0 |
-| VD nominal | radiological | window | 1293 | 42.5 | 94.9 | 96.4 | 57.2 | 95.9 | 99.0 | 99.8 | 94.7 | 100.0 | 94.9 | 99.8 | 100.0 |
-| VD nominal | radiological | + cut | 3 | 33.3 | 33.3 | 66.7 | 0.0 | 33.3 | 66.7 | 100.0 | 33.3 | 100.0 | 33.3 | 100.0 | n/a |
-| VD shielded | marley | window | 15892 | 0.1 | 44.9 | 57.2 | 0.7 | 45.1 | 62.2 | 91.6 | 44.9 | 91.6 | 49.0 | 100.0 | 0.0 |
-| VD shielded | marley | + cut | 5119 | 0.3 | 32.9 | 42.6 | 0.7 | 33.0 | 46.2 | 86.2 | 32.9 | 86.2 | 38.1 | 100.0 | 0.0 |
-| VD shielded | gamma | window | 10383 | 0.1 | 89.4 | 95.6 | 8.8 | 89.8 | 97.9 | 99.1 | 89.4 | 99.1 | 90.2 | 100.0 | 0.1 |
-| VD shielded | gamma | + cut | 1651 | 0.0 | 72.6 | 84.4 | 6.1 | 73.0 | 94.3 | 98.3 | 72.5 | 98.4 | 73.8 | 100.0 | 1.4 |
-| VD shielded | neutron | window | 8771 | 0.9 | 85.2 | 90.7 | 28.6 | 86.1 | 89.3 | 97.1 | 85.2 | 97.1 | 87.7 | 100.0 | 0.1 |
-| VD shielded | neutron | + cut | 320 | 0.1 | 87.0 | 87.3 | 58.5 | 87.1 | 87.2 | 88.4 | 87.0 | 88.4 | 98.4 | 100.0 | 0.0 |
-| VD shielded | radiological | window | 747 | 23.2 | 88.4 | 91.4 | 45.2 | 91.2 | 98.9 | 99.9 | 88.2 | 100.0 | 88.3 | 99.8 | 100.0 |
-| VD shielded | radiological | + cut | 3 | 33.3 | 33.3 | 66.7 | 0.0 | 33.3 | 66.7 | 100.0 | 33.3 | 100.0 | 33.3 | 100.0 | n/a |
-| HD central APA | marley | window | 24326 | 0.3 | 17.4 | 33.0 | 0.2 | 17.5 | 41.0 | 41.9 | 17.4 | 41.9 | 41.4 | 100.0 | 0.0 |
-| HD central APA | marley | + cut | 7132 | 0.0 | 4.5 | 8.6 | 0.1 | 4.7 | 10.1 | 10.2 | 4.5 | 10.2 | 44.2 | 100.0 | 0.0 |
-| HD central APA | gamma | window | 49398 | 0.3 | 12.7 | 23.8 | 3.5 | 15.5 | 22.9 | 29.7 | 12.6 | 29.8 | 42.3 | 99.2 | 0.1 |
-| HD central APA | gamma | + cut | 115 | 0.0 | 75.6 | 80.7 | 0.1 | 75.7 | 75.6 | 79.6 | 75.6 | 79.6 | 95.0 | 100.0 | 0.0 |
-| HD central APA | neutron | window | 8719 | 0.6 | 4.2 | 10.7 | 4.4 | 8.0 | 6.3 | 6.9 | 4.0 | 7.1 | 57.4 | 95.6 | 0.2 |
-| HD central APA | neutron | + cut | 25 | 96.3 | 96.3 | 96.3 | 96.3 | 96.4 | 0.0 | 0.0 | 0.0 | 96.3 | 0.0 | 0.0 | 96.3 |
-| HD central APA | radiological | window | 31 | 0.0 | 45.2 | 80.6 | 35.5 | 58.1 | 100.0 | 100.0 | 45.2 | 100.0 | 45.2 | 100.0 | n/a |
-| HD central APA | radiological | + cut | 1 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 100.0 | 100.0 | 0.0 | 100.0 | 0.0 | n/a | n/a |
+| HD lateral APA | marley | window | 91551 | 0.3 | 15.3 | 28.8 | 0.2 | 15.5 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| HD lateral APA | marley | + cut | 84744 | 0.2 | 13.9 | 25.8 | 0.2 | 14.0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| HD lateral APA | gamma | window | 92799 | 0.9 | 21.2 | 37.3 | 4.1 | 24.3 | 36.7 | 37.7 | 21.0 | 37.9 | 55.7 | 98.9 | 0.4 |
+| HD lateral APA | gamma | + cut | 85929 | 0.9 | 19.1 | 33.9 | 3.8 | 22.1 | 32.1 | 33.1 | 18.9 | 33.3 | 57.0 | 98.6 | 0.4 |
+| HD lateral APA | neutron | window | 8886 | 0.8 | 21.6 | 41.8 | 17.4 | 31.5 | 36.7 | 37.3 | 19.9 | 39.0 | 53.3 | 92.1 | 2.7 |
+| HD lateral APA | neutron | + cut | 7277 | 0.6 | 20.7 | 40.2 | 17.2 | 31.0 | 34.1 | 34.2 | 18.8 | 36.1 | 54.9 | 91.0 | 2.8 |
+| HD lateral APA | radiological | window | 22 | 0.0 | 40.9 | 68.2 | 27.3 | 40.9 | 90.9 | 90.9 | 31.8 | 100.0 | 35.0 | 77.8 | 100.0 |
+| HD lateral APA | radiological | + cut | 16 | 0.0 | 25.0 | 62.5 | 25.0 | 25.0 | 87.5 | 87.5 | 12.5 | 100.0 | 14.3 | 50.0 | 100.0 |
+| VD nominal | marley | window | 51524 | 0.0 | 34.9 | 45.3 | 0.9 | 35.2 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| VD nominal | marley | + cut | 17590 | 0.0 | 10.6 | 14.2 | 0.4 | 10.7 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| VD nominal | gamma | window | 1759 | 0.2 | 89.9 | 95.4 | 10.2 | 90.6 | 97.1 | 99.9 | 89.9 | 99.9 | 89.9 | 100.0 | 0.0 |
+| VD nominal | gamma | + cut | 121 | 0.0 | 94.6 | 96.2 | 4.3 | 94.7 | 96.2 | 99.8 | 94.6 | 99.8 | 94.9 | 100.0 | 0.0 |
+| VD nominal | neutron | window | 1408 | 0.0 | 86.5 | 88.2 | 17.9 | 86.5 | 89.0 | 98.7 | 86.5 | 98.7 | 87.6 | 100.0 | 0.0 |
+| VD nominal | neutron | + cut | 71 | 0.0 | 47.7 | 47.8 | 47.3 | 48.2 | 47.8 | 75.9 | 47.7 | 75.9 | 62.9 | 100.0 | 0.0 |
+| VD nominal | radiological | window | 24 | 0.0 | 87.5 | 91.7 | 58.3 | 87.5 | 100.0 | 100.0 | 87.5 | 100.0 | 87.5 | 100.0 | n/a |
+| VD nominal | radiological | + cut | 1 | 0.0 | 0.0 | 100.0 | 0.0 | 0.0 | 100.0 | 100.0 | 0.0 | 100.0 | 0.0 | n/a | n/a |
+| VD shielded | marley | window | 29467 | 0.1 | 31.6 | 40.6 | 0.6 | 31.8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| VD shielded | marley | + cut | 18918 | 0.0 | 14.1 | 17.9 | 0.2 | 14.2 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| VD shielded | gamma | window | 9869 | 0.2 | 85.1 | 93.5 | 8.3 | 85.6 | 97.5 | 98.7 | 85.1 | 98.7 | 86.2 | 100.0 | 1.0 |
+| VD shielded | gamma | + cut | 2101 | 0.2 | 84.5 | 93.7 | 5.0 | 84.7 | 96.8 | 97.7 | 84.4 | 97.8 | 86.4 | 99.9 | 2.7 |
+| VD shielded | neutron | window | 6449 | 0.0 | 83.5 | 89.0 | 28.7 | 84.3 | 87.1 | 97.1 | 83.5 | 97.1 | 86.0 | 100.0 | 0.1 |
+| VD shielded | neutron | + cut | 1350 | 0.0 | 60.3 | 67.6 | 18.2 | 61.8 | 63.4 | 90.4 | 60.3 | 90.4 | 66.7 | 100.0 | 0.0 |
+| VD shielded | radiological | window | 17 | 0.0 | 47.1 | 64.7 | 17.6 | 52.9 | 100.0 | 100.0 | 47.1 | 100.0 | 47.1 | 100.0 | n/a |
+| VD shielded | radiological | + cut | 3 | 0.0 | 66.7 | 100.0 | 0.0 | 66.7 | 100.0 | 100.0 | 66.7 | 100.0 | 66.7 | 100.0 | n/a |
+| HD central APA | marley | window | 92827 | 0.5 | 14.4 | 27.8 | 0.2 | 14.5 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| HD central APA | marley | + cut | 75740 | 0.4 | 11.5 | 22.4 | 0.2 | 11.7 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| HD central APA | gamma | window | 45663 | 0.6 | 29.7 | 55.6 | 3.9 | 32.4 | 65.6 | 67.8 | 29.7 | 67.8 | 43.8 | 99.9 | 0.1 |
+| HD central APA | gamma | + cut | 36266 | 0.6 | 26.5 | 51.0 | 3.8 | 29.2 | 59.1 | 61.4 | 26.5 | 61.5 | 43.1 | 99.8 | 0.1 |
+| HD central APA | neutron | window | 9374 | 0.5 | 25.1 | 48.9 | 23.6 | 37.5 | 44.5 | 45.7 | 23.7 | 47.0 | 51.9 | 94.6 | 2.5 |
+| HD central APA | neutron | + cut | 6367 | 0.2 | 24.8 | 52.0 | 29.5 | 41.0 | 42.3 | 44.2 | 22.6 | 46.4 | 51.1 | 91.2 | 3.9 |
+| HD central APA | radiological | window | 27 | 0.0 | 48.1 | 81.5 | 22.2 | 59.3 | 96.3 | 96.3 | 44.4 | 100.0 | 46.2 | 92.3 | 100.0 |
+| HD central APA | radiological | + cut | 19 | 0.0 | 63.2 | 84.2 | 21.1 | 68.4 | 94.7 | 94.7 | 57.9 | 100.0 | 61.1 | 91.7 | 100.0 |
 
 ## Table F5 — Which truth key describes the reconstructed cluster?
 
@@ -180,35 +180,27 @@ Weighted share of events whose reco Y,Z (wire-based cluster position) and reco X
 
 | Config | Component | Sample | N_MC | configured key | Main: Y,Z [%] / X [%] / in box [%] | MainParent: Y,Z [%] / X [%] / in box [%] | End: Y,Z [%] / X [%] / in box [%] | SignalParticle: Y,Z [%] / X [%] / in box [%] |
 |---|---|---|---|---|---|---|---|---|
-| HD central APA | marley | window | 24326 | SignalParticle | 99 / 67 / 100 | 0 / 0 / 0 | 99 / 67 / 100 | 100 / 67 / 100 |
-| HD central APA | marley | + cut | 7132 | SignalParticle | 100 / 91 / 100 | 0 / 0 / 0 | 98 / 91 / 100 | 100 / 91 / 100 |
-| HD central APA | gamma | window | 49398 | End | 11 / 53 / 0 | 0 / 0 / 0 | 90 / 76 / 100 | 11 / 53 / 0 |
-| HD central APA | gamma | + cut | 115 | End | 0 / 14 / 0 | 0 / 0 / 0 | 100 / 19 / 100 | 0 / 14 / 0 |
-| HD central APA | neutron | window | 8719 | Main | 89 / 89 / 100 | 0 / 13 / 0 | 88 / 89 / 99 | 0 / 13 / 0 |
-| HD central APA | neutron | + cut | 25 | Main | 4 / 4 / 100 | 0 / 0 / 0 | 3 / 4 / 100 | 0 / 0 / 0 |
-| HD central APA | radiological | window | 31 | End | 29 / 26 / 58 | 29 / 16 / 45 | 65 / 19 / 90 | 3 / 0 / 100 |
-| HD central APA | radiological | + cut | 1 | End | 0 / 0 / 100 | 0 / 0 / 100 | 100 / 100 / 100 | 0 / 0 / 100 |
-| HD lateral APA | marley | window | 19123 | SignalParticle | 100 / 72 / 100 | 0 / 0 / 0 | 99 / 71 / 100 | 100 / 72 / 100 |
-| HD lateral APA | marley | + cut | 12890 | SignalParticle | 100 / 75 / 100 | 0 / 0 / 0 | 99 / 74 / 100 | 100 / 75 / 100 |
-| HD lateral APA | gamma | window | 128943 | End | 36 / 53 / 41 | 0 / 0 / 0 | 89 / 65 / 97 | 36 / 53 / 41 |
-| HD lateral APA | gamma | + cut | 75268 | End | 38 / 56 / 46 | 0 / 0 / 0 | 90 / 69 / 96 | 38 / 56 / 46 |
-| HD lateral APA | neutron | window | 11472 | Main | 77 / 67 / 81 | 2 / 21 / 40 | 89 / 73 / 98 | 2 / 21 / 40 |
-| HD lateral APA | neutron | + cut | 2862 | Main | 66 / 59 / 65 | 1 / 23 / 29 | 89 / 69 / 96 | 1 / 23 / 29 |
-| HD lateral APA | radiological | window | 14 | End | 71 / 29 / 93 | 36 / 7 / 71 | 86 / 57 / 100 | 14 / 21 / 100 |
-| HD lateral APA | radiological | + cut | 4 | End | 75 / 50 / 100 | 25 / 0 / 75 | 75 / 75 / 100 | 25 / 25 / 100 |
-| VD nominal | marley | window | 15503 | SignalParticle | 99 / 43 / 100 | 0 / 0 / 0 | 97 / 43 / 100 | 99 / 44 / 100 |
-| VD nominal | marley | + cut | 5089 | SignalParticle | 99 / 57 / 100 | 0 / 0 / 0 | 96 / 57 / 100 | 99 / 58 / 100 |
-| VD nominal | gamma | window | 10121 | End | 23 / 1 / 0 | 0 / 0 / 0 | 83 / 5 / 95 | 23 / 1 / 0 |
-| VD nominal | gamma | + cut | 1641 | End | 19 / 2 / 0 | 0 / 0 / 0 | 90 / 21 / 95 | 19 / 2 / 0 |
-| VD nominal | neutron | window | 7742 | Main | 61 / 9 / 74 | 1 / 2 / 0 | 75 / 11 / 91 | 1 / 2 / 0 |
-| VD nominal | neutron | + cut | 298 | Main | 36 / 6 / 57 | 0 / 5 / 0 | 53 / 2 / 82 | 0 / 5 / 0 |
-| VD nominal | radiological | window | 1293 | End | 27 / 3 / 19 | 3 / 2 / 4 | 37 / 4 / 69 | 0 / 7 / 88 |
-| VD nominal | radiological | + cut | 3 | End | 33 / 33 / 33 | 33 / 33 / 33 | 100 / 33 / 100 | 0 / 0 / 100 |
-| VD shielded | marley | window | 15892 | SignalParticle | 99 / 43 / 100 | 0 / 0 / 0 | 98 / 42 / 100 | 99 / 43 / 100 |
-| VD shielded | marley | + cut | 5119 | SignalParticle | 99 / 57 / 100 | 0 / 0 / 0 | 96 / 57 / 100 | 99 / 57 / 100 |
-| VD shielded | gamma | window | 10383 | End | 23 / 1 / 0 | 0 / 0 / 0 | 84 / 4 / 96 | 23 / 1 / 0 |
-| VD shielded | gamma | + cut | 1651 | End | 17 / 2 / 0 | 0 / 0 / 0 | 90 / 16 / 96 | 17 / 2 / 0 |
-| VD shielded | neutron | window | 8771 | Main | 64 / 9 / 77 | 1 / 3 / 0 | 76 / 11 / 92 | 1 / 3 / 0 |
-| VD shielded | neutron | + cut | 320 | Main | 41 / 13 / 60 | 0 / 4 / 0 | 57 / 9 / 83 | 0 / 4 / 0 |
-| VD shielded | radiological | window | 747 | End | 37 / 7 / 34 | 7 / 5 / 9 | 46 / 9 / 77 | 0 / 7 / 87 |
-| VD shielded | radiological | + cut | 3 | End | 33 / 33 / 33 | 33 / 33 / 33 | 100 / 33 / 100 | 0 / 0 / 100 |
+| HD central APA | gamma | window | 45663 | End | 16 / 34 / 0 | 0 / 0 / 0 | 88 / 44 / 96 | 16 / 34 / 0 |
+| HD central APA | gamma | + cut | 36266 | End | 16 / 36 / 0 | 0 / 0 / 0 | 88 / 49 / 96 | 16 / 36 / 0 |
+| HD central APA | neutron | window | 9374 | Main | 68 / 51 / 70 | 1 / 13 / 0 | 87 / 60 / 98 | 1 / 13 / 0 |
+| HD central APA | neutron | + cut | 6367 | Main | 60 / 48 / 64 | 1 / 14 / 0 | 86 / 62 / 98 | 1 / 14 / 0 |
+| HD central APA | radiological | window | 27 | End | 33 / 26 / 56 | 30 / 15 / 48 | 70 / 19 / 96 | 0 / 19 / 100 |
+| HD central APA | radiological | + cut | 19 | End | 26 / 5 / 58 | 21 / 0 / 47 | 68 / 16 / 100 | 0 / 16 / 100 |
+| HD lateral APA | gamma | window | 92799 | End | 41 / 49 / 53 | 0 / 0 / 0 | 87 / 63 / 97 | 41 / 49 / 53 |
+| HD lateral APA | gamma | + cut | 85929 | End | 42 / 52 / 55 | 0 / 0 / 0 | 88 / 66 / 97 | 42 / 52 / 55 |
+| HD lateral APA | neutron | window | 8886 | Main | 74 / 58 / 77 | 2 / 19 / 47 | 89 / 65 / 97 | 2 / 19 / 47 |
+| HD lateral APA | neutron | + cut | 7277 | Main | 75 / 60 / 78 | 2 / 20 / 48 | 89 / 67 / 97 | 2 / 20 / 48 |
+| HD lateral APA | radiological | window | 22 | End | 36 / 36 / 50 | 14 / 5 / 45 | 68 / 32 / 82 | 0 / 18 / 100 |
+| HD lateral APA | radiological | + cut | 16 | End | 38 / 44 / 44 | 12 / 6 / 44 | 69 / 38 / 81 | 0 / 25 / 100 |
+| VD nominal | gamma | window | 1759 | End | 21 / 1 / 0 | 0 / 0 / 0 | 82 / 5 / 96 | 21 / 1 / 0 |
+| VD nominal | gamma | + cut | 121 | End | 19 / 1 / 0 | 0 / 0 / 0 | 79 / 4 / 97 | 19 / 1 / 0 |
+| VD nominal | neutron | window | 1408 | Main | 80 / 12 / 86 | 1 / 1 / 0 | 82 / 12 / 96 | 1 / 1 / 0 |
+| VD nominal | neutron | + cut | 71 | Main | 53 / 52 / 53 | 0 / 0 / 0 | 98 / 53 / 99 | 0 / 0 / 0 |
+| VD nominal | radiological | window | 24 | End | 38 / 8 / 50 | 4 / 8 / 17 | 38 / 8 / 83 | 0 / 12 / 83 |
+| VD nominal | radiological | + cut | 1 | End | 0 / 0 / 100 | 0 / 0 / 100 | 0 / 0 / 100 | 0 / 0 / 100 |
+| VD shielded | gamma | window | 9869 | End | 22 / 1 / 0 | 0 / 0 / 0 | 84 / 7 / 96 | 22 / 1 / 0 |
+| VD shielded | gamma | + cut | 2101 | End | 21 / 1 / 0 | 0 / 0 / 0 | 87 / 6 / 98 | 21 / 1 / 0 |
+| VD shielded | neutron | window | 6449 | Main | 62 / 11 / 74 | 1 / 3 / 0 | 79 / 12 / 90 | 1 / 3 / 0 |
+| VD shielded | neutron | + cut | 1350 | Main | 74 / 32 / 85 | 0 / 2 / 0 | 78 / 30 / 88 | 0 / 2 / 0 |
+| VD shielded | radiological | window | 17 | End | 76 / 41 / 76 | 59 / 41 / 65 | 71 / 35 / 94 | 0 / 18 / 100 |
+| VD shielded | radiological | + cut | 3 | End | 67 / 0 / 33 | 33 / 0 / 33 | 67 / 0 / 100 | 0 / 33 / 100 |

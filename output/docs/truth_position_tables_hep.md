@@ -8,14 +8,14 @@ Weighted (B/S) in the shell divided by (B/S) in the 100–200 cm shell, truth po
 
 | Config | Background | 0–20 cm | 20–100 cm | 100–200 cm |
 |---|---|---|---|---|
-| HD central APA | gamma | ×60.0 | ×17.6 | ×1.0 |
-| HD central APA | neutron | ×0.7 | ×0.9 | ×1.0 |
-| HD lateral APA | gamma | ×132.9 | ×24.6 | ×1.0 |
-| HD lateral APA | neutron | ×3.5 | ×1.1 | ×1.0 |
-| VD nominal | gamma | ×39.9 | ×15.5 | ×1.0 |
-| VD nominal | neutron | ×19.4 | ×2.2 | ×1.0 |
-| VD shielded | gamma | ×52.8 | ×18.9 | ×1.0 |
-| VD shielded | neutron | ×19.3 | ×2.4 | ×1.0 |
+| HD central APA | gamma | ×92.1 | ×20.0 | ×1.0 |
+| HD central APA | neutron | ×6.6 | ×1.2 | ×1.0 |
+| HD lateral APA | gamma | ×106.4 | ×22.9 | ×1.0 |
+| HD lateral APA | neutron | ×4.2 | ×1.1 | ×1.0 |
+| VD nominal | gamma | ×46.6 | ×10.3 | ×1.0 |
+| VD nominal | neutron | ×12.1 | ×1.8 | ×1.0 |
+| VD shielded | gamma | ×66.2 | ×18.5 | ×1.0 |
+| VD shielded | neutron | ×22.1 | ×2.0 | ×1.0 |
 
 ## Table 2 — Pass fractions
 
@@ -23,30 +23,30 @@ Fraction of the HEP window+cut sample kept by the fiducial cut. 'Fiducial only' 
 
 | Config | Component | N_MC | reco pos, reco vol [%] | truth pos, reco vol, fiducial only [%] | truth pos, reco vol, + containment/consistency [%] | truth pos, truth vol, + containment/consistency [%] |
 |---|---|---|---|---|---|---|
-| HD central APA | marley | 12828 | 90.8 | 91.0 | 91.0 | 91.0 |
-| HD central APA | gamma | 47 | 1.3 | 1.3 | 1.2 | 1.2 |
-| HD central APA | neutron | 241 | 93.7 | 93.7 | 93.7 | 93.7 |
-| HD central APA | neutron_agree | 226 | 93.3 | 93.3 | 93.3 | 93.3 |
-| HD central APA | neutron_disagree | 15 | 99.8 | 100.0 | 99.3 | 99.3 |
-| HD central APA | radiological | 2 | 100.0 | 100.0 | 100.0 | 100.0 |
-| HD lateral APA | marley | 14886 | 70.3 | 71.2 | 71.2 | 88.2 |
-| HD lateral APA | gamma | 94262 | 4.5 | 5.9 | 4.8 | 45.7 |
-| HD lateral APA | neutron | 5843 | 48.6 | 49.9 | 42.0 | 60.1 |
-| HD lateral APA | neutron_agree | 3157 | 55.9 | 55.6 | 54.8 | 76.7 |
-| HD lateral APA | neutron_disagree | 2686 | 33.5 | 37.8 | 15.3 | 25.3 |
-| HD lateral APA | radiological | 7 | 85.7 | 100.0 | 57.1 | 57.1 |
-| VD nominal | marley | 10713 | 99.8 | 100.0 | 100.0 | 100.0 |
-| VD nominal | gamma | 3619 | 100.0 | 94.4 | 17.3 | 17.3 |
-| VD nominal | neutron | 1638 | 99.0 | 83.9 | 29.6 | 29.6 |
-| VD nominal | neutron_agree | 464 | 94.5 | 100.0 | 100.0 | 100.0 |
-| VD nominal | neutron_disagree | 1174 | 99.9 | 80.6 | 15.2 | 15.2 |
-| VD nominal | radiological | 66 | 98.5 | 80.3 | 22.7 | 22.7 |
-| VD shielded | marley | 5621 | 99.8 | 100.0 | 100.0 | 100.0 |
-| VD shielded | gamma | 767 | 99.9 | 96.2 | 21.6 | 21.6 |
-| VD shielded | neutron | 415 | 100.0 | 94.4 | 42.9 | 42.9 |
-| VD shielded | neutron_agree | 188 | 99.8 | 100.0 | 100.0 | 100.0 |
-| VD shielded | neutron_disagree | 227 | 100.0 | 92.5 | 24.2 | 24.2 |
-| VD shielded | radiological | 6 | 83.3 | 100.0 | 50.0 | 50.0 |
+| HD central APA | marley | 61689 | 67.9 | 67.9 | 67.9 | 71.6 |
+| HD central APA | gamma | 22147 | 0.3 | 0.6 | 0.2 | 0.2 |
+| HD central APA | neutron | 3523 | 34.7 | 31.4 | 27.9 | 29.9 |
+| HD central APA | neutron_agree | 1370 | 45.8 | 46.8 | 46.8 | 50.1 |
+| HD central APA | neutron_disagree | 2153 | 22.1 | 13.9 | 6.4 | 7.0 |
+| HD central APA | radiological | 7 | 42.9 | 0.0 | 0.0 | 14.3 |
+| HD lateral APA | marley | 51604 | 51.5 | 51.6 | 51.6 | 50.2 |
+| HD lateral APA | gamma | 60186 | 6.8 | 4.8 | 3.8 | 1.7 |
+| HD lateral APA | neutron | 2744 | 30.8 | 27.8 | 17.3 | 17.6 |
+| HD lateral APA | neutron_agree | 716 | 35.3 | 35.3 | 33.5 | 34.2 |
+| HD lateral APA | neutron_disagree | 2028 | 27.3 | 22.0 | 4.8 | 4.8 |
+| HD lateral APA | radiological | 6 | 33.3 | 33.3 | 16.7 | 16.7 |
+| VD nominal | marley | 29190 | 100.0 | 100.0 | 100.0 | 100.0 |
+| VD nominal | gamma | 391 | 100.0 | 97.7 | 18.2 | 18.2 |
+| VD nominal | neutron | 182 | 100.0 | 83.6 | 21.2 | 21.2 |
+| VD nominal | neutron_agree | 63 | 100.0 | 100.0 | 100.0 | 100.0 |
+| VD nominal | neutron_disagree | 119 | 100.0 | 80.3 | 5.0 | 5.0 |
+| VD nominal | radiological | 1 | 100.0 | 100.0 | 0.0 | 0.0 |
+| VD shielded | marley | 15090 | 52.9 | 52.9 | 52.9 | 100.0 |
+| VD shielded | gamma | 1504 | 49.4 | 47.0 | 10.3 | 24.2 |
+| VD shielded | neutron | 681 | 61.9 | 49.0 | 27.8 | 50.1 |
+| VD shielded | neutron_agree | 310 | 51.8 | 51.8 | 51.8 | 99.9 |
+| VD shielded | neutron_disagree | 371 | 67.3 | 47.5 | 14.9 | 23.3 |
+| VD shielded | radiological | 3 | 33.3 | 0.0 | 0.0 | 66.7 |
 
 ## Table 3 — Default vs fiduc_truth volumes and significances
 
@@ -54,18 +54,18 @@ Fraction of the HEP window+cut sample kept by the fiducial cut. 'Fiducial only' 
 
 | Config | Analysis | Default volume X/Y/Z [cm] | significance default (σ; Sensitivity: Δχ²) | Truth volume X/Y/Z [cm] | significance fiduc_truth | significance fiduc_truth_refvol (truth pos., default volume) | Δ fiduc_truth | Δ refvol |
 |---|---|---|---|---|---|---|---|---|
-| HD central APA | DayNight | 20/100/320 | 5.468 | 100/80/320 | 6.143 | 6.035 | +0.675 | +0.567 |
-| HD central APA | HEP | 0/80/0 | 12.181 | 0/80/0 | 12.063 | 11.387 | -0.118 | -0.794 |
-| HD central APA | Sensitivity | 0/80/100 | 5.728 | 0/100/20 | 7.252 | 7.616 | +1.524 | +1.888 |
-| HD lateral APA | DayNight | 80/140/240 | 1.537 | 60/80/0 | 2.057 | 1.701 | +0.520 | +0.164 |
-| HD lateral APA | HEP | 60/80/20 | 5.672 | 0/80/100 | 6.620 | 7.181 | +0.947 | +1.509 |
-| HD lateral APA | Sensitivity | 60/260/200 | 0.405 | 60/60/0 | 0.615 | 0.528 | +0.209 | +0.123 |
-| VD nominal | DayNight | 0/20/60 | 0.857 | 80/180/480 | 3.274 | 2.565 | +2.417 | +1.707 |
-| VD nominal | HEP | 0/0/40 | 2.755 | 0/0/40 | 5.365 | 5.352 | +2.610 | +2.597 |
-| VD nominal | Sensitivity | 0/0/20 | 0.080 | 100/80/0 | 0.902 | 0.751 | +0.822 | +0.671 |
-| VD shielded | DayNight | 20/100/20 | 1.910 | 100/80/0 | 4.335 | 4.329 | +2.426 | +2.420 |
-| VD shielded | HEP | 0/0/20 | 3.663 | 0/0/20 | 5.617 | 5.617 | +1.953 | +1.953 |
-| VD shielded | Sensitivity | 0/0/20 | 0.396 | 100/80/140 | 0.914 | 1.025 | +0.518 | +0.628 |
+| HD central APA | DayNight | 0/200/60 | 5.174 | 0/200/60 | 6.564 | 6.035 | +1.390 | +0.861 |
+| HD central APA | HEP | 60/160/60 | 13.701 | 0/160/60 | 12.638 | 11.387 | -1.063 | -2.314 |
+| HD central APA | Sensitivity | 0/200/60 | 5.943 | 0/200/60 | 8.278 | 7.616 | +2.335 | +1.672 |
+| HD lateral APA | DayNight | 60/300/160 | 1.393 | 80/140/0 | 4.114 | 1.314 | +2.720 | -0.079 |
+| HD lateral APA | HEP | 60/240/0 | 1.588 | 80/220/0 | 6.995 | 7.173 | +5.407 | +5.585 |
+| HD lateral APA | Sensitivity | 60/300/160 | 0.923 | 80/120/0 | 2.883 | 0.473 | +1.960 | -0.450 |
+| VD nominal | DayNight | 40/0/480 | 2.384 | 40/60/0 | 7.143 | 2.565 | +4.759 | +0.181 |
+| VD nominal | HEP | 0/0/0 | 1.979 | 0/0/0 | 6.330 | 5.352 | +4.352 | +3.374 |
+| VD nominal | Sensitivity | 0/120/0 | 1.125 | 40/20/0 | 5.277 | 0.751 | +4.152 | -0.374 |
+| VD shielded | DayNight | 0/0/0 | 4.749 | 160/60/0 | 9.309 | 4.329 | +4.560 | -0.419 |
+| VD shielded | HEP | 0/0/520 | 2.246 | 0/0/0 | 7.620 | 5.617 | +5.374 | +3.370 |
+| VD shielded | Sensitivity | 0/0/0 | 4.255 | 140/40/0 | 15.426 | 1.025 | +11.171 | -3.231 |
 
 ## Table 4 — Surviving MC statistics at the analysis cut
 
@@ -73,19 +73,19 @@ N_MC at the default HEP best cut. The weight per event and the share of the back
 
 | Config | Component | N_MC (window+cut) | N_MC + reco fiducial | N_MC + truth pipeline | Σw (reco fiducial) | mean w / event | N_eff | largest single-event share of Σw | rel. stat. unc. 1/√N_eff | share of background Σw, reco | share of background Σw, truth pipeline |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| HD central APA | marley | 12828 | 11596 | 11587 | 990.1 | 0.08538 | 1801.4 | 0% | 2% | – | – |
-| HD central APA | gamma | 47 | 13 | 11 | 0.1588 | 0.01221 | 4.4 | 28% | 48% | 0% | 0% |
-| HD central APA | neutron | 241 | 215 | 214 | 1443 | 6.711 | 21.0 | 6% | 22% | 1% | 1% |
-| HD central APA | radiological | 2 | 2 | 2 | 1.069e+05 | 5.344e+04 | 2.0 | 50% | 71% | 99% | 99% |
-| HD lateral APA | marley | 14886 | 10654 | 13167 | 1218 | 0.1143 | 2087.6 | 0% | 2% | – | – |
-| HD lateral APA | gamma | 94262 | 5198 | 58345 | 1879 | 0.3615 | 305.7 | 1% | 6% | 0% | 4% |
-| HD lateral APA | neutron | 5843 | 2958 | 2660 | 3.808e+04 | 12.87 | 249.4 | 1% | 6% | 6% | 10% |
-| HD lateral APA | radiological | 7 | 6 | 4 | 6.409e+05 | 1.068e+05 | 6.0 | 17% | 41% | 94% | 87% |
-| VD nominal | marley | 10713 | 10702 | 10713 | 532 | 0.04971 | 1856.5 | 0% | 2% | – | – |
-| VD nominal | gamma | 3619 | 3604 | 962 | 4442 | 1.233 | 179.7 | 1% | 7% | 0% | 0% |
-| VD nominal | neutron | 1638 | 1616 | 579 | 1.998e+04 | 12.37 | 66.8 | 2% | 12% | 0% | 0% |
-| VD nominal | radiological | 66 | 65 | 15 | 7.873e+06 | 1.211e+05 | 65.0 | 2% | 12% | 100% | 100% |
-| VD shielded | marley | 5621 | 5614 | 5621 | 130.5 | 0.02324 | 518.9 | 0% | 4% | – | – |
-| VD shielded | gamma | 767 | 764 | 259 | 48.2 | 0.06309 | 90.9 | 6% | 10% | 0% | 0% |
-| VD shielded | neutron | 415 | 411 | 217 | 109.5 | 0.2665 | 20.5 | 8% | 22% | 0% | 0% |
-| VD shielded | radiological | 6 | 5 | 3 | 6.056e+05 | 1.211e+05 | 5.0 | 20% | 45% | 100% | 100% |
+| HD central APA | marley | 61689 | 40957 | 44500 | 1688 | 0.04122 | 8835.0 | 0% | 1% | – | – |
+| HD central APA | gamma | 22147 | 61 | 72 | 842.8 | 13.82 | 3.2 | 39% | 56% | 0% | 1% |
+| HD central APA | neutron | 3523 | 857 | 702 | 2.206e+04 | 25.74 | 81.0 | 2% | 11% | 12% | 26% |
+| HD central APA | radiological | 7 | 3 | 1 | 1.608e+05 | 5.361e+04 | 3.0 | 33% | 58% | 88% | 73% |
+| HD lateral APA | marley | 51604 | 26832 | 26598 | 977.9 | 0.03645 | 5740.0 | 0% | 1% | – | – |
+| HD lateral APA | gamma | 60186 | 3665 | 1274 | 5.532e+04 | 15.09 | 304.3 | 1% | 6% | 19% | 10% |
+| HD lateral APA | neutron | 2744 | 813 | 264 | 2.072e+04 | 25.48 | 51.4 | 3% | 14% | 7% | 9% |
+| HD lateral APA | radiological | 6 | 2 | 1 | 2.154e+05 | 1.077e+05 | 2.0 | 50% | 71% | 74% | 81% |
+| VD nominal | marley | 29190 | 29190 | 29144 | 749 | 0.02566 | 3975.9 | 0% | 2% | – | – |
+| VD nominal | gamma | 391 | 391 | 111 | 2.646e+04 | 67.68 | 55.3 | 4% | 13% | 6% | 18% |
+| VD nominal | neutron | 182 | 182 | 75 | 1.022e+05 | 561.3 | 16.9 | 8% | 24% | 21% | 82% |
+| VD nominal | radiological | 1 | 1 | 0 | 3.475e+05 | 3.475e+05 | 1.0 | 100% | 100% | 73% | 0% |
+| VD shielded | marley | 15090 | 7837 | 15089 | 421.4 | 0.05377 | 1010.2 | 0% | 3% | – | – |
+| VD shielded | gamma | 1504 | 828 | 431 | 3193 | 3.857 | 88.6 | 4% | 11% | 2% | 0% |
+| VD shielded | neutron | 681 | 386 | 359 | 533.3 | 1.382 | 22.5 | 7% | 21% | 0% | 0% |
+| VD shielded | radiological | 3 | 1 | 2 | 1.818e+05 | 1.818e+05 | 1.0 | 100% | 100% | 98% | 99% |
