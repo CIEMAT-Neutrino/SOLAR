@@ -98,7 +98,7 @@ parser.add_argument(
          "the default cut flow.",
 )
 parser.add_argument(
-    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=True,
+    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=False,
     help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): apply the neutron-capture veto also below its "
          "classifier region, from the AnalysisData_SolarEnergyNCapLow_Ref export (03_analysis.py --energy SolarEnergyNCapLow "
          "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "

@@ -418,7 +418,7 @@ parser.add_argument(
 )
 parser.add_argument("--zoom", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
-    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=True,
+    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=False,
     help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): the Day-Night spectra drop the clusters the "
          "neutron-capture veto flags below its classifier region (lib/background.ncap_display_low_scale, needs the "
          "SolarEnergyNCapLow export of 03_analysis.py), as the analysis drops the flagged clusters inside the region. "
