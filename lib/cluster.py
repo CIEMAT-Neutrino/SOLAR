@@ -881,7 +881,8 @@ def compute_energy_calibration(
                         # clusters below the classifier region, as SolarEnergyNCapLow, so the cut-flow and spectrum figures
                         # show no step at the region edge. Built only with SOLAR_NCAP_DISPLAY=1 (03_analysis.py export
                         # --energy SolarEnergyNCapLow); SolarEnergy and every analysis are unchanged.
-                        _dmin = load_analysis_info(str(root)).get("NCAP_DISPLAY_ENERGY_MIN")
+                        # SOLAR_NCAP_DISPLAY_MIN (MeV) overrides the config for display tests (e.g. 4: only the 4-6 MeV bins)
+                        _dmin = os.environ.get("SOLAR_NCAP_DISPLAY_MIN") or load_analysis_info(str(root)).get("NCAP_DISPLAY_ENERGY_MIN")
                         if os.environ.get("SOLAR_NCAP_DISPLAY") == "1" and _dmin is not None:
                             low_score, _ = _neutron_capture_scores(
                                 run, config, name, idx, run["Reco"]["SolarEnergyOffset"][rows],

@@ -405,6 +405,11 @@ parser.add_argument(
     choices=ENERGY_CHOICES,
     default=["SolarEnergy"],
 )
+parser.add_argument("--display_exports", action=argparse.BooleanOptionalAction, default=True,
+                    help="Default runs (no --study_label): after the best-cut exports, export the extra cluster energies the "
+                         "thesis figures read (SolarEnergyHEP for the HEP cut flow; ElectronEnergy and SolarEnergyOffset for "
+                         "the ch. 7 energy-estimator flow) and draw that flow (cutflow_plot.py --energy_stages, output label "
+                         "energystages). No analysis result depends on them.")
 parser.add_argument("--nhits", type=int, help="The nhit cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
@@ -449,6 +454,9 @@ parser.add_argument("--fiducial_energy_branch", type=str, default=None,
 parser.add_argument("--fiducial_z_limit_y", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: the fiducial scan may not use beam-direction margins larger than the largest vertical margin "
          "(02_best_fiducial.py, through SOLAR_FIDUCIAL_Z_LIMIT_Y), see lib/study.py fid_zlim.")
+parser.add_argument("--fiducial_z_max", type=float, default=None,
+    help="Study knob: largest beam-direction margin (cm) the fiducial scan may choose (02_best_fiducial.py, through "
+         "SOLAR_FIDUCIAL_Z_MAX), see lib/study.py fid_zmax20.")
 parser.add_argument("--fiducial_exposure", type=float, default=None,
     help="Study knob: exposure (years) of the fiducial figure of merit, default 100 (02_best_fiducial.py, "
          "SOLAR_FIDUCIAL_EXPOSURE), see lib/study.py fid_exp30.")
@@ -1077,6 +1085,11 @@ if args.fiducial_z_limit_y is not None:  # 02_best_fiducial.py follows the study
     if args.fiducial_z_limit_y and not args.study_label:
         raise SystemExit("[ERROR] --fiducial_z_limit_y is a study knob: pass --study_label so the outputs are labeled.")
     os.environ["SOLAR_FIDUCIAL_Z_LIMIT_Y"] = "1" if args.fiducial_z_limit_y else "0"
+
+if args.fiducial_z_max is not None:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_z_max is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_Z_MAX"] = f"{args.fiducial_z_max:g}"
 
 if args.fiducial_exposure:  # 02_best_fiducial.py follows the study knob
     if not args.study_label:
@@ -1999,6 +2012,26 @@ for config, folder in product(args.config, args.folder):
             for name in available_names
         ])
 
+    # Pass 3b: display exports for the thesis figures (default runs only): the HEP cut flow is drawn in SolarEnergyHEP, the
+    # energy the HEP analysis reads; the ch. 7 energy-estimator flow needs ElectronEnergy and SolarEnergyOffset.
+    _display = args.computation and args.display_exports and not args.study_label and "SolarEnergy" in args.energy
+    if _display:
+        _display_base = base_args_for(config, folder, include_background=False) + ["--no-plot"]
+        _display_common = (oscillation_args_for() + membrane_veto_args_for() + sb_args_for() + truth_purity_args_for()
+                           + fiducial_folder_args_for() + fiducial_from_reco_args_for()
+                           + ["--skip_scan", "--no-export_fiducial"])
+        if "HEP" in args.analysis:
+            run_sample_scripts("src/physics/signal/03_analysis.py", [
+                _display_base + ["--signal", name, "--analysis", "HEP", "--energy", "SolarEnergyHEP"] + _display_common
+                for name in available_names
+            ])
+        if "DayNight" in args.analysis:
+            run_sample_scripts("src/physics/signal/03_analysis.py", [
+                _display_base + ["--signal", name, "--analysis", "DayNight", "--energy", "ElectronEnergy", "SolarEnergyOffset",
+                                 "--electron_energy"] + _display_common
+                for name in available_names
+            ])
+
     # Pass 4: cutflow — one call per energy with all names and analyses dispatched at once.
     # Requires best-cuts pkls (written by 05_best_sigmas.py in per-analysis stages above).
     for energy in args.energy:
@@ -2014,6 +2047,20 @@ for config, folder in product(args.config, args.folder):
                 "--debug"   if args.verbose == "verbose" else "--no-debug",
                 "--plot"    if args.plot else "--no-plot",
             ] + membrane_veto_args_for() + study_label_args_for() + truth_fiducial_args_for() + cut_args_for(),
+        )
+
+    # Pass 5: ch. 7 energy-estimator flow (ElectronEnergy, SolarEnergy with the offset, SolarEnergy after the vetoes) from the
+    # Pass 3b exports, under the output label energystages (plotting repo study "energystages").
+    if _display and "DayNight" in args.analysis:
+        run_analysis_script(
+            "src/physics/signal/cutflow_plot.py",
+            [
+                "--config", config, "--signal", *available_names, "--folder", folder, "--energy", "SolarEnergy",
+                "--analysis", "DayNight", "--energy_stages", "--output_label", "energystages",
+                "--rewrite" if args.rewrite else "--no-rewrite",
+                "--debug" if args.verbose == "verbose" else "--no-debug",
+                "--plot" if args.plot else "--no-plot",
+            ] + membrane_veto_args_for() + cut_args_for(),
         )
 
 run_presentations()

@@ -561,7 +561,8 @@ for _sl in _study_labels_to_run:
     args.study_label = _sl
     _ctx = study_context(args)
     _study_suffix   = _ctx.study_suffix
-    _save_subfolder = _ctx.save_subfolder
+    # SOLAR_DISPLAY_SUBFOLDER: write the spectra of a display test (e.g. --ncap_display_low) to their own subfolder
+    _save_subfolder = os.environ.get("SOLAR_DISPLAY_SUBFOLDER") or _ctx.save_subfolder
     _study_name     = _sl or "default"
 
     # ── accumulators ───────────────────────────────────────────────────────────────

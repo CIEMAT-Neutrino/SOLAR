@@ -98,6 +98,15 @@ parser.add_argument(
          "the default cut flow.",
 )
 parser.add_argument(
+    "--energy_stages", action=argparse.BooleanOptionalAction, default=False,
+    help="Energy-estimator flow instead of the selection cut flow (thesis ch. 7, user 2026-10-22): the clusters with a "
+         "TPC-PDS match in three energies, the primary-electron energy (ElectronEnergy), SolarEnergy with the de-excitation "
+         "offset for every cluster (SolarEnergyOffset), and SolarEnergy after the signal/background and neutron-capture "
+         "vetoes (the flagged clusters removed, AnalysisKeep). Needs the AnalysisData_ElectronEnergy_Ref and "
+         "AnalysisData_SolarEnergyOffset_Ref exports (03_analysis.py --energy ElectronEnergy SolarEnergyOffset --skip_scan "
+         "--no-export_fiducial); --energy SolarEnergy, DayNight or Sensitivity.",
+)
+parser.add_argument(
     "--ncap_display_low", action=argparse.BooleanOptionalAction, default=False,
     help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): apply the neutron-capture veto also below its "
          "classifier region, from the AnalysisData_SolarEnergyNCapLow_Ref export (03_analysis.py --energy SolarEnergyNCapLow "
@@ -144,6 +153,8 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--mc_filter_threshold",  str(args.mc_filter_threshold),
             "--mc_filter_stages",     args.mc_filter_stages,
             "--remove_no_offset" if args.remove_no_offset else "--no-remove_no_offset",
+            "--ncap_display_low" if args.ncap_display_low else "--no-ncap_display_low",
+            "--energy_stages" if args.energy_stages else "--no-energy_stages",
             "--rewrite"   if args.rewrite       else "--no-rewrite",
             "--debug"     if args.debug         else "--no-debug",
             "--plot"      if args.plot          else "--no-plot",
@@ -287,6 +298,13 @@ _CUT_STAGES: list[dict] = [
     {"label": "NHits",              "color": "rgba(31,119,180,1)",    "dash": "solid", "width": 2},
     {"label": "NHits+OpHits",       "color": "rgba(255,127,14,1)",    "dash": "solid", "width": 2},
     {"label": "NHits+OpHits+AdjCl", "color": "rgba(44,160,44,1)",    "dash": "solid", "width": 2},
+]
+
+# --energy_stages: one stage per energy estimator (labels drawn as they are)
+_ENERGY_STAGES: list[dict] = [
+    {"label": "Electron Energy",      "energy": "ElectronEnergy",    "veto": False, "color": "rgba(50,50,50,0.9)",   "dash": "dot",   "width": 2},
+    {"label": "Solar Energy",         "energy": "SolarEnergyOffset", "veto": False, "color": "rgba(148,103,189,0.9)", "dash": "dash", "width": 2},
+    {"label": "Solar Energy + Vetoes", "energy": "SolarEnergy",      "veto": True,  "color": "rgba(44,160,44,1)",    "dash": "solid", "width": 2},
 ]
 
 # ── Component specs per analysis (signal/marley only) ─────────────────────────
@@ -495,6 +513,35 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
         _h_and_err(full_mask,  mc_filter=_mc_filter),
     ]
 
+def _load_energy_stages(name: str, weight_filename: str) -> list:
+    """--energy_stages: (h, err, mc) per _ENERGY_STAGES entry over the clusters with a TPC-PDS match (the TPC-PDS Matching
+    stage of the cut flow), weighted with the SolarEnergy weights; the last stage drops the clusters the analysis removes
+    (AnalysisKeep: signal/background classifier and neutron-capture veto). All exports describe the same clusters."""
+    def _load(stem, dtype):
+        path = _ref_pkl(name, stem)
+        if not os.path.exists(path):
+            raise SystemExit(f"[ERROR] Missing {path}: run 03_analysis.py --config {args.config} --signal {name} --folder "
+                             f"{args.folder} --energy ElectronEnergy SolarEnergyOffset --skip_scan --no-export_fiducial first.")
+        return np.asarray(pickle.load(open(path, "rb")), dtype=dtype)
+
+    weights = _load(f"{weight_filename}_SolarEnergy_Ref", float)
+    flash = (accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), str(root), args.membrane_veto)
+             & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0))
+    keep_path = _ref_pkl(name, f"AnalysisKeep_SolarEnergy_{args.analysis.upper()}")
+    keep = np.asarray(pickle.load(open(keep_path, "rb")), dtype=bool) if os.path.exists(keep_path) else np.ones(len(weights), bool)
+    out = []
+    for stage in _ENERGY_STAGES:
+        energy = _load(f"AnalysisData_{stage['energy']}_Ref", float)
+        if len(energy) != len(weights) or len(keep) != len(weights):
+            raise SystemExit(f"[ERROR] {name}: {stage['energy']} export has {len(energy)} clusters, weights {len(weights)}.")
+        mask = flash & keep if stage["veto"] else flash
+        h = _histogram(energy, weights, mask)
+        w2, _ = np.histogram(energy[mask], bins=_edges, weights=weights[mask] ** 2)
+        mc, _ = np.histogram(energy[mask], bins=_edges)
+        out.append((h, np.sqrt(w2), mc))
+    return out
+
+
 # ── Smoothing config (1-D, analysis-specific — matches significance_plot.py) ──
 
 _smoothing_cfg = get_smoothing_config(
@@ -571,13 +618,16 @@ for _name in args.signal:
     # ── Per-component stage histograms ────────────────────────────────────────
 
     for _component_label, _weight_filename in _components:
-        stage_hists = _load_all_stages(_name, _weight_filename)
+        if args.energy_stages:
+            _active_stage_pairs = list(zip(_ENERGY_STAGES, _load_energy_stages(_name, _weight_filename)))
+        else:
+            stage_hists = _load_all_stages(_name, _weight_filename)
 
-        # Prepend "Interacting" stage if truth-level pkls are available.
-        _truth_entry = _try_load_truth_stage(_name, _weight_filename)
-        _active_stage_pairs = (
-            [(_TRUTH_STAGES[0], _truth_entry)] if _truth_entry is not None else []
-        ) + list(zip(_FID_STAGES + _CUT_STAGES, stage_hists))
+            # Prepend "Interacting" stage if truth-level pkls are available.
+            _truth_entry = _try_load_truth_stage(_name, _weight_filename)
+            _active_stage_pairs = (
+                [(_TRUTH_STAGES[0], _truth_entry)] if _truth_entry is not None else []
+            ) + list(zip(_FID_STAGES + _CUT_STAGES, stage_hists))
 
         key = (_name, _component_label)
         _component_order.append(key)
