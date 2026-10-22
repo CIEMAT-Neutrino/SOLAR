@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.fiducial_entries import best_fiducials_stem, isolated_suffix, write_fiducial_entries
+
+FIDUCIAL_Z_MAX_CM = 20.0  # largest beam-direction margin the scan may choose (see the cap below)
 from lib.fiducial_significance import (
     GROUP_COLUMNS,
     FIDUCIAL_COLUMNS,
@@ -465,6 +467,14 @@ for config in configs:
             _y_max = float(plot_df["FiducializedY"].max())
             plot_df = plot_df.loc[plot_df["FiducializedZ"] <= _y_max].copy()
             rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: FiducialZ limited to the FiducialY reach ({_y_max:g} cm)")
+        # Beam-direction margin capped at FIDUCIAL_Z_MAX_CM (default since 2026-10-22, user). The simulated section is a slice
+        # of the module: its ends along the beam are not walls of the full detector, and the end-cap backgrounds are removed
+        # by the surface filter, so a margin cut at both ends of the slice does not extrapolate to the full module. With
+        # F_z <= 20 cm the fiducial mass is the full-detector mass times the drift and vertical fractions kept.
+        # SOLAR_FIDUCIAL_Z_MAX=<cm> replaces the cap (study fid_zfree: no cap).
+        _z_max = float(os.environ.get("SOLAR_FIDUCIAL_Z_MAX", FIDUCIAL_Z_MAX_CM))
+        plot_df = plot_df.loc[plot_df["FiducializedZ"] <= _z_max].copy()
+        rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: FiducialZ limited to {_z_max:g} cm")
         # Study knob SOLAR_FIDUCIAL_BIN_MC_FLOOR="radiological:2[,gamma:2,...]" (fidsmooth study, default off): a component's
         # energy bin backed by fewer than N simulated clusters (scan MCCounts, i.e. after the 01_fiducialize gap filling)
         # is zeroed, as 03_analysis.py does with RADIOLOGICAL_MIN_MC_PER_BIN. A lone heavy cluster then cannot switch a
