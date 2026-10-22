@@ -79,6 +79,40 @@ parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for scaling. Default resolved per --analysis from EVALUATION_EXPOSURE_YEARS in config/analysis/config.json (DayNight/HEP 20 yr, Sensitivity 30 yr).")
 parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per bin in the final-cut stage; bins below are zeroed (matches 03_analysis.py default).")
+parser.add_argument(
+    "--mc_filter_stages", type=str, choices=["final", "all"], default="final",
+    help="Stages the --mc_filter_threshold zeroing applies to: the final-cut stage only (default, as the "
+         "analysis Rebin pkl) or every stage, each with its own MC counts (cut-flow display variant).",
+)
+parser.add_argument(
+    "--remove_no_offset", action=argparse.BooleanOptionalAction, default=False,
+    help="Drop from every stage the clusters whose SolarEnergy is the no-offset version, i.e. the clusters the "
+         "signal/background classifier calls background-like or the neutron-capture veto flags (lib/cluster.py). "
+         "Needs the AnalysisData_SolarEnergyOffset_Ref / AnalysisData_SolarEnergyNoOffset_Ref exports "
+         "(03_analysis.py --energy SolarEnergyOffset SolarEnergyNoOffset --skip_scan --no-export_fiducial); "
+         "--energy SolarEnergy only. Cut-flow display variant.",
+)
+parser.add_argument(
+    "--output_label", type=str, default=None,
+    help="Suffix of the output pkl/png names (_Cutflow{study}_{label}) so a display variant does not overwrite "
+         "the default cut flow.",
+)
+parser.add_argument(
+    "--energy_stages", action=argparse.BooleanOptionalAction, default=False,
+    help="Energy-estimator flow instead of the selection cut flow (thesis ch. 7, user 2026-10-22): the clusters with a "
+         "TPC-PDS match in three energies, the primary-electron energy (ElectronEnergy), SolarEnergy with the de-excitation "
+         "offset for every cluster (SolarEnergyOffset), and SolarEnergy after the signal/background and neutron-capture "
+         "vetoes (the flagged clusters removed, AnalysisKeep). Needs the AnalysisData_ElectronEnergy_Ref and "
+         "AnalysisData_SolarEnergyOffset_Ref exports (03_analysis.py --energy ElectronEnergy SolarEnergyOffset --skip_scan "
+         "--no-export_fiducial); --energy SolarEnergy, DayNight or Sensitivity.",
+)
+parser.add_argument(
+    "--ncap_display_low", action=argparse.BooleanOptionalAction, default=False,
+    help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): apply the neutron-capture veto also below its "
+         "classifier region, from the AnalysisData_SolarEnergyNCapLow_Ref export (03_analysis.py --energy SolarEnergyNCapLow "
+         "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "
+         "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export.",
+)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
@@ -117,6 +151,10 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--folder",               args.folder,
             "--energy",               args.energy,
             "--mc_filter_threshold",  str(args.mc_filter_threshold),
+            "--mc_filter_stages",     args.mc_filter_stages,
+            "--remove_no_offset" if args.remove_no_offset else "--no-remove_no_offset",
+            "--ncap_display_low" if args.ncap_display_low else "--no-ncap_display_low",
+            "--energy_stages" if args.energy_stages else "--no-energy_stages",
             "--rewrite"   if args.rewrite       else "--no-rewrite",
             "--debug"     if args.debug         else "--no-debug",
             "--plot"      if args.plot          else "--no-plot",
@@ -125,6 +163,8 @@ if len(args.config) > 1 or len(args.analysis) > 1:
         ]
         if args.study_label:
             _cmd += ["--study_label", args.study_label]
+        if args.output_label:
+            _cmd += ["--output_label", args.output_label]
         if args.exposure is not None:
             _cmd += ["--exposure", str(args.exposure)]
         if args.nhits  is not None:
@@ -142,6 +182,12 @@ args.config   = args.config[0]
 args.analysis = args.analysis[0]
 # Labeled Ref/mask inputs and cutflow outputs for truth-fiducial variants ("" otherwise).
 _ref_sfx = study_context(args).ref_suffix
+# Output names only: display variants (--mc_filter_stages all, --remove_no_offset) under their own label.
+_out_sfx = f"{_ref_sfx}_{args.output_label}" if args.output_label else _ref_sfx
+if args.remove_no_offset and args.energy != "SolarEnergy":
+    raise SystemExit("[ERROR] --remove_no_offset needs --energy SolarEnergy (the flags are read from its offset versions).")
+if (args.remove_no_offset or args.mc_filter_stages != "final") and not args.output_label:
+    raise SystemExit("[ERROR] --remove_no_offset / --mc_filter_stages all are display variants: pass --output_label.")
 
 os.makedirs(f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}", exist_ok=True)
 
@@ -254,6 +300,13 @@ _CUT_STAGES: list[dict] = [
     {"label": "NHits+OpHits+AdjCl", "color": "rgba(44,160,44,1)",    "dash": "solid", "width": 2},
 ]
 
+# --energy_stages: one stage per energy estimator (labels drawn as they are)
+_ENERGY_STAGES: list[dict] = [
+    {"label": "Electron Energy",      "energy": "ElectronEnergy",    "veto": False, "color": "rgba(50,50,50,0.9)",   "dash": "dot",   "width": 2},
+    {"label": "Solar Energy",         "energy": "SolarEnergyOffset", "veto": False, "color": "rgba(148,103,189,0.9)", "dash": "dash", "width": 2},
+    {"label": "Solar Energy + Vetoes", "energy": "SolarEnergy",      "veto": True,  "color": "rgba(44,160,44,1)",    "dash": "solid", "width": 2},
+]
+
 # ── Component specs per analysis (signal/marley only) ─────────────────────────
 # Each entry: (component_label, weight_pkl_prefix)
 # Weight pkl: {ref_path}/{config}/{name}/{folder}/{config}_{name}_{prefix}_{energy}_Ref.pkl
@@ -356,6 +409,17 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
             )
 
     reco     = np.asarray(pickle.load(open(required[0], "rb")), dtype=float)
+    # The HEP analysis reads SolarEnergyHEP (the S/B classifier at its HEP working point, no neutron-capture veto shift;
+    # 03_analysis.py _energy_key): its cut flow is drawn in that energy when the export exists
+    # (03_analysis.py --energy SolarEnergyHEP --skip_scan --no-export_fiducial). Same clusters, same order.
+    if args.analysis == "HEP" and args.energy == "SolarEnergy":
+        _hep_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyHEP_Ref")
+        if os.path.exists(_hep_pkl):
+            _hep = np.asarray(pickle.load(open(_hep_pkl, "rb")), dtype=float)
+            if len(_hep) != len(reco):
+                raise SystemExit(f"[ERROR] {name}: {_hep_pkl} has {len(_hep)} clusters, SolarEnergy {len(reco)}.")
+            rprint(f"[cyan][INFO][/cyan] {name}: HEP cut flow in SolarEnergyHEP ({np.mean(_hep != reco):.1%} of clusters differ from SolarEnergy)")
+            reco = _hep
     weights  = np.asarray(pickle.load(open(required[1], "rb")), dtype=float)
     geo_fid  = np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
     nhits    = np.asarray(pickle.load(open(required[3], "rb")), dtype=int)
@@ -364,17 +428,71 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     op_plane = np.asarray(pickle.load(open(required[6], "rb")), dtype=int)
     op_pe    = np.asarray(pickle.load(open(required[7], "rb")), dtype=float)
 
-    flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0)
-    fid        = geo_fid & flash_mask
-    pre_mask   = np.ones(len(reco), dtype=bool)
+    # --remove_no_offset: keep only the clusters whose SolarEnergy carries the de-excitation offset. A cluster
+    # flagged by the signal/background classifier or the neutron-capture veto has SolarEnergy == SolarEnergyNoOffset.
+    keep = np.ones(len(reco), dtype=bool)
+    # Clusters the analysis keeps (03_analysis.py AnalysisKeep export: neutron-capture veto with ACTION remove and the default
+    # removal of the no-offset clusters, REMOVE_NO_OFFSET_CLUSTERS): they leave at the Fiducial stage, with the fiducial cut;
+    # Raw and TPC-PDS Matching keep every reconstructed cluster. Older exports have no such file and keep every cluster.
+    fid_keep = np.ones(len(reco), dtype=bool)
+    _keep_pkl = _ref_pkl(name, f"AnalysisKeep_{args.energy}_{args.analysis.upper()}")
+    if os.path.exists(_keep_pkl):
+        fid_keep = np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
+        if len(fid_keep) != len(reco):
+            raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(fid_keep)} clusters, SolarEnergy {len(reco)}.")
+        rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~fid_keep):.2%} of clusters removed by the analysis at the Fiducial stage (AnalysisKeep)")
+    if args.ncap_display_low and args.analysis != "HEP" and args.energy == "SolarEnergy" and not args.study_label:
+        _low_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNCapLow_Ref")
+        if os.path.exists(_low_pkl):
+            _display = np.asarray(pickle.load(open(_low_pkl, "rb")), dtype=float)
+            if len(_display) != len(reco):
+                raise SystemExit(f"[ERROR] {name}: {_low_pkl} has {len(_display)} clusters, SolarEnergy {len(reco)}.")
+            _low = _display != reco
+            reco = np.where(_low, _display, reco)
+            fid_keep = fid_keep & ~_low
+            rprint(f"[cyan][INFO][/cyan] {name}: display veto below the neutron-capture region, {np.mean(_low):.2%} of clusters")
+        else:
+            rprint(f"[yellow][WARNING][/yellow] {name}: no {_low_pkl}; cut flow without the display veto below the region")
+    if args.remove_no_offset:
+        _off_pkl  = _ref_pkl(name, "AnalysisData_SolarEnergyOffset_Ref")
+        _noff_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNoOffset_Ref")
+        for _p in (_off_pkl, _noff_pkl):
+            if not os.path.exists(_p):
+                raise SystemExit(
+                    f"[ERROR] Missing {_p}: run 03_analysis.py --config {args.config} --signal {name} --folder {args.folder} "
+                    "--energy SolarEnergyOffset SolarEnergyNoOffset --skip_scan --no-export_fiducial first."
+                )
+        e_off  = np.asarray(pickle.load(open(_off_pkl, "rb")), dtype=float)
+        e_noff = np.asarray(pickle.load(open(_noff_pkl, "rb")), dtype=float)
+        # Both exports must describe the clusters of the SolarEnergy export, in the same order.
+        if len(e_off) != len(reco) or len(e_noff) != len(reco):
+            raise SystemExit(f"[ERROR] {name}: offset exports have {len(e_off)}/{len(e_noff)} clusters, SolarEnergy {len(reco)}.")
+        is_off, is_noff = reco == e_off, reco == e_noff
+        if not np.all(is_off | is_noff):
+            raise SystemExit(
+                f"[ERROR] {name}: {np.sum(~(is_off | is_noff))} clusters have a SolarEnergy equal to neither the offset nor "
+                "the no-offset export — the exports do not match the SolarEnergy Ref pkl."
+            )
+        keep = ~(is_noff & ~is_off)
+        rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~keep):.2%} of clusters without offset removed "
+               f"({np.mean(is_off & is_noff):.2%} with equal offset and no-offset energy kept)")
+
+    flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0) & keep
+    fid        = geo_fid & flash_mask & fid_keep
+    pre_mask   = keep.copy()
     nhits_mask = fid & (nhits  >= _nhits)
     op_mask    = nhits_mask & (ophits >= _ophits)
     full_mask  = op_mask    & (adjcl  <  _adjcls)
 
     # mc_filter on final stage only — matches 03_analysis.py Rebin pkl behaviour.
     # Bins with fewer than mc_filter_threshold unweighted MC events are zeroed.
-    _mc_counts, _ = np.histogram(reco[full_mask], bins=_edges)
-    _mc_filter     = (_mc_counts >= args.mc_filter_threshold).astype(float)
+    # --mc_filter_stages all: every stage is zeroed with its own MC counts.
+    def _stage_filter(mask):
+        mc, _ = np.histogram(reco[mask], bins=_edges)
+        return (mc >= args.mc_filter_threshold).astype(float)
+
+    _mc_filter = _stage_filter(full_mask)
+    _all = args.mc_filter_stages == "all"
 
     def _h_and_err(mask, mc_filter=None):
         h = _histogram(reco, weights, mask)
@@ -387,13 +505,42 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
         return h, err, mc
 
     return [
-        _h_and_err(pre_mask),
-        _h_and_err(flash_mask),
-        _h_and_err(fid),
-        _h_and_err(nhits_mask),
-        _h_and_err(op_mask),
-        _h_and_err(full_mask, mc_filter=_mc_filter),
+        _h_and_err(pre_mask,   mc_filter=_stage_filter(pre_mask)   if _all else None),
+        _h_and_err(flash_mask, mc_filter=_stage_filter(flash_mask) if _all else None),
+        _h_and_err(fid,        mc_filter=_stage_filter(fid)        if _all else None),
+        _h_and_err(nhits_mask, mc_filter=_stage_filter(nhits_mask) if _all else None),
+        _h_and_err(op_mask,    mc_filter=_stage_filter(op_mask)    if _all else None),
+        _h_and_err(full_mask,  mc_filter=_mc_filter),
     ]
+
+def _load_energy_stages(name: str, weight_filename: str) -> list:
+    """--energy_stages: (h, err, mc) per _ENERGY_STAGES entry over the clusters with a TPC-PDS match (the TPC-PDS Matching
+    stage of the cut flow), weighted with the SolarEnergy weights; the last stage drops the clusters the analysis removes
+    (AnalysisKeep: signal/background classifier and neutron-capture veto). All exports describe the same clusters."""
+    def _load(stem, dtype):
+        path = _ref_pkl(name, stem)
+        if not os.path.exists(path):
+            raise SystemExit(f"[ERROR] Missing {path}: run 03_analysis.py --config {args.config} --signal {name} --folder "
+                             f"{args.folder} --energy ElectronEnergy SolarEnergyOffset --skip_scan --no-export_fiducial first.")
+        return np.asarray(pickle.load(open(path, "rb")), dtype=dtype)
+
+    weights = _load(f"{weight_filename}_SolarEnergy_Ref", float)
+    flash = (accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), str(root), args.membrane_veto)
+             & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0))
+    keep_path = _ref_pkl(name, f"AnalysisKeep_SolarEnergy_{args.analysis.upper()}")
+    keep = np.asarray(pickle.load(open(keep_path, "rb")), dtype=bool) if os.path.exists(keep_path) else np.ones(len(weights), bool)
+    out = []
+    for stage in _ENERGY_STAGES:
+        energy = _load(f"AnalysisData_{stage['energy']}_Ref", float)
+        if len(energy) != len(weights) or len(keep) != len(weights):
+            raise SystemExit(f"[ERROR] {name}: {stage['energy']} export has {len(energy)} clusters, weights {len(weights)}.")
+        mask = flash & keep if stage["veto"] else flash
+        h = _histogram(energy, weights, mask)
+        w2, _ = np.histogram(energy[mask], bins=_edges, weights=weights[mask] ** 2)
+        mc, _ = np.histogram(energy[mask], bins=_edges)
+        out.append((h, np.sqrt(w2), mc))
+    return out
+
 
 # ── Smoothing config (1-D, analysis-specific — matches significance_plot.py) ──
 
@@ -471,13 +618,16 @@ for _name in args.signal:
     # ── Per-component stage histograms ────────────────────────────────────────
 
     for _component_label, _weight_filename in _components:
-        stage_hists = _load_all_stages(_name, _weight_filename)
+        if args.energy_stages:
+            _active_stage_pairs = list(zip(_ENERGY_STAGES, _load_energy_stages(_name, _weight_filename)))
+        else:
+            stage_hists = _load_all_stages(_name, _weight_filename)
 
-        # Prepend "Interacting" stage if truth-level pkls are available.
-        _truth_entry = _try_load_truth_stage(_name, _weight_filename)
-        _active_stage_pairs = (
-            [(_TRUTH_STAGES[0], _truth_entry)] if _truth_entry is not None else []
-        ) + list(zip(_FID_STAGES + _CUT_STAGES, stage_hists))
+            # Prepend "Interacting" stage if truth-level pkls are available.
+            _truth_entry = _try_load_truth_stage(_name, _weight_filename)
+            _active_stage_pairs = (
+                [(_TRUTH_STAGES[0], _truth_entry)] if _truth_entry is not None else []
+            ) + list(zip(_FID_STAGES + _CUT_STAGES, stage_hists))
 
         key = (_name, _component_label)
         _component_order.append(key)
@@ -496,7 +646,10 @@ for _name in args.signal:
         for stage, (h, h_err, mc) in _active_stage_pairs:
             h_scaled   = h     * _comp_scale   # events/(kT·yr) × kT·yr → events/MeV (1 MeV bins)
             err_scaled = h_err * _comp_scale
-            sh_scaled  = _smooth(h,     _component_label) * _comp_scale
+            # Displayed spectrum (lib/smoothing.display_smoothed_background): backgrounds without single-cluster bins (the
+            # radiological ones need the analysis floor) and smoothed as the analysis does; Counts keeps the raw histogram.
+            sh_scaled  = (display_smoothed_background(h, mc, _component_label, _smoothing_cfg) if not _is_signal
+                          else _smooth(h, _component_label)) * _comp_scale
             se_scaled  = _smooth(h_err, _component_label) * _comp_scale
             cutflow_rows.append({
                 **_meta, "Stage": stage["label"],
@@ -517,7 +670,7 @@ for _name in args.signal:
 
     # ── Save pkl (one per name) ────────────────────────────────────────────────
 
-    _pkl_filename = f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}"
+    _pkl_filename = f"{args.energy}_{args.analysis}_Cutflow{_out_sfx}"
     save_df(
         pd.DataFrame(cutflow_rows),
         data_path,
@@ -584,7 +737,7 @@ for _name in args.signal:
         fig,
         f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}",
         config=args.config, name=_name, subfolder=None,
-        filename=f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}_{_cut_label}",
+        filename=f"{args.energy}_{args.analysis}_Cutflow{_out_sfx}_{_cut_label}",
         rm=args.rewrite, debug=args.plot,
     )
 
@@ -598,7 +751,7 @@ if _all_rows:
         config=args.config,
         name=None,
         subfolder=f"{args.folder.lower()}/{args.analysis.lower()}",
-        filename=f"{args.energy}_{args.analysis}_Cutflow{_ref_sfx}",
+        filename=f"{args.energy}_{args.analysis}_Cutflow{_out_sfx}",
         rm=args.rewrite,
         debug=args.plot,
     )

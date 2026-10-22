@@ -50,7 +50,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import root, load_analysis_info                                    # noqa: E402
 from lib.fiducial import accepted_flash_planes, build_fiducial_spatial_mask  # noqa: E402
-from lib.background import is_surface_background                            # noqa: E402
+from lib.background import is_surface_background, background_weight_divisor  # noqa: E402
 
 ROOT = str(root)
 CACHE = Path(ROOT) / "output/data/solar/truth_position"
@@ -76,7 +76,10 @@ class Sample:
     def __init__(self, config, name, info):
         self.config, self.name, self.info = config, name, info
         self.d = dict(np.load(CACHE / config / f"{config}_{name}.npz", allow_pickle=True))
-        self.w = self.d["w"]
+        # weights of the default background model of the analysis (background_weight_divisor of FOLDER, e.g. the 4 pi
+        # reduction of the external gamma and neutron rates); the signal keeps its interaction-rate weight
+        self.w = self.d["w"] / (np.asarray(background_weight_divisor(ROOT, FOLDER, name, config, self.d["energy"]), dtype=float)
+                                if name != "marley" else 1.0)
         self.energy = self.d["energy"]
         quality = accepted_flash_planes(self.d["plane"], ROOT, True) & (self.d["pe"] > 0)
         if is_surface_background(ROOT, name):
@@ -186,7 +189,7 @@ rev = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"],
                      capture_output=True, text=True).stdout.strip()
 meta = {"kind": ["ScanCurvesFid", "ScanCurvesFidRad"], "script": "src/tools/truth_position_scan_fom.py",
         "git_head": rev, "folder": FOLDER,
-        "definition": "Z_A = sqrt(sum_i Z_{A,i}^2) with the per-bin Asimov significance "
+        "definition": "Z_A = sqrt(sum_i Z_{A,i}^2) with the per-bin Asimov significance (backgrounds weighted with the default background model of FOLDER) "
                       "Z_{A,i} = sqrt(2[(S_i+B_i) ln(1+S_i/B_i) - S_i]) (eq:asimov_simple) over 1 MeV SolarEnergy "
                       "bins of the full simulated range; flash-quality selection only (no analysis window, "
                       "no topological cut); truth-containment cut in both modes; ScanCurvesFid: B = external gamma+neutron, ScanCurvesFidRad: "

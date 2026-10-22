@@ -1,11 +1,13 @@
 import os
 import sys
+import json
 from typing import Dict, List, Optional, Set, Tuple
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.fiducial_entries import best_fiducials_stem, isolated_suffix, write_fiducial_entries
 from lib.fiducial_significance import (
     GROUP_COLUMNS,
     FIDUCIAL_COLUMNS,
@@ -48,6 +50,15 @@ def select_best_fiducial(plot_df: pd.DataFrame, analysis_config: Dict, smoothing
         plot_df,
         analysis_config.get("background_components", []),
     )
+    from lib.smoothing import radiological_smoothing_mode
+    if radiological_smoothing_mode() != "off":
+        # default (user, 2026-10-20): the background is smoothed component by component with the component smoothing config of
+        # the stage, the radiological one included (lib/smoothing.radiological_smoothing_mode); the study knob
+        # SOLAR_RADIOLOGICAL_SMOOTHING=0 restores the smoothing of the summed background
+        from lib.fiducial_significance import smoothed_component_background
+        background_df = background_df.merge(
+            smoothed_component_background(plot_df, analysis_config.get("background_components", []), smoothing_config),
+            on=GROUP_COLUMNS, how="left")
     merged_df = pd.merge(
         signal_df,
         background_df,
@@ -165,6 +176,52 @@ def filter_fiducializable_components(components: List[str]) -> List[str]:
     return [c for c in components if str(c).lower().split("_")[0] not in NON_FIDUCIALIZABLE_TRUTH_COMPONENTS]
 
 
+def fiducial_profile_rows(plot_df: pd.DataFrame, gated_plot_df: pd.DataFrame, analysis_config: Dict,
+                          smoothing_config: Dict, exposure: float, root_path: str, chosen: Tuple[int, int, int],
+                          band_label: str, meta: Dict) -> List[Dict]:
+    """One-coordinate profiles of the smoothed fiducial significance through the origin and through `chosen`."""
+    _, all_sig = select_best_fiducial(plot_df, analysis_config, smoothing_config, exposure)
+    if all_sig.empty:
+        return []
+    _, gated_sig = select_best_fiducial(gated_plot_df, analysis_config, smoothing_config, exposure)
+    passing = set(map(tuple, gated_sig[["FiducializedX", "FiducializedY", "FiducializedZ"]].astype(int).values)) if not gated_sig.empty else set()
+    window = plot_df
+    if analysis_config.get("energy_min") is not None:
+        window = window.loc[window["Energy"] >= float(analysis_config["energy_min"])]
+    if analysis_config.get("energy_max") is not None:
+        window = window.loc[window["Energy"] <= float(analysis_config["energy_max"])]
+    essential = sorted(get_essential_background_components(root_path, list(analysis_config.get("background_components", []))))
+    mc = {c: window.loc[window["Component"] == c].groupby(["FiducializedX", "FiducializedY", "FiducializedZ"])["MCCounts"].sum()
+          for c in essential}
+    axes = {"X": "FiducializedX", "Y": "FiducializedY", "Z": "FiducializedZ"}
+    rows = []
+    for ref_name, ref in (("Origin", (0, 0, 0)), ("Optimum", tuple(int(v) for v in chosen))):
+        for coord, col in axes.items():
+            others = [(k, ref[i]) for i, k in enumerate(axes.values()) if k != col]
+            sel = all_sig
+            for k, v in others:
+                sel = sel.loc[sel[k].astype(int) == int(v)]
+            for _, r in sel.sort_values(col).iterrows():
+                key = (int(r["FiducializedX"]), int(r["FiducializedY"]), int(r["FiducializedZ"]))
+                row = {**meta, "Band": band_label, "Reference": ref_name, "Variable": coord, "Margin": int(r[col]),
+                       "SmoothedSignificance": float(r["SmoothedSignificance"]), "RawSignificance": float(r["RawSignificance"]),
+                       "PassesMCGate": key in passing, "AtReference": key == ref,
+                       "ReferenceX": ref[0], "ReferenceY": ref[1], "ReferenceZ": ref[2],
+                       "SelectedX": int(chosen[0]), "SelectedY": int(chosen[1]), "SelectedZ": int(chosen[2])}
+                for c in essential:
+                    row[f"MC_{c}"] = float(mc[c].get(key, 0.0)) if len(mc[c]) else 0.0
+                row["MC_essential"] = float(sum(row[f"MC_{c}"] for c in essential))
+                rows.append(row)
+    # Z relative to its value at the reference point (the curve passes through 1 there): readable across configs.
+    for ref_name in ("Origin", "Optimum"):
+        at_ref = [r for r in rows if r["Reference"] == ref_name and r["AtReference"]]
+        z_ref = at_ref[0]["SmoothedSignificance"] if at_ref else float("nan")
+        for r in rows:
+            if r["Reference"] == ref_name:
+                r["RelativeSignificance"] = r["SmoothedSignificance"] / z_ref if z_ref else float("nan")
+    return rows
+
+
 def apply_fiducial_mc_threshold(
     plot_df: pd.DataFrame,
     analysis_config: Dict,
@@ -227,6 +284,47 @@ def apply_fiducial_mc_threshold(
     return result
 
 
+def _parse_bin_mc_floor(spec: str) -> Dict[str, float]:
+    """'radiological:2,gamma:1' -> {'radiological': 2.0, 'gamma': 1.0}; empty -> {} (option off)."""
+    floors = {}
+    for item in [s.strip() for s in str(spec).split(",") if s.strip()]:
+        component, _, value = item.partition(":")
+        floors[component.strip()] = float(value) if value else 2.0
+    return floors
+
+
+def apply_bin_mc_floor(plot_df: pd.DataFrame, floors: Dict[str, float]) -> pd.DataFrame:
+    """Zero Counts and errors of component bins with MCCounts below the component's floor (MCCounts kept)."""
+    out = plot_df.copy()
+    for component, floor in floors.items():
+        low = (out["Component"] == component) & (out["MCCounts"] < float(floor))
+        out.loc[low, ["Counts", "Error+", "Error-"]] = 0.0
+        rprint(f"[cyan][INFO][/cyan] bin MC floor {component} < {floor:g}: {int(low.sum())} (volume, bin) entries zeroed")
+    return out
+
+
+def smooth_scan_in_margins(plot_df: pd.DataFrame, sigma: float) -> pd.DataFrame:
+    """Gaussian smoothing (mode 'nearest') of Counts, Error^2 and MCCounts across the fiducial grid, per component and
+    energy bin. The grid is the regular F_x/F_y/F_z scan of 01_fiducialize.py (20 cm steps)."""
+    from scipy.ndimage import gaussian_filter
+
+    out = plot_df.copy()
+    axes = [np.sort(out[c].unique()) for c in FIDUCIAL_COLUMNS]
+    energies = np.sort(out["Energy"].unique())
+    idx = [np.searchsorted(a, out[c].to_numpy()) for a, c in zip(axes, FIDUCIAL_COLUMNS)]
+    e_idx = np.searchsorted(energies, out["Energy"].to_numpy())
+    shape = tuple(len(a) for a in axes) + (len(energies),)
+    for component in out["Component"].unique():
+        rows = (out["Component"] == component).to_numpy()
+        sel = tuple(i[rows] for i in idx) + (e_idx[rows],)
+        for column, power in (("Counts", 1), ("MCCounts", 1), ("Error+", 2), ("Error-", 2)):
+            grid = np.zeros(shape)
+            grid[sel] = out.loc[rows, column].to_numpy(dtype=float) ** power
+            grid = gaussian_filter(grid, sigma=(sigma, sigma, sigma, 0), mode="nearest")
+            out.loc[rows, column] = grid[sel] ** (1.0 / power)
+    return out
+
+
 parser = argparse.ArgumentParser(description="Plot the energy distribution of the particles")
 parser.add_argument("--config", type=str, help="The configuration to load", default="hd_1x2x6_centralAPA")
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
@@ -279,6 +377,23 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--export_profiles",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Also export one-coordinate profiles of the fiducial significance: FiducialX, FiducialY and FiducialZ scanned "
+        "one at a time over the full grid, with the other two held at the origin (0/0/0) or at the chosen volume, for "
+        "the full window and for each energy band (ungated, with the MC-gate flag and the essential MC per point). "
+        "Written to FIDUCIAL/<folder>/<config>/<signal>/<config>_<signal>_<energy>_Fiducial_Profiles<label>.pkl."
+    ),
+)
+parser.add_argument(
+    "--write_records",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Write BestFiducials*.json and the per-entry records (--no-write_records: profiles only, records untouched).",
+)
+parser.add_argument(
     "--reference_energy",
     type=str,
     default=None,
@@ -290,6 +405,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+# Study knob SOLAR_FIDUCIAL_EXPOSURE=<years> (fid_exp30): exposure of the fiducial figure of merit (default --exposure 100).
+if os.environ.get("SOLAR_FIDUCIAL_EXPOSURE"):
+    args.exposure = float(os.environ["SOLAR_FIDUCIAL_EXPOSURE"])
+    rprint(f"[cyan][INFO][/cyan] fiducial figure of merit at {args.exposure:g} yr (SOLAR_FIDUCIAL_EXPOSURE)")
 if args.exclude_radiological_from_scan is None:
     args.exclude_radiological_from_scan = bool(args.truth_fiducial)
 config = args.config
@@ -300,14 +419,21 @@ for path in [save_path, data_path]:
     if not os.path.exists(f"{path}/{args.folder.lower()}"):
         os.makedirs(f"{path}/{args.folder.lower()}", exist_ok=True)  # parallel samples race
 
-_best_fiducials_stem = "BestFiducials_fiduc_truth" if args.truth_fiducial else "BestFiducials"
+_best_fiducials_stem = best_fiducials_stem(args.truth_fiducial)
 filename = f"{data_path}/{args.folder.lower()}/{_best_fiducials_stem}.json"
 # Only this run's entries are collected here; _merge_and_write_json merges them into the shared file
 # under a lock. Seeding this dict from the file at start-up would write every other config's entries
 # back as they were when this process started, undoing whatever a concurrent run stored meanwhile.
 best_fiducials = {}
 
-_scan_suffix = "_fiduc_truth" if args.truth_fiducial else ""
+_scan_suffix = "_fiduc_truth" if args.truth_fiducial else isolated_suffix()
+_profile_rows = []
+# The fidsmooth knobs change the scan itself: never let them write the default records or the default profiles.
+if os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR") or float(os.environ.get("SOLAR_FIDUCIAL_MARGIN_SMOOTH", "0") or 0) > 0:
+    if args.write_records and not _scan_suffix:
+        raise SystemExit("[ERROR] SOLAR_FIDUCIAL_BIN_MC_FLOOR / SOLAR_FIDUCIAL_MARGIN_SMOOTH need --no-write_records or an isolated study suffix")
+    if args.export_profiles and not os.environ.get("SOLAR_FIDUCIAL_PROFILE_SUFFIX"):
+        raise SystemExit("[ERROR] SOLAR_FIDUCIAL_BIN_MC_FLOOR / SOLAR_FIDUCIAL_MARGIN_SMOOTH with --export_profiles need SOLAR_FIDUCIAL_PROFILE_SUFFIX")
 
 for config in configs:
     for name, energy_label in product(configs[config], args.energy):
@@ -333,12 +459,49 @@ for config in configs:
         plot_df["Error-"] = pd.to_numeric(plot_df["Error-"], errors="coerce").fillna(0.0)
         plot_df["Energy"] = pd.to_numeric(plot_df["Energy"], errors="coerce")
         plot_df["MCCounts"] = pd.to_numeric(plot_df["MCCounts"], errors="coerce").fillna(0.0)
+        # Study knob SOLAR_FIDUCIAL_Z_LIMIT_Y=1 (fid_zlim): the beam-direction margin may not exceed the largest vertical
+        # margin of the grid, so F_z cannot use its longer reach (quarter of the module length) to trade statistics.
+        if os.environ.get("SOLAR_FIDUCIAL_Z_LIMIT_Y") == "1":
+            _y_max = float(plot_df["FiducializedY"].max())
+            plot_df = plot_df.loc[plot_df["FiducializedZ"] <= _y_max].copy()
+            rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: FiducialZ limited to the FiducialY reach ({_y_max:g} cm)")
+        # Study knob SOLAR_FIDUCIAL_BIN_MC_FLOOR="radiological:2[,gamma:2,...]" (fidsmooth study, default off): a component's
+        # energy bin backed by fewer than N simulated clusters (scan MCCounts, i.e. after the 01_fiducialize gap filling)
+        # is zeroed, as 03_analysis.py does with RADIOLOGICAL_MIN_MC_PER_BIN. A lone heavy cluster then cannot switch a
+        # bin on and off as the margin moves.
+        # Default (2026-10-18, user): radiological bins need RADIOLOGICAL_MIN_MC_PER_BIN simulated clusters, the floor that
+        # 03_analysis.py applies; the env knob replaces it ("none" switches every floor off).
+        _floor_env = os.environ.get("SOLAR_FIDUCIAL_BIN_MC_FLOOR")
+        if _floor_env is None:
+            _rad_floor = os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN")
+            _floor_env = f"radiological:{_rad_floor}" if _rad_floor else ""
+        _mc_floor = {} if _floor_env.strip().lower() == "none" else _parse_bin_mc_floor(_floor_env)
+        if _mc_floor:
+            plot_df = apply_bin_mc_floor(plot_df, _mc_floor)
+        # Study knob SOLAR_FIDUCIAL_MARGIN_SMOOTH=<sigma in grid steps> (fidsmooth study, default off): Gaussian smoothing of
+        # every component's Counts, Error^2 and MCCounts across the (F_x, F_y, F_z) grid, bin by bin in energy.
+        _margin_sigma = float(os.environ.get("SOLAR_FIDUCIAL_MARGIN_SMOOTH", "0") or 0)
+        if _margin_sigma > 0:
+            plot_df = smooth_scan_in_margins(plot_df, _margin_sigma)
+            rprint(f"[cyan][INFO][/cyan] {config} {energy_label}: scan smoothed in the margins (sigma {_margin_sigma:g} steps)")
 
         best_fiducials.setdefault(config, {})
 
         for analysis_name in args.analysis:
             analysis_key = analysis_name.upper()
             analysis_config = get_fiducialization_config(str(root), analysis_key)
+            # Study knob SOLAR_FIDUCIAL_BANDS="HEP=14-22,22-30;DAYNIGHT=6-12,12-18" (fid_hepbands22): replace the energy bands of
+            # the listed analyses (the bands are written into the records, so the analysis mask follows them).
+            _bands_env = os.environ.get("SOLAR_FIDUCIAL_BANDS")
+            if _bands_env:
+                for _spec in _bands_env.split(";"):
+                    _ana, _, _ranges = _spec.partition("=")
+                    if _ana.strip().upper() == analysis_key:
+                        analysis_config = dict(analysis_config)
+                        analysis_config["energy_bands"] = [
+                            {"label": f"b{i}", "energy_min": float(r.split("-")[0]), "energy_max": float(r.split("-")[1])}
+                            for i, r in enumerate(_ranges.split(","))]
+                        rprint(f"[cyan][INFO][/cyan] {analysis_key}: energy bands {_ranges} (SOLAR_FIDUCIAL_BANDS)")
             _sig_ref = str(
                 _analysis_info.get("BEST_SIGMA_SIGNIFICANCE_REFERENCE", {}).get(analysis_key, "")
             ).lower()
@@ -374,7 +537,7 @@ for config in configs:
             )
 
             if args.reference_energy:
-                ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                ref_file = f"{data_path}/{args.folder.lower()}/{best_fiducials_stem()}.json"
                 ref_entry = None
                 if os.path.exists(ref_file):
                     ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(args.reference_energy)
@@ -400,7 +563,7 @@ for config in configs:
                 # the previous run's entry was silent staleness and a lower threshold picked a volume that did
                 # not survive the analysis cuts, so the truth study inherits the reference volume instead.
                 if args.truth_fiducial:
-                    ref_file = f"{data_path}/{args.folder.lower()}/BestFiducials.json"
+                    ref_file = f"{data_path}/{args.folder.lower()}/{best_fiducials_stem()}.json"
                     ref_entry = None
                     if os.path.exists(ref_file):
                         ref_entry = json.load(open(ref_file)).get(config, {}).get(analysis_key, {}).get(energy_label)
@@ -452,10 +615,21 @@ for config in configs:
                     f"(essential MC {_mc_diag['ChosenEssentialMC']}, ungated best {_mc_diag['UngatedBest']})"
                 )
 
+            _profile_meta = {"Geometry": "", "Config": config, "Name": name, "Analysis": analysis_name, "Energy": energy_label,
+                             "Folder": args.folder, "MCThreshold": int(args.mc_threshold)}
+            if args.export_profiles:
+                _profile_rows.extend(fiducial_profile_rows(
+                    plot_df, gated_plot_df, analysis_config, smoothing_config, args.exposure, str(root),
+                    (max_row["FiducializedX"], max_row["FiducializedY"], max_row["FiducializedZ"]), "Full window", _profile_meta))
             # Per-energy-band optimization: find the best fiducial independently for
             # each band. Downstream masking applies the band-specific cut per event.
             band_results = []
-            for band in analysis_config.get("energy_bands", []):
+            # Study knob SOLAR_FIDUCIAL_SINGLE_BAND=1 (fid_oneband): one volume for the full window, EnergyBands written
+            # empty so the seeded per-band entries of the default do not survive the merge.
+            _single_band = os.environ.get("SOLAR_FIDUCIAL_SINGLE_BAND") == "1"
+            if _single_band:
+                best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = []
+            for band in ([] if _single_band else analysis_config.get("energy_bands", [])):
                 band_config = dict(analysis_config)
                 band_config["energy_min"] = band["energy_min"]
                 band_config["energy_max"] = band["energy_max"]
@@ -466,6 +640,29 @@ for config in configs:
                     continue
                 band_best = band_sig_df.loc[band_sig_df["SmoothedSignificance"].idxmax()]
                 band_label = band.get("label", f"{band['energy_min']}-{band['energy_max']}")
+                # Study knob SOLAR_FIDUCIAL_BAND_MIN_Z="abs:<Z>" or "rel:<f>" (fid_bandmin*): a band whose best fiducial-stage
+                # significance is below Z (or below f x the full-window significance) carries no information to choose a
+                # volume, so it takes the full-window volume instead of its own optimum.
+                _bmin = os.environ.get("SOLAR_FIDUCIAL_BAND_MIN_Z")
+                if _bmin:
+                    _mode, _val = _bmin.split(":")
+                    _limit = float(_val) * (float(max_row["SmoothedSignificance"]) if _mode == "rel" else 1.0)
+                    if float(band_best["SmoothedSignificance"]) < _limit:
+                        rprint(f"  [{band_label}] significance {band_best['SmoothedSignificance']:.3f} < {_limit:.3f} ({_bmin}): "
+                               f"full-window volume X={int(max_row['FiducializedX'])} Y={int(max_row['FiducializedY'])} "
+                               f"Z={int(max_row['FiducializedZ'])} instead of its own optimum")
+                        _full = (band_sig_df["FiducializedX"] == max_row["FiducializedX"]) & \
+                                (band_sig_df["FiducializedY"] == max_row["FiducializedY"]) & \
+                                (band_sig_df["FiducializedZ"] == max_row["FiducializedZ"])
+                        if _full.any():
+                            band_best = band_sig_df.loc[_full].iloc[0]
+                        else:
+                            band_best = max_row
+                if args.export_profiles:
+                    _profile_rows.extend(fiducial_profile_rows(
+                        plot_df, gated_plot_df, band_config, smoothing_config, args.exposure, str(root),
+                        (band_best["FiducializedX"], band_best["FiducializedY"], band_best["FiducializedZ"]),
+                        f"{band['energy_min']:g}-{band['energy_max']:g} MeV", _profile_meta))
                 rprint(
                     f"  [{band_label}] {band['energy_min']}-{band['energy_max']} MeV: "
                     f"significance {band_best['SmoothedSignificance']:.2f} at "
@@ -482,7 +679,54 @@ for config in configs:
                     "FiducialZ": int(band_best["FiducializedZ"]),
                     "SmoothedSignificance": float(band_best["SmoothedSignificance"]),
                 })
-            if band_results:
-                best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
+            # Written also when empty, so per-band volumes of an earlier record do not survive the merge.
+            best_fiducials[config][analysis_key][energy_label]["EnergyBands"] = band_results
+            # Study knob SOLAR_FIDUCIAL_FORCE_BAND=<low|high|best|index> (fid_highband, fid_bestband): apply the volume chosen
+            # for that energy band (best: the band with the highest fiducial-stage significance) to every event (EnergyBands
+            # written empty), instead of per-band volumes plus the full-window volume elsewhere.
+            _force = os.environ.get("SOLAR_FIDUCIAL_FORCE_BAND")
+            if _force and _force.startswith("vol:"):
+                # vol:X,Y,Z (fid_v*): a fixed volume for every event of the analysis, to test single volumes on the final score
+                _fx, _fy, _fz = (int(v) for v in _force[4:].split(","))
+                best_fiducials[config][analysis_key][energy_label].update(
+                    {"FiducialX": _fx, "FiducialY": _fy, "FiducialZ": _fz, "EnergyBands": [], "ForcedBand": _force})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: fixed volume X={_fx} Y={_fy} Z={_fz} "
+                       f"applied to every event")
+            elif _force == "max" and band_results:
+                # max (fid_bandmax): one volume with each margin the largest of the band volumes (their intersection), so
+                # every band's cut is applied to every event
+                _fx, _fy, _fz = (max(r[k] for r in band_results) for k in ("FiducialX", "FiducialY", "FiducialZ"))
+                best_fiducials[config][analysis_key][energy_label].update(
+                    {"FiducialX": _fx, "FiducialY": _fy, "FiducialZ": _fz, "EnergyBands": [], "ForcedBand": "max"})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: intersection of the band volumes "
+                       f"X={_fx} Y={_fy} Z={_fz} applied to every event")
+            elif _force and band_results:
+                _best = max(range(len(band_results)), key=lambda i: band_results[i]["SmoothedSignificance"])
+                _idx = {"low": 0, "high": len(band_results) - 1, "best": _best}.get(_force, None)
+                _idx = int(_force) if _idx is None else _idx
+                _fb = band_results[_idx]
+                _entry = best_fiducials[config][analysis_key][energy_label]
+                _entry.update({"FiducialX": _fb["FiducialX"], "FiducialY": _fb["FiducialY"], "FiducialZ": _fb["FiducialZ"],
+                               "EnergyBands": [], "ForcedBand": _fb["label"]})
+                rprint(f"[cyan][INFO][/cyan] {config} {analysis_name} {energy_label}: volume of band {_fb['label']} "
+                       f"({_fb['energy_min']}-{_fb['energy_max']} MeV) applied to every event: "
+                       f"X={_fb['FiducialX']} Y={_fb['FiducialY']} Z={_fb['FiducialZ']}")
 
-_merge_and_write_json(filename, best_fiducials)
+if args.write_records:
+    _merge_and_write_json(filename, best_fiducials)
+    # Per-entry records for the template staleness guard (lib/fiducial_entries.py)
+    write_fiducial_entries(str(root), args.folder, _best_fiducials_stem, json.load(open(filename)), configs=list(best_fiducials))
+else:
+    rprint("[cyan][INFO][/cyan] --no-write_records: BestFiducials records left untouched")
+if args.export_profiles and _profile_rows:
+    _profiles = pd.DataFrame(_profile_rows)
+    for (_cfg, _name, _energy), _part in _profiles.groupby(["Config", "Name", "Energy"]):
+        _out = f"{_analysis_info['PATH']}/FIDUCIAL/{args.folder.lower()}/{_cfg}/{_name}"
+        os.makedirs(_out, exist_ok=True)
+        # SOLAR_FIDUCIAL_PROFILE_SUFFIX (default empty): extra label on the profile file name, so study profiles do not
+        # replace the default ones.
+        _path = f"{_out}/{_cfg}_{_name}_{_energy}_Fiducial_Profiles{_scan_suffix}{os.environ.get('SOLAR_FIDUCIAL_PROFILE_SUFFIX', '')}.pkl"
+        if os.path.exists(_path):
+            os.remove(_path)  # pnfs: no in-place overwrite
+        _part.reset_index(drop=True).to_pickle(_path)
+        rprint(f"[cyan][INFO][/cyan] fiducial profiles: {len(_part)} rows -> {_path}")

@@ -44,15 +44,18 @@ upper/lower branch classifier as before.
 - Neutron-capture classifier (--target ncap): random forest CC vs neutron captures for clusters whose SolarEnergy with
   the offset is in [--ncap_energy_min, --ncap_energy_max) (6-14 MeV), CC clusters weighted by the oscillated solar weight,
   neutrons by their rate weight; inputs of the default classifier. Writes <config>_neutron_capture.json (score thresholds
-  per CC completeness, NCAP_THRESHOLDS) and *_neutron_capture_fold{0,1}.pkl. Used by the neutron-capture veto in MODE
-  "classifier" (config NEUTRON_CAPTURE_VETO.PER_CONFIG): DayNight and Sensitivity drop the region clusters scored below
-  the threshold. Cluster-level test on the rerun 17 state (2026-10-10, both event halves): HD Central at 50% CC
+  per CC completeness, NCAP_THRESHOLDS) and *_neutron_capture_fold{0,1}.pkl (name set by --ncap_model). Used by the
+  neutron-capture veto (config NEUTRON_CAPTURE_VETO): with ACTION "no_offset" the region clusters scored below the
+  threshold get SolarEnergy without the de-excitation offset (lib/cluster.py; SolarEnergyHEP untouched); with ACTION
+  "remove" DayNight and Sensitivity drop them. Cluster-level test on the rerun 17 state (2026-10-10, both event halves): HD Central at 50% CC
   completeness in the region DayNight +20%, Sensitivity-selection day-night significance +38%.
 - High-energy threshold: clusters whose SolarEnergy (with the offset) is at least --gate_energy use
   SB_THRESHOLD_HIGH, the largest score cut that keeps --completeness_high of the signal clusters above the
   gate (never looser than SB_THRESHOLD). Above the gate the backgrounds left after the topological cuts are
   external gammas and neutron captures, and the CC clusters there are the most signal-like, so a stricter
   cut costs little signal (study of 2026-10-07, _xchk/hep). --gate_energy 0 switches it off.
+- Since 2026-10-18 the analysis applies SB_THRESHOLD only with config SB_LOW_THRESHOLD true (default false): below
+  SB_GATE_ENERGY every cluster keeps the offset, and SB_THRESHOLD only floors SB_THRESHOLD_HIGH / SB_THRESHOLD_HEP.
 """
 
 parser = argparse.ArgumentParser(description="Train the signal/background cluster classifier")
@@ -78,12 +81,18 @@ parser.add_argument("--target", choices=["default", "hep", "ncap"], default="def
          "ncap: the neutron-capture classifier of the neutron-capture veto.")
 parser.add_argument("--ncap_energy_min", type=float, default=6.0, help="--target ncap: region lower edge (SolarEnergy with the offset).")
 parser.add_argument("--ncap_energy_max", type=float, default=14.0, help="--target ncap: region upper edge.")
+parser.add_argument("--ncap_model", type=str, default="neutron_capture",
+    help="--target ncap: model name in the output files (<config>_<model>.json, *_<model>_fold{0,1}.pkl); config "
+         "NEUTRON_CAPTURE_VETO.MODEL selects the one the veto reads.")
 parser.add_argument("--hep_min_energy", type=float, default=8.0, help="--target hep: minimum cluster Energy of the training sample.")
 parser.add_argument("--hep_model_gate_energy", type=float, default=12.0,
     help="--target hep: SolarEnergy (with the offset, MeV) above which the HEP classifier replaces the default one.")
 parser.add_argument("--hep_model_completeness", type=float, default=0.80,
     help="--target hep: CC completeness above --hep_model_gate_energy of SB_HEP_MODEL_THRESHOLD.")
 parser.add_argument("--max_per_sample", type=int, default=300000)
+parser.add_argument("--ncap_dry_run", action=argparse.BooleanOptionalAction, default=False,
+                    help="--target ncap: print the summary (AUC, thresholds, neutrons kept) without saving models or json "
+                         "(training-size checks next to the models in use).")
 parser.add_argument("--rf_estimators", type=int, default=300)
 parser.add_argument("--rf_depth", type=int, default=10)
 parser.add_argument("--rf_min_leaf", type=int, default=20)
@@ -210,22 +219,26 @@ if NCAP:
     auc = roc_auc_score(data["Label"], data["Score"], sample_weight=data["W"])
     summary = {"NCAP_THRESHOLDS": thresholds, "NCAP_ENERGY_MIN": args.ncap_energy_min, "NCAP_ENERGY_MAX": args.ncap_energy_max,
                "FEATURES": features, "EXCLUDED_FEATURES": list(args.exclude_features), "AUC": float(auc),
-               "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k", "SIGNAL_SAMPLE": args.name,
+               "FOLD_RULE": "(Flag + Event) % 2; model k applied to fold 1-k", "SIGNAL_SAMPLE": args.name, "MODEL": args.ncap_model,
                "BACKGROUND_SAMPLES": args.backgrounds, "SEED": args.seed,
                "RF": {"n_estimators": args.rf_estimators, "max_depth": args.rf_depth, "min_samples_leaf": args.rf_min_leaf},
                "NEUTRON_KEPT": {c: float(np.average(data.loc[~sig, "Score"] >= t, weights=data.loc[~sig, "W"])) for c, t in thresholds.items()}}
     rprint(json.dumps(summary, indent=2))
+    rprint(f"NCAP training clusters: CC {int(sig.sum())}, neutron {int((~sig).sum())}")
+    if args.ncap_dry_run:
+        rprint("[cyan][INFO][/cyan] --ncap_dry_run: models and json not written")
+        sys.exit(0)
     model_dir = f"{_models_base}/{config}/{args.name}/models"
     os.makedirs(model_dir, exist_ok=True)
     for fold, model in models.items():
-        path = f"{model_dir}/{config}_{args.name}_neutron_capture_fold{fold}.pkl"
+        path = f"{model_dir}/{config}_{args.name}_{args.ncap_model}_fold{fold}.pkl"
         if os.path.isfile(path):  # pnfs cannot overwrite in place
             os.remove(path)
         with open(path, "wb") as f:
             pickle.dump(model, f)
     calib_dir = f"{root}/config/{config}/{args.name}/{config}_calib"
     os.makedirs(calib_dir, exist_ok=True)
-    with open(f"{calib_dir}/{config}_neutron_capture.json", "w") as f:
+    with open(f"{calib_dir}/{config}_{args.ncap_model}.json", "w") as f:
         json.dump(summary, f, indent=2)
     rprint(f"Saved neutron-capture classifier ({len(features)} features, AUC {auc:.3f}) to {model_dir} and {calib_dir}")
     sys.exit(0)

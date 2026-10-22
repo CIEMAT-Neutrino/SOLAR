@@ -70,7 +70,14 @@ def load_config_counts(info: Optional[dict], name: str, branch: str) -> Optional
             _config_npy_cache[path] = np.asarray(arr, dtype=np.int64).ravel()
         except FileNotFoundError:
             _config_npy_cache[path] = None
-    return _config_npy_cache[path]
+    arr = _config_npy_cache[path]
+    # study bkgsub: only the kept jobs count (N_gen rescales with the subsample)
+    from lib.subsample import subsample_masks
+    from src.utils import get_project_root
+    sub = subsample_masks(path.rsplit("/Config/", 1)[0], name, info, str(get_project_root()))
+    if arr is not None and sub is not None and len(arr) == len(sub["Config"]):
+        arr = arr[sub["Config"]]
+    return arr
 
 
 def _truth_entry_count(run: dict, info: Optional[dict], name: str) -> Optional[float]:
@@ -285,30 +292,24 @@ def evaluate_surface_pdf(info, name, A, alpha, p, x, y, z, s, kde_p, kde_uv):
     return N * np.absolute(w)
 
 
-def evaluate_background_pdf(info, name, A, alpha, p, s, hists, bins):
-    """Evaluate the background PDF using histogram PDFs for each surface."""
-    # surface_weights = json.load(open(f"{root}/config/import/surface_weights.json"))
-    # surface_production = json.load(open(f"{root}/config/import/surface_production.json"))
-    N = 0
-    w = np.zeros_like(p)
+def evaluate_background_pdf(p, s, hists, bins):
+    """Truth momentum density P(p|s) of each particle's generation surface s.
+
+    hists/bins are the per-surface momentum PDFs of 03_background_pdf.py (unit integral over p). Particles without a
+    surface or on a surface without spectrum get 0. normalize_true_weights scales P(p|s) to the surface rate:
+    w_s(p) = f_s * R_s * P(p|s) * dp_gen / N_gen,s (see _generated_mean_weight).
+    """
+    w = np.zeros(np.shape(p), dtype=float)
     for surface_id in np.unique(s):
         mask = s == surface_id
         if surface_id < 0 or len(hists[surface_id]) == 0:
             continue
 
-        N += 1
-        p_s = p[mask]
-        bin_idx_s = np.digitize(p_s, bins[surface_id]) - 1
+        bin_idx_s = np.digitize(p[mask], bins[surface_id]) - 1
         bin_idx_s = np.clip(bin_idx_s, 0, len(hists[surface_id]) - 1)
-        w[mask] = (
-            A[str(surface_id)]
-            * alpha[surface_id]
-            * hists[surface_id][bin_idx_s]
-            # * surface_production[info["VERSION"]][str(surface_id)]
-            # / surface_weights[info["VERSION"]][name][str(surface_id)]
-        )
+        w[mask] = hists[surface_id][bin_idx_s]
 
-    return N * w
+    return w
 
 
 def compute_particle_weights(
@@ -880,11 +881,9 @@ def compute_true_weights(
                     for this_exposure in exposure.values():
                         alpha_truth.append(this_exposure["counts"] / total_counts)
                     
-                    # Calculate surface areas based on production sizes from config
-                    # The old surface_areas.json used hardcoded values that were:
-                    # - Correct for central's surfaces 0,1,2 but wrong for 3,4
-                    # - Wrong for lateral's surfaces 1,2 but correct for 0,3,4
-                    # Now we calculate directly from PRODUCTION_SIZE values
+                    # Generation areas from the PRODUCTION_SIZE values and surface fractions alpha_truth, used by
+                    # the "surface" (KDE) weighting only. The "histogram" weights carry no area or fraction: both are
+                    # in the surface rates R_s (exposure counts, flux x surface_areas.json area per kT yr).
                     surfaces_dict = json.load(open(f"{root}/config/import/surface_positions.json"))
                     A = {}
                     for surface_label, (surface_value, surface_id) in surfaces_dict[info["GEOMETRY"]].items():
@@ -912,10 +911,6 @@ def compute_true_weights(
 
                         run[tree]["SignalParticleWeight"][idx] = (
                             evaluate_background_pdf(
-                                info,
-                                name,
-                                A,
-                                alpha_truth,
                                 run[tree]["SignalParticleP"][idx],
                                 run[tree]["SignalParticleSurface"][idx],
                                 pdf_hist,
@@ -1000,16 +995,14 @@ def compute_true_weights(
     return run, output, exposure, new_branches
 
 
-def _generated_mean_weight(weights, momenta, name: str, config: str, surface_id: int):
-    """Mean background weight over the generated particles of one surface.
+def _generated_mean_weight(name: str, config: str, surface_id: int):
+    """Mean of the histogram weight P(p|s) over the generated particles of one surface.
 
-    The histogram weights are c_s * h_s(p) (evaluate_background_pdf, h_s the rate per momentum bin), and the samples
-    are generated flat in momentum over GENERATED_MOMENTUM_MEV (backgrounds.json). A generated particle of momentum p
-    then carries R_s * h_s(p) / (bin width * sum(h_s)) * range / N_gen, so the normalisation divides by
-    c_s * (bin width * sum(h_s)) / range: the mean weight a flat generation would have if all of the surface rate lay
-    inside the generated range. It is not the mean over the clusters of the tree, which the detection efficiency biases
-    towards the momenta that produce clusters, and the rate outside the generated range is not reassigned to it.
-    Returns None when it cannot be evaluated (no generated range, no non-zero pdf entry).
+    The samples are generated flat in momentum over dp_gen = GENERATED_MOMENTUM_MEV (backgrounds.json), so the mean is
+    integral(P(p|s) dp) / dp_gen = 1 / dp_gen, and dividing by it gives w_s(p) = f_s * R_s * P(p|s) * dp_gen / N_gen,s:
+    the truth-to-generated density ratio scaled to the surface rate R_s. It is not the mean over the clusters of the
+    tree, which the detection efficiency biases towards the momenta that produce clusters, and the rate outside the
+    generated range is not reassigned to it. Returns None when it cannot be evaluated (no generated range or spectrum).
     """
     from .background import get_background_config
 
@@ -1021,12 +1014,7 @@ def _generated_mean_weight(weights, momenta, name: str, config: str, surface_id:
     hist, edges = np.asarray(hists[surface_id], dtype=float), np.asarray(bins[surface_id], dtype=float)
     if len(hist) == 0:
         return None
-    pdf = hist[np.clip(np.digitize(momenta, edges) - 1, 0, len(hist) - 1)]
-    ok = pdf > 0
-    if not np.any(ok):
-        return None
-    scale = float(np.median(np.asarray(weights, dtype=float)[ok] / pdf[ok]))
-    return scale * float(np.sum(hist * np.diff(edges))) / (hi - lo)
+    return float(np.sum(hist * np.diff(edges))) / (hi - lo)
 
 
 def normalize_true_weights(
@@ -1164,14 +1152,10 @@ def normalize_true_weights(
                                 this_rate_factor = float(
                                     info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
                                 )
-                                # Histogram weights are normalised over the generated particles
-                                # (_generated_mean_weight); otherwise over the clusters of this tree.
+                                # Histogram weights P(p|s) are normalised over the generated particles
+                                # (_generated_mean_weight = 1 / dp_gen); otherwise over the clusters of this tree.
                                 this_mean_weight = (
-                                    _generated_mean_weight(
-                                        run[tree][this_weight_name][idx[0][mask]],
-                                        np.asarray(run[tree]["SignalParticleP"][idx[0][mask]], dtype=float),
-                                        name, config, surface_id,
-                                    )
+                                    _generated_mean_weight(name, config, surface_id)
                                     if params.get("PARTICLE_WEIGHTING") == "histogram" and np.any(mask)
                                     else None
                                 )

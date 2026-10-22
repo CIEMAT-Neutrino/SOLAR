@@ -8,6 +8,7 @@ from typing import Optional
 from itertools import product
 from .formatting import remove_branches, get_param_dict, reshape_array
 from .defaults import get_default_info, load_analysis_info
+from .background import neutron_capture_no_offset, neutron_capture_veto_params
 from .fitting import calibration_func
 from .dataframe import npy2df
 
@@ -67,14 +68,18 @@ def _signal_background_hep_model(run, config, name, idx):
     return score, info
 
 
-def _neutron_capture_scores(run, config, name, idx, offset_energy):
+def _neutron_capture_scores(run, config, name, idx, offset_energy, region_range=None):
     """Scores of the neutron-capture classifier (03b_signal_background.py --target ncap) for the clusters in its region
-    (SolarEnergy with the offset in [NCAP_ENERGY_MIN, NCAP_ENERGY_MAX)); 1 elsewhere. (None, None) without a classifier."""
+    (SolarEnergy with the offset in [NCAP_ENERGY_MIN, NCAP_ENERGY_MAX), or in region_range when given); 1 elsewhere.
+    (None, None) without a classifier."""
+    veto = load_analysis_info(str(root)).get("NEUTRON_CAPTURE_VETO", {})
+    model = veto.get("PER_CONFIG", {}).get(config, {}).get("MODEL", veto.get("MODEL", "neutron_capture"))
+    model = os.environ.get("SOLAR_NCVETO_MODEL") or model  # study knob run_sensitivity --ncveto_model
     for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
         if not sample:
             continue
-        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_neutron_capture.json"
-        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_neutron_capture_fold{k}.pkl" for k in (0, 1)]
+        jpath = f"{root}/config/{config}/{sample}/{config}_calib/{config}_{model}.json"
+        mpaths = [f"{_pnfs_calib}/{config}/{sample}/models/{config}_{sample}_{model}_fold{k}.pkl" for k in (0, 1)]
         if os.path.isfile(jpath) and all(os.path.isfile(p) for p in mpaths):
             break
     else:
@@ -82,7 +87,8 @@ def _neutron_capture_scores(run, config, name, idx, offset_energy):
     info = json.load(open(jpath))
     reco = run["Reco"]
     offset_energy = np.asarray(offset_energy, dtype=float)
-    region = (offset_energy >= float(info["NCAP_ENERGY_MIN"])) & (offset_energy < float(info["NCAP_ENERGY_MAX"]))
+    lo, hi = region_range if region_range is not None else (info["NCAP_ENERGY_MIN"], info["NCAP_ENERGY_MAX"])
+    region = (offset_energy >= float(lo)) & (offset_energy < float(hi))
     score = np.ones(len(offset_energy))
     if not region.any():
         return score, info
@@ -114,6 +120,16 @@ def _signal_background_flags(run, config, name, idx, this_params):
     """
     if not load_analysis_info(str(root)).get("SIGNAL_BACKGROUND_CLASSIFIER", False):
         return None
+    if os.environ.get("SOLAR_SB_CLASSIFIER") == "0":
+        # Study knob sb_off (run_sensitivity --no-sb_classifier): every cluster signal-like, i.e. SolarEnergy keeps the
+        # offset everywhere and SolarEnergyHEP equals it; the branches the classifier block writes (neutron-capture
+        # score included) are still filled. Score 1 for every cluster.
+        _SB_INFO_CACHE.pop((config, name), None)
+        reco = run["Reco"]
+        if "SignalBackgroundScore" not in reco:
+            reco["SignalBackgroundScore"] = np.ones(len(reco["Event"]))
+        reco["SignalBackgroundScore"][idx] = 1.0
+        return np.ones(len(np.asarray(idx[0])), dtype=bool)
     if this_params is not None and this_params.get("SB_CLASSIFIER", True) is False:
         return None
     for sample in dict.fromkeys([name, _calib_fallback(name, "")]):
@@ -160,6 +176,16 @@ def _signal_background_flags(run, config, name, idx, this_params):
             threshold_high = float(table[key])
         solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
         threshold[solar >= float(info["SB_GATE_ENERGY"])] = threshold_high
+    _low_env = os.environ.get("SOLAR_SB_LOW_THRESHOLD")
+    low_on = (_low_env == "1") if _low_env in ("0", "1") else bool(load_analysis_info(str(root)).get("SB_LOW_THRESHOLD", True))
+    if not low_on:
+        # Default since 2026-10-18 (config SB_LOW_THRESHOLD false): no S/B decision below SB_GATE_ENERGY; only
+        # SB_THRESHOLD_HIGH above the gate (and SB_THRESHOLD_HEP for SolarEnergyHEP) act. SOLAR_SB_LOW_THRESHOLD (1/0,
+        # run_sensitivity --[no-]sb_low_threshold, study sb_lowthr) overrides the config.
+        if "SB_THRESHOLD_HIGH" not in info:
+            raise KeyError(f"SB_LOW_THRESHOLD off needs SB_THRESHOLD_HIGH in the classifier json of {config} {name}")
+        solar = np.asarray(reco["SolarEnergy"])[idx].astype(float)
+        threshold[solar < float(info["SB_GATE_ENERGY"])] = -np.inf
     return score >= threshold
 
 def _adjcl_slots(run, idx):
@@ -840,6 +866,36 @@ def compute_energy_calibration(
                     if "NeutronCaptureScore" not in run["Reco"]:
                         run["Reco"]["NeutronCaptureScore"] = np.ones(len(run["Reco"]["Event"]))
                     run["Reco"]["NeutronCaptureScore"][rows] = nc_score
+                    # Neutron-capture veto with ACTION "no_offset" (config NEUTRON_CAPTURE_VETO): capture-like clusters of the
+                    # classifier region are treated as background-like, i.e. SolarEnergy without the offset (SolarEnergyHEP,
+                    # set above, is not touched).
+                    nc_flag = neutron_capture_no_offset(str(root), config, nc_score)
+                    # SolarEnergy before the veto shift: the fiducial volume scan reads it (01_fiducialize.py, 2026-10-18)
+                    if "SolarEnergyNoVeto" not in run["Reco"]:
+                        run["Reco"]["SolarEnergyNoVeto"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
+                    run["Reco"]["SolarEnergyNoVeto"][rows] = run["Reco"]["SolarEnergy"][rows]
+                    if nc_flag is not None:
+                        run["Reco"]["SolarEnergy"][rows[nc_flag]] = no_offset[nc_flag]
+                        output += f"\t\t[cyan][INFO][/cyan] {name}: neutron-capture veto, {np.mean(nc_flag):.1%} of clusters without offset\n"
+                        # Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): the same veto applied to the
+                        # clusters below the classifier region, as SolarEnergyNCapLow, so the cut-flow and spectrum figures
+                        # show no step at the region edge. Built only with SOLAR_NCAP_DISPLAY=1 (03_analysis.py export
+                        # --energy SolarEnergyNCapLow); SolarEnergy and every analysis are unchanged.
+                        # SOLAR_NCAP_DISPLAY_MIN (MeV) overrides the config for display tests (e.g. 4: only the 4-6 MeV bins)
+                        _dmin = os.environ.get("SOLAR_NCAP_DISPLAY_MIN") or load_analysis_info(str(root)).get("NCAP_DISPLAY_ENERGY_MIN")
+                        if os.environ.get("SOLAR_NCAP_DISPLAY") == "1" and _dmin is not None:
+                            low_score, _ = _neutron_capture_scores(
+                                run, config, name, idx, run["Reco"]["SolarEnergyOffset"][rows],
+                                region_range=(float(_dmin), float(nc_info["NCAP_ENERGY_MIN"])))
+                            low_flag = neutron_capture_no_offset(str(root), config, low_score)
+                            if "SolarEnergyNCapLow" not in run["Reco"]:
+                                run["Reco"]["SolarEnergyNCapLow"] = np.array(run["Reco"]["SolarEnergy"], dtype=float, copy=True)
+                            display_energy = np.array(run["Reco"]["SolarEnergy"][rows], dtype=float, copy=True)
+                            display_energy[low_flag] = no_offset[low_flag]
+                            run["Reco"]["SolarEnergyNCapLow"][rows] = display_energy
+                            output += f"\t\t[cyan][INFO][/cyan] {name}: display veto below {float(_dmin):g}-{float(nc_info['NCAP_ENERGY_MIN']):g} MeV, {np.mean(low_flag):.1%} of clusters\n"
+                elif neutron_capture_veto_params(str(root), config).get("MODE") == "classifier":
+                    raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config} {name}: no neutron-capture classifier")
                 # Alternative HEP energy (study variant hep_sbmodel): above SB_HEP_MODEL_GATE_ENERGY the HEP-trained
                 # classifier decides the offset; below it SolarEnergy is unchanged. Built only on request.
                 if this_params is not None and this_params.get("SB_HEP_MODEL", False):

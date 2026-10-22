@@ -49,6 +49,84 @@ def adaptive_mc_thresholds(
     return out
 
 
+def mc_floor() -> float:
+    """MC_FLOOR of the study mcfloor (run_sensitivity --mc_floor, SOLAR_MC_FLOOR), 0 when off."""
+    return float(os.environ.get("SOLAR_MC_FLOOR", "0") or 0)
+
+
+def _is_external(component) -> bool:
+    return str(component).lower().split("_")[0] in ("gamma", "neutron")
+
+
+def mc_floor_cuts(root: str, folder: str, config: str, analysis: str, energy: str, frames, axes):
+    """Cuts eligible under the MC floor of the study mcfloor, or None when the floor is off.
+
+    A cut is eligible when gamma and neutron each keep >= MC_FLOOR simulated clusters (Rebin MCCounts, Truth/Mean rows,
+    i.e. inside the fiducial volume) in the analysis energy window [EnergyMin, EnergyMax) of this analysis' fiducial
+    entry (DayNight 6-18, HEP 14-30, Sensitivity 10-30 MeV). This is on top of the default essential-background gate,
+    which counts the whole 0-30 MeV Rebin. `frames` maps background components to their Rebin rows; `axes` gives the
+    order of the returned cut tuples. Writes the eligible range and the window MC at every eligible cut to
+    output/logs/mcfloor/<config>_<ANALYSIS>_<energy>_<label>.json.
+    """
+    floor = mc_floor()
+    if floor <= 0:
+        return None
+    import json
+    import numpy as np
+    from rich import print as rprint
+    from .fiducial_entries import best_fiducials_stem
+    fiducials = json.load(open(os.path.join(str(root), "config", "analysis", "fiducial", str(folder).lower(), f"{best_fiducials_stem()}.json")))
+    entry = fiducials.get(config, {}).get(str(analysis).upper(), {}).get(energy, {}) or {}
+    e_min, e_max = float(entry.get("EnergyMin", 0.0)), float(entry.get("EnergyMax", 1e9))
+    mc: Dict[str, Dict[tuple, float]] = {}
+    for component, frame in frames.items():
+        if not _is_external(component) or frame is None or len(frame) == 0 or "MCCounts" not in frame.columns:
+            continue
+        if "Oscillation" in frame.columns:
+            frame = frame.loc[frame["Oscillation"] == "Truth"]
+        if "Mean" in frame.columns:
+            frame = frame.loc[frame["Mean"] == "Mean"]
+        per_cut: Dict[tuple, float] = {}
+        for _, row in frame.iterrows():
+            counts = np.asarray(row["MCCounts"], dtype=float)
+            centers = np.arange(len(counts)) + 0.5  # every analysis Rebin is 0-30 MeV in 1 MeV bins
+            if "Energy" in row.index and hasattr(row["Energy"], "__len__") and len(row["Energy"]) == len(counts):
+                centers = np.asarray(row["Energy"], dtype=float)
+            cut = tuple(int(row[axis]) for axis in axes)
+            per_cut[cut] = per_cut.get(cut, 0.0) + float(np.nansum(counts[(centers >= e_min) & (centers < e_max)]))
+        mc[component] = per_cut
+    cuts = set()
+    for per_cut in mc.values():
+        cuts.update(per_cut)
+    # A component whose window MC stays below the floor even at the loosest cut (HD Central gamma in 6-18 MeV: 9
+    # clusters) cannot meet it anywhere; its requirement is then its own grid maximum (the cut may not lose any of it).
+    required = {comp: min(floor, max(per_cut.values()) if per_cut else 0.0) for comp, per_cut in mc.items()}
+    eligible = sorted(c for c in cuts if all(mc[comp].get(c, 0.0) >= required[comp] for comp in mc))
+    ranges = {ax: [min(c[i] for c in eligible), max(c[i] for c in eligible)] for i, ax in enumerate(axes)} if eligible else {}
+    label = os.environ.get("SOLAR_MC_FLOOR_LABEL") or f"mcfloor{floor:g}"
+    payload = {
+        "Config": config, "Analysis": str(analysis).upper(), "Energy": energy, "Label": label, "MCFloor": floor,
+        "Window": [e_min, e_max], "Axes": list(axes), "Components": list(mc), "Required": required,
+        "NCuts": len(cuts), "NEligible": len(eligible),
+        "EligibleRange": ranges,
+        "MC": {"/".join(str(v) for v in c): {comp: mc[comp].get(c, 0.0) for comp in mc} for c in eligible},
+    }
+    out_dir = os.path.join(str(root), "output", "logs", "mcfloor")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{config}_{str(analysis).upper()}_{energy}_{label}.json")
+    tmp = f"{path}.tmp{os.getpid()}"
+    with open(tmp, "w") as handle:
+        json.dump(payload, handle, indent=1)
+    os.replace(tmp, path)
+    rprint(
+        f"[cyan][INFO][/cyan] MC floor {floor:g} in {e_min:g}-{e_max:g} MeV ({analysis} {config} {energy}): "
+        f"{len(eligible)} of {len(cuts)} cuts eligible (required " + ", ".join(f"{c} {r:g}" for c, r in required.items()) + ")"
+        + ("".join(f", {ax} {lo}-{hi}" for ax, (lo, hi) in ranges.items()) if ranges else ", none")
+        + f" -> {path}"
+    )
+    return set(eligible)
+
+
 def folder_applies_surface_cut(root: str, folder: str) -> bool:
     """Return True if Z endcap rejection uses SignalParticleSurface < 3 filter (z_endcap_rejection == 'surface')."""
     return get_folder_flags(root, folder)["z_endcap_rejection"] == "surface"
@@ -91,35 +169,166 @@ def get_component_model_factor(root: str, folder: str, component: str, config: O
     return _component_factor(factors, folder, component, config, "background-model factor")
 
 
-def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
-    """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
+def neutron_capture_veto_params(root: str, config: str, override=None) -> dict:
+    """Parameters of the neutron-capture veto (config NEUTRON_CAPTURE_VETO) for config, or {} when it is off.
 
-    Removed: ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN. On for the configs in
-    ENABLED_CONFIGS; override (True/False) or the environment variable SOLAR_NCVETO (1/0, set by run_sensitivity for
-    the study variants) takes precedence. Returns an all-True mask when off or for analyses not listed.
+    On for the configs in ENABLED_CONFIGS; override (True/False) or the environment variable SOLAR_NCVETO (1/0, set by
+    run_sensitivity and 03_analysis.py --ncveto for the study variants) takes precedence. The top-level keys are the
+    defaults and PER_CONFIG.<config> overrides them.
     """
     import os
-    import numpy as np
 
-    energy = np.asarray(energy, dtype=float)
-    keep = np.ones(len(energy), dtype=bool)
     veto = load_analysis_info(root).get("NEUTRON_CAPTURE_VETO", {})
-    if not veto or analysis not in veto.get("ANALYSES", []):
-        return keep
+    if not veto:
+        return {}
     if override is None and os.environ.get("SOLAR_NCVETO") in ("0", "1"):
         override = os.environ["SOLAR_NCVETO"] == "1"
     on = (config in veto.get("ENABLED_CONFIGS", [])) if override is None else bool(override)
     if not on:
+        return {}
+    keys = ("MODE", "ACTION", "MODEL", "COMPLETENESS", "ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN", "ANALYSES")
+    par = {k: veto[k] for k in keys if k in veto}
+    par.update(veto.get("PER_CONFIG", {}).get(config, {}))
+    par.setdefault("MODE", "window")
+    par.setdefault("ACTION", "remove")
+    par.setdefault("MODEL", "neutron_capture")
+    if os.environ.get("SOLAR_NCVETO_MODEL"):  # study knob run_sensitivity --ncveto_model (lib/study.py sbsimple)
+        par["MODEL"] = os.environ["SOLAR_NCVETO_MODEL"]
+    return par
+
+
+def neutron_capture_threshold(root: str, config: str, par: dict) -> float:
+    """Score threshold of the neutron-capture classifier at the CC completeness par["COMPLETENESS"] (03b --target ncap)."""
+    import json as _json
+    import os
+
+    jpath = f"{root}/config/{config}/marley_final/{config}_calib/{config}_{par['MODEL']}.json"
+    if not os.path.isfile(jpath):
+        raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: {jpath} missing "
+                                f"(03b_signal_background.py --target ncap --ncap_model {par['MODEL']})")
+    return float(_json.load(open(jpath))["NCAP_THRESHOLDS"][f"{float(par['COMPLETENESS']):.2f}"])
+
+
+def neutron_capture_no_offset(root: str, config: str, score):
+    """Clusters that lose the de-excitation offset under the neutron-capture veto with ACTION "no_offset": the clusters of
+    the classifier region (score < 1 there; 1 outside) scored below the threshold. None when the veto is off or acts by
+    removal. Called by lib/cluster.py after the signal/background stage, so SolarEnergy (DayNight, Sensitivity and every
+    other user of SolarEnergy) changes and SolarEnergyHEP does not."""
+    import numpy as np
+
+    par = neutron_capture_veto_params(root, config)
+    if not par or par["ACTION"] != "no_offset":
+        return None
+    if par["MODE"] != "classifier":
+        raise ValueError(f"Neutron-capture veto for {config}: ACTION no_offset needs MODE classifier")
+    return np.asarray(score, dtype=float) < neutron_capture_threshold(root, config, par)
+
+
+def ncap_display_low_scale(ref_prefix: str, analysis: str, weight_file: str, edges, nhits: int, ophits: int, adjcl: int,
+                           root: str, membrane_veto: bool = True):
+    """Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): per-bin factor of a SolarEnergy spectrum at the
+    selected cut that removes the clusters the neutron-capture veto flags below its classifier region (the
+    SolarEnergyNCapLow export of 03_analysis.py, written with SOLAR_NCAP_DISPLAY=1), as the analysis removes the flagged
+    clusters inside the region: 1 - (weight of those clusters) / (weight of all selected clusters) per bin, 1 where the bin
+    is empty. Empty bins below the highest flagged cluster get 0, so a smoothed spectrum does not spill back into the
+    vetoed range. ref_prefix is the export path up to the file stem ({...}/{config}_{name}_). None without the export."""
+    import os
+    import pickle
+
+    import numpy as np
+
+    from .fiducial import accepted_flash_planes
+
+    if not os.path.exists(f"{ref_prefix}AnalysisData_SolarEnergyNCapLow_Ref.pkl"):
+        return None
+
+    def _load(stem, dtype):
+        return np.asarray(pickle.load(open(f"{ref_prefix}{stem}.pkl", "rb")), dtype=dtype)
+
+    reco = _load("AnalysisData_SolarEnergy_Ref", float)
+    display = _load("AnalysisData_SolarEnergyNCapLow_Ref", float)
+    weights = _load(f"{weight_file}_SolarEnergy_Ref", float)
+    if len(display) != len(reco) or len(weights) != len(reco):
+        raise ValueError(f"{ref_prefix}: SolarEnergyNCapLow / weight exports do not match the SolarEnergy export")
+    selected = (
+        _load(f"FiducializationMask_SolarEnergy_{analysis.upper()}", bool)
+        & accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), root, membrane_veto)
+        & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0)
+        & (_load("AnalysisNHits_SolarEnergy_Ref", int) >= nhits)
+        & (_load("AnalysisOpHits_SolarEnergy_Ref", int) >= ophits)
+        & (_load("AnalysisAdjCl_SolarEnergy_Ref", int) < adjcl)
+    )
+    if os.path.exists(f"{ref_prefix}AnalysisKeep_SolarEnergy_{analysis.upper()}.pkl"):
+        selected &= _load(f"AnalysisKeep_SolarEnergy_{analysis.upper()}", bool)
+    low = selected & (display != reco)
+    w_all, _ = np.histogram(reco[selected], bins=edges, weights=weights[selected])
+    w_low, _ = np.histogram(reco[low], bins=edges, weights=weights[low])
+    scale = np.where(w_all > 0, 1.0 - w_low / np.where(w_all > 0, w_all, 1.0), 1.0)
+    if low.any():
+        edges = np.asarray(edges, dtype=float)
+        scale[(w_all <= 0) & (edges[1:] <= float(np.max(reco[low])) + 1e-9)] = 0.0
+    return scale
+
+
+def no_offset_removal_keep(analysis: str, reco, rows=None, root=None):
+    """Clusters kept by the removal of the no-offset clusters (config REMOVE_NO_OFFSET_CLUSTERS, default since 2026-10-20;
+    the environment variable SOLAR_REMOVE_NO_OFFSET 1/0, run_sensitivity --[no-]remove_no_offset, overrides it): every
+    cluster that the analysis energy carries without the de-excitation offset is removed, i.e. the clusters the
+    signal/background classifier calls background-like and the neutron-capture veto flags (SolarEnergy for DayNight and
+    Sensitivity, SolarEnergyHEP, the HEP working point of the classifier, for HEP). None when the removal is off, and, unless
+    forced through the environment, when the classifier stage is off (no SolarEnergyOffset, e.g. study sb_off)."""
+    import os
+
+    import numpy as np
+
+    env = os.environ.get("SOLAR_REMOVE_NO_OFFSET")
+    explicit = env in ("0", "1")
+    if explicit:
+        on = env == "1"
+    else:
+        _root = root or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        on = bool(load_analysis_info(_root).get("REMOVE_NO_OFFSET_CLUSTERS", False))
+    if not on:
+        return None
+    if reco is None or "SolarEnergyOffset" not in reco:
+        if explicit:
+            raise KeyError("SOLAR_REMOVE_NO_OFFSET: SolarEnergyOffset missing (signal/background classifier stage off?)")
+        return None
+    branch = "SolarEnergyHEP" if analysis == "HEP" and "SolarEnergyHEP" in reco else "SolarEnergy"
+    energy = np.asarray(reco[branch], dtype=float)
+    offset = np.asarray(reco["SolarEnergyOffset"], dtype=float)
+    if rows is not None:
+        energy, offset = energy[rows], offset[rows]
+    return energy == offset
+
+
+def neutron_capture_veto_keep(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
+    """Clusters kept by the neutron-capture veto (neutron_capture_veto_keep_rule) and, with the study knob
+    SOLAR_REMOVE_NO_OFFSET=1, by the removal of every no-offset cluster (no_offset_removal_keep)."""
+    keep = neutron_capture_veto_keep_rule(root, config, analysis, energy, main_energy, override, reco, rows)
+    removal = no_offset_removal_keep(analysis, reco, rows, root=root)
+    return keep if removal is None else keep & removal
+
+
+def neutron_capture_veto_keep_rule(root: str, config: str, analysis: str, energy, main_energy, override=None, reco=None, rows=None):
+    """Clusters kept by the neutron-capture veto (config NEUTRON_CAPTURE_VETO) in one analysis.
+
+    ACTION "remove" only (ACTION "no_offset" acts in the calibration, lib/cluster.py, and keeps every cluster here).
+    MODE "window": removed ENERGY_MIN <= energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN; MODE
+    "classifier": removed the region clusters scored below the threshold of COMPLETENESS. On/off as in
+    neutron_capture_veto_params. Returns an all-True mask when off or for analyses not in ANALYSES.
+    """
+    import numpy as np
+
+    energy = np.asarray(energy, dtype=float)
+    keep = np.ones(len(energy), dtype=bool)
+    par = neutron_capture_veto_params(root, config, override)
+    if not par or par["ACTION"] != "remove" or analysis not in par.get("ANALYSES", []):
         return keep
-    par = {**{k: veto[k] for k in ("ENERGY_MIN", "ENERGY_MAX", "MAIN_CLUSTER_ENERGY_MIN")}, **veto.get("PER_CONFIG", {}).get(config, {})}
-    if par.get("MODE") == "classifier":
-        # Neutron-capture classifier (03b --target ncap): drop its region clusters scored below the threshold of COMPLETENESS.
-        import json as _json
-        jpath = f"{root}/config/{config}/marley_final/{config}_calib/{config}_neutron_capture.json"
-        if reco is None or "NeutronCaptureScore" not in reco or not os.path.isfile(jpath):
-            raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: NeutronCaptureScore or {jpath} missing")
-        info = _json.load(open(jpath))
-        t = float(info["NCAP_THRESHOLDS"][f"{float(par['COMPLETENESS']):.2f}"])
+    if par["MODE"] == "classifier":
+        if reco is None or "NeutronCaptureScore" not in reco:
+            raise FileNotFoundError(f"Neutron-capture veto MODE classifier for {config}: NeutronCaptureScore missing")
+        t = neutron_capture_threshold(root, config, par)
         score = np.asarray(reco["NeutronCaptureScore"], dtype=float)
         if rows is not None:
             score = score[rows]
@@ -139,8 +348,12 @@ def score_categories(root: str, config: str) -> list:
     hold K + 1 categories stacked along the nadir axis, the most signal-like first."""
     import json as _json
 
+    import os as _os
+
     cfg = load_analysis_info(root).get("SENSITIVITY_SCORE_CATEGORIES", {})
     if not cfg or config not in cfg.get("ENABLED_CONFIGS", []):
+        return []
+    if _os.environ.get("SOLAR_SB_CLASSIFIER") == "0":  # study sb_off: the categories are classifier-score categories
         return []
     path = score_categories_path(root, config)
     if not os.path.isfile(path):

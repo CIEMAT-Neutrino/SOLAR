@@ -141,7 +141,7 @@
     "VALIDATION_SCALE": 1000
   },
   "DATA_PATHS": {
-    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth_sb_20261005b",
+    "TRUTH": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/truth_hdgeo_20261014",
     "LEGACY": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/background/legacy",
     "CALIBRATION": "/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/calibration_sb_20261004"
   },
@@ -181,5 +181,24 @@
       ]
     ],
     "FLUX_REFERENCE_CONFIG": "vd_1x8x14_3view_30deg_nominal"
-  }
+  },
+  "HEP_TAIL_EXTRAPOLATION": {
+    "_doc": "HEP (01_hep.py, 02_hep_energy_limit.py): in the bins a cut leaves without simulated events, the external spectrum of COMPONENTS gets the tail of the same sample at the loosest cut of the scan (exponential fit, endpoint mode). 2026-10-14 (user): every config, gammas only; the neutron-capture spectra are over-calibrated by the Geant4 capture bug, so their tails are not extrapolated. Kept here rather than in config.json (it overrides the config.json entry, load_analysis_info merges this file later) because config.json is an input of the Sensitivity template staleness guard and studies were running.",
+    "IN_ANALYSIS": false,
+    "_IN_ANALYSIS_doc": "2026-10-18 (user): the HEP analysis (01_hep.py) uses no tail treatment; empty bins stay empty. With the enlarged VD Top samples (rerun 38) VD Shielded is above VD Top without tails. The tails of ENABLED_CONFIGS/COMPONENTS remain the cross-check of 02_hep_energy_limit.py (ch. 8 energy-limit figure). run_sensitivity --hep_tail_extrapolation (study) turns them on.",
+    "ENABLED_CONFIGS": [
+      "hd_1x2x6_centralAPA",
+      "hd_1x2x6_lateralAPA",
+      "vd_1x8x14_3view_30deg_nominal",
+      "vd_1x8x14_3view_30deg_shielded"
+    ],
+    "COMPONENTS": [
+      "gamma"
+    ],
+    "MODE": "endpoint",
+    "FIT_THRESHOLD": 14.0,
+    "_FIT_THRESHOLD_doc": "Lower edge of the HEP window: the loosest-cut tail is fitted from FIT_THRESHOLD - 4 MeV (lib.background.external_tail_model), as in 02_hep_energy_limit.py and ch. 8.3. Before 2026-10-14 01_hep.py passed its analysis threshold (0 MeV), so the fit covered the whole spectrum."
+  },
+  "RADIOLOGICAL_MIN_MC_PER_BIN": 3,
+  "_RADIOLOGICAL_MIN_MC_PER_BIN_doc": "03_analysis.py: minimum number of simulated radiological clusters per 1 MeV bin (the per-bin MC filter for that sample, whatever MC_FILTER the config uses). User decision 2026-10-15: a single radiological cluster (weight 1e5-1e6 events) is not a valid background reference; it made the HD Central true-position DayNight result fall below the reco one. User decision 2026-10-20: floor 3 (was 2) in 03_analysis.py, the fiducial figure of merit (02_best_fiducial.py) and the displayed spectra (lib/smoothing.display_smoothed_background), together with the regular radiological smoothing in every stage (smoothing.json, lib/smoothing.radiological_smoothing_mode). It removes the radiological bins backed by 2 simulated clusters (weights 1e7-1e9 per 20 yr) at the low-energy edge of the analysis windows, e.g. HD Central 11-12 MeV, which the smoothing would otherwise spread into the empty signal bins. Gamma and neutron keep their looser criteria (MC_FILTER, fiducial gate). Study knob: run_sensitivity --radiological_min_mc (SOLAR_RADIOLOGICAL_MIN_MC)."
 }

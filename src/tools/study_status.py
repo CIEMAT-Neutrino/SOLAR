@@ -133,6 +133,21 @@ EXPECTED_TRENDS: Dict[str, Dict[str, tuple]] = {
     "ncveto": {"*": ("default", None)},
     "ncveto_off": {"*": ("default", None)},
     "hep_plain": {"*": ("default", None)},
+    # analysis without the signal/background classifier (full chain re-optimised): no expected direction
+    "sb_off": {"*": ("default", None)},
+    # radiological component of the Sensitivity background template smoothed (full chain re-optimised): no expected direction
+    "rad_smooth": {"*": ("default", None)},
+    # HEP without the external-tail extrapolation (full chain re-optimised): no expected direction
+    "hep_notail": {"*": ("default", None)},
+    # MC-statistics diagnostics (selection bias): no expected direction
+    **{f"mcfloor_{n}": {"*": ("default", None)} for n in (10, 25, 50)},
+    **{f"bkgsub_s{s}": {"*": ("default", None)} for s in (1, 2, 3)},
+    "hep_extmask": {"*": ("default", None)},
+    "hep_looseshape": {"*": ("default", None)},
+    "hep_looseshape_plain": {"*": ("default", None)},
+    "hep_looseshape_nh": {"*": ("default", None)},
+    "hep_looseshape_win": {"*": ("default", None)},
+    "sb_off_veto": {"*": ("default", None)},
     # looser MC-statistics requirements (diagnostic)
     "mcgate_50": {"*": ("default", None)},
     "mcgate_20": {"*": ("default", None)},
@@ -208,6 +223,9 @@ def read_fiducial(root: str, folder: str, cfg: str, an: str, energy: str, label:
     BestFiducials.json, keyed by its own energy (energy_override), see STUDY_VARIANTS.
     """
     stem = "BestFiducials_fiduc_truth" if label == "fiduc_truth" else "BestFiducials"
+    # runs with --no-update_best_fiducials keep their volumes in BestFiducials_<label>.json
+    if label and label != "fiduc_truth" and os.path.exists(f"{root}/config/analysis/fiducial/{folder.lower()}/BestFiducials_{label}.json"):
+        stem = f"BestFiducials_{label}"
     path = f"{root}/config/analysis/fiducial/{folder.lower()}/{stem}.json"
     if path not in _FIDUCIAL_CACHE:
         payload = None
@@ -225,7 +243,12 @@ def read_fiducial(root: str, folder: str, cfg: str, an: str, energy: str, label:
     if node is None:
         return "-"
     try:
-        mark = "*" if node.get("MCLimited") else ""
+        # Two MC marks (02_best_fiducial MCLimitedReason): "*" an essential background has fewer than 2x the MC
+        # threshold in the chosen volume (estimate MC-limited); "†" the MC gate changed the chosen volume.
+        mark = ""
+        if node.get("MCLimited"):
+            reason = str(node.get("MCLimitedReason", ""))
+            mark = ("*" if ("below" in reason or not reason) else "") + ("†" if "gate changed" in reason else "")
         return f"{int(node['FiducialX'])}/{int(node['FiducialY'])}/{int(node['FiducialZ'])}{mark}"
     except Exception:
         return "-"
@@ -459,7 +482,7 @@ def main() -> None:
     with open(md, "w") as fh:
         fh.write(f"# Study status {stamp}\n\nEpochs: " + ", ".join(f"{k}={v.isoformat(timespec='minutes')}" for k, v in epochs.items()) + "\n\n")
         fh.write("cut = NHits/OpHits/AdjCl. fiducial = FiducialX/Y/Z (cm) from BestFiducials*.json for that "
-                 "config/folder/analysis/energy (- if no record; * = MC-limited choice, see MCLimitedReason). DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
+                 "config/folder/analysis/energy (- if no record; * = an essential background has fewer than 2x the MC threshold in the chosen volume, † = the MC gate changed the chosen volume; see MCLimitedReason). DayNight/HEP: smoothed Asimov / profile-likelihood significance; "
                  "Sensitivity: Δχ² solar-fit-at-reactor / reactor-fit-at-solar (full profile unless a nuisance study).\n\n"
                  "trend: 🟢 study follows the expected relation to its reference; 🟠 it does not, but one side has a known bug "
                  "or still awaits its rerun (re-check after the queue); 🔴 it does not and both sides are fresh -> a bug to "

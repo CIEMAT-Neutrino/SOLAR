@@ -131,6 +131,7 @@ def _hep_display_spectrum(
     signal_uncertainty: float,
     detection_threshold: float,
     adaptive_rebin_config: dict,
+    bin_mask=None,
 ) -> dict:
     """Compute per-bin significance spectra at the full display exposure for plotting.
 
@@ -147,7 +148,11 @@ def _hep_display_spectrum(
     uncertainty = display_factor * bkg_error_rate
     detection_signal = signal * (1.0 - display_detection_requirement * signal_uncertainty)
 
-    no_rebin_mask = detection_signal >= detection_threshold
+    # bin_mask (2026-10-21, user): the per-bin values use the bins the profile likelihood keeps (pl_bin_mask, enough
+    # simulated background per bin) instead of the display detection requirement, which removed every bin of a weak signal
+    # (VD: all hep bins below 10 expected events)
+    no_rebin_mask = (np.asarray(bin_mask, dtype=bool) if bin_mask is not None
+                     else detection_signal >= detection_threshold)
     s_nr = np.where(no_rebin_mask, signal, 0.0)
     b_nr = np.where(no_rebin_mask, background, 0.0)
     u_nr = np.where(no_rebin_mask, uncertainty, 0.0)
@@ -435,10 +440,14 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 out[component][cut] = out[component].get(cut, 0.0) + float(np.nansum(mc[threshold_idx:]))
         return out
 
+    _mc_by_cut = _background_mc_by_cut(plot_df, _hep_bkg_components)
     _mc_thresholds = adaptive_mc_thresholds(
-        _background_mc_by_cut(plot_df, _hep_bkg_components),
-        essential_background_components, args.mc_threshold, args.min_nonessential_mc,
+        _mc_by_cut, essential_background_components, args.mc_threshold, args.min_nonessential_mc,
     )
+    from lib.background import mc_floor_cuts
+    _floor_cuts = mc_floor_cuts(str(root), args.folder, config, "HEP", energy,
+                                {c: plot_df.loc[plot_df["Component"] == c] for c in _hep_bkg_components},
+                                ("NHits", "OpHits", "AdjCl"))
     for _comp, _thr in _mc_thresholds.items():
         if _thr <= 0:
             rprint(f"[cyan][INFO][/cyan] MC support: '{_comp}' has 0 simulated events everywhere in this grid; not gated.")
@@ -446,9 +455,13 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # HEP_TAIL_EXTRAPOLATION: external gamma/neutron tails from the loosest cut fill the bins a cut leaves empty.
     _tail_cfg = load_analysis_info(str(root)).get("HEP_TAIL_EXTRAPOLATION", {})
     _tail_models = {}
-    if config in _tail_cfg.get("ENABLED_CONFIGS", []):
+    # IN_ANALYSIS false (default since 2026-10-18): the analysis uses no tails; the tails remain the cross-check of
+    # 02_hep_energy_limit.py. SOLAR_HEP_TAIL_EXTRAPOLATION (run_sensitivity --[no-]hep_tail_extrapolation) overrides.
+    _tail_env = os.environ.get("SOLAR_HEP_TAIL_EXTRAPOLATION")
+    _tail_on = _tail_env == "1" or (_tail_env != "0" and bool(_tail_cfg.get("IN_ANALYSIS", True)))
+    if config in _tail_cfg.get("ENABLED_CONFIGS", []) and _tail_on:
         for _comp in _hep_bkg_components:
-            if _comp.split("_")[0] not in ("gamma", "neutron"):
+            if _comp.split("_")[0] not in _tail_cfg.get("COMPONENTS", ["gamma", "neutron"]):
                 continue
             _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
             if _cdf.empty:
@@ -456,10 +469,56 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             _loose = _cdf.loc[(_cdf["NHits"] == _cdf["NHits"].min()) & (_cdf["OpHits"] == _cdf["OpHits"].min()) & (_cdf["AdjCl"] == _cdf["AdjCl"].max())]
             if _loose.empty:
                 continue
-            _tail_models[_comp] = external_tail_model(_loose.iloc[0]["Counts"], _loose.iloc[0]["MCCounts"], hep_rebin, args.threshold)
+            _tail_models[_comp] = external_tail_model(_loose.iloc[0]["Counts"], _loose.iloc[0]["MCCounts"], hep_rebin, float(_tail_cfg.get("FIT_THRESHOLD", args.threshold)))
             if _tail_models[_comp] is not None:
                 rprint(f"[cyan][INFO][/cyan] {config} {_comp}: HEP tail extrapolation, loose-cut slope {_tail_models[_comp][0]:.2f}/MeV, "
                        f"last populated bin {hep_rebin_centers[_tail_models[_comp][2]]:.1f} MeV")
+
+    # study hep_looseshape (run_sensitivity --hep_bkg_shape loose, SOLAR_HEP_BKG_SHAPE): every external component takes
+    # the spectral shape of its loosest cut of the scan (same fiducial volume, most simulated events), normalised to the
+    # cut's own total; no fit, no extrapolation beyond the bins the loosest cut populates.
+    # loose_nhits (study hep_looseshape_nh): the shape comes from the loosest OpHits/AdjCl cut at the SAME NHits as the
+    # cut, since NHits is the cut variable correlated with energy (a tighter NHits keeps a harder external spectrum).
+    _loose_shapes = {}
+    _shape_mode = os.environ.get("SOLAR_HEP_BKG_SHAPE")
+    if _shape_mode == "loose_nhits":
+        for _comp in _hep_bkg_components:
+            if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
+                continue
+            _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
+            _per_nhits = {}
+            for _nh in sorted(_cdf["NHits"].unique()):
+                _sub = _cdf.loc[_cdf["NHits"] == _nh]
+                _loose = _sub.loc[(_sub["OpHits"] == _sub["OpHits"].min()) & (_sub["AdjCl"] == _sub["AdjCl"].max())]
+                if not _loose.empty:
+                    _per_nhits[int(_nh)] = (np.asarray(_loose.iloc[0]["Counts"], dtype=float), np.asarray(_loose.iloc[0]["Error"], dtype=float))
+            if _per_nhits:
+                _loose_shapes[_comp] = _per_nhits
+        rprint(f"[cyan][INFO][/cyan] HEP background shapes from the loosest OpHits/AdjCl cut at each NHits for {sorted(_loose_shapes)} ({config} {energy})")
+    # loose_window (study hep_looseshape_win): the loosest-cut shape is used only inside the HEP window
+    # [EnergyMin, 30) of the fiducial entry and normalised to the cut's own counts there. The cuts remove the low-energy
+    # background much more than the high-energy one (loosest cut: < 1 % of the counts above 14 MeV; selected cuts 1-45 %),
+    # so normalising to the full spectrum (loose, loose_nhits) underestimates the window background many times over.
+    _shape_win_min = 14.0
+    if _shape_mode == "loose_window":
+        try:
+            from lib.fiducial_entries import best_fiducials_stem
+            _fid = json.load(open(f"{root}/config/analysis/fiducial/{args.folder.lower()}/{best_fiducials_stem()}.json"))
+            _shape_win_min = float(_fid[config]["HEP"][energy].get("EnergyMin", 14.0))
+        except Exception as _err:
+            rprint(f"[yellow][WARNING][/yellow] HEP window for the loose shape not found ({_err}); using {_shape_win_min} MeV")
+    if _shape_mode in ("loose", "loose_window"):
+        for _comp in _hep_bkg_components:
+            if str(_comp).lower().split("_")[0] not in ("gamma", "neutron"):
+                continue
+            _cdf = plot_df.loc[(plot_df["Component"] == _comp) & (plot_df["Oscillation"] == "Truth") & (plot_df["Mean"] == "Mean")]
+            if _cdf.empty:
+                continue
+            _loose = _cdf.loc[(_cdf["NHits"] == _cdf["NHits"].min()) & (_cdf["OpHits"] == _cdf["OpHits"].min()) & (_cdf["AdjCl"] == _cdf["AdjCl"].max())]
+            if _loose.empty:
+                continue
+            _loose_shapes[_comp] = (np.asarray(_loose.iloc[0]["Counts"], dtype=float), np.asarray(_loose.iloc[0]["Error"], dtype=float))
+        rprint(f"[cyan][INFO][/cyan] HEP background shapes from the loosest cut for {sorted(_loose_shapes)} ({config} {energy})")
 
     sigmamax = 0.0
     last_sigma2 = 1e6
@@ -497,6 +556,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
         smoothed_background_error = np.zeros((len(components) - 1, len(hep_rebin_centers) - threshold_idx), dtype=float)
         background_mc_counts = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
+        external_mc_counts = np.zeros(len(hep_rebin_centers) - threshold_idx, dtype=float)
         hep_signal = None
         smoothed_hep = None
         mc_sums = {}
@@ -518,6 +578,18 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             counts = np.asarray(this_comp_df["Counts"].values[0][threshold_idx:], dtype=float)
             errors = np.asarray(this_comp_df["Error"].values[0][threshold_idx:], dtype=float)
             mc_counts = np.asarray(this_comp_df["MCCounts"].values[0][threshold_idx:], dtype=float)
+            if component in _loose_shapes:
+                _lc, _le = (_loose_shapes[component][int(nhit)] if _shape_mode == "loose_nhits" else _loose_shapes[component])
+                _full = np.asarray(this_comp_df["Counts"].values[0], dtype=float)
+                if _shape_mode == "loose_window":
+                    _win = np.asarray(hep_rebin_centers) >= _shape_win_min
+                    _ratio = float(np.nansum(_full[_win])) / float(np.nansum(_lc[_win])) if np.nansum(_lc[_win]) > 0 else 0.0
+                    counts = np.where(_win, _lc * _ratio, _full)[threshold_idx:]
+                    errors = np.where(_win, _le * _ratio, np.asarray(this_comp_df["Error"].values[0], dtype=float))[threshold_idx:]
+                else:
+                    _ratio = float(np.nansum(_full)) / float(np.nansum(_lc)) if np.nansum(_lc) > 0 else 0.0
+                    counts = (_lc * _ratio)[threshold_idx:]
+                    errors = (_le * _ratio)[threshold_idx:]
             if _tail_models.get(component) is not None:
                 counts = counts + extrapolated_external_tail(
                     this_comp_df["Counts"].values[0], this_comp_df["MCCounts"].values[0], _tail_models[component],
@@ -533,6 +605,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 raw_background += counts
                 smoothed_background += smoothed_counts
                 background_mc_counts += mc_counts
+                if str(component).lower().split("_")[0] in ("gamma", "neutron"):
+                    external_mc_counts += mc_counts
                 background_statistical = np.divide(
                     errors,
                     counts,
@@ -585,6 +659,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
 
         if not has_required_background_mc or hep_signal is None or smoothed_hep is None:
             continue
+        if _floor_cuts is not None and (int(nhit), int(ophit), int(adjcl)) not in _floor_cuts:
+            continue  # study mcfloor
         cuts_passing_mc_threshold += 1
 
         raw_combined_b_error = np.sum(background_error, axis=0)
@@ -644,6 +720,11 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # the standard ROOT/HistFactory treatment: zero contribution to the test
         # statistic for bins without MC support, regardless of exposure.
         pl_bin_mask = background_mc_counts >= args.min_mc_per_bin
+        # study hep_extmask (run_sensitivity --hep_bin_mask external, SOLAR_HEP_BIN_MASK): a bin also needs simulated
+        # gamma/neutron clusters at this cut, so the bins a cut empties of external MC drop out instead of counting as
+        # background free (8B MC alone no longer makes a bin "supported").
+        if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
+            pl_bin_mask = pl_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
 
         prev_raw_starts = [np.zeros(0, dtype=int) for _ in range(3)]
         prev_smoothed_starts = [np.zeros(0, dtype=int) for _ in range(3)]
@@ -757,18 +838,22 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Per-bin significance spectra — only needed when significance_bins is active.
         _n_energy_bins = len(hep_rebin_centers) - threshold_idx
         _zeros_bins = np.zeros(_n_energy_bins, dtype=float)
+        # analysis mask of the per-bin values (as pl_bin_mask)
+        _display_bin_mask = background_mc_counts >= args.min_mc_per_bin
+        if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
+            _display_bin_mask = _display_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
         if _compute_significance_bins:
             display_factor = args.exposure * detector_mass
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             smoothed_display = _hep_display_spectrum(
                 smoothed_signal_rate, smoothed_background_rate, smoothed_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             raw_asimov_spectrum            = raw_display["asimov_no_rebin"]
             raw_gaussian_spectrum          = raw_display["gaussian_no_rebin"]
@@ -788,12 +873,12 @@ for config, name, energy in product(args.config, args.signal, args.energy):
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             smoothed_display = _hep_display_spectrum(
                 smoothed_signal_rate, smoothed_background_rate, smoothed_bkg_error_rate,
                 display_factor, display_detection_requirement, args.signal_uncertainty,
-                detection_threshold, adaptive_rebin_config,
+                detection_threshold, adaptive_rebin_config, bin_mask=_display_bin_mask,
             )
             raw_asimov_spectrum      = raw_display["asimov_no_rebin"]
             smoothed_asimov_spectrum = smoothed_display["asimov_no_rebin"]

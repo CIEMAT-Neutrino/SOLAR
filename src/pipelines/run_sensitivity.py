@@ -405,6 +405,11 @@ parser.add_argument(
     choices=ENERGY_CHOICES,
     default=["SolarEnergy"],
 )
+parser.add_argument("--display_exports", action=argparse.BooleanOptionalAction, default=True,
+                    help="Default runs (no --study_label): after the best-cut exports, export the extra cluster energies the "
+                         "thesis figures read (SolarEnergyHEP for the HEP cut flow; ElectronEnergy and SolarEnergyOffset for "
+                         "the ch. 7 energy-estimator flow) and draw that flow (cutflow_plot.py --energy_stages, output label "
+                         "energystages). No analysis result depends on them.")
 parser.add_argument("--nhits", type=int, help="The nhit cut for the analysis", default=None)
 parser.add_argument("--ophits", type=int, help="The ophit cut for the analysis", default=None)
 parser.add_argument("--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None)
@@ -416,8 +421,85 @@ parser.add_argument("--mc_filter_threshold", type=int, default=None,
 parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=None,
     help="Study knob: neutron-capture veto on/off for every step (03_analysis.py, signal templates; through "
          "SOLAR_NCVETO), see lib/study.py ncveto / ncveto_off.")
+parser.add_argument("--remove_no_offset", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: remove every cluster the analysis energy carries without the de-excitation offset (S/B background-like "
+         "or neutron-capture veto) from every step instead of keeping it without the offset (through SOLAR_REMOVE_NO_OFFSET, "
+         "lib/background.py no_offset_removal_keep), see lib/study.py sb_remove.")
 parser.add_argument("--hep_energy", type=str, default=None,
     help="Study knob passed to 03_analysis.py: energy of the HEP analysis (see lib/study.py hep_sbmodel).")
+parser.add_argument("--update_best_fiducials", action=argparse.BooleanOptionalAction, default=True,
+    help="--no-update_best_fiducials: the fiducial volumes this run optimises go to BestFiducials_<study_label>.json "
+         "(seeded from the folder's BestFiducials.json; through SOLAR_FIDUCIAL_STEM, lib/fiducial_entries.py) and the "
+         "Sensitivity score-category thresholds are not rewritten, so the shared BestFiducials.json is left as it was. "
+         "Default: update it, as before.")
+parser.add_argument("--mc_floor", type=float, default=None,
+    help="Study knob (SOLAR_MC_FLOOR): a cut is eligible only if gamma and neutron each keep >= this many simulated "
+         "clusters in the analysis energy window and fiducial volume (DayNight, HEP, Sensitivity; on top of the default "
+         "gate, which counts 0-30 MeV), see lib/background.mc_floor_cuts and lib/study.py mcfloor.")
+parser.add_argument("--bkg_subsample", type=str, default=None,
+    help="Study knob (SOLAR_BKG_SUBSAMPLE): F:SEED or match=<config>:SEED keeps a random fraction of the whole jobs of "
+         "gamma_final/neutron_final in every stage (lib/subsample.py), see lib/study.py bkgsub.")
+parser.add_argument("--hep_bkg_shape", choices=["default", "loose", "loose_nhits", "loose_window"], default=None,
+    help="Study knob (SOLAR_HEP_BKG_SHAPE): loose gives every external HEP background the spectral shape of its loosest "
+         "cut, normalised to the cut's total (01_hep.py), see lib/study.py hep_looseshape.")
+parser.add_argument("--hep_bin_mask", choices=["default", "external"], default=None,
+    help="Study knob (SOLAR_HEP_BIN_MASK): external also drops the HEP likelihood bins without simulated gamma/neutron "
+         "clusters at the cut (01_hep.py), see lib/study.py hep_extmask.")
+parser.add_argument("--hep_tail_extrapolation", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-hep_tail_extrapolation switches HEP_TAIL_EXTRAPOLATION off in 01_hep.py "
+         "(through SOLAR_HEP_TAIL_EXTRAPOLATION), see lib/study.py hep_notail.")
+parser.add_argument("--fiducial_energy_branch", type=str, default=None,
+    help="Study knob: energy branch read by the fiducial volume scan of the SolarEnergy analyses (01_fiducialize.py, "
+         "through SOLAR_FIDUCIAL_ENERGY_BRANCH), e.g. SolarEnergyOffset; see lib/study.py fid_nosb.")
+parser.add_argument("--fiducial_z_limit_y", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: the fiducial scan may not use beam-direction margins larger than the largest vertical margin "
+         "(02_best_fiducial.py, through SOLAR_FIDUCIAL_Z_LIMIT_Y), see lib/study.py fid_zlim.")
+parser.add_argument("--fiducial_z_max", type=float, default=None,
+    help="Study knob: largest beam-direction margin (cm) the fiducial scan may choose (02_best_fiducial.py, through "
+         "SOLAR_FIDUCIAL_Z_MAX), see lib/study.py fid_zmax20.")
+parser.add_argument("--fiducial_exposure", type=float, default=None,
+    help="Study knob: exposure (years) of the fiducial figure of merit, default 100 (02_best_fiducial.py, "
+         "SOLAR_FIDUCIAL_EXPOSURE), see lib/study.py fid_exp30.")
+parser.add_argument("--fiducial_bands", type=str, default=None,
+    help="Study knob: replace fiducial energy bands, e.g. 'HEP=14-22,22-30' (02_best_fiducial.py, SOLAR_FIDUCIAL_BANDS), "
+         "see lib/study.py fid_hepbands22.")
+parser.add_argument("--fiducial_band_min_z", type=str, default=None,
+    help="Study knob: 'abs:Z' or 'rel:f'; an energy band whose best fiducial significance is below Z (or f x the "
+         "full-window one) takes the full-window volume (02_best_fiducial.py, SOLAR_FIDUCIAL_BAND_MIN_Z), see lib/study.py fid_bandmin.")
+parser.add_argument("--fiducial_force_band", type=str, default=None,
+    help="Study knob: apply the fiducial volume of one energy band (low, high, best or its index) to every event "
+         "(02_best_fiducial.py, through SOLAR_FIDUCIAL_FORCE_BAND), see lib/study.py fid_highband.")
+parser.add_argument("--fiducial_bin_mc_floor", type=str, default=None,
+    help="Study knob: per-bin MC floor of the fiducial figure of merit, e.g. 'radiological:2' (02_best_fiducial.py, through "
+         "SOLAR_FIDUCIAL_BIN_MC_FLOOR), the same floor 03_analysis.py applies with RADIOLOGICAL_MIN_MC_PER_BIN; see lib/study.py fid_radfloor.")
+parser.add_argument("--single_fiducial_band", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --single_fiducial_band optimises one fiducial volume over the full analysis window instead of one per "
+         "energy band (02_best_fiducial.py, through SOLAR_FIDUCIAL_SINGLE_BAND), see lib/study.py fid_oneband.")
+parser.add_argument("--radiological_min_mc", type=int, default=None,
+    help="Study knob: minimum number of simulated radiological clusters per energy bin, replacing RADIOLOGICAL_MIN_MC_PER_BIN = 3 "
+         "(backgrounds.json) in 03_analysis.py and in the fiducial figure of merit of 02_best_fiducial.py (through "
+         "SOLAR_RADIOLOGICAL_MIN_MC), see lib/study.py rad_floor3.")
+parser.add_argument("--radiological_smoothing_unified", action=argparse.BooleanOptionalAction, default=None,
+    help="The radiological background smoothed like the other backgrounds in every analysis and stage, without the endpoint "
+         "stop (SOLAR_RADIOLOGICAL_SMOOTHING=full); the default since 2026-10-20 (lib/smoothing.radiological_smoothing_mode).")
+parser.add_argument("--radiological_smoothing_endpoint", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --radiological_smoothing_endpoint smooths the radiological component in every stage but sets it to zero "
+         "above the last bin with simulated radiological counts, keeping the raw integral (SOLAR_RADIOLOGICAL_SMOOTHING=endpoint), "
+         "see lib/study.py rad_unified.")
+parser.add_argument("--radiological_smoothing", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-radiological_smoothing leaves the radiological background raw in every stage (SOLAR_RADIOLOGICAL_"
+         "SMOOTHING=0; the summed background is then smoothed in the fiducial figure of merit, the rerun-39 treatment), see "
+         "lib/study.py rad_off; --radiological_smoothing is the default (smoothed in every stage since 2026-10-20).")
+parser.add_argument("--sb_classifier", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob: --no-sb_classifier switches the signal/background classifier off for every step (no SolarEnergy "
+         "first stage, no Sensitivity score categories; through SOLAR_SB_CLASSIFIER), see lib/study.py sb_off.")
+parser.add_argument("--sb_low_threshold", action=argparse.BooleanOptionalAction, default=None,
+    help="Study knob overriding config SB_LOW_THRESHOLD (default false since 2026-10-18: no S/B decision below "
+         "SB_GATE_ENERGY): --sb_low_threshold restores SB_THRESHOLD below the gate (study sb_lowthr), --no-sb_low_threshold "
+         "forces it off; through SOLAR_SB_LOW_THRESHOLD, see lib/study.py sbsimple.")
+parser.add_argument("--ncveto_model", type=str, default=None,
+    help="Study knob: neutron-capture classifier files of the veto (03b --target ncap --ncap_model NAME, with its own "
+         "region; through SOLAR_NCVETO_MODEL), see lib/study.py sbsimple.")
 parser.add_argument("--sb_completeness_high", type=float, default=None,
     help="Study knob passed to 03_analysis.py: S/B classifier working point above the gate energy (see lib/study.py sb_hep90).")
 parser.add_argument(
@@ -939,6 +1021,141 @@ def charge_scan_args_for() -> List[str]:
     return []
 
 
+if not args.update_best_fiducials:  # every child reads and writes BestFiducials_<label>.json (lib/fiducial_entries.py)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --no-update_best_fiducials needs --study_label (the volumes go to BestFiducials_<label>.json).")
+    import shutil as _shutil
+    os.environ["SOLAR_FIDUCIAL_STEM"] = f"BestFiducials_{args.study_label}"
+    for _fid_folder in dict.fromkeys([*args.folder, *([args.reference_folder] if args.reference_folder else [])]):
+        _fid_dir = f"{root}/config/analysis/fiducial/{_fid_folder.lower()}"
+        if not os.path.isfile(f"{_fid_dir}/BestFiducials.json"):
+            continue
+        # The entries of this run's configs are seeded fresh from the shared file at every start (volumes this run does not
+        # scan are the current ones); other configs' entries, e.g. of a parallel run of the same label, are kept.
+        import fcntl as _fcntl, json as _json
+        _labeled = f"{_fid_dir}/BestFiducials_{args.study_label}.json"
+        with open(f"{_labeled}.lock", "a+") as _lock:
+            _fcntl.flock(_lock.fileno(), _fcntl.LOCK_EX)
+            _shared = _json.load(open(f"{_fid_dir}/BestFiducials.json"))
+            _payload = _json.load(open(_labeled)) if os.path.isfile(_labeled) else {}
+            for _cfg in args.config:
+                if _cfg in _shared:
+                    _payload[_cfg] = _shared[_cfg]
+            _tmp = f"{_labeled}.tmp{os.getpid()}"
+            _json.dump(_payload, open(_tmp, "w"), indent=4)
+            os.replace(_tmp, _labeled)
+        for _cfg in args.config:
+            if os.path.isdir(f"{_fid_dir}/entries/BestFiducials/{_cfg}"):
+                _shutil.copytree(f"{_fid_dir}/entries/BestFiducials/{_cfg}",
+                                 f"{_fid_dir}/entries/BestFiducials_{args.study_label}/{_cfg}", dirs_exist_ok=True)
+        rprint(f"[cyan][INFO][/cyan] --no-update_best_fiducials: fiducial volumes in {_fid_dir}/BestFiducials_{args.study_label}.json")
+
+if args.mc_floor is not None:  # every child process follows the study knob (lib/background.adaptive_mc_thresholds)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --mc_floor is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_MC_FLOOR"] = f"{args.mc_floor:g}"
+    os.environ["SOLAR_MC_FLOOR_LABEL"] = args.study_label
+
+if args.bkg_subsample is not None:  # every child process follows the study knob (lib/io.load_multi, lib/weights)
+    if not args.study_label or args.update_best_fiducials:
+        raise SystemExit("[ERROR] --bkg_subsample needs --study_label and --no-update_best_fiducials.")
+    os.environ["SOLAR_BKG_SUBSAMPLE"] = args.bkg_subsample
+
+if args.hep_bkg_shape is not None:  # every child process follows the study knob (01_hep.py)
+    if args.hep_bkg_shape != "default" and not args.study_label:
+        raise SystemExit("[ERROR] --hep_bkg_shape is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_HEP_BKG_SHAPE"] = args.hep_bkg_shape
+
+if args.hep_bin_mask is not None:  # every child process follows the study knob (01_hep.py)
+    if args.hep_bin_mask != "default" and not args.study_label:
+        raise SystemExit("[ERROR] --hep_bin_mask is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_HEP_BIN_MASK"] = args.hep_bin_mask
+
+if args.hep_tail_extrapolation is not None:  # every child process follows the study knob (01_hep.py)
+    if not args.hep_tail_extrapolation and not args.study_label:
+        raise SystemExit("[ERROR] --no-hep_tail_extrapolation is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_HEP_TAIL_EXTRAPOLATION"] = "1" if args.hep_tail_extrapolation else "0"
+
+if args.fiducial_energy_branch:  # 01_fiducialize.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_energy_branch is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_ENERGY_BRANCH"] = args.fiducial_energy_branch
+
+if args.fiducial_z_limit_y is not None:  # 02_best_fiducial.py follows the study knob
+    if args.fiducial_z_limit_y and not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_z_limit_y is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_Z_LIMIT_Y"] = "1" if args.fiducial_z_limit_y else "0"
+
+if args.fiducial_z_max is not None:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_z_max is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_Z_MAX"] = f"{args.fiducial_z_max:g}"
+
+if args.fiducial_exposure:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_exposure is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_EXPOSURE"] = str(args.fiducial_exposure)
+
+if args.fiducial_bands:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_bands is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_BANDS"] = args.fiducial_bands
+
+if args.fiducial_band_min_z:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_band_min_z is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_BAND_MIN_Z"] = args.fiducial_band_min_z
+
+if args.fiducial_force_band:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_force_band is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_FORCE_BAND"] = args.fiducial_force_band
+
+if args.fiducial_bin_mc_floor:  # 02_best_fiducial.py follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --fiducial_bin_mc_floor is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_BIN_MC_FLOOR"] = args.fiducial_bin_mc_floor
+
+if args.single_fiducial_band is not None:  # 02_best_fiducial.py follows the study knob
+    if args.single_fiducial_band and not args.study_label:
+        raise SystemExit("[ERROR] --single_fiducial_band is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_FIDUCIAL_SINGLE_BAND"] = "1" if args.single_fiducial_band else "0"
+
+if args.radiological_smoothing is not None:  # every child process follows the study knob (01_background_template.py)
+    if not args.radiological_smoothing and not args.study_label:
+        raise SystemExit("[ERROR] --no-radiological_smoothing is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "full" if args.radiological_smoothing else "0"
+if args.radiological_min_mc is not None:  # 03_analysis.py and 02_best_fiducial.py follow the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --radiological_min_mc is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_RADIOLOGICAL_MIN_MC"] = str(int(args.radiological_min_mc))
+if args.radiological_smoothing_unified:  # the default treatment, set explicitly (lib/smoothing.radiological_smoothing_mode)
+    os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "full"
+if args.radiological_smoothing_endpoint:  # every stage (lib/smoothing) follows the study knob
+    if not args.study_label:
+        raise SystemExit("[ERROR] --radiological_smoothing_endpoint is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_RADIOLOGICAL_SMOOTHING"] = "endpoint"
+
+if args.sb_classifier is not None:  # every child process follows the study knob (lib/cluster.py, lib/background.py)
+    if not args.sb_classifier and not args.study_label:
+        raise SystemExit("[ERROR] --no-sb_classifier is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_SB_CLASSIFIER"] = "1" if args.sb_classifier else "0"
+
+if args.sb_low_threshold is not None:  # every child process follows the study knob (lib/cluster.py)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --[no-]sb_low_threshold is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_SB_LOW_THRESHOLD"] = "1" if args.sb_low_threshold else "0"
+
+if args.ncveto_model is not None:  # every child process follows the study knob (lib/cluster.py, lib/background.py)
+    if not args.study_label:
+        raise SystemExit("[ERROR] --ncveto_model is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_NCVETO_MODEL"] = args.ncveto_model
+
+if args.remove_no_offset is not None:  # every child process follows the study knob (lib/background.py)
+    if args.remove_no_offset and not args.study_label:
+        raise SystemExit("[ERROR] --remove_no_offset is a study knob: pass --study_label so the outputs are labeled.")
+    os.environ["SOLAR_REMOVE_NO_OFFSET"] = "1" if args.remove_no_offset else "0"
+
 if args.ncveto is not None:  # every child process (templates included) follows the study knob
     os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"
 
@@ -1220,8 +1437,9 @@ def run_shared_prerequisites(config: str, folder: str, available_names: List[str
     # Thresholds of the Sensitivity score categories (config SENSITIVITY_SCORE_CATEGORIES), read by 03_analysis.py
     # and the template scripts.
     _signal_names = [n for n in available_names if "marley" in n]
-    if args.rebin and "Sensitivity" in args.analysis and _signal_names and config in load_analysis_info(str(root)).get(
-            "SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
+    if args.rebin and "Sensitivity" in args.analysis and _signal_names and os.environ.get("SOLAR_SB_CLASSIFIER") != "0" \
+            and args.update_best_fiducials \
+            and config in load_analysis_info(str(root)).get("SENSITIVITY_SCORE_CATEGORIES", {}).get("ENABLED_CONFIGS", []):
         run_analysis_script(
             "src/physics/sensitivity/00_score_categories.py",
             ["--config", config, "--signal", _signal_names[0], "--folder", folder],
@@ -1794,6 +2012,26 @@ for config, folder in product(args.config, args.folder):
             for name in available_names
         ])
 
+    # Pass 3b: display exports for the thesis figures (default runs only): the HEP cut flow is drawn in SolarEnergyHEP, the
+    # energy the HEP analysis reads; the ch. 7 energy-estimator flow needs ElectronEnergy and SolarEnergyOffset.
+    _display = args.computation and args.display_exports and not args.study_label and "SolarEnergy" in args.energy
+    if _display:
+        _display_base = base_args_for(config, folder, include_background=False) + ["--no-plot"]
+        _display_common = (oscillation_args_for() + membrane_veto_args_for() + sb_args_for() + truth_purity_args_for()
+                           + fiducial_folder_args_for() + fiducial_from_reco_args_for()
+                           + ["--skip_scan", "--no-export_fiducial"])
+        if "HEP" in args.analysis:
+            run_sample_scripts("src/physics/signal/03_analysis.py", [
+                _display_base + ["--signal", name, "--analysis", "HEP", "--energy", "SolarEnergyHEP"] + _display_common
+                for name in available_names
+            ])
+        if "DayNight" in args.analysis:
+            run_sample_scripts("src/physics/signal/03_analysis.py", [
+                _display_base + ["--signal", name, "--analysis", "DayNight", "--energy", "ElectronEnergy", "SolarEnergyOffset",
+                                 "--electron_energy"] + _display_common
+                for name in available_names
+            ])
+
     # Pass 4: cutflow — one call per energy with all names and analyses dispatched at once.
     # Requires best-cuts pkls (written by 05_best_sigmas.py in per-analysis stages above).
     for energy in args.energy:
@@ -1809,6 +2047,20 @@ for config, folder in product(args.config, args.folder):
                 "--debug"   if args.verbose == "verbose" else "--no-debug",
                 "--plot"    if args.plot else "--no-plot",
             ] + membrane_veto_args_for() + study_label_args_for() + truth_fiducial_args_for() + cut_args_for(),
+        )
+
+    # Pass 5: ch. 7 energy-estimator flow (ElectronEnergy, SolarEnergy with the offset, SolarEnergy after the vetoes) from the
+    # Pass 3b exports, under the output label energystages (plotting repo study "energystages").
+    if _display and "DayNight" in args.analysis:
+        run_analysis_script(
+            "src/physics/signal/cutflow_plot.py",
+            [
+                "--config", config, "--signal", *available_names, "--folder", folder, "--energy", "SolarEnergy",
+                "--analysis", "DayNight", "--energy_stages", "--output_label", "energystages",
+                "--rewrite" if args.rewrite else "--no-rewrite",
+                "--debug" if args.verbose == "verbose" else "--no-debug",
+                "--plot" if args.plot else "--no-plot",
+            ] + membrane_veto_args_for() + cut_args_for(),
         )
 
 run_presentations()

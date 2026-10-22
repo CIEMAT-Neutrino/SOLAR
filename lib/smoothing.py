@@ -651,11 +651,51 @@ def should_smooth_component(
     return True
 
 
+def radiological_smoothing_mode() -> str:
+    """Treatment of the radiological background wherever backgrounds are smoothed (DayNight, the Sensitivity background
+    template, the fiducial figure of merit component by component, the displayed spectra; the hep profile likelihood uses
+    raw spectra). Default (user, 2026-10-20): "full", smoothed with the kernel of the stage like the external backgrounds,
+    together with the per-bin MC floor RADIOLOGICAL_MIN_MC_PER_BIN = 3 (backgrounds.json). Study knob
+    SOLAR_RADIOLOGICAL_SMOOTHING: "endpoint" stops the smoothing at the radiological MC endpoint (last bin with simulated
+    clusters, raw integral kept; run_sensitivity --radiological_smoothing_endpoint), "0"/"off" leaves it raw (rerun-39
+    treatment; run_sensitivity --no-radiological_smoothing)."""
+    value = str(os.environ.get("SOLAR_RADIOLOGICAL_SMOOTHING", "")).strip().lower()
+    if value in ("0", "off", "none", "raw", "false"):
+        return "off"
+    if value == "endpoint":
+        return "endpoint"
+    return "full"
+
+
+def radiological_endpoint_smoothing() -> bool:
+    """Study knob SOLAR_RADIOLOGICAL_SMOOTHING=endpoint (radiological_smoothing_mode)."""
+    return radiological_smoothing_mode() == "endpoint"
+
+
+def radiological_min_mc(root: Optional[str] = None) -> int:
+    """Per-bin MC floor of the radiological background: RADIOLOGICAL_MIN_MC_PER_BIN (backgrounds.json, 3 since 2026-10-20)
+    or the study knob SOLAR_RADIOLOGICAL_MIN_MC (run_sensitivity --radiological_min_mc)."""
+    env = os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC")
+    if env:
+        return int(env)
+    if root is None:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return int(load_analysis_info(root).get("RADIOLOGICAL_MIN_MC_PER_BIN", 1))
+
+
 def get_component_smoothing_config(
     config: Dict[str, Any], component: Optional[str] = None
 ) -> Dict[str, Any]:
     component_config = deepcopy(config)
     enabled = should_smooth_component(component_config, component)
+    endpoint = False
+    if component is not None and "radiological" in str(component).lower():
+        # radiological_smoothing_mode: smoothed with the kernel of the stage (default), stopped at the MC endpoint or raw
+        _rad_mode = radiological_smoothing_mode()
+        enabled = (_rad_mode != "off"
+                   and _normalize_method(component_config.get("method"), component_config.get("enabled", False)) != "none")
+        endpoint = enabled and _rad_mode == "endpoint"
+    component_config["endpoint"] = endpoint
     component_config["enabled"] = enabled
     component_config["method"] = _normalize_method(
         component_config.get("method"), enabled
@@ -726,12 +766,23 @@ def smooth_histogram(
 def smooth_histogram_with_config(
     data: np.ndarray, config: Dict[str, Any]
 ) -> np.ndarray:
-    return smooth_histogram(
+    smoothed = smooth_histogram(
         data,
         method=config.get("method", "none"),
         preserve_integral=config.get("preserve_integral", True),
         **config.get("params", {}),
     )
+    if config.get("endpoint") and np.ndim(data) == 1:
+        # radiological endpoint smoothing (radiological_endpoint_smoothing): nothing above the last populated raw bin
+        raw = np.nan_to_num(np.asarray(data, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        populated = np.flatnonzero(raw > 0)
+        if populated.size == 0:
+            return np.clip(raw, 0.0, None)
+        smoothed = np.asarray(smoothed, dtype=float).copy()
+        smoothed[populated.max() + 1:] = 0.0
+        if smoothed.sum() > 0:
+            smoothed *= raw.sum() / smoothed.sum()
+    return smoothed
 
 
 def smooth_threshold_slice(
@@ -866,3 +917,18 @@ def smooth_histogram_errors(
             propagated_variance *= (original_integral / smoothed_integral) ** 2
 
     return np.sqrt(np.clip(propagated_variance, 0.0, None))
+
+
+def display_smoothed_background(counts, mc_counts, component, smoothing_config, threshold_idx=0, min_mc=2):
+    """Smoothed background spectrum for the figures (cut flows, component spectra); never used by an analysis.
+
+    Bins with fewer than min_mc simulated clusters are not shown; radiological bins need the analysis floor
+    (radiological_min_mc, RADIOLOGICAL_MIN_MC_PER_BIN). Every component is then drawn as the analysis treats it: smoothed
+    with the component smoothing config of the stage (the radiological one following radiological_smoothing_mode).
+    """
+    counts = np.nan_to_num(np.asarray(counts, dtype=float)).copy()
+    is_radiological = "radiological" in str(component).lower()
+    if mc_counts is not None:
+        thr = max(min_mc, radiological_min_mc()) if is_radiological else min_mc
+        counts[np.asarray(mc_counts, dtype=float) < thr] = 0.0
+    return smooth_threshold_slice(counts, threshold_idx, get_component_smoothing_config(smoothing_config, component))

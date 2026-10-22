@@ -113,6 +113,32 @@ def compute_efficiency(
     elif matching_type == "Neutrino":
         return true, true_error, true_PE
 
+def drift_scan_centers(coord):
+    """Bin centres of the coordinate scan, in the frame of the selection.
+
+    For X the bins are laid on the drift-coordinate grid used by fill_plot_list
+    (HD |x|, HD lateral 2 * DETECTOR_MAX_X - |x|, VD x + DETECTOR_MAX_X): lower
+    edges at 0, DEFAULT_X_BIN, 2 * DEFAULT_X_BIN, ... (HD lateral from the grid
+    point nearest the cathode), so every configuration shares the same edges
+    and no bin extends below 0. The last bin may extend beyond the active volume.
+    """
+    width = params[f"DEFAULT_{coord}_BIN"]
+    if coord != "X":
+        return np.arange(
+            info[f"DETECTOR_MIN_{coord}"],
+            info[f"DETECTOR_MAX_{coord}"] + width,
+            width,
+        )
+    x_max = info["DETECTOR_MAX_X"]
+    if config == "hd_1x2x6_lateralAPA":
+        start = width * np.round(x_max / width)
+        drift = np.arange(start + width / 2, 2 * x_max + width / 2, width)
+        return 2 * x_max - drift
+    if info["GEOMETRY"] == "hd":
+        return np.arange(width / 2, x_max + width / 2, width)
+    return np.arange(info["DETECTOR_MIN_X"] + width / 2, x_max + width / 2, width)
+
+
 def fill_plot_list(
     efficiency_plot,
     this_filtered_run,
@@ -226,11 +252,7 @@ for config in configs:
                     )
 
         for energy, coord in product(lowe_energy_centers, ["X", "Y", "Z"]):
-            for value in np.arange(
-                0 if info["GEOMETRY"] == "hd" and coord == "X" else info[f"DETECTOR_MIN_{coord}"],
-                info[f"DETECTOR_MAX_{coord}"] + params[f"DEFAULT_{coord}_BIN"],
-                params[f"DEFAULT_{coord}_BIN"],
-            ):
+            for value in drift_scan_centers(coord):
                 this_drift_run, mask, output = compute_filtered_run(
                     this_run,
                     configs,

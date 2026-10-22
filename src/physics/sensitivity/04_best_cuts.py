@@ -395,12 +395,14 @@ def _mc_supported_cuts():
     )
     _label = args.study_label if _selection_changed else None
     mc_by_component: dict = {}
+    _frames: dict = {}  # study mcfloor
     sparse_weight: dict = {}
     total_weight: dict = {}
     for sample, filepath in load_available_background_dataframes(
         str(root), "SENSITIVITY", args.folder, args.config, args.energy, study_label=_label
     ):
         frame = pd.read_pickle(filepath)
+        _frames[sample] = frame
         if "MCCounts" not in frame.columns:
             rprint(f"[yellow][WARNING][/yellow] {sample} Rebin has no MCCounts; MC support unchecked.")
             continue
@@ -419,6 +421,8 @@ def _mc_supported_cuts():
     if not mc_by_component:
         return None
     thresholds = adaptive_mc_thresholds(mc_by_component, essential, args.min_background_mc, args.min_nonessential_mc)
+    from lib.background import mc_floor_cuts
+    _floor_cuts = mc_floor_cuts(str(root), args.folder, args.config, "SENSITIVITY", args.energy, _frames, ("NHits", "AdjCl", "OpHits"))
     supported = None
     if args.max_sparse_weight_fraction > 0 and total_weight:
         supported = {c for c, tot in total_weight.items() if tot <= 0 or sparse_weight.get(c, 0.0) / tot <= args.max_sparse_weight_fraction}
@@ -435,6 +439,8 @@ def _mc_supported_cuts():
             continue
         ok = {cut for cut, mc in per_cut.items() if mc >= threshold}
         supported = ok if supported is None else (supported & ok)
+    if _floor_cuts is not None:  # study mcfloor
+        supported = _floor_cuts if supported is None else (supported & _floor_cuts)
     if supported is None:
         return None
     rprint(

@@ -137,11 +137,26 @@
   "SIGNAL_CANDIDATE": "leading_cluster",
   "_SIGNAL_CANDIDATE_comment": "leading_cluster: one candidate per signal interaction (largest-Charge cluster) carrying the Truth-tree event weight, sum preserved; per_cluster: legacy, every cluster weighted (fragments dilute the event weight). lib/weights.py assign_signal_event_weights.",
   "SIGNAL_BACKGROUND_CLASSIFIER": true,
+  "_REMOVE_NO_OFFSET_CLUSTERS_comment": "true (default since 2026-10-20, user): every cluster without the de-excitation offset (signal/background classifier background-like, or flagged by the neutron-capture veto) is removed from every analysis step (cut scan, templates, score categories, fiducial scan, cut flow) instead of kept with the no-offset SolarEnergy (lib/background.py no_offset_removal_keep). Studies 2026-10-19 (study_status_sbremove_20261019, sbremove_c2): at the rerun-38 fiducial volumes (sb_remove_fixfid) DayNight / HEP / Sensitivity HD Central 5.50/14.01/6.02 vs 5.52/14.01/5.70, VD Shielded 4.65/3.34/4.39 vs 4.51/3.34/4.12; with the volume re-optimised HD Central DayNight fell to 3.74 (larger volume with radiological background in the window). The environment variable SOLAR_REMOVE_NO_OFFSET (1/0) overrides it.",
+  "REMOVE_NO_OFFSET_CLUSTERS": true,
+  "_SB_LOW_THRESHOLD_comment": "false (default since 2026-10-18, user): no S/B decision below SB_GATE_ENERGY (12 MeV of SolarEnergy with the offset), only SB_THRESHOLD_HIGH above it and SB_THRESHOLD_HEP for SolarEnergyHEP; true restores SB_THRESHOLD (95 % CC completeness over E_nu 6-20 MeV) below the gate. Full chains (rerun36 state, study sb_gateonly): HD Central and VD Shielded DayNight / Sensitivity identical, HD Lateral within 1 %, VD Shielded HEP -4 % (other cut at the MC gate). Cluster-level scan: _runs/sbeval_20261017/sbscan. The environment variable SOLAR_SB_LOW_THRESHOLD (1/0, run_sensitivity --[no-]sb_low_threshold, study sb_lowthr) overrides it.",
+  "SB_LOW_THRESHOLD": false,
   "_SELECTED_ADJCL_PADDING_BUG_comment": "Diagnostic only: true re-creates the pre-c01e61a SelectedAdjClNum (zero padding counted) to measure the effect of the fix. Never true for results.",
   "SELECTED_ADJCL_PADDING_BUG": false,
+  "_NCAP_DISPLAY_ENERGY_MIN_comment": "Off since 2026-10-22 (user: the figures show the analysis as it is below 6 MeV; null = off, the --ncap_display_low options default off). Display only (user, 2026-10-22): the cut-flow and Day-Night spectrum figures apply the neutron-capture veto also to the clusters from this SolarEnergy (with the offset) up to the classifier region (NCAP_ENERGY_MIN of the model, 6 MeV), so they show no step at the region edge: lib/cluster.py SolarEnergyNCapLow (SOLAR_NCAP_DISPLAY=1, 03_analysis.py --energy SolarEnergyNCapLow export), cutflow_plot.py and common/significance_plot.py (DayNight) --ncap_display_low. No analysis uses it.",
+  "NCAP_DISPLAY_ENERGY_MIN": null,
   "NEUTRON_CAPTURE_VETO": {
-    "_doc": "03_analysis.py: in the listed analyses, clusters with ENERGY_MIN <= analysis energy < ENERGY_MAX whose main cluster Energy is below MAIN_CLUSTER_ENERGY_MIN are removed. Neutron-capture cascades share their 6.1 MeV among several clusters, so a small main cluster with a large reconstructed energy is mostly a capture (HD Central, new PIC backgrounds, cluster-level study 2026-10-09: DayNight +4/+8% on the two event halves). On by default only for ENABLED_CONFIGS; the study variant ncveto switches it on for any config. Adopted for every config after rerun 15 (study ncveto, cuts re-optimised): DayNight / Sensitivity at 30 years HD Central 3.93->4.05 / 3.20->3.41, HD Lateral 1.08->1.09 / 0.59->0.66, VD Top 1.25->1.32 / 0.40->0.44, VD Shielded 3.52->3.64 / 2.66->3.05.",
-    "ENABLED_CONFIGS": ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"],
+    "_doc": "Neutron-capture veto, one rule for every config (user, 2026-10-17): the neutron-capture classifier (03b --target ncap --ncap_model MODEL, CC vs neutron captures among the clusters whose SolarEnergy with the offset is in its 6-14 MeV region) flags the region clusters scored below the threshold of COMPLETENESS (CC kept in the region). ACTION no_offset: the flagged clusters are treated as background-like by the signal/background stage, i.e. SolarEnergy without the de-excitation offset (lib/cluster.py); SolarEnergyHEP is not changed, so HEP is unaffected, and ANALYSES is not used. ACTION remove: 03_analysis.py / 02_signal_template.py drop them in ANALYSES. MODE window (ACTION remove only): drop ENERGY_MIN <= analysis energy < ENERGY_MAX with main-cluster Energy < MAIN_CLUSTER_ENERGY_MIN. PER_CONFIG.<config> overrides the top-level keys. Cluster-level study on the final samples (SOLAR-sb _xchk3/ncap_study2.py, default cuts and volumes held, vs the previous removal veto: classifier in HD Central / HD Lateral / VD Top, window [8,12) MeV main < 4.5 MeV in VD Shielded): no offset = removal within 1 %; predicted DayNight HD Central +1 %, HD Lateral -3 %, VD Top -5 %, VD Shielded -2 %, Sensitivity +2 %, +1 %, +2 %, -14 %; 80-90 % completeness loses most of the HD gain. Window rule alone: no gain in HD.",
+    "ENABLED_CONFIGS": [
+      "hd_1x2x6_centralAPA",
+      "hd_1x2x6_lateralAPA",
+      "vd_1x8x14_3view_30deg_nominal",
+      "vd_1x8x14_3view_30deg_shielded"
+    ],
+    "MODE": "classifier",
+    "ACTION": "no_offset",
+    "MODEL": "neutron_capture_final",
+    "COMPLETENESS": 0.5,
     "ANALYSES": [
       "DayNight",
       "Sensitivity"
@@ -149,41 +164,40 @@
     "ENERGY_MIN": 8.0,
     "ENERGY_MAX": 12.0,
     "MAIN_CLUSTER_ENERGY_MIN": 4.5,
-    "PER_CONFIG": {
-        "_doc": "Per-config veto (overrides the defaults above). MODE classifier: the neutron-capture classifier (03b --target ncap) removes the clusters of its 6-14 MeV region scored below the threshold of COMPLETENESS (CC kept in the region); chosen from the cluster-level test on the rerun 17 state (2026-10-10, both event halves; DayNight / Sensitivity-selection day-night significance at 50%: HD Central +20% / +38%, HD Lateral +13% / +6%, VD Top +23% / +22%). VD Shielded keeps the window rule [8,12) MeV, main cluster < 4.5 MeV (classifier <= +5%).",
-        "hd_1x2x6_centralAPA": {
-          "MODE": "classifier",
-          "COMPLETENESS": 0.5
-        },
-        "hd_1x2x6_lateralAPA": {
-          "MODE": "classifier",
-          "COMPLETENESS": 0.5
-        },
-        "vd_1x8x14_3view_30deg_nominal": {
-          "MODE": "classifier",
-          "COMPLETENESS": 0.5
-        }
-      }
+    "PER_CONFIG": {}
   },
   "SENSITIVITY_SCORE_CATEGORIES": {
-    "_doc": "Sensitivity fit in categories of the signal/background classifier score (SignalBackgroundScore): the selected clusters of each cut are split at the QUANTILES of the score of the CC signal with ENERGY_RANGE (MeV) reconstructed energy (quality cuts, Sensitivity fiducial volume of FIDUCIAL_FOLDER, neutron-capture veto), written per config to config/<config>/<config>_score_categories.json by src/physics/sensitivity/00_score_categories.py. Signal and background templates hold one block of NADIR_BINS rows per category, the most signal-like first; the fit is unchanged (same bins and nuisances, summed over all rows). HD Central study 2026-10-11 (rerun 20 state, cut 3/4/5): Delta chi2 4.13 -> 6.77 at 30 years. 2026-10-12: two categories (split at the median) instead of the quartiles; with four, the purest quartile alone carried most of the gain (VD Top 0.72 -> 2.22), so the 2-category fit is the default (rerun 23).",
-    "ENABLED_CONFIGS": ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"],
+    "_doc": "Sensitivity fit in categories of the signal/background classifier score (SignalBackgroundScore): the selected clusters of each cut are split at the QUANTILES of the score of the CC signal with ENERGY_RANGE (MeV) reconstructed energy (quality cuts, Sensitivity fiducial volume of FIDUCIAL_FOLDER, neutron-capture veto), written per config to config/<config>/<config>_score_categories.json by src/physics/sensitivity/00_score_categories.py. Signal and background templates hold one block of NADIR_BINS rows per category, the most signal-like first; the fit is unchanged (same bins and nuisances, summed over all rows). HD Central study 2026-10-11 (rerun 20 state, cut 3/4/5): Delta chi2 4.13 -> 6.77 at 30 years. 2026-10-12: two categories (split at the median) instead of the quartiles; with four, the purest quartile alone carried most of the gain (VD Top 0.72 -> 2.22), so the 2-category fit is the default (rerun 23). 2026-10-13: back to the quartiles (user): with the final HD Central backgrounds the 2-category HD Central score fell to 2.84, below VD Shielded (rerun 24b). With the radiological smoothing fix (623b2ce) the quartiles gave HD Central 6.91, 21 % above the original thesis 5.73 and tied with VD Shielded 6.86 (rerun 26c), so back to 2 categories (user rule).",
+    "ENABLED_CONFIGS": [
+      "hd_1x2x6_centralAPA",
+      "hd_1x2x6_lateralAPA",
+      "vd_1x8x14_3view_30deg_nominal",
+      "vd_1x8x14_3view_30deg_shielded"
+    ],
     "VARIABLE": "SignalBackgroundScore",
-    "QUANTILES": [0.5],
-    "ENERGY_RANGE": [8, 13],
+    "QUANTILES": [
+      0.5
+    ],
+    "ENERGY_RANGE": [
+      8,
+      13
+    ],
     "FIDUCIAL_FOLDER": "Truncated"
   },
   "SIGNAL_GENERATION_CONTAINMENT": {
     "_doc": "Signal samples whose MARLEY vertices are generated in a volume larger than the active TPC (the official VD Top dataset: x up to 375 cm, y +-732 cm, z -57..2157 cm against the active box of the config json; 2026-10-12, 79% of its events give a reco cluster against ~97% elsewhere). N_gen counts only the Truth entries with the vertex inside DETECTOR_MIN/MAX_X/Y/Z, so the rate is normalised to the active mass (lib/weights.resolve_generated_event_count). Before: VD Top signal low by a factor ~0.82.",
-    "ENABLED_CONFIGS": ["vd_1x8x14_3view_30deg_nominal"]
+    "ENABLED_CONFIGS": [
+      "vd_1x8x14_3view_30deg_nominal"
+    ]
   },
   "HEP_TAIL_EXTRAPOLATION": {
     "_doc": "HEP (01_hep.py): for these configs the external gamma/neutron spectrum of every cut gets, in the bins the cut leaves without simulated events, the tail of the same sample at the loosest cut of the scan (same fiducial volume; exponential fit of the populated tail, scaled by the cut/loose ratio where both have >= 3 simulated events, stopped one bin above the last populated loose bin: MODE endpoint). Same model as src/physics/hep/02_hep_energy_limit.py (ch. 8.3 tails-extrapolated curves). VD Top: its tight selection leaves 0-1 simulated gammas per bin above 21 MeV, which the per-bin MC filter zeroes, so those bins were background-free.",
-    "ENABLED_CONFIGS": ["vd_1x8x14_3view_30deg_nominal"],
+    "ENABLED_CONFIGS": [],
+    "_ENABLED_CONFIGS_comment": "2026-10-13: off for VD Top as well (user): with its own nominal-overlay backgrounds at full statistics the high-energy bins should no longer be empty; rerun 25 checks it with 02_hep_energy_limit.py (Z with and without the extrapolated tails at the VD Top cut).",
     "MODE": "endpoint"
   },
   "MC_THRESHOLDS_PER_CONFIG": {
-    "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2) for these configs. Chosen from the mcgate study (2026-10-10, rerun 17 state): HD Central with the gates divided by 5 (20/5/5, user's choice) and a 1-event per-bin filter (HEP 6.25 -> 13.74, DayNight 4.92 -> 5.06, Sensitivity 3.20 -> 3.37 sigma/dchi2 at 30 y), HD Lateral with the 50/10 gates (HEP 2.49 -> 3.34). VD unchanged (looser settings were equal or lower). Results under these settings rest on fewer simulated background events; see the study for the MC support.",
+    "_doc": "Per-config MC-statistics requirements (run_sensitivity.py), replacing ANALYSIS_THRESHOLDS MC and the 03_analysis per-bin filter (2). 2026-10-16 (user): fiducial gate 20 (the HD Central value) in every configuration; study mcgate_20 gave the default fiducial volumes in HD Lateral, VD Top and VD Shielded. Before: HD Lateral 50, VD 100. Cut-scan gates and per-bin filter unchanged: HD Central 5/5/filter 1 (mcgate study 2026-10-10), HD Lateral 10/10, VD the global defaults (20/20, filter 2).",
     "hd_1x2x6_centralAPA": {
       "FIDUCIALIZATION": 20,
       "DAYNIGHT": 5,
@@ -191,9 +205,15 @@
       "MC_FILTER": 1
     },
     "hd_1x2x6_lateralAPA": {
-      "FIDUCIALIZATION": 50,
+      "FIDUCIALIZATION": 20,
       "DAYNIGHT": 10,
       "HEP": 10
+    },
+    "vd_1x8x14_3view_30deg_nominal": {
+      "FIDUCIALIZATION": 20
+    },
+    "vd_1x8x14_3view_30deg_shielded": {
+      "FIDUCIALIZATION": 20
     }
   }
 }

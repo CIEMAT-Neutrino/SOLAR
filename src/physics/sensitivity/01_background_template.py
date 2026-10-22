@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.study import variant_labels_rebin
+from lib.fiducial_entries import best_fiducials_stem
 
 
 TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
@@ -363,7 +364,7 @@ dm2_list, sin13_list, sin12_list = [], [], []
 
 analysis_info = load_analysis_info(str(root))
 info = json.loads(open(f"{root}/config/{args.config}/{args.config}_config.json").read())
-_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+_fiducials_stem = best_fiducials_stem(args.truth_fiducial and not args.fiducial_from_reco)
 fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_fiducials_stem}.json").read())
 
 detector_mass = get_full_detector_mass(args.config, info)
@@ -401,6 +402,27 @@ for _k in range(n_score_categories(str(root), args.config) if score_categories(s
     _frames = load_available_background_dataframes(str(root), "SENSITIVITY", args.folder, args.config, args.energy,
                                                     study_label=_bkg_study_label, category=_k)
     score_category_dfs.append(pd.concat([pd.read_pickle(_fp) for _, _fp in _frames], ignore_index=True))
+
+
+def _smoothed_component(y, component):
+    """Smoothed spectrum of one background component. Since 2026-10-20 (user) the radiological component is smoothed with
+    the kernel of the external backgrounds (lib/smoothing.radiological_smoothing_mode; study knob SOLAR_RADIOLOGICAL_SMOOTHING
+    =endpoint stops it at its MC endpoint, =0 leaves it raw). Its bins need RADIOLOGICAL_MIN_MC_PER_BIN = 3 simulated
+    clusters (03_analysis.py), so no 2-cluster radiological bin is spread into the empty signal bins."""
+    from lib.smoothing import radiological_smoothing_mode
+    if "radiological" in str(component) and radiological_smoothing_mode() == "off":
+        return np.asarray(y, dtype=float)
+    # the endpoint stop of radiological_smoothing_mode "endpoint" is applied by smooth_histogram_with_config
+    return smooth_histogram_with_config(y, get_component_smoothing_config(smoothing_config_1d, component))
+
+
+def _category_total_smoothed(category_df, nhits, adjcl, ophits):
+    """Sum of the component-smoothed spectra of one score category at one cut (as total_smoothed below)."""
+    rows = category_df[(category_df["NHits"] == nhits) & (category_df["OpHits"] == ophits) & (category_df["AdjCl"] == adjcl)]
+    total = np.zeros(len(sensitivity_rebin) - 1)
+    for _, row in rows.iterrows():
+        total = total + _smoothed_component(np.nan_to_num(np.asarray(row["Counts"], dtype=float)), row["Component"])
+    return total
 
 
 def _category_total(category_df, nhits, adjcl, ophits):
@@ -600,6 +622,7 @@ for idx, cut in enumerate(cut_entries):
         fig = _NullFigure()
 
     component_energy = np.asarray(sensitivity_rebin_centers)
+    total_smoothed_sum = np.zeros(len(total))
 
     for bkg in background_samples:
         this_df = plot_df[
@@ -622,10 +645,7 @@ for idx, cut in enumerate(cut_entries):
         y = np.nan_to_num(y)
         y_error = np.nan_to_num(y_error)
 
-        component_smoothing_config_1d = get_component_smoothing_config(
-            smoothing_config_1d, bkg
-        )
-        y_smoothed = smooth_histogram_with_config(y, component_smoothing_config_1d)
+        y_smoothed = _smoothed_component(y, bkg)
 
         fig.add_trace(
             go.Scatter(
@@ -658,9 +678,11 @@ for idx, cut in enumerate(cut_entries):
             rprint(f"[yellow][WARNING][/yellow] Bin count mismatch for {bkg}: expected {len(total)}, got {len(y)}. Stale pkl — regenerate with current sensitivity_rebin. Skipping.")
             continue
         total = total + np.array(y)
+        total_smoothed_sum = total_smoothed_sum + np.asarray(y_smoothed, dtype=float)
         total_error = total_error + y_error**2
 
-    total_smoothed = smooth_histogram_with_config(total, smoothing_config_1d)
+    # Sum of the component-smoothed spectra (radiological unsmoothed), not the smoothed total (see _smoothed_component).
+    total_smoothed = total_smoothed_sum
 
     if idx == 0:
         # Panel 5: standalone 1D background spectrum b(E_reco) for the best-selected cut
@@ -716,9 +738,9 @@ for idx, cut in enumerate(cut_entries):
     # Apply stability guards before saving: clean NaN/Inf, clip negative and extreme values
     _template_to_save = detector_mass * smoothed_bkg_hist
     if score_category_dfs:
-        # One NADIR_BINS block per score category, each smoothed as the total spectrum above.
+        # One NADIR_BINS block per score category, each the sum of its component-smoothed spectra as above.
         _template_to_save = detector_mass * np.vstack([
-            _project_1d_to_2d(smooth_histogram_with_config(_category_total(_cdf, nhits, adjcl, ophits), smoothing_config_1d),
+            _project_1d_to_2d(_category_total_smoothed(_cdf, nhits, adjcl, ophits),
                               oscillation_df, nadir_pdf=_nadir_pdf_weights)
             for _cdf in score_category_dfs
         ])

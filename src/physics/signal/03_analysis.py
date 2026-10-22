@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.fiducial import truth_match_purity_mask
+from lib.fiducial_entries import best_fiducials_stem
 
 save_path   = f"{root}/output/images/solar/results"
 export_path = f"{root}/output/data/results"
@@ -110,7 +111,7 @@ parser.add_argument("--config", type=str, help="The configuration to load", defa
 parser.add_argument("--signal", type=str, help="The name of the configuration", default="marley")
 parser.add_argument("--folder", type=str, help="The name of the background folder", choices=["Reduced", "Truncated", "Nominal", "Pessimistic"], default="Nominal")
 parser.add_argument("--analysis", nargs="+", type=str, help="The name of the analysis", choices=["DayNight", "HEP", "Sensitivity"], default=["DayNight", "HEP", "Sensitivity"])
-parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "SolarEnergyOffset", "SolarEnergyNoOffset", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
+parser.add_argument("--energy", nargs="+", type=str, help="The energy variable to plot", choices=["SignalParticleK", "MainK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy", "SolarEnergyOffset", "SolarEnergyNoOffset", "SolarEnergyHEP", "SolarEnergyNCapLow", "ElectronEnergy"], default=["SignalParticleK", "ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"])
 parser.add_argument(
     "--electron_energy",
     action=argparse.BooleanOptionalAction,
@@ -142,6 +143,22 @@ parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=Tr
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--export_raw", action=argparse.BooleanOptionalAction, default=True, help="Export raw numpy arrays (energy, mask, weights) as pkl files")
 parser.add_argument("--save_weighted", action=argparse.BooleanOptionalAction, default=False, help="Save per-cut weighted DataFrame to output/data/solar/weighted/ (disabled by default; used by 04_weighted.py)")
+parser.add_argument("--surface_split", action=argparse.BooleanOptionalAction, default=False,
+                    help="Study export: the weighted spectra (gamma/neutron split by generation-surface group, SURFACE_GROUPS; signal per "
+                         "component Solar/8B/hep with the mean oscillated weights) at the "
+                         "reference cut (NHits 1, OpHits 4, AdjCl 20) and at the analysis best cut, plus all clusters before any cut "
+                         "(Selection TPC), after the fiducialisation step (Selection Fiducial) and at generation (Selection Truth: signal "
+                         "interactions, gamma/neutron surface rates; none for radiological), to output/data/solar/weighted/.../{energy}_{analysis}_AnalysisDataSurface.pkl. "
+                         "Writes nothing else (no Ref/mask exports, weighted DataFrame, analysis_cuts json or Rebin pkl).")
+parser.add_argument("--surface_split_cut_energy", type=str, default="SolarEnergy",
+                    help="With --surface_split: the analysis energy. Its best-cut JSON entry gives the analysis cut; its fiducial volume "
+                         "(and energy bands, assigned with this energy) gives the Fiducial rows.")
+parser.add_argument("--surface_split_fiducial_json", type=str, default=None,
+                    help="With --surface_split: BestFiducials json for all its rows (default: the folder's BestFiducials.json), "
+                         "e.g. a snapshot of the volumes of a given set of runs.")
+parser.add_argument("--surface_split_best_cuts_json", type=str, default=None,
+                    help="With --surface_split: json {config: {analysis: {NHits, OpHits, AdjCl}}} with the analysis cuts "
+                         "(default: the best-cut JSON of the config), e.g. a snapshot of a given set of runs.")
 parser.add_argument("--export_fiducial", action=argparse.BooleanOptionalAction, default=False, help="Export FiducializationMask per analysis (surface+spatial mask at best fiducial, before quality cuts)")
 parser.add_argument("--skip_scan", action=argparse.BooleanOptionalAction, default=False, help="Skip cut scan after exporting raw arrays and fiducial mask (fast first-pass mode)")
 parser.add_argument("--best_cuts_only", action=argparse.BooleanOptionalAction, default=False, help="Scan only the best-cut point(s) loaded from JSON; save AnalysisMask and skip DataFrame writes (Pass 3 / post-analysis export)")
@@ -154,7 +171,7 @@ parser.add_argument("--hep_energy", type=str, default="SolarEnergyHEP", choices=
     help="Energy of the HEP analysis when --energy is SolarEnergy. SolarEnergyHEPModel (study knob, needs --study_label): "
          "the alternative HEP-trained S/B classifier (03b_signal_background.py --target hep).")
 parser.add_argument("--ncveto", action=argparse.BooleanOptionalAction, default=None,
-    help="Neutron-capture veto (config NEUTRON_CAPTURE_VETO) in DayNight/Sensitivity: default from ENABLED_CONFIGS; "
+    help="Neutron-capture veto (config NEUTRON_CAPTURE_VETO): default from ENABLED_CONFIGS; "
          "--ncveto forces it on (study knob, needs --study_label).")
 parser.add_argument("--study_label", type=str, default=None, help="Tag appended to Rebin pkl filename when charge_threshold>0 or dm2 override set, to avoid overwriting the nominal Rebin.")
 parser.add_argument(
@@ -208,6 +225,14 @@ parser.add_argument("--fiducial_from_reco", action=argparse.BooleanOptionalActio
 args = parser.parse_args()
 if "ElectronEnergy" in args.energy and not args.electron_energy:
     parser.error("--energy ElectronEnergy requires --electron_energy (builds the branch).")
+# Surface groups of SignalParticleSurface (config/import/surface_positions.json): 0 the anode plane (HD APA side, VD top),
+# 1+2 the walls (HD top/bottom, VD membranes), 3+4 the end caps; "None" collects clusters without an assigned surface and
+# "All" every cluster. Rows carry Counts (reconstructed energy) and TrueCounts (true kinetic energy of the primary).
+SURFACE_GROUPS = {"Anode": [0], "Walls": [1, 2], "EndCaps": [3, 4]}
+if args.surface_split:
+    if args.best_cuts_only or args.skip_scan or args.minimal_cuts or args.nhits is not None or args.charge_threshold > 0:
+        parser.error("--surface_split runs the default scan: no --best_cuts_only, --skip_scan, --minimal_cuts, --nhits or --charge_threshold.")
+    args.export_raw = args.export_fiducial = args.save_weighted = False
 _ctx = study_context(args)
 # Event-level exports (Ref arrays, FiducializationMask, AnalysisMask, analysis_cuts) are labeled
 # for truth-fiducial variants, which share energy and folder with the nominal run.
@@ -295,6 +320,9 @@ if args.sb_completeness_high is not None:
     workflow_params["SB_COMPLETENESS_HIGH"] = args.sb_completeness_high
 if args.ncveto is not None and not args.study_label:
     raise SystemExit("[ERROR] --ncveto / --no-ncveto is a study knob: pass --study_label so the Rebin pkls are labeled.")
+if args.ncveto is not None:
+    # ACTION "no_offset" acts in the calibration (lib/cluster.py), which reads the switch from the environment.
+    os.environ["SOLAR_NCVETO"] = "1" if args.ncveto else "0"
 if args.hep_energy != "SolarEnergyHEP":
     if not args.study_label:
         raise SystemExit("[ERROR] --hep_energy is a study knob: pass --study_label so the Rebin pkls are labeled.")
@@ -317,8 +345,11 @@ if args.charge_threshold > 0:
 
 for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
-    _best_fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+    _best_fiducials_stem = best_fiducials_stem(args.truth_fiducial and not args.fiducial_from_reco)
     fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_best_fiducials_stem}.json").read())
+    if args.surface_split and args.surface_split_fiducial_json:
+        # Every --surface_split row, including the scan masks behind the cut rows, uses the snapshot volumes.
+        fiducials = json.load(open(args.surface_split_fiducial_json))
     detector_x = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]
     detector_y = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 
@@ -376,7 +407,8 @@ for config in configs:
                     pos_keys=_pos_keys,
                 ), dtype=bool)
 
-        # Neutron-capture veto (config NEUTRON_CAPTURE_VETO): small main cluster at a large analysis energy.
+        # Neutron-capture veto (config NEUTRON_CAPTURE_VETO) with ACTION "remove"; ACTION "no_offset" already acted on
+        # SolarEnergy in the calibration (lib/cluster.py) and keeps every cluster here.
         _ncveto_masks = {}
         for _an in args.analysis:
             _keep = neutron_capture_veto_keep(str(root), config, _an, run["Reco"][_energy_key[_an]], run["Reco"]["Energy"], args.ncveto,
@@ -438,6 +470,14 @@ for config in configs:
                     filename=f"FiducializationMask_{energy}_{_an.upper()}{_ref_sfx}",
                     rm=user_input["rewrite"], debug=args.debug,
                 )
+                # Clusters kept by the neutron-capture veto (ACTION remove) and the removal of the no-offset clusters
+                # (REMOVE_NO_OFFSET_CLUSTERS): applied by cutflow_plot.py and 04_weighted.py as in the analysis.
+                save_pkl(
+                    np.asarray(_ncveto_masks[_an], dtype=bool), export_path, config, name,
+                    subfolder=args.folder.lower(),
+                    filename=f"AnalysisKeep_{energy}_{_an.upper()}{_ref_sfx}",
+                    rm=user_input["rewrite"], debug=args.debug,
+                )
         if args.skip_scan:
             continue
 
@@ -450,6 +490,145 @@ for config in configs:
         _reco_energy_arr = run["Reco"][energy]
         _true_energy_arr = run["Reco"]["SignalParticleK"]
         _n_bins = len(true_energy_edges) - 1
+
+        # --surface_split: per-cluster surface group, the cuts to record and the TPC rows (all clusters, no cut, no MC filter).
+        if args.surface_split:
+            # Signal: one component per weight (Solar = 8B + hep, mean oscillated weights); backgrounds: the sample weight.
+            _is_signal = "marley" in name
+            _comp_weights = ([("Solar", "SignalParticleWeightOscMean"), ("8B", "SignalParticleWeightb8OscMean"),
+                              ("hep", "SignalParticleWeighthepOscMean")] if _is_signal else [(name.split("_")[0], "SignalParticleWeight")])
+            _surf = np.asarray(run["Reco"]["SignalParticleSurface"])
+            _surf_group = np.full(len(_surf), "None", dtype=object)
+            for _g, _ids in SURFACE_GROUPS.items():
+                _surf_group[np.isin(_surf, _ids)] = _g
+            # Reference cut (the loosest grid point, as --minimal_cuts) and the analysis best cut; one row set per label.
+            _split_cuts = {_an: {(nhits[0], nhits[3], nhits[::-1][0]): ["Reference"]} for _an in args.analysis}
+            _bc_snap = json.load(open(args.surface_split_best_cuts_json)) if args.surface_split_best_cuts_json else None
+            for _an in args.analysis:
+                _bc = (_bc_snap.get(config, {}).get(_an, {}) if _bc_snap is not None
+                       else _load_best_cuts(_an, args.folder, config).get(args.surface_split_cut_energy, {}))
+                if not _bc:
+                    raise SystemExit(f"[ERROR] --surface_split: no {args.surface_split_cut_energy} best cut for {config} {_an}.")
+                _split_cuts[_an].setdefault((int(_bc["NHits"]), int(_bc["OpHits"]), int(_bc["AdjCl"])), []).append("Analysis")
+            _surface_rows = {_an: [] for _an in args.analysis}
+            # Role of each row in each analysis (tab:fiducial_windows): the signal component (Solar = 8B + hep for DayNight and
+            # Sensitivity, hep for HEP, where 8B is a background) and the background samples of BACKGROUND_SAMPLES.ANALYSES.
+            from lib.background import get_background_config
+            _bkg_samples = {_an: [str(b).lower() for b in get_background_config(str(root)).get("ANALYSES", {}).get(
+                _an.upper(), get_background_config(str(root)).get("default", []))] for _an in args.analysis}
+            _signal_roles = {"DayNight": {"Solar": "Signal"}, "Sensitivity": {"Solar": "Signal"}, "HEP": {"hep": "Signal", "8B": "Background"}}
+
+            def _role(analysis, component):
+                if _is_signal:
+                    return _signal_roles.get(analysis, {}).get(component, "None")
+                return "Background" if str(name).lower() in _bkg_samples[analysis] else "None"
+
+            def _surface_split_rows(analysis, selection, sel_group, reco_bidx, sel_w, true_group, true_bidx, true_w, mc_filter, cut,
+                                    component=None):
+                # "All": every selected cluster whatever its surface (the sum of the groups and None).
+                for _g in [*SURFACE_GROUPS, "None", "All"]:
+                    _in = np.ones(len(sel_group), dtype=bool) if _g == "All" else sel_group == _g
+                    _tin = np.ones(len(true_group), dtype=bool) if _g == "All" else true_group == _g
+                    _h = np.bincount(reco_bidx[_in], weights=sel_w[_in], minlength=_n_bins).astype(float)
+                    _w2 = np.bincount(reco_bidx[_in], weights=sel_w[_in] ** 2, minlength=_n_bins)
+                    if mc_filter is not None:
+                        _h, _w2 = _h * mc_filter, _w2 * mc_filter
+                    _surface_rows[analysis].append({
+                        "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": analysis,
+                        "Component": component or name, "Type": "signal" if _is_signal else "background",
+                        "Selection": selection, "Surface": _g, "Role": _role(analysis, component or name),
+                        "MCCounts": np.bincount(reco_bidx[_in], minlength=_n_bins).tolist(),
+                        "TrueCounts": np.bincount(true_bidx[_tin], weights=true_w[_tin], minlength=_n_bins).astype(float).tolist(),
+                        "Counts": _h.tolist(), "Error": np.sqrt(_w2), "Energy": true_energy_centers,
+                        "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+                        "NHits": cut[0], "OpHits": cut[1], "AdjCl": cut[2],
+                    })
+
+            # Fiducial rows: the volume of the analysis energy (--surface_split_cut_energy) and its energy bands, assigned with that
+            # energy (the HEP-only energy for HEP, as in the analysis), from --surface_split_fiducial_json or the folder file.
+            _fid_src = json.load(open(args.surface_split_fiducial_json)) if args.surface_split_fiducial_json else fiducials
+            _E = args.surface_split_cut_energy
+            _split_spatial = {}
+            for _an in args.analysis:
+                _ek = args.hep_energy if (_an == "HEP" and _E == "SolarEnergy" and args.hep_energy in run["Reco"]) else _E
+                _f, _b = get_best_fiducial(_fid_src, config, _E, _an), get_best_fiducial_bands(_fid_src, config, _E, _an)
+                _split_spatial[_an] = np.asarray(build_energy_band_spatial_mask(
+                    run, config, detector_x, detector_y, info, args.folder, _f, _b, _ek, pos_keys=_pos_keys,
+                ) if _b else build_fiducial_spatial_mask(
+                    run, config, detector_x, detector_y, info, args.folder, _f, pos_keys=_pos_keys,
+                ), dtype=bool)
+            _divisor = (background_weight_divisor(str(root), args.folder, name, config, _true_energy_arr)
+                        if workflow_params.get("PARTICLE_TYPE") == "background" else 1.0)
+            # TPC rows: every cluster. The radiological sample keeps its external-overlap removal (_surface_mask), which defines
+            # the sample rather than selecting it; the gamma/neutron surface cut belongs to the fiducialisation step.
+            _tpc_keep = np.ones(len(_surf), dtype=bool) if is_surface_background(str(root), name) else np.asarray(_surface_mask, dtype=bool)
+            _tbidx = np.digitize(np.asarray(_true_energy_arr), true_energy_edges) - 1
+            _tvalid = (_tbidx >= 0) & (_tbidx < _n_bins) & _tpc_keep
+            for _comp, _wname in _comp_weights:
+                _w_tpc = np.asarray(run["Reco"][_wname]) / _divisor
+                for _an in args.analysis:
+                    _bidx = np.digitize(np.asarray(run["Reco"][_energy_key[_an]]), true_energy_edges) - 1
+                    _valid = (_bidx >= 0) & (_bidx < _n_bins) & _tpc_keep
+                    _surface_split_rows(_an, "TPC", _surf_group[_valid], _bidx[_valid], _w_tpc[_valid],
+                                        _surf_group[_tvalid], _tbidx[_tvalid], _w_tpc[_tvalid], None, (0, 0, 0), _comp)
+                    # Fiducial: the fiducialisation step of the cutflow (cutflow_plot.py stage "Fiducial"): surface cut,
+                    # flash matched on an accepted plane with PE > 0 and the fiducial volume of the analysis; no topological
+                    # cut, no MC filter. The clusters the analysis removes (neutron-capture veto ACTION remove, no-offset removal)
+                    # leave here, as in the cut flow (cutflow_plot.py AnalysisKeep); the TPC rows keep every cluster.
+                    _fid = (_surface_mask & _reco_plane_ok & (np.asarray(_reco_op_pe) > 0) & _split_spatial[_an]
+                            & np.asarray(_ncveto_masks[_an], dtype=bool))
+                    _fr, _ft = _valid & _fid, _tvalid & _fid
+                    _surface_split_rows(_an, "Fiducial", _surf_group[_fr], _bidx[_fr], _w_tpc[_fr],
+                                        _surf_group[_ft], _tbidx[_ft], _w_tpc[_ft], None, (0, 0, 0), _comp)
+
+            # Truth rows (rate at generation, binned in true energy; Counts = TrueCounts). Signal: every interaction of the Truth
+            # tree with its true neutrino energy. Gamma/neutron: the surface rates of the weights (exposure.pkl counts with
+            # SURFACE_RATE_FACTORS, momentum PDFs of pdf.pkl) over each true kinetic-energy bin, divided as the weights.
+            # Radiological: no generation-level rate (only its reconstructed clusters exist).
+            if _is_signal:
+                _tk = np.asarray(run["Truth"]["SignalParticleK"], dtype=float)
+                _tb = np.digitize(_tk, true_energy_edges) - 1
+                _tv = (_tb >= 0) & (_tb < _n_bins)
+                # Samples generated beyond the active volume (SIGNAL_GENERATION_CONTAINMENT): only the interactions inside it,
+                # the volume the weights are normalised to (lib/weights._contained).
+                if config in _analysis_info.get("SIGNAL_GENERATION_CONTAINMENT", {}).get("ENABLED_CONFIGS", []):
+                    for _ax in ("X", "Y", "Z"):
+                        _v = np.asarray(run["Truth"][f"SignalParticle{_ax}"], dtype=float)
+                        _tv &= (_v >= info[f"DETECTOR_MIN_{_ax}"]) & (_v <= info[f"DETECTOR_MAX_{_ax}"])
+                for _comp, _wname in _comp_weights:
+                    _tw = np.asarray(run["Truth"][_wname], dtype=float)[_tv]
+                    _tg = np.full(int(_tv.sum()), "None", dtype=object)
+                    for _an in args.analysis:
+                        _surface_split_rows(_an, "Truth", _tg, _tb[_tv], _tw, _tg, _tb[_tv], _tw, None, (0, 0, 0), _comp)
+            elif is_surface_background(str(root), name):
+                from lib.weights import _truth_path
+                _part = name.split("_")[0]
+                _exp = pickle.load(open(f"{_truth_path()}/{config}/{config}_{_part}_exposure.pkl", "rb"))
+                _hists, _hbins = pickle.load(open(f"{_truth_path()}/{config}/{config}_{_part}_pdf.pkl", "rb"))
+                _to_p = (lambda k: np.asarray(k, dtype=float)) if _part == "gamma" else (lambda k: np.sqrt(2 * 939.565 * np.asarray(k, dtype=float)))
+                _pe = _to_p(np.clip(true_energy_edges, 0, None))
+                _gen = {}
+                for _sid, _e in _exp.items():
+                    _h, _hb = np.asarray(_hists[int(_sid)], dtype=float), np.asarray(_hbins[int(_sid)], dtype=float)
+                    if len(_h) == 0:
+                        continue
+                    _cdf = np.concatenate([[0.0], np.cumsum(_h * np.diff(_hb))])  # PDF integrates to 1
+                    _frac = np.diff(np.interp(_pe, _hb, _cdf))
+                    _rate = float(_e["counts"]) * float(info.get("SURFACE_RATE_FACTORS", {}).get(str(_sid), 1.0))
+                    _g = next((k for k, v in SURFACE_GROUPS.items() if int(_sid) in v), "None")
+                    _gen[_g] = _gen.get(_g, 0) + _rate * _frac / np.asarray(
+                        background_weight_divisor(str(root), args.folder, name, config, true_energy_centers), dtype=float)
+                for _an in args.analysis:
+                    for _g in [*SURFACE_GROUPS, "None", "All"]:
+                        _c = sum(_gen.values()) if _g == "All" else _gen.get(_g, np.zeros(_n_bins))
+                        _surface_rows[_an].append({
+                            "Geometry": config.split("_")[0], "Config": config, "Name": name, "Analysis": _an,
+                            "Component": _part, "Type": "background", "Selection": "Truth", "Surface": _g, "Role": _role(_an, _part),
+                            "MCCounts": np.zeros(_n_bins, dtype=int).tolist(), "TrueCounts": np.asarray(_c, dtype=float).tolist(),
+                            "Counts": np.asarray(_c, dtype=float).tolist(), "Error": np.zeros(_n_bins), "Energy": true_energy_centers,
+                            "EnergyUnit": "MeV", "CountsUnit": r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+                            "NHits": 0, "OpHits": 0, "AdjCl": 0,
+                        })
 
         # Pre-compute charge filter arrays once per (config, name, energy) iteration.
         _reco_charge_ok: Optional[np.ndarray] = None
@@ -565,7 +744,14 @@ for config in configs:
                     _rb_idx = np.digitize(sel_reco, _rb_edges) - 1
                     _rb_valid = (_rb_idx >= 0) & (_rb_idx < _rb_bins)
                     _mc_counts_rb = np.bincount(_rb_idx[_rb_valid], minlength=_rb_bins)
-                    _mc_filter_rb = _mc_counts_rb >= args.mc_filter_threshold
+                    # Radiological sample: never trust a bin backed by fewer than RADIOLOGICAL_MIN_MC_PER_BIN simulated
+                    # clusters (backgrounds.json; 2026-10-14). Its clusters carry weights of 1e5-1e6 events, so a single
+                    # cluster in an otherwise empty bin is not a valid background estimate (HD Central runs with MC_FILTER 1).
+                    _mc_thr = args.mc_filter_threshold
+                    if str(name).split("_")[0].lower() == "radiological":
+                        # study knob SOLAR_RADIOLOGICAL_MIN_MC (run_sensitivity --radiological_min_mc) replaces the floor
+                        _mc_thr = max(_mc_thr, int(os.environ.get("SOLAR_RADIOLOGICAL_MIN_MC") or _analysis_info.get("RADIOLOGICAL_MIN_MC_PER_BIN", 1)))
+                    _mc_filter_rb = _mc_counts_rb >= _mc_thr
                     # Expand from 30-bin to 60-bin: find parent 30-bin for each 60-bin center
                     _bin_centers_60 = (true_energy_edges[:-1] + true_energy_edges[1:]) / 2
                     _parent_rb = np.clip(np.digitize(_bin_centers_60, _rb_edges) - 1, 0, _rb_bins - 1)
@@ -641,6 +827,14 @@ for config in configs:
                     h  *= cached["mc_filter"]
                     w2 *= cached["mc_filter"]
                     h_error = np.sqrt(w2)
+                    if (args.surface_split and _cat is None and _cur_cut in _split_cuts[analysis]
+                            and mean_label == ("OscMean" if "marley" in name else "")):
+                        # Same selected clusters, weights and MC filter as h: the groups sum to Counts bin by bin.
+                        for _sel in _split_cuts[analysis][_cur_cut]:
+                            _surface_split_rows(analysis, _sel, _surf_group[mask][_reco_bvalid], _reco_bidx, _sel_w,
+                                                _surf_group[mask][_true_bvalid], _true_bidx, _sel_w_true,
+                                                cached["mc_filter"], _cur_cut,
+                                                weight_labels if "marley" in name else name.split("_")[0])
 
                     plot_lists[(analysis, _cat)].append({
                         "Geometry": config.split("_")[0],
@@ -691,6 +885,12 @@ for config in configs:
         if _prev_cut is not None:
             for _p in _pairs:
                 analysis_cache.pop((*_p, *_prev_cut), None)
+
+        if args.surface_split:
+            for _an in args.analysis:
+                save_df(pd.DataFrame(_surface_rows[_an]), data_path, config=config, name=name, subfolder=args.folder.lower(),
+                        filename=f"{energy}_{_an}_AnalysisDataSurface", rm=user_input["rewrite"], debug=user_input["debug"])
+            continue
 
         if not args.best_cuts_only:
             # All analyses use identical rebinning (0-31 MeV, 1 MeV bins)

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from lib import *
 from lib.fiducial import _DEFAULT_POS_KEYS, get_truth_pos_keys, truth_match_purity_mask
+from lib.fiducial_entries import best_fiducials_stem
 
 
 TEMPLATE_NORMALIZATION_FILE = "TEMPLATE_NORMALIZATION.json"
@@ -442,7 +443,7 @@ for config in configs:
     info = json.loads(
         open(f"{root}/config/{config}/{config}_config.json").read()
     )
-    _fiducials_stem = "BestFiducials_fiduc_truth" if (args.truth_fiducial and not args.fiducial_from_reco) else "BestFiducials"
+    _fiducials_stem = best_fiducials_stem(args.truth_fiducial and not args.fiducial_from_reco)
     fiducials = json.loads(open(f"{root}/config/analysis/fiducial/{(args.fiducial_folder or args.folder).lower()}/{_fiducials_stem}.json").read())
     selected_fiducial = get_best_fiducial(fiducials, config, args.energy, "SENSITIVITY")
     selected_fiducial_bands = get_best_fiducial_bands(fiducials, config, args.energy, "SENSITIVITY")

@@ -22,7 +22,7 @@ Outputs (per-config summary)
                   FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot cm^{-2}}"
                   AreaUnit = r"\mathrm{cm^{2}}"
                 Combined rows (SpectrumType="combined"):
-                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"
+                  FluxUnit = r"\mathrm{counts \cdot MeV^{-1} \cdot kT^{-1} \cdot yr^{-1}}"
                   (area-weighted sum, normalised by detector mass in kT)
                   AreaUnit = None, Component = None, Surface = None
 
@@ -194,7 +194,9 @@ for config in configs_to_run:
             # Convert: x keV→MeV,  y → counts MeV⁻¹ s⁻¹ cm⁻² (density)
             x_mev  = 1e-3 * x_rb
             dx_mev = np.diff(x_mev)[0]
-            y_flux = 1e3 * y_rb / dx_mev  # /keV → /MeV factor
+            # y_rb holds the counts of each rebinned block, so the density per MeV is y_rb / dx_mev (until 2026-10-15
+            # this carried an extra factor 1e3, which put every flux of the summary pkl 1000 times too high).
+            y_flux = y_rb / dx_mev
 
             key = (surface_id, particle_type, particle_origin)
             # Raw (uncorrected) — kept only for shielding comparison plots
@@ -391,7 +393,11 @@ for config in configs_to_run:
     for (surface_id, particle_type, particle_origin), (x, y) in all_plots[config].items():
         if particle_type not in names:
             continue
-        area_weight = areas.get(geometry, {}).get(surface_id, 0.0)
+        # SURFACE_RATE_FACTORS: the same per-surface correction as the analysis weights (lib/weights.py), e.g. the x2 of
+        # the HD Lateral anode plane, whose surface_areas.json entry is one wall while the workspace mass has two TPCs.
+        area_weight = areas.get(geometry, {}).get(surface_id, 0.0) * float(
+            _info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0)
+        )
         y_scaled    = np.array(y) / detector_mass * area_weight  # counts/(MeV·s·kT)
 
         if particle_type not in combined_spectra[config]:
@@ -400,6 +406,16 @@ for config in configs_to_run:
             prev_y, prev_x = combined_spectra[config][particle_type]
             n = min(len(prev_y), len(y_scaled))
             combined_spectra[config][particle_type] = (prev_y[:n] + y_scaled[:n], prev_x[:n])
+
+
+# Default background model (DEFAULT_FOLDER, Truncated): the external rates of the analysis are divided by
+# background_model_factors (lib.background.background_weight_divisor); FluxDefault / CountsDefault carry that normalisation.
+from lib.background import background_weight_divisor
+_default_folder = analysis_info.get("DEFAULT_FOLDER", "Truncated")
+
+
+def _default_divisor(config, particle, energy):
+    return np.asarray(background_weight_divisor(str(root), _default_folder, f"{particle}_final", config, energy), dtype=float)
 
 
 # ── Build combined_df ─────────────────────────────────────────────────────────
@@ -411,8 +427,9 @@ for config, spectra in combined_spectra.items():
             "Particle":        particle_type,
             "Energy":          np.array(x_comb),
             "EnergyUnit":      r"\mathrm{MeV}",
-            "Flux":            np.array(y_comb),
-            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}",
+            "Flux":            np.array(y_comb) * 60 * 60 * 24 * 365.25,  # per year, as the analysis rates
+            "FluxUnit":        r"\mathrm{counts \cdot MeV^{-1} \cdot kT^{-1} \cdot yr^{-1}}",
+            "FluxDefault":     np.array(y_comb) * 60 * 60 * 24 * 365.25 / _default_divisor(config, particle_type, np.array(x_comb)),
             "SpectrumType":    "combined",
         })
 _combined_df = pd.DataFrame(_combined_records)
@@ -452,6 +469,46 @@ rprint("\n[bold]Integrated flux (counts · kT⁻¹ · yr⁻¹):[/bold]")
 rprint(_flux_df.to_string(index=False))
 
 
+# ── Workspace rates per generation surface ────────────────────────────────────
+# The flux of each surface and origin integrated over its area and normalised to the workspace mass, per year and per
+# 100 keV block (Counts, events kT^-1 yr^-1), with the SURFACE_RATE_FACTORS of the analysis weights: the truth-level
+# rates of the samples before any reconstruction. SurfaceGroup groups the surfaces as the analysis tables (anode plane 0,
+# walls 1+2, end caps 3+4); "All" repeats every row once more for the totals. Saved per config and particle (Name) as
+# {config}/spectra/{config}_{particle}_background_surface_rates.pkl.
+_SURFACE_GROUPS = {"0": "Anode", "1": "Walls", "2": "Walls", "3": "EndCaps", "4": "EndCaps"}
+_surface_rate_records = []
+for config in configs_to_run:
+    if config not in all_plots:
+        continue
+    _geo  = config.split("_")[0].lower()
+    _info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _mass = get_workspace_detector_mass(config, _info)
+    for (surface_id, particle_type, particle_origin), (x_mev, y_flux) in all_plots[config].items():
+        _area = areas.get(_geo, {}).get(surface_id, 0.0) * float(_info.get("SURFACE_RATE_FACTORS", {}).get(str(surface_id), 1.0))
+        _counts = np.array(y_flux) * np.diff(np.append(x_mev, 2 * x_mev[-1] - x_mev[-2])) * _area / _mass * 60 * 60 * 24 * 365.25
+        for _group in [_SURFACE_GROUPS.get(str(surface_id), "None"), "All"]:
+            _surface_rate_records.append({
+                "Config":       config,
+                "Geometry":     _geo,
+                "Component":    clean_component_name(particle_origin),
+                "Surface":      surface_id,
+                "SurfaceGroup": _group,
+                "Particle":     particle_type,
+                "Name":         particle_type,
+                "Energy":       np.array(x_mev),
+                "EnergyUnit":   r"\mathrm{MeV}",
+                "Counts":       _counts,
+                "CountsDefault": _counts / _default_divisor(config, particle_type, np.array(x_mev)),
+                "CountsUnit":   r"\mathrm{events \cdot kT^{-1} \cdot yr^{-1}}",
+            })
+for config, particle in {(r["Config"], r["Particle"]) for r in _surface_rate_records}:
+    _path = f"{data_path}/{config}/spectra/{config}_{particle}_background_surface_rates.pkl"
+    if args.rewrite or not os.path.exists(_path):
+        os.makedirs(os.path.dirname(_path), exist_ok=True)
+        pd.DataFrame([r for r in _surface_rate_records if r["Config"] == config and r["Particle"] == particle]).to_pickle(_path)
+        rprint(f"Saved data in: {_path}")
+
+
 # ── Save per-config summary pkl ───────────────────────────────────────────────
 _summary_records = []
 for row in _spectra_records:
@@ -469,7 +526,8 @@ for row in _combined_records:
         "Energy":          row["Energy"],
         "EnergyUnit":      row.get("EnergyUnit", "MeV"),
         "Flux":            row["Flux"],
-        "FluxUnit":        row.get("FluxUnit", "counts MeV⁻¹ s⁻¹ kT⁻¹"),
+        "FluxUnit":        row["FluxUnit"],
+        "FluxDefault":     row["FluxDefault"],
         "SpectrumType":    row["SpectrumType"],
     })
 _summary_df = pd.DataFrame(_summary_records)
@@ -501,7 +559,8 @@ for config in configs_to_run:
             "Energy":          row["Energy"],
             "EnergyUnit":      row.get("EnergyUnit", r"\mathrm{MeV}"),
             "Flux":            row["Flux"],
-            "FluxUnit":        row.get("FluxUnit", r"\mathrm{counts \cdot MeV^{-1} \cdot s^{-1} \cdot kT^{-1}}"),
+            "FluxUnit":        row["FluxUnit"],
+            "FluxDefault":     row["FluxDefault"],
             "SpectrumType":    row["SpectrumType"],
         }
         for row in _combined_records

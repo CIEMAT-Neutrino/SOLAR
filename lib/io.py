@@ -1134,6 +1134,16 @@ def load_multi(
         inv_bkg_dict = {v: k for k, v in bkg_dict.items()}
 
         for jdx, name in enumerate(configs[config]):
+            # study bkgsub (SOLAR_BKG_SUBSAMPLE): keep a random subset of whole jobs of this sample in every tree
+            _sub = None
+            if name_prefix != "MCParticle_":
+                from lib.subsample import subsample_masks
+                _sub = subsample_masks(f"{filepath}{name}", name, info, str(root))
+
+            def _entries(tree, _sub=_sub, name=name):
+                n = len(np.load(f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy", allow_pickle=True))
+                return int(_sub[tree].sum()) if (_sub is not None and tree in _sub and len(_sub[tree]) == n) else n
+
             if load_all:
                 branches_dict = get_branches(
                     name, path=filepath, debug=debug
@@ -1168,12 +1178,7 @@ def load_multi(
                             ["Name", "Geometry", "Version"], [name, geo, vers]
                         ):
                             try:
-                                run[tree][identifiyer_label] = [identifiyer] * len(
-                                    np.load(
-                                        f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
-                                        allow_pickle=True,
-                                    )
-                                )
+                                run[tree][identifiyer_label] = [identifiyer] * _entries(tree)
                                 # print(f"Loaded {config} events:\t{len(run[tree][identifiyer_label])}\t from {tree} -> {name}")
                             except KeyError:
                                 rprint(
@@ -1192,12 +1197,7 @@ def load_multi(
                                 (
                                     run[tree][identifiyer_label],
                                     [identifiyer]
-                                    * len(
-                                        np.load(
-                                            f"{filepath}{name}/{tree}/{ref_branch[tree]}.npy",
-                                            allow_pickle=True,
-                                        )
-                                    ),
+                                    * _entries(tree),
                                 ),
                                 axis=0,
                             )
@@ -1212,6 +1212,11 @@ def load_multi(
                         if debug:
                             files_notfound[tree].append(key)
                         continue
+
+                    if _sub is not None and tree in _sub:
+                        if len(branch) != len(_sub[tree]):
+                            raise ValueError(f"bkg_subsample: {name} {tree}/{key} has {len(branch)} entries, the {tree} mask {len(_sub[tree])}")
+                        branch = branch[_sub[tree]]
 
                     if key == "Generator":
                         # Create a new branch with the background names according to the bkg_dict

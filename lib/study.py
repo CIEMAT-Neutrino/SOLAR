@@ -24,6 +24,7 @@ pre-scaled template pkl files are needed:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -168,7 +169,8 @@ def study_context(args, folder: Optional[str] = None, analysis: Optional[str] = 
         study_suffix=study_sfx,
         template_suffix=template_sfx,
         save_subfolder=subfolder,
-        ref_suffix=study_sfx if truth_fiducial else "",
+        # --no-update_best_fiducials runs (SOLAR_FIDUCIAL_STEM) label their event-level exports as well
+        ref_suffix=study_sfx if (truth_fiducial or os.environ.get("SOLAR_FIDUCIAL_STEM")) else "",
     )
 
 
@@ -218,6 +220,7 @@ class StudyVariant(TypedDict):
     excluded_configs:     NotRequired[List[str]]       # configs this variant does not run for
     extra:                NotRequired[List[str]]       # verbatim flags appended last
     labeled_rebin:        NotRequired[bool]            # the variant changes the Rebin contents through its extra flags
+    superseded:           NotRequired[bool]            # replaced by a later default; runs only when named with --variant
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +357,244 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
     # S/B classifier working point above the 12 MeV gate: 90% instead of the calibrated 95% CC completeness
     # (user, 2026-10-07: a study for the VD Shielded HEP analysis only). Fiducial volume and cuts held at
     # the nominal Truncated ones; only the Rebin pkls (labeled) and the HEP significance are rebuilt.
+    # Analysis without the signal/background classifier (user, 2026-10-15, comparison page): SolarEnergy keeps the
+    # de-excitation offset for every cluster and the Sensitivity fit has no score categories; the neutron-capture veto
+    # is off as well (user). Full chain re-optimised (volume, cuts, sigmas), as the 2026-10-08 diag_sboff.
+    # Simplified S/B + neutron-capture set (2026-10-18, user; cluster-level scan SOLAR-sb _runs/sbeval_20261017/sbscan):
+    # no S/B decision below the 12 MeV gate, and/or the veto classifier over the Day-Night window 6-18 MeV (model
+    # neutron_capture_6_18, 03b --target ncap --ncap_energy_max 18). Full chains re-optimised.
+    "sbsimple": [
+        {"label": "sb_simple", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_low_threshold", "--ncveto_model", "neutron_capture_6_18"]},
+        {"label": "sb_gateonly", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_low_threshold"]},
+        {"label": "ncveto_618", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--ncveto_model", "neutron_capture_6_18"]},
+        # the previous default (2026-10-04 to 2026-10-18): SB_THRESHOLD below the 12 MeV gate as well (config SB_LOW_THRESHOLD
+        # false since 2026-10-18, so sb_gateonly equals the default from then on)
+        {"label": "sb_lowthr", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--sb_low_threshold"]},
+        # the simplified set with the HEP background of hep_looseshape_win (no tail extrapolation)
+        {"label": "sb_simple_hepwin", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-sb_low_threshold", "--ncveto_model", "neutron_capture_6_18", "--no-hep_tail_extrapolation",
+                   "--hep_bkg_shape", "loose_window"]},
+    ],
+    "sboff": [
+        {"label": "sb_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier", "--no-ncveto"]},
+        # the neutron-capture veto on its own: classifier off, veto as in the default (2026-10-17, user)
+        {"label": "sb_off_veto", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--no-sb_classifier"]},
+    ],
+    # Every no-offset cluster (S/B background-like or neutron-capture veto) removed instead of kept without the offset
+    # (user, 2026-10-19, after the cut-flow display variant mcfilter_noflag). Full chain re-optimised (volume, cuts, sigmas).
+    "sbremove": [
+        {"label": "sb_remove", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
+        # the same with the radiological component of the Sensitivity background template smoothed (as rad_smooth; user,
+        # 2026-10-19). Sensitivity only; full chain re-optimised.
+        {"label": "sb_remove_radsmooth", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing"]},
+        # sb_remove at the default fiducial volumes (no volume scan; cuts and sigmas re-optimised), to separate the volume
+        # change from the removal itself (user, 2026-10-19)
+        {"label": "sb_remove_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--remove_no_offset"]},
+        # final candidate (user, 2026-10-19): sb_remove with the radiological Sensitivity smoothing, and the fiducial volume
+        # scanned without the radiological background (02_best_fiducial.py --exclude_radiological_from_scan: dropped from the
+        # significance sum and the MC-support gate). All analyses; full chain re-optimised.
+        {"label": "sb_remove_rs_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True,
+         "extra": ["--remove_no_offset", "--radiological_smoothing", "--exclude_radiological_from_scan"]},
+        # fallback for the Sensitivity if the full smoothing costs too much (user, 2026-10-19): the radiological smoothing
+        # stopped at its MC endpoint (as rad_smooth_end), otherwise as sb_remove_rs_noradfid. Sensitivity only.
+        {"label": "sb_remove_rse_noradfid", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint", "--exclude_radiological_from_scan"]},
+        # final candidate 2 (2026-10-19): the default fiducial volumes (as sb_remove_fixfid, which reproduces rerun 38 in HD
+        # Central Day-Night, 5.50 vs 5.52) with the radiological smoothing stopped at its MC endpoint (full smoothing costs
+        # HD Central Sensitivity 5.70 -> 3.09). Sensitivity only: Day-Night / HEP are sb_remove_fixfid (the smoothing knob
+        # only reaches the Sensitivity background template).
+        {"label": "sb_remove_rse_fixfid", "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"],
+         "extra": ["--remove_no_offset", "--radiological_smoothing_endpoint"]},
+        # the default (no-offset removal, no radiological smoothing) with the fiducial volumes re-optimised instead of held at
+        # the rerun-38 volumes (final_run.sh -F): which volumes the optimiser would choose under the rerun-39 settings (2026-10-20)
+        {"label": "fid_rescan", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": []},
+    ],
+    # Radiological treatment (user, 2026-10-20): the default is the per-bin MC floor 3 (backgrounds.json
+    # RADIOLOGICAL_MIN_MC_PER_BIN) with the regular radiological smoothing in every stage (smoothing.json,
+    # lib/smoothing.radiological_smoothing_mode); the hep profile likelihood stays on raw spectra.
+    # SUPERSEDED by that default (kept to read their old labelled outputs; their results ran on the rerun-38/39 defaults,
+    # floor 2 and the radiological background unsmoothed, so rerunning them now measures something else):
+    #   rad_smooth (Sensitivity template smoothed, 2026-10-15), rad_smooth_end (the same stopped at the MC endpoint,
+    #   2026-10-19), rad_floor3 / rad_floor3_smooth / rad_floor3_smooth_end (floor 3 without / with / with endpoint-stopped
+    #   Sensitivity smoothing, 2026-10-20), rad_unified_smooth (floor 3 + regular smoothing everywhere = the default since
+    #   2026-10-20; validated configuration, SOLAR-sb bf1446a).
+    "radsmooth": [
+        {"label": "rad_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing"]},
+        {"label": "rad_smooth_end", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_smoothing_endpoint"]},
+        {"label": "rad_floor3", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3"]},
+        {"label": "rad_floor3_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing"]},
+        {"label": "rad_floor3_smooth_end", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["Sensitivity"], "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
+        {"label": "rad_unified_smooth", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_unified"]},
+        # rad_default_check: the default with labelled outputs (validation of the promoted default against rad_unified_smooth,
+        # 2026-10-20); runs only when named.
+        {"label": "rad_default_check", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False,
+         "skip_best_sigmas": False, "skip_templates": False, "labeled_rebin": True, "extra": []},
+        # Variations of the default, all analyses, full chain re-optimised:
+        # rad_unified: the radiological smoothing stopped at its MC endpoint in every stage (floor 3 kept).
+        {"label": "rad_unified", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "3", "--radiological_smoothing_endpoint"]},
+        # rad_off: the rerun-39 radiological treatment (floor 2, radiological never smoothed, summed-background smoothing in
+        # the fiducial figure of merit) on the current analysis.
+        {"label": "rad_off", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--radiological_min_mc", "2", "--no-radiological_smoothing"]},
+    ],
+    # HEP without the external-tail extrapolation (HEP_TAIL_EXTRAPOLATION off; user, 2026-10-16, comparison page).
+    # HEP only, full chain re-optimised.
+    "hepnotail": [
+        {"label": "hep_notail", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--no-hep_tail_extrapolation"]},
+    ],
+    # Fiducial and HEP-energy comparisons (2026-10-16, user; run with --no-update_best_fiducials):
+    # fid_oneband: one fiducial volume over the full analysis window instead of one per energy band; full chain re-optimised.
+    "fidband": [
+        {"label": "fid_oneband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--single_fiducial_band"]},
+        # fid_zlim: beam-direction margin limited to the vertical reach of the grid (user, 2026-10-16: test whether F_z is
+        # picked only because its range is longer); full chain re-optimised.
+        {"label": "fid_zlim", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_limit_y"]},
+        # fid_exp30 (user, 2026-10-17): fiducial figure of merit at 30 yr (the analysis benchmark) instead of 100 yr.
+        {"label": "fid_exp30", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_exposure", "30"]},
+        # fid_hepbands22 (user, 2026-10-17): HEP fiducial bands 14-22 and 22-30 MeV instead of 14-20 and 20-30; HEP only.
+        {"label": "fid_hepbands22", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--fiducial_bands", "HEP=14-22,22-30"]},
+        # fid_bandmin1 / fid_bandrel5 (user, 2026-10-17): a band keeps its own volume only if its best fiducial-stage
+        # significance is >= 1 (absolute) / >= 5 % of the full-window one; otherwise it takes the full-window volume.
+        {"label": "fid_bandmin1", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_band_min_z", "abs:1.0"]},
+        {"label": "fid_bandrel5", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_band_min_z", "rel:0.05"]},
+        # fid_highband: the volume chosen for the highest energy band applied to every event (user, 2026-10-17: HD Central
+        # HEP, where the full-window volume is the 14-20 MeV band's); full chain re-optimised.
+        {"label": "fid_highband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "high"]},
+        # fid_bestband (user, 2026-10-17): the volume of the band with the highest fiducial-stage significance applied to
+        # every event (one volume per analysis); full chain re-optimised.
+        {"label": "fid_bestband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "best"]},
+        # Single-volume candidates for Day-Night (user, 2026-10-17: one volume per analysis without losing HD Central
+        # Day-Night). fid_lowband: the 6-12 MeV band volume for every event; fid_v*: fixed volumes X_Y_Z in cm (HD Central:
+        # X/Y of the low band with the high-band Z, the midpoint, the high-band X/Y with the low-band Z; VD Top: both bands'
+        # margins combined). Run with --analysis DayNight on the config named in the comment.
+        # fid_radfloor / fid_radfloor_one (2026-10-17): the fiducial figure of merit ignores radiological bins backed by fewer
+        # than 2 simulated clusters, as 03_analysis.py then did (RADIOLOGICAL_MIN_MC_PER_BIN, 3 since 2026-10-20: these
+        # studies now loosen the fiducial floor to 2); with the default bands, or with one volume over the full window.
+        {"label": "fid_radfloor", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2"]},
+        {"label": "fid_radfloor_one", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_bin_mc_floor", "radiological:2", "--single_fiducial_band"]},
+        # fid_oldrule (2026-10-18): the fiducial rule before 5a97226 (per-band volumes, no radiological floor) on the current
+        # analysis (no-offset neutron-capture veto), to separate the effect of the veto from that of the fiducial rule.
+        {"label": "fid_oldrule", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True,
+         "extra": ["--fiducial_bands", "DAYNIGHT=6-12,12-18;HEP=14-20,20-30;SENSITIVITY=10-20,20-30", "--fiducial_bin_mc_floor", "none"]},
+        {"label": "fid_v100_300_60", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,300,60"]},
+        {"label": "fid_v0_300_0", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,300,0"]},
+        # fid_noveto (user, 2026-10-18): fiducial volumes chosen on SolarEnergy before the neutron-capture veto shift
+        # (SolarEnergyNoVeto); cuts and significances on the default SolarEnergy (veto applied). Full chain re-optimised.
+        {"label": "fid_noveto", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_energy_branch", "SolarEnergyNoVeto"]},
+        # fid_dn616 (user, 2026-10-17): one Day-Night volume, optimised on 6-16 MeV (the 16-18 MeV bins, almost free of
+        # background, otherwise pull the optimum to the loosest volume) and applied to every event. Day-Night only.
+        {"label": "fid_dn616", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["DayNight"],
+         "extra": ["--fiducial_bands", "DAYNIGHT=6-16", "--fiducial_force_band", "low"]},
+        # fid_bandmax: the intersection of the band volumes (largest margin of the bands per coordinate) for every event.
+        {"label": "fid_bandmax", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "max"]},
+        {"label": "fid_lowband", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "low"]},
+        {"label": "fid_v140_300_60", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:140,300,60"]},
+        {"label": "fid_v80_240_160", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:80,240,160"]},
+        {"label": "fid_v0_200_260", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,200,260"]},
+        {"label": "fid_v100_60_480", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,60,480"]},
+        # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
+        # range the cut scan and the significances use; full chain re-optimised.
+        {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "ignore_energy_window": True, "extra": ["--single_fiducial_band"]},
+    ],
+    # fid_nosb: fiducial volumes scanned on SolarEnergyOffset (SolarEnergy without the signal/background classifier
+    # stage); band assignment, cuts and significances on the default SolarEnergy; full chain re-optimised.
+    "fidnosb": [
+        {"label": "fid_nosb", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_energy_branch", "SolarEnergyOffset"]},
+    ],
+    # hep_plain_opt: HEP on SolarEnergy (no HEP-only S/B working point) with volume and cuts re-optimised (hep_plain holds them).
+    "hepplain": [
+        {"label": "hep_plain_opt", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"], "extra": ["--hep_energy", "SolarEnergy"]},
+    ],
+    # Selection bias from background MC statistics (2026-10-16, diagnostics; run with --no-update_best_fiducials).
+    # mcfloor: a cut is eligible only if gamma and neutron each keep >= MC_FLOOR simulated clusters in the analysis
+    # window and fiducial volume; full chain re-optimised.
+    "mcfloor": [
+        {"label": f"mcfloor_{n}", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--mc_floor", str(n)]}
+        for n in (10, 25, 50)
+    ],
+    # bkgsub: HD Lateral / VD Shielded gamma and neutron cut to the VD Top generated statistics by keeping a random
+    # subset of whole jobs (F = VD Top generated / own generated, per sample); three seeds, full chain re-optimised.
+    "bkgsub": [
+        {"label": f"bkgsub_s{seed}", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "excluded_configs": ["vd_1x8x14_3view_30deg_nominal"],
+         "extra": ["--bkg_subsample", f"match=vd_1x8x14_3view_30deg_nominal:{seed}"]}
+        for seed in (1, 2, 3)
+    ],
+    # HEP without the tail extrapolation and with the likelihood bins restricted to those with simulated gamma/neutron
+    # clusters at the cut (2026-10-16, user: simplify HEP, keep VD Shielded above VD Top). HEP only, full re-optimisation.
+    "hepextmask": [
+        {"label": "hep_extmask", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bin_mask", "external"]},
+    ],
+    # HEP without the tail extrapolation, external backgrounds with the shape of their loosest cut normalised to each
+    # cut (2026-10-16, user: simpler HEP, HD Central near the thesis, VD Shielded above VD Top). HEP only, full re-optimisation.
+    "heplooseshape": [
+        {"label": "hep_looseshape", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose"]},
+        # the same on SolarEnergy (the DayNight/Sensitivity energy) instead of SolarEnergyHEP (user, 2026-10-16)
+        {"label": "hep_looseshape_plain", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose", "--hep_energy", "SolarEnergy"]},
+        # shape from the loosest OpHits/AdjCl cut at the same NHits (2026-10-17, user: the energy-correlated cut stays fixed)
+        {"label": "hep_looseshape_nh", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose_nhits"]},
+        # loosest-cut shape inside the HEP window only, normalised to the cut's own window counts (2026-10-17; the
+        # full-spectrum normalisation of hep_looseshape / hep_looseshape_nh underestimates the window background)
+        {"label": "hep_looseshape_win", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "analysis_override": ["HEP"],
+         "extra": ["--no-hep_tail_extrapolation", "--hep_bkg_shape", "loose_window"]},
+    ],
     "sbhep": [
         {"label": "sb_hep90", "skip_rebin": False, "skip_best_cuts": True, "skip_best_sigmas": True,
          "analysis_override": ["HEP"], "labeled_rebin": True,
@@ -531,7 +772,7 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
 
 ALL_GROUPS: list[str] = list(STUDY_VARIANTS.keys())
 # Diagnostic groups: runnable by name (--study <group>) but left out of --all and of the stale-rerun queues.
-OPTIONAL_GROUPS: list[str] = ["fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter"]  # hepsbmodel: needs 03b --target hep
+OPTIONAL_GROUPS: list[str] = ["fidnosb", "fidband", "hepplain", "fiduc_truth_refvol", "hepsbmodel", "ncveto", "mcgate", "mcfilter", "sboff", "radsmooth", "hepnotail", "mcfloor", "bkgsub", "hepextmask", "heplooseshape", "sbsimple", "sbremove"]  # hepsbmodel: needs 03b --target hep
 DEFAULT_GROUPS: list[str] = [g for g in ALL_GROUPS if g not in OPTIONAL_GROUPS]
 
 

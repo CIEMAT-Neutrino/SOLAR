@@ -1,10 +1,11 @@
-import os
+import json, os
 import sys
 
 # Add the absolute path to the lib directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from lib import *
+from lib.background import no_offset_removal_keep
 from lib.fiducial import truth_containment_mask, truth_match_purity_mask
 
 analysis_info = load_analysis_info(str(root))
@@ -226,7 +227,41 @@ for config in configs:
             _reco_x_arr = run["Reco"]["RecoX"]
             _reco_y_arr = run["Reco"]["RecoY"]
             _reco_z_arr = run["Reco"]["RecoZ"]
-        _energy_arr   = run["Reco"][energy]
+        # Fiducial energy (2026-10-18, user): the volume scan of the SolarEnergy analyses reads SolarEnergy before the
+        # neutron-capture veto shift (SolarEnergyNoVeto: S/B classifier stage applied, veto not), so the volume follows where
+        # the external background enters and the MC gate counts the simulated events of the volume; cuts and significances
+        # use the vetoed SolarEnergy. Study knob SOLAR_FIDUCIAL_ENERGY_BRANCH replaces it (fid_nosb: SolarEnergyOffset;
+        # "SolarEnergy": the vetoed energy). The scan is saved under the analysis energy.
+        _fid_branch = os.environ.get("SOLAR_FIDUCIAL_ENERGY_BRANCH", "SolarEnergyNoVeto") if energy == "SolarEnergy" else None
+        if _fid_branch == "SolarEnergy":
+            _fid_branch = None
+        if _fid_branch == "SolarEnergyNoVeto" and "SolarEnergyNoVeto" not in run["Reco"]:
+            # The veto only shifts clusters whose SolarEnergy with the offset is below NCAP_ENERGY_MAX of its model; there
+            # SolarEnergyHEP (copied before the veto, changed only at or above SB_HEP_GATE_ENERGY) is the pre-veto value,
+            # elsewhere SolarEnergy is. Exact while NCAP_ENERGY_MAX <= SB_HEP_GATE_ENERGY (both 14 MeV by default).
+            from lib.background import neutron_capture_veto_params
+            _veto = neutron_capture_veto_params(str(root), config)
+            if not _veto or not {"SolarEnergyHEP", "SolarEnergyOffset"} <= set(run["Reco"]):
+                run["Reco"]["SolarEnergyNoVeto"] = np.asarray(run["Reco"]["SolarEnergy"], dtype=float)
+            else:
+                _cal = f"{root}/config/{config}/marley_final/{config}_calib/{config}"
+                _nv_emax = float(json.load(open(f"{_cal}_{_veto.get('MODEL', 'neutron_capture')}.json")).get("NCAP_ENERGY_MAX", 14.0))
+                _hep_gate = float(json.load(open(f"{_cal}_signal_background.json")).get("SB_HEP_GATE_ENERGY", 14.0))
+                if _nv_emax > _hep_gate:  # e.g. study veto models over 6-18 MeV: scan on the vetoed SolarEnergy instead
+                    rprint(f"[yellow][WARNING][/yellow] {config}: veto region up to {_nv_emax} MeV is above SB_HEP_GATE_ENERGY "
+                           f"{_hep_gate}; SolarEnergyNoVeto cannot be rebuilt, fiducial scan on the vetoed SolarEnergy")
+                    run["Reco"]["SolarEnergyNoVeto"] = np.asarray(run["Reco"]["SolarEnergy"], dtype=float)
+                else:
+                    run["Reco"]["SolarEnergyNoVeto"] = np.where(
+                        np.asarray(run["Reco"]["SolarEnergyOffset"], dtype=float) < _nv_emax,
+                        np.asarray(run["Reco"]["SolarEnergyHEP"], dtype=float), np.asarray(run["Reco"]["SolarEnergy"], dtype=float))
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: SolarEnergyNoVeto differs from SolarEnergy for "
+                   f"{np.mean(run['Reco']['SolarEnergyNoVeto'] != run['Reco']['SolarEnergy']):.1%} of clusters")
+        if _fid_branch:
+            if _fid_branch not in run["Reco"]:
+                raise SystemExit(f"[ERROR] SOLAR_FIDUCIAL_ENERGY_BRANCH={_fid_branch} is not a Reco branch of {config} {name}")
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: fiducial scan on {_fid_branch} (saved as {energy})")
+        _energy_arr   = run["Reco"][_fid_branch or energy]
         _is_marley    = "marley" in args.signal
 
         _n_bins        = len(reco_energy_edges) - 1
@@ -243,6 +278,12 @@ for config in configs:
             & accepted_flash_planes(_op_plane_arr, str(root), args.membrane_veto)
             & (_op_pe_arr > 0)
         )
+        # Study knob SOLAR_REMOVE_NO_OFFSET (sb_remove): the no-offset clusters are removed from the volume scan as well
+        # (SolarEnergy definition; with them removed SolarEnergyNoVeto equals SolarEnergy).
+        _removal = no_offset_removal_keep("DayNight", run["Reco"])
+        if _removal is not None:
+            rprint(f"[cyan][INFO][/cyan] {config} {name}: {np.mean(~_removal):.1%} of clusters without offset removed")
+            _quality_mask = _quality_mask & _removal
         if args.truth_fiducial and args.truth_purity:
             # Truth study: the flash match must be pure and agree with the true position, so the
             # background rejection the reco fiducial cut gets from wrong matches stays explicit.
@@ -369,7 +410,8 @@ for config in configs:
                 }
             )
 
-        scan_filename = f"{energy}_Fiducial_Scan_fiduc_truth" if args.truth_fiducial else f"{energy}_Fiducial_Scan"
+        from lib.fiducial_entries import isolated_suffix
+        scan_filename = f"{energy}_Fiducial_Scan_fiduc_truth" if args.truth_fiducial else f"{energy}_Fiducial_Scan{isolated_suffix()}"
         save_df(
             pd.DataFrame(plot_list),
             f"{data_path}/{args.folder.lower()}",
