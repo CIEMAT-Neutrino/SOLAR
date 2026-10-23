@@ -159,10 +159,10 @@ No fiducial optimization plots were found for this folder.
 
 | Config | Fiducial X | Fiducial Y | Fiducial Z | Before Fiducialization | After Fiducialization | Fiducial Mass (kt) |
 |---|---:|---:|---:|---:|---:|---:|
-| HD Central | 140 | 280 | 240 | 0.041 | 2.669 | 1.43 |
-| HD Lateral | 20 | 0 | 180 | 0.063 | 0.103 | 4.71 |
-| VD Top | 20 | 60 | 80 | 0.047 | 0.084 | 6.24 |
-| VD Bottom Shielded | 60 | 280 | 520 | 0.679 | 1.061 | 2.04 |
+| HD Central | 140 | 280 | 240 | 0.041 | 2.669 | 1.49 |
+| HD Lateral | 20 | 0 | 180 | 0.063 | 0.103 | 4.90 |
+| VD Top | 20 | 60 | 80 | 0.047 | 0.084 | 5.94 |
+| VD Bottom Shielded | 60 | 280 | 520 | 0.679 | 1.061 | 1.94 |
 
 ---
 
