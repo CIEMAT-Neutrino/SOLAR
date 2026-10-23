@@ -687,3 +687,41 @@ Two bookkeeping bugs were found while checking this, neither of which changed a 
    truth-fiducial variants. `membrane_veto_off` holds the default cut, so its export overwrote the default-named VD files with veto-off
    content. No SOLAR script reads them and they are not synced; they are labeled for veto-off runs now (`_mask_sfx`) and the
    default VD files were rewritten (verified: 0 selected events on planes 1–4).
+
+## 10. Update 2026-10-22/23: beam-direction margin capped at 20 cm, fiducial mass on the analysis normalisation
+
+**Why.** The simulated section is a slice of the module (HD 13.94 m, VD 20.9 m along the beam, against `FD_SIZE_Z`
+58.1 m / 59.8 m). Its ends along the beam are not walls of the full detector, and the end-cap backgrounds are already
+removed by the surface filter (`z_endcap_rejection = surface`). A beam-direction margin is cut at both ends of the slice
+and then scaled to the module with the normalisation mass, so a margin `F_z` acts on the module as a cut of
+`F_z x FD_SIZE_Z / DETECTOR_SIZE_Z` at every slice end (VD Top 3.4 m -> ~9.7 m per module end). It removes signal and
+background at the slice edges, where the background is not that of the full module, and does not extrapolate.
+
+**What changed (6e225ea).**
+- `02_best_fiducial.py`: `FIDUCIAL_Z_MAX_CM = 20` caps `FiducializedZ` before the volume is chosen (default in every
+  folder). `SOLAR_FIDUCIAL_Z_MAX` / `run_sensitivity.py --fiducial_z_max` replace it; study `fid_zfree` (`--fiducial_z_max
+  100000`) is the uncapped check. The constant lives in the script, not in `config/analysis/config.json`, because that
+  file is a template-guard input (editing it marks every Sensitivity template stale).
+- `src/tools/presentations/common.py::compute_fiducial_mass_kt`: fiducial mass = `get_full_detector_mass` x kept x/y/z
+  fractions. It used `workspace x FULL_DETECTOR_FACTOR / 2` (HD 4 x 13.94 m = 55.8 m, VD 3 x 20.9 m = 62.7 m), a second
+  definition of the full detector: HD masses 4 % low, VD 5 % high, VD Shielded fiducial mass (7.65 kt) above the 7.29 kt
+  total. Same bug as item 4 of the 2026-09-24 study-status page, which had been fixed only on that page.
+
+**Results (rerun 41, `SOLAR_compare/rerun41_final`, status `study_status_thesis41_20261023.md`).** Only the volumes with
+`F_z > 20 cm` change; the optimiser trades the beam margin for the vertical one (30 yr):
+
+| Config / analysis | rerun 40 (uncapped) | rerun 41 (cap) | significance 40 -> 41 |
+|---|---|---|---|
+| HD Central HEP | 60/160/60, cut 4/4/4 | 40/160/0, cut 4/4/4 | 14.01 -> 14.21 sigma |
+| VD Top DayNight | 140/0/340 | 140/240/0 | 1.48 -> 1.51 sigma |
+| VD Top HEP | 0/0/400, cut 4/20/5 | 0/120/0, cut 1/4/3 | 2.44 -> 2.62 sigma |
+| VD Top Sensitivity | 140/0/340, cut 5/16/20 | 140/240/0, cut 5/15/17 | dchi2 0.63/0.61 -> 0.68/0.66 |
+
+`fid_zfree` reproduces the rerun-40 volumes and values exactly. Fiducial masses (kt, DN/HEP/Sens): HDC 4.66/4.56/4.35,
+HDL 4.66/3.50/4.66, VDT 3.68/5.99/3.68, VDS 7.29/7.29/7.07 (combined 20.3/21.3/19.8); normalisation masses HD 6.996 kt,
+VD 7.291 kt. A forced-volume test (`fid_v*`, F_z -> 20 cm without re-optimising x/y) was the wrong test and was stopped.
+
+**Open.** The Pessimistic folder (not shown in the thesis) was not rerun: HD Lateral (80/80/100 DN, 60/240/60 HEP and Sensitivity) and
+VD Shielded HEP (0/260/520) still carry beam margins above 20 cm. VD Top HEP at 1/4/3 rests on few simulated gammas.
+Gotcha: regenerating the thesis macros from a status taken before a study queue finishes marks held-cut studies as
+`cut!=ref` (rendered red in ch. 9).
