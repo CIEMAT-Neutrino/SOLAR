@@ -554,6 +554,9 @@ for config in configs:
                     "HighPurity": 100 * drift_sample[3],
                     "Sigma": popt_overall[2],
                     "SigmaError": perr_overall[2],
+                    # Width of the broad (tail) component of the double Gaussian (NaN for a single Gaussian)
+                    "SigmaTail": abs(popt_overall[4]) if len(popt_overall) > 4 else np.nan,
+                    "SigmaTailError": perr_overall[4] if len(perr_overall) > 4 else np.nan,
                     "Sigma1": sigma1,
                     "Sigma3": sigma2,
                     "Sigma5": sigma3,
