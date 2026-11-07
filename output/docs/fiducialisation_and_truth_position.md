@@ -12,7 +12,7 @@ changes the results. Every number below is taken from the generated tables
 
 Status: written against commit `c800b4f` plus the uncommitted working tree of 2026-09-20. The study code
 (`src/physics/signal/truth_position_study.py`, `src/tools/*truth_position*`) was not yet under version control
-when this file was written. Weights are `SignalParticleWeight` only (no oscillation, no MC-support gate, no
+when this file was written; it was committed later (`1f96208`). Weights are `SignalParticleWeight` only (no oscillation, no MC-support gate, no
 smoothing), so the checks explain position information; they are not replacement significances.
 
 ---
