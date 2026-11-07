@@ -804,7 +804,8 @@ def _check_counts(rows: list) -> list:
     if held != [[_nhits, _ophits, _adjcls]]:
         rprint(f"[yellow][WARNING][/yellow] {path} holds cuts {held}, the cut flow {_cut_label}: not checked.")
         return []
-    by_label = {str(c).lower(): r for c, r in zip(counts["Component"], counts.itertuples())}
+    # Background components are labelled by sample in some analyses (gamma_final) and by particle in others (Gamma)
+    by_label = {str(c).lower().split("_")[0]: r for c, r in zip(counts["Component"], counts.itertuples())}
     bad, checked = [], 0
     for row in rows:
         if row["Stage"] != _CUT_STAGES[-1]["label"]:
