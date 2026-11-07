@@ -4,12 +4,22 @@ Copies the families the standard plots read (analysis results, solar cutflow/nhi
 smearing chain, workflow/discrimination, best-sigma-json, the study status report) from a SOLAR
 worktree into DST with the *_final sample names replaced by the thesis names (marley, gamma,
 neutron, radiological) in paths and inside pickles/json/markdown. Only the default study is
-staged, so a plot that needs anything else fails instead of mixing old and new data."""
+staged, so a plot that needs anything else fails instead of mixing old and new data.
+
+Cut-flow update (stage_compare.py SRC DST TAG --cutflow_label LABEL): only the cut flows written with
+cutflow_plot.py --output_label LABEL (or <variant>_LABEL) are staged, under their names without the
+_LABEL suffix, into DST (a copy of an earlier staging prepared by the caller); nothing else is touched."""
 import os, re, sys, json, pickle, shutil
 import numpy as np, pandas as pd
 
-SRC, DST = sys.argv[1], sys.argv[2]
-TAG = sys.argv[3] if len(sys.argv) > 3 else "sb_rescan3"
+_args = list(sys.argv[1:])
+CUTFLOW_LABEL = None
+if "--cutflow_label" in _args:
+    i = _args.index("--cutflow_label")
+    CUTFLOW_LABEL = _args[i + 1]
+    del _args[i:i + 2]
+SRC, DST = _args[0], _args[1]
+TAG = _args[2] if len(_args) > 2 else "sb_rescan3"
 PAT = re.compile(r"(marley|gamma|neutron|radiological)_final(?=$|[^A-Za-z0-9])")
 CONFIGS = ["hd_1x2x6_centralAPA", "hd_1x2x6_lateralAPA", "vd_1x8x14_3view_30deg_nominal", "vd_1x8x14_3view_30deg_shielded"]
 
@@ -59,7 +69,8 @@ def stage(src_root, rel_dir, keep=lambda p: True):
             sp = os.path.join(dirpath, f)
             if not keep(sp) or f.endswith(".lock"):
                 continue
-            dp = os.path.join(DST, PAT.sub(r"\1", rel), PAT.sub(r"\1", f))
+            g = re.sub(rf"_{CUTFLOW_LABEL}(?=\.pkl$)", "", f) if CUTFLOW_LABEL else f
+            dp = os.path.join(DST, PAT.sub(r"\1", rel), PAT.sub(r"\1", g))
             os.makedirs(os.path.dirname(dp), exist_ok=True)
             if f.endswith(".pkl"):
                 pkl_jobs.append((sp, dp))
@@ -74,6 +85,14 @@ def stage(src_root, rel_dir, keep=lambda p: True):
 
 final_only = lambda p: bool(PAT.search(p)) or "/samples/" in p
 os.makedirs(DST, exist_ok=True)
+if CUTFLOW_LABEL:
+    stage(SRC, "output/data/solar/cutflow",
+          keep=lambda p: final_only(p) and bool(re.search(rf"_Cutflow\w*_{CUTFLOW_LABEL}\.pkl$", p)))
+    from multiprocessing import Pool
+    with Pool(16) as pool:
+        pool.map(stage_pkl, pkl_jobs, chunksize=4)
+    print("staged", n, "cut flows (label", CUTFLOW_LABEL, "removed) ->", DST)
+    sys.exit(0)
 for fam in ["output/data/analysis", "output/data/solar/cutflow", "output/data/solar/nhits", "output/data/solar/weighted",
             "output/data/TPC/smearing", "output/data/workflow/discrimination"]:
     if os.path.isdir(os.path.join(SRC, fam)):

@@ -25,6 +25,12 @@ Components per analysis (from 03_analysis.py --export_raw --export_fiducial):
                 hep         — AnalysisWeightshep_{energy}_Ref
   Background  : (name)      — AnalysisWeights_{energy}_Ref
 
+The Ref weights carry the unscaled rates. The background weights are divided by the folder's
+background model and statistical reduction (lib.background.background_weight_divisor, per cluster
+true energy AnalysisEnergy_{energy}_Ref), as 03_analysis.py does for the analysis spectra, so the
+last stage of the default cut flow equals the {Analysis}_Counts.pkl spectra (checked at the end,
+--check_counts).
+
 Required Ref pkls (shared across all components):
   AnalysisData_{energy}_Ref, FiducializationMask_{energy}_{ANALYSIS},
   AnalysisNHits_{energy}_Ref, AnalysisOpHits_{energy}_Ref,
@@ -113,6 +119,14 @@ parser.add_argument(
          "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "
          "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export.",
 )
+parser.add_argument(
+    "--check_counts", action=argparse.BooleanOptionalAction, default=True,
+    help="Compare the last stage (SmoothedCounts) of every component with the Smoothed spectra of the analysis "
+         "({Analysis}_Counts.pkl of the same folder, study and cuts) bin by bin, rtol --check_counts_rtol; exit 1 on a "
+         "mismatch. Default cut flow only (--energy SolarEnergy, no display variant); skipped with a warning when the "
+         "Counts pkl is missing or holds other cuts.",
+)
+parser.add_argument("--check_counts_rtol", type=float, default=1e-3)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
@@ -142,6 +156,7 @@ args = parser.parse_args()
 # Self-dispatch: when multiple configs or analyses given, invoke script once per (config, analysis) pair.
 if len(args.config) > 1 or len(args.analysis) > 1:
     from itertools import product as _product
+    _failed = []
     for _cfg, _ana in _product(args.config, args.analysis):
         _cmd = [
             sys.executable, __file__,
@@ -160,6 +175,8 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--plot"      if args.plot          else "--no-plot",
             "--membrane_veto" if args.membrane_veto else "--no-membrane_veto",
             "--truth_fiducial" if args.truth_fiducial else "--no-truth_fiducial",
+            "--check_counts" if args.check_counts else "--no-check_counts",
+            "--check_counts_rtol",    str(args.check_counts_rtol),
         ]
         if args.study_label:
             _cmd += ["--study_label", args.study_label]
@@ -174,8 +191,11 @@ if len(args.config) > 1 or len(args.analysis) > 1:
         if args.adjcls is not None:
             _cmd += ["--adjcls", str(args.adjcls)]
         rprint(f"\n[green][CMD][/green] cutflow_plot.py --config {_cfg} --analysis {_ana}")
-        subprocess.run(_cmd, check=False)
-    sys.exit(0)
+        if subprocess.run(_cmd, check=False).returncode:
+            _failed.append(f"{_cfg} {_ana}")
+    if _failed:
+        rprint(f"[red][ERROR][/red] cutflow_plot.py failed for: {', '.join(_failed)}")
+    sys.exit(1 if _failed else 0)
 
 # Unwrap single-element lists to plain strings for the rest of the script.
 args.config   = args.config[0]
@@ -352,6 +372,22 @@ def _ref_pkl(name: str, filename: str, labeled: bool = True) -> str:
 _op_plane_cut = analysis_info.get("QUALITY_CUTS", {}).get("OPFLASH_PLANE", 0)
 
 
+def _folder_weights(name: str, weights: np.ndarray, energy: str) -> np.ndarray:
+    """Weights of one sample in the folder's normalisation. The Ref weight exports hold the unscaled rates; a background
+    sample is divided by the background model and statistical reduction of the folder (background_weight_divisor, per
+    cluster true energy AnalysisEnergy_{energy}_Ref), as the analysis spectra of 03_analysis.py (Rebin, Counts)."""
+    if "marley" in name:
+        return weights
+    path = _ref_pkl(name, f"AnalysisEnergy_{energy}_Ref")
+    if not os.path.exists(path):
+        raise SystemExit(f"[ERROR] Missing {path}: the folder normalisation of {name} needs the true energies "
+                         "(03_analysis.py --export_raw without --best_cuts_only).")
+    true_energy = np.asarray(pickle.load(open(path, "rb")), dtype=float)
+    if len(true_energy) != len(weights):
+        raise SystemExit(f"[ERROR] {name}: {path} has {len(true_energy)} clusters, the weights {len(weights)}.")
+    return weights / np.asarray(background_weight_divisor(str(root), args.folder, name, args.config, true_energy), dtype=float)
+
+
 def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     """
     Load all 6 stage histograms from Ref pkls using a single consistent event pool.
@@ -420,8 +456,8 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
                 raise SystemExit(f"[ERROR] {name}: {_hep_pkl} has {len(_hep)} clusters, SolarEnergy {len(reco)}.")
             rprint(f"[cyan][INFO][/cyan] {name}: HEP cut flow in SolarEnergyHEP ({np.mean(_hep != reco):.1%} of clusters differ from SolarEnergy)")
             reco = _hep
-    weights  = np.asarray(pickle.load(open(required[1], "rb")), dtype=float)
-    geo_fid  = np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
+    weights  = _folder_weights(name, np.asarray(pickle.load(open(required[1], "rb")), dtype=float), args.energy)
+    geo_fid  =np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
     nhits    = np.asarray(pickle.load(open(required[3], "rb")), dtype=int)
     ophits   = np.asarray(pickle.load(open(required[4], "rb")), dtype=int)
     adjcl    = np.asarray(pickle.load(open(required[5], "rb")), dtype=int)
@@ -524,7 +560,7 @@ def _load_energy_stages(name: str, weight_filename: str) -> list:
                              f"{args.folder} --energy ElectronEnergy SolarEnergyOffset --skip_scan --no-export_fiducial first.")
         return np.asarray(pickle.load(open(path, "rb")), dtype=dtype)
 
-    weights = _load(f"{weight_filename}_SolarEnergy_Ref", float)
+    weights = _folder_weights(name, _load(f"{weight_filename}_SolarEnergy_Ref", float), "SolarEnergy")
     flash = (accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), str(root), args.membrane_veto)
              & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0))
     keep_path = _ref_pkl(name, f"AnalysisKeep_SolarEnergy_{args.analysis.upper()}")
@@ -587,6 +623,9 @@ def _try_load_truth_stage(name: str, weight_filename: str) -> Optional[tuple]:
 
     t_energy  = np.asarray(pickle.load(open(energy_pkl,  "rb")), dtype=float)
     t_weights = np.asarray(pickle.load(open(weight_pkl,  "rb")), dtype=float)
+    if "marley" not in name:  # same folder normalisation as the reconstructed stages (_folder_weights)
+        t_weights = t_weights / np.asarray(
+            background_weight_divisor(str(root), args.folder, name, args.config, t_energy), dtype=float)
 
     h,  _ = np.histogram(t_energy, bins=_edges, weights=t_weights)
     w2, _ = np.histogram(t_energy, bins=_edges, weights=t_weights ** 2)
@@ -740,6 +779,65 @@ for _name in args.signal:
         filename=f"{args.energy}_{args.analysis}_Cutflow{_out_sfx}_{_cut_label}",
         rm=args.rewrite, debug=args.plot,
     )
+
+# ── Closure with the analysis spectra ─────────────────────────────────────────
+# The last stage of the default cut flow is the selection of the analysis: its SmoothedCounts must equal the Smoothed
+# spectra of {Analysis}_Counts.pkl (significance_plot.py) of the same folder, study and cuts, component by component.
+# Raw Counts are not compared: the cut flow zeroes bins below --mc_filter_threshold, the analysis applies its own MC floor.
+
+_COUNTS_DIR = {"DayNight": "day-night", "HEP": "hep", "Sensitivity": "sensitivity"}
+
+
+def _check_counts(rows: list) -> list:
+    """Mismatches (strings) between the last-stage SmoothedCounts and the analysis Smoothed spectra; [] if all agree."""
+    _ctx = study_context(args)
+    path = (f"{root}/output/data/analysis/{_COUNTS_DIR[args.analysis]}/{args.config}/{_primary}/{_ctx.save_subfolder}/"
+            f"{args.config}_{_primary}_{args.analysis}_Counts.pkl")
+    if not os.path.exists(path):
+        rprint(f"[yellow][WARNING][/yellow] No {path}: cut flow not checked against the analysis spectra.")
+        return []
+    counts = pd.read_pickle(path)
+    counts = counts.loc[counts["SpectrumType"] == "Smoothed"]
+    if "Study" in counts.columns:
+        counts = counts.loc[counts["Study"] == (args.study_label or "default")]
+    held = counts[["NHits", "OpHits", "AdjCl"]].drop_duplicates().values.tolist()
+    if held != [[_nhits, _ophits, _adjcls]]:
+        rprint(f"[yellow][WARNING][/yellow] {path} holds cuts {held}, the cut flow {_cut_label}: not checked.")
+        return []
+    by_label = {str(c).lower(): r for c, r in zip(counts["Component"], counts.itertuples())}
+    bad, checked = [], 0
+    for row in rows:
+        if row["Stage"] != _CUT_STAGES[-1]["label"]:
+            continue
+        label = row["Component"].lower() if "marley" in row["Name"] else row["Name"].split("_")[0].lower()
+        ref = by_label.get(label) or by_label.get(f"{label} (osc)")
+        if ref is None:
+            continue
+        ana = np.asarray(ref.Counts, dtype=float) * _exposure / float(ref.Exposure)
+        ours = np.asarray(row["SmoothedCounts"], dtype=float)
+        if len(ana) != len(ours) or not np.allclose(np.asarray(ref.Energy, dtype=float), row["Energy"]):
+            bad.append(f"{row['Component']}: energy binning differs from {os.path.basename(path)}")
+            continue
+        # Bins far below the spectrum peak (oscillation-interpolation tails ~1e-10 of the peak) do not count.
+        atol = 1e-6 * max(np.max(np.abs(ana)), np.max(np.abs(ours)))
+        off = ~np.isclose(ours, ana, rtol=args.check_counts_rtol, atol=atol)
+        checked += 1
+        if off.any():
+            ratio = np.divide(ours, ana, out=np.full(len(ana), np.nan), where=ana != 0)
+            bad.append(f"{row['Component']}: {off.sum()} bins off, e.g. {np.asarray(row['Energy'])[off][:3].tolist()} MeV "
+                       f"cut flow/analysis {np.round(ratio[off][:3], 4).tolist()} (total {ours.sum():.6g} vs {ana.sum():.6g})")
+    rprint(f"[cyan][INFO][/cyan] Cut flow vs {os.path.basename(path)}: {checked} components checked, {len(bad)} mismatched")
+    return bad
+
+
+if args.check_counts and _all_rows and args.energy == "SolarEnergy" and not (
+    args.energy_stages or args.remove_no_offset or args.ncap_display_low or args.mc_filter_stages != "final"
+):
+    _mismatch = _check_counts(_all_rows)
+    if _mismatch:
+        rprint(f"[red][ERROR][/red] {args.config} {args.folder} {args.analysis}: the last cut-flow stage differs from the "
+               f"analysis spectra (rtol {args.check_counts_rtol}):\n  " + "\n  ".join(_mismatch))
+        sys.exit(1)
 
 # ── Combined pkl (all names, no Name column) ──────────────────────────────────
 

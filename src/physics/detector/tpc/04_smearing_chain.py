@@ -70,7 +70,8 @@ parser.add_argument("--weight", type=str, choices=["analysis", "truth"], default
                          "'Solar' component of cutflow_plot.py); truth: unoscillated truth-flux weights")
 parser.add_argument("--reference_folder", type=str, choices=["Nominal", "Reduced", "Truncated", "Pessimistic"], default="Truncated",
                     help="Where to find the 03_analysis.py --export_raw Ref pkls used for the cutflow_plot.py closure "
-                         "check (their content does not depend on the folder)")
+                         "check (their content does not depend on the folder; the cutflow_plot.py pkl holds the "
+                         "backgrounds in this folder's normalisation, which the check applies)")
 parser.add_argument("--unweighted", action=argparse.BooleanOptionalAction, default=False,
                     help="Count MC events instead of truth-flux weights (natural for a narrow --true_range)")
 parser.add_argument("--bin_width", type=float, default=1.0, help="Histogram bin width (MeV)")
@@ -443,6 +444,12 @@ for energy_name in args.energy:
             continue
         theirs = np.asarray(raw["Counts"].iloc[0], dtype=float) * exposure / float(raw["Exposure"].iloc[0])
         ours = np.asarray(final_row["Counts"], dtype=float)
+        if not is_signal:
+            # cutflow_plot.py draws a background in the folder's normalisation (background_weight_divisor of
+            # --reference_folder); this chain keeps the unscaled rates
+            _div = background_weight_divisor(str(root), args.reference_folder, name, config,
+                                             np.asarray(reco["SignalParticleK"], dtype=float)[mask])
+            ours = np.histogram(list(progression.values())[-1], bins=cut_edges, weights=w / _div)[0] * scale
         cutflow_match = {"pkl": cut_pkl, "pkl_mtime": os.path.getmtime(cut_pkl),
                          "identical": bool(np.allclose(ours, theirs, rtol=1e-6, atol=0))}
         tag = "[green]identical[/green]" if cutflow_match["identical"] else "[red]DIFFERENT[/red]"
