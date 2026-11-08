@@ -84,7 +84,12 @@ parser.add_argument("--nhits",  type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for scaling. Default resolved per --analysis from EVALUATION_EXPOSURE_YEARS in config/analysis/config.json (DayNight/HEP 20 yr, Sensitivity 30 yr).")
-parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per bin in the final-cut stage; bins below are zeroed (matches 03_analysis.py default).")
+parser.add_argument(
+    "--mc_filter_threshold", type=int, default=None,
+    help="Min unweighted MC events per 1 MeV bin in the final-cut stage; bins below are zeroed. Default: the per-bin "
+         "filter of the analysis (config.json MC_THRESHOLDS_PER_CONFIG MC_FILTER, else 2, as run_sensitivity.py passes "
+         "to 03_analysis.py); radiological bins need at least RADIOLOGICAL_MIN_MC_PER_BIN (lib.smoothing.radiological_min_mc).",
+)
 parser.add_argument(
     "--mc_filter_stages", type=str, choices=["final", "all"], default="final",
     help="Stages the --mc_filter_threshold zeroing applies to: the final-cut stage only (default, as the "
@@ -121,7 +126,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--check_counts", action=argparse.BooleanOptionalAction, default=True,
-    help="Compare the last stage (SmoothedCounts) of every component with the Smoothed spectra of the analysis "
+    help="Compare the last stage (Counts, SmoothedCounts) of every component with the Raw and Smoothed spectra of the analysis "
          "({Analysis}_Counts.pkl of the same folder, study and cuts) bin by bin, rtol --check_counts_rtol; exit 1 on a "
          "mismatch. Default cut flow only (--energy SolarEnergy, no display variant); skipped with a warning when the "
          "Counts pkl is missing or holds other cuts.",
@@ -165,7 +170,7 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--signal",               *args.signal,
             "--folder",               args.folder,
             "--energy",               args.energy,
-            "--mc_filter_threshold",  str(args.mc_filter_threshold),
+            *(["--mc_filter_threshold", str(args.mc_filter_threshold)] if args.mc_filter_threshold is not None else []),
             "--mc_filter_stages",     args.mc_filter_stages,
             "--remove_no_offset" if args.remove_no_offset else "--no-remove_no_offset",
             "--ncap_display_low" if args.ncap_display_low else "--no-ncap_display_low",
@@ -200,6 +205,18 @@ if len(args.config) > 1 or len(args.analysis) > 1:
 # Unwrap single-element lists to plain strings for the rest of the script.
 args.config   = args.config[0]
 args.analysis = args.analysis[0]
+# Per-bin MC filter of the analysis: run_sensitivity.py passes MC_THRESHOLDS_PER_CONFIG MC_FILTER to 03_analysis.py
+# (default 2 there), which raises it to RADIOLOGICAL_MIN_MC_PER_BIN for the radiological sample.
+if args.mc_filter_threshold is None:
+    args.mc_filter_threshold = int(analysis_info.get("MC_THRESHOLDS_PER_CONFIG", {}).get(args.config, {}).get("MC_FILTER", 2))
+
+
+def _mc_threshold(name: str) -> int:
+    """Per-bin MC filter of sample name, as 03_analysis.py applies it."""
+    if str(name).split("_")[0].lower() == "radiological":
+        return max(args.mc_filter_threshold, radiological_min_mc(str(root)))
+    return args.mc_filter_threshold
+
 # Labeled Ref/mask inputs and cutflow outputs for truth-fiducial variants ("" otherwise).
 _ref_sfx = study_context(args).ref_suffix
 # Output names only: display variants (--mc_filter_stages all, --remove_no_offset) under their own label.
@@ -525,7 +542,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     # --mc_filter_stages all: every stage is zeroed with its own MC counts.
     def _stage_filter(mask):
         mc, _ = np.histogram(reco[mask], bins=_edges)
-        return (mc >= args.mc_filter_threshold).astype(float)
+        return (mc >= _mc_threshold(name)).astype(float)
 
     _mc_filter = _stage_filter(full_mask)
     _all = args.mc_filter_stages == "all"
@@ -685,8 +702,10 @@ for _name in args.signal:
         for stage, (h, h_err, mc) in _active_stage_pairs:
             h_scaled   = h     * _comp_scale   # events/(kT·yr) × kT·yr → events/MeV (1 MeV bins)
             err_scaled = h_err * _comp_scale
-            # Displayed spectrum (lib/smoothing.display_smoothed_background): backgrounds without single-cluster bins (the
-            # radiological ones need the analysis floor) and smoothed as the analysis does; Counts keeps the raw histogram.
+            # Displayed spectrum (lib/smoothing.display_smoothed_background, the rule of the significance_plot.py Smoothed
+            # spectra): backgrounds without single-cluster bins (the radiological ones need the analysis floor) and smoothed
+            # as the analysis does. Counts keeps the histogram, the final stage zeroed below the per-bin MC filter of the
+            # analysis (_mc_threshold) as the Rebin pkl and the Raw spectra of significance_plot.py.
             sh_scaled  = (display_smoothed_background(h, mc, _component_label, _smoothing_cfg) if not _is_signal
                           else _smooth(h, _component_label)) * _comp_scale
             se_scaled  = _smooth(h_err, _component_label) * _comp_scale
@@ -781,15 +800,15 @@ for _name in args.signal:
     )
 
 # ── Closure with the analysis spectra ─────────────────────────────────────────
-# The last stage of the default cut flow is the selection of the analysis: its SmoothedCounts must equal the Smoothed
-# spectra of {Analysis}_Counts.pkl (significance_plot.py) of the same folder, study and cuts, component by component.
-# Raw Counts are not compared: the cut flow zeroes bins below --mc_filter_threshold, the analysis applies its own MC floor.
+# The last stage of the default cut flow is the selection of the analysis: its Counts and SmoothedCounts must equal the
+# Raw and Smoothed spectra of {Analysis}_Counts.pkl (significance_plot.py) of the same folder, study and cuts, component
+# by component (Raw: the per-bin MC filter of the analysis, _mc_threshold; Smoothed: the display rule of both).
 
 _COUNTS_DIR = {"DayNight": "day-night", "HEP": "hep", "Sensitivity": "sensitivity"}
 
 
 def _check_counts(rows: list) -> list:
-    """Mismatches (strings) between the last-stage SmoothedCounts and the analysis Smoothed spectra; [] if all agree."""
+    """Mismatches (strings) between the last-stage Counts/SmoothedCounts and the analysis Raw/Smoothed spectra; [] if all agree."""
     _ctx = study_context(args)
     path = (f"{root}/output/data/analysis/{_COUNTS_DIR[args.analysis]}/{args.config}/{_primary}/{_ctx.save_subfolder}/"
             f"{args.config}_{_primary}_{args.analysis}_Counts.pkl")
@@ -797,7 +816,7 @@ def _check_counts(rows: list) -> list:
         rprint(f"[yellow][WARNING][/yellow] No {path}: cut flow not checked against the analysis spectra.")
         return []
     counts = pd.read_pickle(path)
-    counts = counts.loc[counts["SpectrumType"] == "Smoothed"]
+    counts = counts.loc[counts["SpectrumType"].isin(["Raw", "Smoothed"])]
     if "Study" in counts.columns:
         counts = counts.loc[counts["Study"] == (args.study_label or "default")]
     held = counts[["NHits", "OpHits", "AdjCl"]].drop_duplicates().values.tolist()
@@ -805,29 +824,32 @@ def _check_counts(rows: list) -> list:
         rprint(f"[yellow][WARNING][/yellow] {path} holds cuts {held}, the cut flow {_cut_label}: not checked.")
         return []
     # Background components are labelled by sample in some analyses (gamma_final) and by particle in others (Gamma)
-    by_label = {str(c).lower().split("_")[0]: r for c, r in zip(counts["Component"], counts.itertuples())}
+    by_label = {(str(c).lower().split("_")[0], t): r
+                for c, t, r in zip(counts["Component"], counts["SpectrumType"], counts.itertuples())}
     bad, checked = [], 0
     for row in rows:
         if row["Stage"] != _CUT_STAGES[-1]["label"]:
             continue
         label = row["Component"].lower() if "marley" in row["Name"] else row["Name"].split("_")[0].lower()
-        ref = by_label.get(label) or by_label.get(f"{label} (osc)")
-        if ref is None:
-            continue
-        ana = np.asarray(ref.Counts, dtype=float) * _exposure / float(ref.Exposure)
-        ours = np.asarray(row["SmoothedCounts"], dtype=float)
-        if len(ana) != len(ours) or not np.allclose(np.asarray(ref.Energy, dtype=float), row["Energy"]):
-            bad.append(f"{row['Component']}: energy binning differs from {os.path.basename(path)}")
-            continue
-        # Bins far below the spectrum peak (oscillation-interpolation tails ~1e-10 of the peak) do not count.
-        atol = 1e-6 * max(np.max(np.abs(ana)), np.max(np.abs(ours)))
-        off = ~np.isclose(ours, ana, rtol=args.check_counts_rtol, atol=atol)
-        checked += 1
-        if off.any():
-            ratio = np.divide(ours, ana, out=np.full(len(ana), np.nan), where=ana != 0)
-            bad.append(f"{row['Component']}: {off.sum()} bins off, e.g. {np.asarray(row['Energy'])[off][:3].tolist()} MeV "
-                       f"cut flow/analysis {np.round(ratio[off][:3], 4).tolist()} (total {ours.sum():.6g} vs {ana.sum():.6g})")
-    rprint(f"[cyan][INFO][/cyan] Cut flow vs {os.path.basename(path)}: {checked} components checked, {len(bad)} mismatched")
+        for spectrum, column in (("Raw", "Counts"), ("Smoothed", "SmoothedCounts")):
+            ref = by_label.get((label, spectrum)) or by_label.get((f"{label} (osc)", spectrum))
+            if ref is None:
+                continue
+            ana = np.asarray(ref.Counts, dtype=float) * _exposure / float(ref.Exposure)
+            ours = np.asarray(row[column], dtype=float)
+            if len(ana) != len(ours) or not np.allclose(np.asarray(ref.Energy, dtype=float), row["Energy"]):
+                bad.append(f"{row['Component']} {spectrum}: energy binning differs from {os.path.basename(path)}")
+                continue
+            # Bins far below the spectrum peak (oscillation-interpolation tails ~1e-10 of the peak) do not count.
+            atol = 1e-6 * max(np.max(np.abs(ana)), np.max(np.abs(ours)))
+            off = ~np.isclose(ours, ana, rtol=args.check_counts_rtol, atol=atol)
+            checked += 1
+            if off.any():
+                ratio = np.divide(ours, ana, out=np.full(len(ana), np.nan), where=ana != 0)
+                bad.append(f"{row['Component']} {spectrum}: {off.sum()} bins off, e.g. "
+                           f"{np.asarray(row['Energy'])[off][:3].tolist()} MeV cut flow/analysis "
+                           f"{np.round(ratio[off][:3], 4).tolist()} (total {ours.sum():.6g} vs {ana.sum():.6g})")
+    rprint(f"[cyan][INFO][/cyan] Cut flow vs {os.path.basename(path)}: {checked} spectra checked, {len(bad)} mismatched")
     return bad
 
 
