@@ -378,10 +378,10 @@ for config in configs:
         if os.path.exists(_keep_pkl):
             _fid_mask = _fid_mask & np.asarray(pickle.load(open(_keep_pkl, "rb")), dtype=bool)
 
-        # Global threshold ranges (full dataset so all stages share the same x-axis)
-        _t_nhits  = np.arange(0, int(np.max(_reco["NHits"]))               + 2)
-        _t_ophits = np.arange(0, int(np.max(_reco["MatchedOpFlashNHits"])) + 2)
-        _t_adjcls = np.arange(0, int(np.max(_reco["AdjClNum"]))            + 2)
+        # Global threshold ranges (full dataset so all stages share the same x-axis), always reaching the selected cut
+        _t_nhits  = np.arange(0, max(int(np.max(_reco["NHits"]))               + 2, (_nhits  or 0) + 1))
+        _t_ophits = np.arange(0, max(int(np.max(_reco["MatchedOpFlashNHits"])) + 2, (_ophits or 0) + 1))
+        _t_adjcls = np.arange(0, max(int(np.max(_reco["AdjClNum"]))            + 2, (_adjcls or 0) + 1))
 
         _weights_list = list(zip(
             user_input["weights"][name.split("_")[0]],
