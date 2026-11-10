@@ -8,16 +8,23 @@ staged, so a plot that needs anything else fails instead of mixing old and new d
 
 Cut-flow update (stage_compare.py SRC DST TAG --cutflow_label LABEL): only the cut flows written with
 cutflow_plot.py --output_label LABEL (or <variant>_LABEL) are staged, under their names without the
-_LABEL suffix, into DST (a copy of an earlier staging prepared by the caller); nothing else is touched."""
+_LABEL suffix, into DST (a copy of an earlier staging prepared by the caller); nothing else is touched.
+Threshold-scan update (--nhits_label LABEL): the same for the 04_weighted.py --output_label LABEL threshold scans
+(*_Weighted_Distributions_Fiducial_<Analysis>_LABEL.pkl)."""
 import os, re, sys, json, pickle, shutil
 import numpy as np, pandas as pd
 
 _args = list(sys.argv[1:])
-CUTFLOW_LABEL = None
+CUTFLOW_LABEL = NHITS_LABEL = None
 if "--cutflow_label" in _args:
     i = _args.index("--cutflow_label")
     CUTFLOW_LABEL = _args[i + 1]
     del _args[i:i + 2]
+if "--nhits_label" in _args:
+    i = _args.index("--nhits_label")
+    NHITS_LABEL = _args[i + 1]
+    del _args[i:i + 2]
+UPDATE_LABEL = CUTFLOW_LABEL or NHITS_LABEL
 SRC, DST = _args[0], _args[1]
 TAG = _args[2] if len(_args) > 2 else "sb_rescan3"
 PAT = re.compile(r"(marley|gamma|neutron|radiological)_final(?=$|[^A-Za-z0-9])")
@@ -69,7 +76,7 @@ def stage(src_root, rel_dir, keep=lambda p: True):
             sp = os.path.join(dirpath, f)
             if not keep(sp) or f.endswith(".lock"):
                 continue
-            g = re.sub(rf"_{CUTFLOW_LABEL}(?=\.pkl$)", "", f) if CUTFLOW_LABEL else f
+            g = re.sub(rf"_{UPDATE_LABEL}(?=\.pkl$)", "", f) if UPDATE_LABEL else f
             dp = os.path.join(DST, PAT.sub(r"\1", rel), PAT.sub(r"\1", g))
             os.makedirs(os.path.dirname(dp), exist_ok=True)
             if f.endswith(".pkl"):
@@ -92,6 +99,14 @@ if CUTFLOW_LABEL:
     with Pool(16) as pool:
         pool.map(stage_pkl, pkl_jobs, chunksize=4)
     print("staged", n, "cut flows (label", CUTFLOW_LABEL, "removed) ->", DST)
+    sys.exit(0)
+if NHITS_LABEL:
+    stage(SRC, "output/data/solar/nhits",
+          keep=lambda p: final_only(p) and bool(re.search(rf"_Weighted_Distributions_Fiducial_\w+_{NHITS_LABEL}\.pkl$", p)))
+    from multiprocessing import Pool
+    with Pool(16) as pool:
+        pool.map(stage_pkl, pkl_jobs, chunksize=4)
+    print("staged", n, "threshold scans (label", NHITS_LABEL, "removed) ->", DST)
     sys.exit(0)
 for fam in ["output/data/analysis", "output/data/solar/cutflow", "output/data/solar/nhits", "output/data/solar/weighted",
             "output/data/TPC/smearing", "output/data/workflow/discrimination"]:
