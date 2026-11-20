@@ -10,7 +10,9 @@ Cut-flow update (stage_compare.py SRC DST TAG --cutflow_label LABEL): only the c
 cutflow_plot.py --output_label LABEL (or <variant>_LABEL) are staged, under their names without the
 _LABEL suffix, into DST (a copy of an earlier staging prepared by the caller); nothing else is touched.
 Threshold-scan update (--nhits_label LABEL): the same for the 04_weighted.py --output_label LABEL threshold scans
-(*_Weighted_Distributions_Fiducial_<Analysis>_LABEL.pkl)."""
+(*_Weighted_Distributions_Fiducial_<Analysis>_LABEL.pkl).
+Analysis-file update (--analysis_regex REGEX): only the default-study output/data/analysis pickles whose path matches
+REGEX (e.g. "_HEP_EnergyLimit\.pkl$"), renamed as above, into DST (a copy of an earlier staging); nothing else is touched."""
 import os, re, sys, json, pickle, shutil
 import numpy as np, pandas as pd
 
@@ -23,6 +25,11 @@ if "--cutflow_label" in _args:
 if "--nhits_label" in _args:
     i = _args.index("--nhits_label")
     NHITS_LABEL = _args[i + 1]
+    del _args[i:i + 2]
+ANALYSIS_REGEX = None
+if "--analysis_regex" in _args:
+    i = _args.index("--analysis_regex")
+    ANALYSIS_REGEX = _args[i + 1]
     del _args[i:i + 2]
 UPDATE_LABEL = CUTFLOW_LABEL or NHITS_LABEL
 SRC, DST = _args[0], _args[1]
@@ -107,6 +114,12 @@ if NHITS_LABEL:
     with Pool(16) as pool:
         pool.map(stage_pkl, pkl_jobs, chunksize=4)
     print("staged", n, "threshold scans (label", NHITS_LABEL, "removed) ->", DST)
+    sys.exit(0)
+if ANALYSIS_REGEX:
+    stage(SRC, "output/data/analysis", keep=lambda p: final_only(p) and bool(re.search(ANALYSIS_REGEX, p)))
+    for job in pkl_jobs:
+        stage_pkl(job)
+    print("staged", n, "analysis files matching", repr(ANALYSIS_REGEX), "->", DST)
     sys.exit(0)
 for fam in ["output/data/analysis", "output/data/solar/cutflow", "output/data/solar/nhits", "output/data/solar/weighted",
             "output/data/TPC/smearing", "output/data/workflow/discrimination"]:
