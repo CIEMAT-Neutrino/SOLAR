@@ -40,6 +40,10 @@ parser.add_argument(
 )
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument(
+    "--figures", action=argparse.BooleanOptionalAction, default=True,
+    help="Save the diagnostic figures; --no-figures writes only the data (figure export dominates the run time)",
+)
 
 args = parser.parse_args()
 config = args.config
@@ -192,6 +196,44 @@ for label, params in zip(
 
                 RMS_error.append(error)
 
+            # Calibrate this clustering/drift/nhit variant on its own events before the resolution:
+            # response R(E) = <E_reco>/E_true from the bin means, solved per event as E_cal = E_reco / R(E_cal)
+            # (fixed point; R interpolated, constant outside 2-30 MeV). The primary cluster response is not linear
+            # (radiative losses grow with energy), so a single slope and intercept leaves an offset at low energy,
+            # and inverting <E_reco>(E_true) directly diverges where the response flattens.
+            # Without it the RMS includes the mean offset left by the shared (CC) calibration.
+            true_energy = data["ElectronK"][data["NHits"] >= nhit]
+            reco_energy = data[f"{variable}Energy"][data["NHits"] >= nhit]
+            centers = reco_energy_centers[fit_init:data_end]
+            bin_means = np.array(
+                [
+                    np.mean(reco_energy[np.abs(true_energy - c) < reco_ebin / 2])
+                    if np.any(np.abs(true_energy - c) < reco_ebin / 2)
+                    else np.nan
+                    for c in centers
+                ]
+            )
+            good = ~np.isnan(bin_means)
+            ratio = bin_means[good] / centers[good]
+            calibrated_energy = reco_energy / np.interp(reco_energy, centers[good], ratio)
+            for _ in range(30):
+                calibrated_energy = reco_energy / np.interp(calibrated_energy, centers[good], ratio)
+
+            bias, calibrated_bias, calibrated_rms, sigma68, calibrated_sigma68 = [], [], [], [], []
+            for c in centers:
+                jdx = np.abs(true_energy - c) < reco_ebin / 2
+                if not np.any(jdx):
+                    for values in (bias, calibrated_bias, calibrated_rms, sigma68, calibrated_sigma68):
+                        values.append(np.nan)
+                    continue
+                residual = (true_energy[jdx] - reco_energy[jdx]) / true_energy[jdx]
+                calibrated_residual = (true_energy[jdx] - calibrated_energy[jdx]) / true_energy[jdx]
+                bias.append(np.mean(residual))
+                calibrated_bias.append(np.mean(calibrated_residual))
+                calibrated_rms.append(np.sqrt(np.mean(np.power(calibrated_residual, 2))))
+                sigma68.append(np.diff(np.percentile(residual, [16, 84]))[0] / 2)
+                calibrated_sigma68.append(np.diff(np.percentile(calibrated_residual, [16, 84]))[0] / 2)
+
             # If RMS value is bigger than 1 substitute it with 1
             RMS = np.where(np.isnan(RMS), 0, RMS)
             RMS_error = np.where(np.isnan(RMS_error), 0, RMS_error)
@@ -290,6 +332,12 @@ for label, params in zip(
                     "Values": reco_energy_centers[fit_init:data_end],
                     "RMS": RMS[fit_init:data_end],
                     "RMSError": RMS_error[fit_init:data_end],
+                    "Bias": np.array(bias),
+                    "Sigma68": np.array(sigma68),
+                    "CalibratedRMS": np.array(calibrated_rms),
+                    "CalibratedBias": np.array(calibrated_bias),
+                    "CalibratedSigma68": np.array(calibrated_sigma68),
+                    "CalibrationResponse": bin_means,
                     "FitFunction": resolution,
                     "FitFunctionLabel": f"Calorimetric Energy Resolution",
                     "FitFunctionFormula": "sqrt(p2^2 + (p1/sqrt(x - b))^2 + (p0/(x - b))^2)",
@@ -322,7 +370,7 @@ for label, params in zip(
                 # Set axis range
                 yaxis2_range=[0, 0.5],
             )
-            if nhit < 4:
+            if args.figures and nhit < 4:
                 save_figure(
                     fig,
                     save_path,
