@@ -66,6 +66,12 @@ parser.add_argument(
 )
 parser.add_argument("--output_label", type=str, default="",
     help="Suffix of the output pkls (_LABEL), to write a re-export next to the existing outputs instead of over them.")
+parser.add_argument("--output_dir", type=str, default=None,
+    help="Directory of the output pkls (and figures) instead of output/data/solar/nhits, for exports that must not "
+         "touch the production tree.")
+parser.add_argument("--cutflow_dir", type=str, default=None,
+    help="Directory of the cut flow compared by --check_cutflow (cutflow_plot.py --output_dir), instead of "
+         "output/data/solar/cutflow.")
 parser.add_argument("--cutflow_label", type=str, default="",
     help="Output label of the cut flow compared by --check_cutflow (cutflow_plot.py --output_label), '' for the default.")
 parser.add_argument("--energy", type=str, default="SolarEnergy", help="Energy variable used to resolve FiducializationMask Ref pkl (must match 03_analysis.py --energy used during export).")
@@ -93,6 +99,8 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+if args.output_dir:
+    save_path = data_path = args.output_dir
 
 # Self-dispatch: run once per (config, signal, analysis) — signal determines ROOT loading
 # and compute_reco_workflow params, so it must be in the dispatch key (unlike cutflow_plot.py).
@@ -111,6 +119,8 @@ if len(args.config) > 1 or len(args.signal) > 1 or len(args.analysis) > 1:
             "--summary_oscillation", args.summary_oscillation,
             "--cutflow_label",       args.cutflow_label,
             "--output_label",        args.output_label,
+            *(["--output_dir", args.output_dir] if args.output_dir else []),
+            *(["--cutflow_dir", args.cutflow_dir] if args.cutflow_dir else []),
             "--check_cutflow" if args.check_cutflow else "--no-check_cutflow",
             "--rewrite"       if args.rewrite       else "--no-rewrite",
             "--debug"         if args.debug         else "--no-debug",
@@ -528,7 +538,7 @@ for config in configs:
 # The signal components need --summary_oscillation Mean; HEP has no "Solar" cut-flow component (8B and hep are checked).
 
 def _check_cutflow(rows: list) -> list:
-    path = (f"{root}/output/data/solar/cutflow/{config}/{name}/{args.folder.lower()}/{args.analysis.lower()}/"
+    path = (f"{args.cutflow_dir or f'{root}/output/data/solar/cutflow'}/{config}/{name}/{args.folder.lower()}/{args.analysis.lower()}/"
             f"{config}_{name}_{args.energy}_{args.analysis}_Cutflow{'_' + args.cutflow_label if args.cutflow_label else ''}.pkl")
     if not os.path.exists(path):
         rprint(f"[yellow][WARNING][/yellow] No {path}: threshold scan not checked against the cut flow.")

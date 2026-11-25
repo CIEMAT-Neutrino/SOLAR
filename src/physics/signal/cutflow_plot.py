@@ -149,6 +149,18 @@ parser.add_argument(
 )
 parser.add_argument("--study_label", type=str, default=None, help="Study variant label (see lib/study.py).")
 parser.add_argument(
+    "--first_stage", type=str, choices=["matching", "vetoes"], default="matching",
+    help="Stage between Raw and Fiducial: matching (TPC-PDS Matching, the flash requirement; default) or vetoes "
+         "(Classifier Vetoes: the clusters the analysis keeps after the signal/background and neutron-capture vetoes, "
+         "AnalysisKeep). With vetoes the Fiducial stage includes the flash matching. The Phase I paper and its "
+         "technical note use vetoes (2026-11-24).",
+)
+parser.add_argument(
+    "--output_dir", type=str, default=None,
+    help="Directory of the output pkls (and figures) instead of output/data/solar/cutflow, for exports that must not "
+         "touch the production tree.",
+)
+parser.add_argument(
     "--truth_fiducial",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -157,6 +169,8 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+if args.output_dir:
+    save_path = data_path = args.output_dir
 
 # Self-dispatch: when multiple configs or analyses given, invoke script once per (config, analysis) pair.
 if len(args.config) > 1 or len(args.analysis) > 1:
@@ -182,7 +196,10 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--truth_fiducial" if args.truth_fiducial else "--no-truth_fiducial",
             "--check_counts" if args.check_counts else "--no-check_counts",
             "--check_counts_rtol",    str(args.check_counts_rtol),
+            "--first_stage",          args.first_stage,
         ]
+        if args.output_dir:
+            _cmd += ["--output_dir", args.output_dir]
         if args.study_label:
             _cmd += ["--study_label", args.study_label]
         if args.output_label:
@@ -328,7 +345,8 @@ _TRUTH_STAGES: list[dict] = [
 ]
 _FID_STAGES: list[dict] = [
     {"label": "Raw",              "color": "rgba(50,50,50,0.9)",    "dash": "dot",    "width": 2},
-    {"label": "TPC-PDS Matching", "color": "rgba(214,39,40,0.9)",   "dash": "dashdot","width": 2},
+    {"label": "Classifier Vetoes" if args.first_stage == "vetoes" else "TPC-PDS Matching",
+     "color": "rgba(214,39,40,0.9)", "dash": "dashdot", "width": 2},
     {"label": "Fiducial",         "color": "rgba(148,103,189,0.9)", "dash": "dash",   "width": 2},
 ]
 _CUT_STAGES: list[dict] = [
@@ -532,6 +550,8 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
 
     flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0) & keep
     fid        = geo_fid & flash_mask & fid_keep
+    # Stage 1: the flash requirement (default) or the classifier vetoes (--first_stage vetoes, the paper's Fig. 5)
+    _stage1    = (keep & fid_keep) if args.first_stage == "vetoes" else flash_mask
     pre_mask   = keep.copy()
     nhits_mask = fid & (nhits  >= _nhits)
     op_mask    = nhits_mask & (ophits >= _ophits)
@@ -559,7 +579,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
 
     return [
         _h_and_err(pre_mask,   mc_filter=_stage_filter(pre_mask)   if _all else None),
-        _h_and_err(flash_mask, mc_filter=_stage_filter(flash_mask) if _all else None),
+        _h_and_err(_stage1, mc_filter=_stage_filter(_stage1) if _all else None),
         _h_and_err(fid,        mc_filter=_stage_filter(fid)        if _all else None),
         _h_and_err(nhits_mask, mc_filter=_stage_filter(nhits_mask) if _all else None),
         _h_and_err(op_mask,    mc_filter=_stage_filter(op_mask)    if _all else None),
