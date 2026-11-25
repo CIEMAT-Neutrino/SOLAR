@@ -29,5 +29,5 @@ for a in DayNight HEP Sensitivity; do for c in $CONFIGS; do IFS=: read nh op ad 
 done; done; wait; done
 $IMG python3 src/physics/signal/hep_veto_check.py --config $CONFIGS > $OUT/hep_veto_check.log 2>&1
 grep -l Traceback $OUT/logs/*.log | sed "s/^/FAILED: /"
-for f in $OUT/logs/weighted_*.log; do tr -d "\n" < $f | tr -s " " | grep -q "checked, \?0 mismatched" || echo "CUT-FLOW CHECK NOT PASSED: $f"; done
+for f in $OUT/logs/weighted_*.log; do tr -d " \n" < $f | grep -q "checked,0mismatched" || echo "CUT-FLOW CHECK NOT PASSED: $f"; done
 echo "$(date "+%F %T") done"
