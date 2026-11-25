@@ -536,6 +536,13 @@ STUDY_VARIANTS: dict[str, list[StudyVariant]] = {
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:0,200,260"]},
         {"label": "fid_v100_60_480", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
          "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_force_band", "vol:100,60,480"]},
+        # fid_zmax20 (user, 2026-10-22): beam-direction margin at most 20 cm; the default since 2026-10-22 (02_best_fiducial.py
+        # FIDUCIAL_Z_MAX_CM), kept to read its labelled outputs. fid_zfree: the scan without the cap (F_z up to a quarter of
+        # the section length, the rule before 2026-10-22), the check of the cap. Full chain re-optimised.
+        {"label": "fid_zmax20", "superseded": True, "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_max", "20"]},
+        {"label": "fid_zfree", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,
+         "skip_templates": False, "labeled_rebin": True, "extra": ["--fiducial_z_max", "100000"]},
         # fid_fullspec: one volume chosen on the full reconstructed spectrum (no analysis window, no bands), the energy
         # range the cut scan and the significances use; full chain re-optimised.
         {"label": "fid_fullspec", "fiducialization": True, "skip_rebin": False, "skip_best_cuts": False, "skip_best_sigmas": False,

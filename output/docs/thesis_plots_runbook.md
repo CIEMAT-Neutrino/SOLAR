@@ -108,7 +108,7 @@ Presence is what is on disk. **Validity decides whether you may plot it.**
 | energy_maink | all 4 | all 4 | — | `RERUN-B` (09-01); DN CAPA grid degenerate (191 rows vs 1030); Sens `MISSING` all 4 |
 | fiduc (Nominal/Reduced/Truncated) | all 4 | all 4 | all 4 | Nominal **READY**; **Reduced `RERUN-A`** on LAPA/VDN/VDS (HEP 09-04 in-window) |
 | bkgmodel (Nominal/Reduced) | all 4 | all 4 | all 4 | same trees as `fiduc` — same verdicts |
-| unc_bkg10 · unc_bkg20 · unc_sig8 · charge_Q200 · metric_raw · metric_smoothed | — | — | — | **`ORPHAN`** — dropped from `STUDY_VARIANTS`, `Study` column absent, pending purge |
+| unc_bkg10 · unc_bkg20 · unc_sig8 · charge_Q200 · metric_raw · metric_smoothed | — | — | — | **`ORPHAN`** — dropped from `STUDY_VARIANTS`, `Study` column absent; no output files left under `output/data` (checked 2026-11-07) |
 
 ### The four `BUG` entries
 
@@ -168,7 +168,7 @@ python3 tools/export_sensitivity_contours.py --config hd_1x2x6_centralAPA --dry_
 **Coverage as of 2026-09-07** — 54 written: cAPA 15 studies, lAPA/vdN/vdS 13 each.
 Genuinely absent (templates exist, `06_significance.py` never ran, so there is nothing to
 export): `energy_maink` and `bkg_gamma` on all 4 configs, `membrane_veto_off` on all 4,
-`energy_spk` on vdN/vdS, `charge_Q100` on lAPA/vdN/vdS, and `charge_Q0` (not yet run).
+`energy_spk` on vdN/vdS, `charge_Q100` on lAPA/vdN/vdS, and `charge_Q0` (not yet run). All of these ran later on the rerun-40 samples (charge thresholds: `charge40` queue, 2026-10-21/22; status `output/logs/study_status_queue_20261022.md`).
 
 The export deliberately falls back **only** unlabeled → labeled when locating a source dir.
 Some historical runs wrote the energy dir labeled and some unlabeled for the same study
@@ -535,8 +535,9 @@ Plot pkls regenerated clean 09-07 15:44–15:52 (Counts 10 rows, Exposure DN 10 
 charge_Q500 --config hd_1x2x6_centralAPA --folder Truncated --rewrite`, then
 `significance_plot.py` / `exposure_plot.py` per variant with `--charge_threshold`.
 
-**lAPA / vdN / vdS still pending** — same rerun needed. Sensitivity leg: `Q50` cAPA/lAPA/vdN
-only, `Q100` cAPA-only, `Q500` absent everywhere.
+**lAPA / vdN / vdS rerun done** in the `charge40` queue (2026-10-21/22, rerun-40 samples):
+`Q0`/`Q50`/`Q100`/`Q500` on lAPA/vdN/vdS for all three analyses, cAPA `Q500` HEP + Sensitivity
+(its DayNight has no admissible cut). Status: `output/logs/study_status_queue_20261022.md`.
 
 > **Two code bugs were fixed to make this work** (2026-09-07). `significance_plot.py` had no
 > `--charge_threshold` flag, so `study_context()` never marked charge runs as template variants

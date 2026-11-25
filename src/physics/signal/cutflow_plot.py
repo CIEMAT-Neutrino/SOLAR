@@ -25,6 +25,12 @@ Components per analysis (from 03_analysis.py --export_raw --export_fiducial):
                 hep         — AnalysisWeightshep_{energy}_Ref
   Background  : (name)      — AnalysisWeights_{energy}_Ref
 
+The Ref weights carry the unscaled rates. The background weights are divided by the folder's
+background model and statistical reduction (lib.background.background_weight_divisor, per cluster
+true energy AnalysisEnergy_{energy}_Ref), as 03_analysis.py does for the analysis spectra, so the
+last stage of the default cut flow equals the {Analysis}_Counts.pkl spectra (checked at the end,
+--check_counts).
+
 Required Ref pkls (shared across all components):
   AnalysisData_{energy}_Ref, FiducializationMask_{energy}_{ANALYSIS},
   AnalysisNHits_{energy}_Ref, AnalysisOpHits_{energy}_Ref,
@@ -78,7 +84,12 @@ parser.add_argument("--nhits",  type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
 parser.add_argument("--exposure", type=float, default=None, help="Livetime in years for scaling. Default resolved per --analysis from EVALUATION_EXPOSURE_YEARS in config/analysis/config.json (DayNight/HEP 20 yr, Sensitivity 30 yr).")
-parser.add_argument("--mc_filter_threshold", type=int, default=2, help="Min unweighted MC events per bin in the final-cut stage; bins below are zeroed (matches 03_analysis.py default).")
+parser.add_argument(
+    "--mc_filter_threshold", type=int, default=None,
+    help="Min unweighted MC events per 1 MeV bin in the final-cut stage; bins below are zeroed. Default: the per-bin "
+         "filter of the analysis (config.json MC_THRESHOLDS_PER_CONFIG MC_FILTER, else 2, as run_sensitivity.py passes "
+         "to 03_analysis.py); radiological bins need at least RADIOLOGICAL_MIN_MC_PER_BIN (lib.smoothing.radiological_min_mc).",
+)
 parser.add_argument(
     "--mc_filter_stages", type=str, choices=["final", "all"], default="final",
     help="Stages the --mc_filter_threshold zeroing applies to: the final-cut stage only (default, as the "
@@ -113,6 +124,14 @@ parser.add_argument(
          "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "
          "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export.",
 )
+parser.add_argument(
+    "--check_counts", action=argparse.BooleanOptionalAction, default=True,
+    help="Compare the last stage (Counts, SmoothedCounts) of every component with the Raw and Smoothed spectra of the analysis "
+         "({Analysis}_Counts.pkl of the same folder, study and cuts) bin by bin, rtol --check_counts_rtol; exit 1 on a "
+         "mismatch. Default cut flow only (--energy SolarEnergy, no display variant); skipped with a warning when the "
+         "Counts pkl is missing or holds other cuts.",
+)
+parser.add_argument("--check_counts_rtol", type=float, default=1e-3)
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug",   action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot",    action=argparse.BooleanOptionalAction, default=True)
@@ -130,6 +149,18 @@ parser.add_argument(
 )
 parser.add_argument("--study_label", type=str, default=None, help="Study variant label (see lib/study.py).")
 parser.add_argument(
+    "--first_stage", type=str, choices=["matching", "vetoes"], default="matching",
+    help="Stage between Raw and Fiducial: matching (TPC-PDS Matching, the flash requirement; default) or vetoes "
+         "(Classifier Vetoes: the clusters the analysis keeps after the signal/background and neutron-capture vetoes, "
+         "AnalysisKeep). With vetoes the Fiducial stage includes the flash matching. The Phase I paper and its "
+         "technical note use vetoes (2026-11-24).",
+)
+parser.add_argument(
+    "--output_dir", type=str, default=None,
+    help="Directory of the output pkls (and figures) instead of output/data/solar/cutflow, for exports that must not "
+         "touch the production tree.",
+)
+parser.add_argument(
     "--truth_fiducial",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -138,10 +169,13 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+if args.output_dir:
+    save_path = data_path = args.output_dir
 
 # Self-dispatch: when multiple configs or analyses given, invoke script once per (config, analysis) pair.
 if len(args.config) > 1 or len(args.analysis) > 1:
     from itertools import product as _product
+    _failed = []
     for _cfg, _ana in _product(args.config, args.analysis):
         _cmd = [
             sys.executable, __file__,
@@ -150,7 +184,7 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--signal",               *args.signal,
             "--folder",               args.folder,
             "--energy",               args.energy,
-            "--mc_filter_threshold",  str(args.mc_filter_threshold),
+            *(["--mc_filter_threshold", str(args.mc_filter_threshold)] if args.mc_filter_threshold is not None else []),
             "--mc_filter_stages",     args.mc_filter_stages,
             "--remove_no_offset" if args.remove_no_offset else "--no-remove_no_offset",
             "--ncap_display_low" if args.ncap_display_low else "--no-ncap_display_low",
@@ -160,7 +194,12 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--plot"      if args.plot          else "--no-plot",
             "--membrane_veto" if args.membrane_veto else "--no-membrane_veto",
             "--truth_fiducial" if args.truth_fiducial else "--no-truth_fiducial",
+            "--check_counts" if args.check_counts else "--no-check_counts",
+            "--check_counts_rtol",    str(args.check_counts_rtol),
+            "--first_stage",          args.first_stage,
         ]
+        if args.output_dir:
+            _cmd += ["--output_dir", args.output_dir]
         if args.study_label:
             _cmd += ["--study_label", args.study_label]
         if args.output_label:
@@ -174,12 +213,27 @@ if len(args.config) > 1 or len(args.analysis) > 1:
         if args.adjcls is not None:
             _cmd += ["--adjcls", str(args.adjcls)]
         rprint(f"\n[green][CMD][/green] cutflow_plot.py --config {_cfg} --analysis {_ana}")
-        subprocess.run(_cmd, check=False)
-    sys.exit(0)
+        if subprocess.run(_cmd, check=False).returncode:
+            _failed.append(f"{_cfg} {_ana}")
+    if _failed:
+        rprint(f"[red][ERROR][/red] cutflow_plot.py failed for: {', '.join(_failed)}")
+    sys.exit(1 if _failed else 0)
 
 # Unwrap single-element lists to plain strings for the rest of the script.
 args.config   = args.config[0]
 args.analysis = args.analysis[0]
+# Per-bin MC filter of the analysis: run_sensitivity.py passes MC_THRESHOLDS_PER_CONFIG MC_FILTER to 03_analysis.py
+# (default 2 there), which raises it to RADIOLOGICAL_MIN_MC_PER_BIN for the radiological sample.
+if args.mc_filter_threshold is None:
+    args.mc_filter_threshold = int(analysis_info.get("MC_THRESHOLDS_PER_CONFIG", {}).get(args.config, {}).get("MC_FILTER", 2))
+
+
+def _mc_threshold(name: str) -> int:
+    """Per-bin MC filter of sample name, as 03_analysis.py applies it."""
+    if str(name).split("_")[0].lower() == "radiological":
+        return max(args.mc_filter_threshold, radiological_min_mc(str(root)))
+    return args.mc_filter_threshold
+
 # Labeled Ref/mask inputs and cutflow outputs for truth-fiducial variants ("" otherwise).
 _ref_sfx = study_context(args).ref_suffix
 # Output names only: display variants (--mc_filter_stages all, --remove_no_offset) under their own label.
@@ -291,7 +345,8 @@ _TRUTH_STAGES: list[dict] = [
 ]
 _FID_STAGES: list[dict] = [
     {"label": "Raw",              "color": "rgba(50,50,50,0.9)",    "dash": "dot",    "width": 2},
-    {"label": "TPC-PDS Matching", "color": "rgba(214,39,40,0.9)",   "dash": "dashdot","width": 2},
+    {"label": "Classifier Vetoes" if args.first_stage == "vetoes" else "TPC-PDS Matching",
+     "color": "rgba(214,39,40,0.9)", "dash": "dashdot", "width": 2},
     {"label": "Fiducial",         "color": "rgba(148,103,189,0.9)", "dash": "dash",   "width": 2},
 ]
 _CUT_STAGES: list[dict] = [
@@ -350,6 +405,22 @@ def _ref_pkl(name: str, filename: str, labeled: bool = True) -> str:
 
 
 _op_plane_cut = analysis_info.get("QUALITY_CUTS", {}).get("OPFLASH_PLANE", 0)
+
+
+def _folder_weights(name: str, weights: np.ndarray, energy: str) -> np.ndarray:
+    """Weights of one sample in the folder's normalisation. The Ref weight exports hold the unscaled rates; a background
+    sample is divided by the background model and statistical reduction of the folder (background_weight_divisor, per
+    cluster true energy AnalysisEnergy_{energy}_Ref), as the analysis spectra of 03_analysis.py (Rebin, Counts)."""
+    if "marley" in name:
+        return weights
+    path = _ref_pkl(name, f"AnalysisEnergy_{energy}_Ref")
+    if not os.path.exists(path):
+        raise SystemExit(f"[ERROR] Missing {path}: the folder normalisation of {name} needs the true energies "
+                         "(03_analysis.py --export_raw without --best_cuts_only).")
+    true_energy = np.asarray(pickle.load(open(path, "rb")), dtype=float)
+    if len(true_energy) != len(weights):
+        raise SystemExit(f"[ERROR] {name}: {path} has {len(true_energy)} clusters, the weights {len(weights)}.")
+    return weights / np.asarray(background_weight_divisor(str(root), args.folder, name, args.config, true_energy), dtype=float)
 
 
 def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
@@ -420,8 +491,8 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
                 raise SystemExit(f"[ERROR] {name}: {_hep_pkl} has {len(_hep)} clusters, SolarEnergy {len(reco)}.")
             rprint(f"[cyan][INFO][/cyan] {name}: HEP cut flow in SolarEnergyHEP ({np.mean(_hep != reco):.1%} of clusters differ from SolarEnergy)")
             reco = _hep
-    weights  = np.asarray(pickle.load(open(required[1], "rb")), dtype=float)
-    geo_fid  = np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
+    weights  = _folder_weights(name, np.asarray(pickle.load(open(required[1], "rb")), dtype=float), args.energy)
+    geo_fid  =np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
     nhits    = np.asarray(pickle.load(open(required[3], "rb")), dtype=int)
     ophits   = np.asarray(pickle.load(open(required[4], "rb")), dtype=int)
     adjcl    = np.asarray(pickle.load(open(required[5], "rb")), dtype=int)
@@ -479,6 +550,8 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
 
     flash_mask = accepted_flash_planes(op_plane, str(root), args.membrane_veto) & (op_pe > 0) & keep
     fid        = geo_fid & flash_mask & fid_keep
+    # Stage 1: the flash requirement (default) or the classifier vetoes (--first_stage vetoes, the paper's Fig. 5)
+    _stage1    = (keep & fid_keep) if args.first_stage == "vetoes" else flash_mask
     pre_mask   = keep.copy()
     nhits_mask = fid & (nhits  >= _nhits)
     op_mask    = nhits_mask & (ophits >= _ophits)
@@ -489,7 +562,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
     # --mc_filter_stages all: every stage is zeroed with its own MC counts.
     def _stage_filter(mask):
         mc, _ = np.histogram(reco[mask], bins=_edges)
-        return (mc >= args.mc_filter_threshold).astype(float)
+        return (mc >= _mc_threshold(name)).astype(float)
 
     _mc_filter = _stage_filter(full_mask)
     _all = args.mc_filter_stages == "all"
@@ -506,7 +579,7 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
 
     return [
         _h_and_err(pre_mask,   mc_filter=_stage_filter(pre_mask)   if _all else None),
-        _h_and_err(flash_mask, mc_filter=_stage_filter(flash_mask) if _all else None),
+        _h_and_err(_stage1, mc_filter=_stage_filter(_stage1) if _all else None),
         _h_and_err(fid,        mc_filter=_stage_filter(fid)        if _all else None),
         _h_and_err(nhits_mask, mc_filter=_stage_filter(nhits_mask) if _all else None),
         _h_and_err(op_mask,    mc_filter=_stage_filter(op_mask)    if _all else None),
@@ -524,7 +597,7 @@ def _load_energy_stages(name: str, weight_filename: str) -> list:
                              f"{args.folder} --energy ElectronEnergy SolarEnergyOffset --skip_scan --no-export_fiducial first.")
         return np.asarray(pickle.load(open(path, "rb")), dtype=dtype)
 
-    weights = _load(f"{weight_filename}_SolarEnergy_Ref", float)
+    weights = _folder_weights(name, _load(f"{weight_filename}_SolarEnergy_Ref", float), "SolarEnergy")
     flash = (accepted_flash_planes(_load("AnalysisOpFlashPlane_SolarEnergy_Ref", int), str(root), args.membrane_veto)
              & (_load("AnalysisOpFlashPE_SolarEnergy_Ref", float) > 0))
     keep_path = _ref_pkl(name, f"AnalysisKeep_SolarEnergy_{args.analysis.upper()}")
@@ -587,6 +660,9 @@ def _try_load_truth_stage(name: str, weight_filename: str) -> Optional[tuple]:
 
     t_energy  = np.asarray(pickle.load(open(energy_pkl,  "rb")), dtype=float)
     t_weights = np.asarray(pickle.load(open(weight_pkl,  "rb")), dtype=float)
+    if "marley" not in name:  # same folder normalisation as the reconstructed stages (_folder_weights)
+        t_weights = t_weights / np.asarray(
+            background_weight_divisor(str(root), args.folder, name, args.config, t_energy), dtype=float)
 
     h,  _ = np.histogram(t_energy, bins=_edges, weights=t_weights)
     w2, _ = np.histogram(t_energy, bins=_edges, weights=t_weights ** 2)
@@ -646,8 +722,10 @@ for _name in args.signal:
         for stage, (h, h_err, mc) in _active_stage_pairs:
             h_scaled   = h     * _comp_scale   # events/(kT·yr) × kT·yr → events/MeV (1 MeV bins)
             err_scaled = h_err * _comp_scale
-            # Displayed spectrum (lib/smoothing.display_smoothed_background): backgrounds without single-cluster bins (the
-            # radiological ones need the analysis floor) and smoothed as the analysis does; Counts keeps the raw histogram.
+            # Displayed spectrum (lib/smoothing.display_smoothed_background, the rule of the significance_plot.py Smoothed
+            # spectra): backgrounds without single-cluster bins (the radiological ones need the analysis floor) and smoothed
+            # as the analysis does. Counts keeps the histogram, the final stage zeroed below the per-bin MC filter of the
+            # analysis (_mc_threshold) as the Rebin pkl and the Raw spectra of significance_plot.py.
             sh_scaled  = (display_smoothed_background(h, mc, _component_label, _smoothing_cfg) if not _is_signal
                           else _smooth(h, _component_label)) * _comp_scale
             se_scaled  = _smooth(h_err, _component_label) * _comp_scale
@@ -740,6 +818,69 @@ for _name in args.signal:
         filename=f"{args.energy}_{args.analysis}_Cutflow{_out_sfx}_{_cut_label}",
         rm=args.rewrite, debug=args.plot,
     )
+
+# ── Closure with the analysis spectra ─────────────────────────────────────────
+# The last stage of the default cut flow is the selection of the analysis: its Counts and SmoothedCounts must equal the
+# Raw and Smoothed spectra of {Analysis}_Counts.pkl (significance_plot.py) of the same folder, study and cuts, component
+# by component (Raw: the per-bin MC filter of the analysis, _mc_threshold; Smoothed: the display rule of both).
+
+_COUNTS_DIR = {"DayNight": "day-night", "HEP": "hep", "Sensitivity": "sensitivity"}
+
+
+def _check_counts(rows: list) -> list:
+    """Mismatches (strings) between the last-stage Counts/SmoothedCounts and the analysis Raw/Smoothed spectra; [] if all agree."""
+    _ctx = study_context(args)
+    path = (f"{root}/output/data/analysis/{_COUNTS_DIR[args.analysis]}/{args.config}/{_primary}/{_ctx.save_subfolder}/"
+            f"{args.config}_{_primary}_{args.analysis}_Counts.pkl")
+    if not os.path.exists(path):
+        rprint(f"[yellow][WARNING][/yellow] No {path}: cut flow not checked against the analysis spectra.")
+        return []
+    counts = pd.read_pickle(path)
+    counts = counts.loc[counts["SpectrumType"].isin(["Raw", "Smoothed"])]
+    if "Study" in counts.columns:
+        counts = counts.loc[counts["Study"] == (args.study_label or "default")]
+    held = counts[["NHits", "OpHits", "AdjCl"]].drop_duplicates().values.tolist()
+    if held != [[_nhits, _ophits, _adjcls]]:
+        rprint(f"[yellow][WARNING][/yellow] {path} holds cuts {held}, the cut flow {_cut_label}: not checked.")
+        return []
+    # Background components are labelled by sample in some analyses (gamma_final) and by particle in others (Gamma)
+    by_label = {(str(c).lower().split("_")[0], t): r
+                for c, t, r in zip(counts["Component"], counts["SpectrumType"], counts.itertuples())}
+    bad, checked = [], 0
+    for row in rows:
+        if row["Stage"] != _CUT_STAGES[-1]["label"]:
+            continue
+        label = row["Component"].lower() if "marley" in row["Name"] else row["Name"].split("_")[0].lower()
+        for spectrum, column in (("Raw", "Counts"), ("Smoothed", "SmoothedCounts")):
+            ref = by_label.get((label, spectrum)) or by_label.get((f"{label} (osc)", spectrum))
+            if ref is None:
+                continue
+            ana = np.asarray(ref.Counts, dtype=float) * _exposure / float(ref.Exposure)
+            ours = np.asarray(row[column], dtype=float)
+            if len(ana) != len(ours) or not np.allclose(np.asarray(ref.Energy, dtype=float), row["Energy"]):
+                bad.append(f"{row['Component']} {spectrum}: energy binning differs from {os.path.basename(path)}")
+                continue
+            # Bins far below the spectrum peak (oscillation-interpolation tails ~1e-10 of the peak) do not count.
+            atol = 1e-6 * max(np.max(np.abs(ana)), np.max(np.abs(ours)))
+            off = ~np.isclose(ours, ana, rtol=args.check_counts_rtol, atol=atol)
+            checked += 1
+            if off.any():
+                ratio = np.divide(ours, ana, out=np.full(len(ana), np.nan), where=ana != 0)
+                bad.append(f"{row['Component']} {spectrum}: {off.sum()} bins off, e.g. "
+                           f"{np.asarray(row['Energy'])[off][:3].tolist()} MeV cut flow/analysis "
+                           f"{np.round(ratio[off][:3], 4).tolist()} (total {ours.sum():.6g} vs {ana.sum():.6g})")
+    rprint(f"[cyan][INFO][/cyan] Cut flow vs {os.path.basename(path)}: {checked} spectra checked, {len(bad)} mismatched")
+    return bad
+
+
+if args.check_counts and _all_rows and args.energy == "SolarEnergy" and not (
+    args.energy_stages or args.remove_no_offset or args.ncap_display_low or args.mc_filter_stages != "final"
+):
+    _mismatch = _check_counts(_all_rows)
+    if _mismatch:
+        rprint(f"[red][ERROR][/red] {args.config} {args.folder} {args.analysis}: the last cut-flow stage differs from the "
+               f"analysis spectra (rtol {args.check_counts_rtol}):\n  " + "\n  ".join(_mismatch))
+        sys.exit(1)
 
 # ── Combined pkl (all names, no Name column) ──────────────────────────────────
 

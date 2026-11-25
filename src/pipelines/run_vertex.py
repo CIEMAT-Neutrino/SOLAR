@@ -98,5 +98,6 @@ for config, name in product(args.config, args.name):
     run_python_command(build_command("src/physics/detector/vertex/02_vertex.py",       base_args))
     run_python_command(build_command("src/physics/detector/vertex/03_fiducial.py",     base_args))
     run_python_command(build_command("src/physics/detector/vertex/04_reconstruction.py", base_args))
+    run_python_command(build_command("src/physics/detector/vertex/05_maps.py",         base_args))
 
 rprint(f"\n[bold green]Vertex pipeline complete.[/bold green]")

@@ -189,3 +189,16 @@ python3 src/pipelines/run_studies.py --study membrane_veto --config vd_1x8x14_3v
 ```
 
 All commands run under the container (`containers/solar_v1.0.sif`).
+
+## 10. Update 2026-10-23: decomposition on the final samples
+
+`pds_plane_decomposition.py` rerun (log `output/logs/pds_planes_20261023.log`) on the 2026-10-16 truth_position caches
+of the final samples, where VD Top has its own background samples (the earlier caches shared the VD Shielded ones and the
+marley/radiological samples), at the current default cuts and volumes (VD Top rerun 41, VD Shielded rerun 40).
+
+Membrane share before selection (HEP `all` stage), VD Top / VD Shielded: marley 36 / 21 %, gamma 52 / 30 %, neutron
+48 / 30 %, radiological 51 / 34 % (was 40, 59, 56 and 11 % for both). After the HEP selection VD Shielded is >= 99 %
+cathode in every sample; at VD Top marley 72/28 % and gamma 68/32 % (75 MC) cathode/membranes, neutrons 3 MC (cathode),
+no radiological MC left in either config. Lifting the veto at the VD Top HEP working point adds 39 % signal and 47 %
+gammas (RelativeToPlane0), consistent with the +0.4 % membrane_veto_off result. The radiological membrane share is no
+longer small: the 11 % of section 3 came from the shared pre-final caches.

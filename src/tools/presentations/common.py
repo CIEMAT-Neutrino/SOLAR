@@ -63,16 +63,16 @@ _LAR_DENSITY_G_PER_CM3 = 1.396
 
 
 def compute_fiducial_mass_kt(config, fid_x, fid_y, fid_z, lar_density=_LAR_DENSITY_G_PER_CM3):
-    """Return fiducial LAr mass in kt for the full detector after applying fid cuts.
+    """Return the fiducial LAr mass in kt: the full-detector mass every count is normalised to (lib.fiducial
+    get_full_detector_mass, FD_SIZE_Z along the beam) times the fraction of the simulated section kept by the margins.
 
-    Each production simulates ONE HALF of the physical module (one cathode/drift side).
-    workspace × FULL_DETECTOR_FACTOR = full module, so a factor 0.5 is applied universally.
-
-    X geometry mirrors build_fiducial_spatial_mask in lib_fiducial.py:
-      - lateralAPA: half-drift sim → drift_factor=2 (both sides); net with 0.5 = ×1
-      - centralAPA: full two-drift workspace → drift_factor=1; net with 0.5 = ×0.5
-      - VD: one-drift workspace (top or bottom) → drift_factor=1; net with 0.5 = ×0.5
+    X follows build_fiducial_spatial_mask: both drift ends in centralAPA, the anode side in lateralAPA, the top in VD.
+    The beam-direction margin is applied at both ends of the section, as the mask does (at most 20 cm since 2026-10-22).
     """
+    import sys
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from lib.fiducial import get_full_detector_mass
     config_path = ROOT / "config" / config / f"{config}_config.json"
     if not config_path.exists():
         return None
@@ -81,27 +81,16 @@ def compute_fiducial_mass_kt(config, fid_x, fid_y, fid_z, lar_density=_LAR_DENSI
     size_x = info["DETECTOR_SIZE_X"] + 2 * info.get("DETECTOR_GAP_X", 0)
     size_y = info["DETECTOR_SIZE_Y"] + 2 * info.get("DETECTOR_GAP_Y", 0)
     size_z = info["DETECTOR_SIZE_Z"] + 2 * info.get("DETECTOR_GAP_Z", 0)
-    full_factor = info.get("FULL_DETECTOR_FACTOR", 1)
     fx = int(fid_x) if fid_x is not None else 0
     fy = int(fid_y) if fid_y is not None else 0
     fz = int(fid_z) if fid_z is not None else 0
-    config_lower = str(config).lower()
-    if config_lower == "hd_1x2x6_lateralapa":
-        fid_x_size = size_x - fx
-        drift_factor = 2  # workspace = one drift; real APA has two
-    elif config_lower == "hd_1x2x6_centralapa":
-        fid_x_size = size_x - 2 * fx
-        drift_factor = 1
-    else:  # VD: one-sided top-boundary fiducial (one drift only)
-        fid_x_size = size_x - fx
-        drift_factor = 1
+    fid_x_size = size_x - 2 * fx if str(config).lower() == "hd_1x2x6_centralapa" else size_x - fx
     fid_y_size = size_y - 2 * fy
     fid_z_size = size_z - 2 * fz
     if fid_x_size <= 0 or fid_y_size <= 0 or fid_z_size <= 0:
         return 0.0
-    # 0.5: each production covers half the physical module (one cathode side);
-    # workspace × FULL_DETECTOR_FACTOR spans the full module.
-    return fid_x_size * fid_y_size * fid_z_size * lar_density * drift_factor * full_factor * 0.5 / 1e9
+    fraction = (fid_x_size / size_x) * (fid_y_size / size_y) * (fid_z_size / size_z)
+    return get_full_detector_mass(config, info, lar_density=lar_density) * fraction
 
 
 _ANALYSIS_DIR = {

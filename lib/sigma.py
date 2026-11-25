@@ -3,6 +3,35 @@ import numpy as np
 from typing import Optional, Union
 
 
+def _solve_global_beta_shift(
+    S_total: float,
+    B_total: float,
+    sigma_rel: float,
+) -> float:
+    """δ = β̂ − 1 of the global background scale for Asimov data N = S + B (mu=0, Gaussian prior).
+
+    With β = 1 + δ the profile equation  β² + (B·σ² − 1)·β − N·σ² = 0  becomes
+        δ² + (1 + B·σ²)·δ − S·σ² = 0,
+    whose positive root is taken in the cancellation-free form
+        δ = 2·S·σ² / ((1 + B·σ²) + sqrt((1 + B·σ²)² + 4·S·σ²)).
+    Solving for β directly loses about log10(B·σ²) digits: with B ~ 1e12 and σ = 0.02
+    (the HEP spectrum from 0 MeV, radiological bins included) β̂ was off by ~1e-7, i.e.
+    β̂·b off by ~1e5 events per low-energy bin, which turned q0 into rounding noise
+    (2026-11-20: isolated 0.67 sigma spike at E_max = 24 MeV in the VD Top hep energy-limit
+    cross-check, true value 0.14).
+    """
+    if B_total <= 0.0 or sigma_rel <= 0.0:
+        return 0.0
+    sigma2 = sigma_rel ** 2
+    a = 1.0 + B_total * sigma2
+    c = S_total * sigma2
+    disc = a * a + 4.0 * c
+    if c >= 0.0:
+        return 2.0 * c / (a + disc ** 0.5)
+    # negative total signal (not used by the analyses): plain root, beta clipped at 1e-12 below
+    return (-a + max(disc, 0.0) ** 0.5) / 2.0
+
+
 def _solve_global_beta_hat(
     N_total: float,
     B_total: float,
@@ -10,14 +39,12 @@ def _solve_global_beta_hat(
 ) -> float:
     """Solve global background scale factor for mu=0 with a Gaussian prior.
 
-    Closed-form positive root of:  β² + (B·σ² – 1)·β – N·σ² = 0
+    Positive root of  β² + (B·σ² – 1)·β – N·σ² = 0, computed as 1 + δ
+    (_solve_global_beta_shift) to avoid cancellation when B·σ² >> 1.
     """
     if B_total <= 0.0 or sigma_rel <= 0.0:
         return 1.0
-    sigma2 = sigma_rel ** 2
-    linear = B_total * sigma2 - 1.0
-    discriminant = max(float(linear ** 2) + 4.0 * N_total * sigma2, 0.0)
-    return max((-linear + discriminant ** 0.5) / 2.0, 1e-12)
+    return max(1.0 + _solve_global_beta_shift(N_total - B_total, B_total, sigma_rel), 1e-12)
 
 
 def evaluate_profile_likelihood_discovery(
@@ -63,29 +90,33 @@ def evaluate_profile_likelihood_discovery(
 
     observed = signal_arr + background_arr
 
-    N_total = float(np.sum(observed))
+    S_total = float(np.sum(signal_arr))
     B_total = float(np.sum(background_arr))
-    beta_hat = _solve_global_beta_hat(N_total, B_total, sigma_rel)
+    # δ = β̂ − 1 from the signal sum: N − B is never formed from two large totals
+    delta = _solve_global_beta_shift(S_total, B_total, sigma_rel)
+    delta = max(delta, 1e-12 - 1.0)
 
-    # Compute the LLR directly as the Poisson deviance between Asimov data
-    # and the null-hypothesis expectation, avoiding catastrophic cancellation.
-    # The naive form  2*(ll_sb - ll_null) subtracts two O(N·logN) quantities
-    # whose difference is O(S²/B) at low exposure — losing log10(N·logN·B/S²)
-    # significant digits and producing large oscillations in sqrt(q0).
-    #
-    # The stable form:  q0 = 2·Σ [n_i·log(n_i/μ_null_i) − (n_i − μ_null_i)]
-    #                           + ((β̂−1)/σ_rel)²
-    # Each per-bin term is O((n−μ)²/μ) when n≈μ — numerically tiny directly.
-    expected_null = np.maximum(beta_hat * background_arr, min_expected)
-    n_over_mu = np.where(
-        (observed > 0) & (expected_null > 0),
-        np.maximum(observed, min_expected) / expected_null,
-        1.0,
-    )
-    per_bin_llr = observed * np.log(n_over_mu) - (np.maximum(observed, min_expected) - expected_null)
+    # q0 = 2·Σ [n_i·log(n_i/μ_i) − (n_i − μ_i)] + (δ/σ_rel)²,  μ_i = (1 + δ)·b_i  (Asimov n_i = s_i + b_i).
+    # Written as n·log1p(d/μ) − d with d = n − μ = s − δ·b, so no per-bin term subtracts two
+    # O(b) numbers: each term stays accurate to ~eps·|d| even for b ~ 1e12 (the naive
+    # n·log(n/μ) − (n − μ) loses log10(b) digits per bin and its sum can exceed the O(S²/B) q0).
+    # Bins with n or μ below min_expected keep the previous flooring:
+    #   n_i·log(max(n_i, m)/max(μ_i, m)) − (max(n_i, m) − max(μ_i, m)),  and max(μ_i, m) − m for n_i = 0.
+    mu_raw = (1.0 + delta) * background_arr
+    expected_null = np.maximum(mu_raw, min_expected)
+    observed_floor = np.maximum(observed, min_expected)
+    direct = (observed >= min_expected) & (mu_raw >= min_expected)
+    diff = np.where(direct, signal_arr - delta * background_arr, observed_floor - expected_null)
+    ratio_m1 = np.maximum(diff / expected_null, -1.0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        per_bin_llr = np.where(
+            observed > 0,
+            observed * np.log1p(ratio_m1) - diff,
+            expected_null - min_expected,
+        )
     q0 = 2.0 * float(np.sum(per_bin_llr))
     if sigma_rel > 0.0:
-        q0 += ((beta_hat - 1.0) / sigma_rel) ** 2
+        q0 += (delta / sigma_rel) ** 2
 
     q0 = max(0.0, q0)
     return float(np.sqrt(q0))

@@ -1,8 +1,8 @@
 """
 run_tpc.py — TPC Energy Resolution Diagnostics Pipeline
 ========================================================
-Runs electron energy resolution, adjacent cluster, total energy resolution and
-primary-cluster smearing-chain diagnostics.
+Runs electron energy resolution, adjacent cluster, total energy resolution,
+primary-cluster smearing-chain and smearing-source / gamma-tagging diagnostics.
 Steps live in src/physics/detector/.
 """
 
@@ -99,6 +99,7 @@ for config, name in product(args.config, args.name):
     run_python_command(build_command("src/physics/detector/tpc/02_adj_clusters.py",   base_args))
     run_python_command(build_command("src/physics/detector/tpc/03_energy_resolution.py", base_args))
     run_python_command(build_command("src/physics/detector/tpc/04_smearing_chain.py", ["--config", config, "--name", name, _rw(), _debug()]))
+    run_python_command(build_command("src/physics/detector/tpc/08_smearing_sources.py", base_args))
 
 if len(args.name) > 1:
     run_python_command(build_command("src/physics/detector/tpc/05_smearing_chain_samples.py",

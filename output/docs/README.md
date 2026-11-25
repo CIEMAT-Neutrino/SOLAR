@@ -25,7 +25,7 @@ Math renders with MathJax/KaTeX (`$...$` inline, `$$...$$` display). Open in Git
 |---|---|
 | `membrane_veto_off`, `nuisance_sin13`, `nuisance_escale` Sensitivity leg | **Code fix** — each is bit-identical to nominal where its knob must move; a re-run alone reproduces it. (`fiduc_truth` was on this list; since the 2026-09-19/20 fixes its Sensitivity Score differs from the default on all four configs, see [fiducialisation_and_truth_position.md §3.8](fiducialisation_and_truth_position.md).) |
 | ~~`unc_bkg0/4/6` Sensitivity leg~~ | **Not blocked — resolved 2026-09-14.** Identical results are the correct physics answer, not a bug: the background prior is non-binding (see [solar_analyses.md §5.14](solar_analyses.md#sens-bkg-prior), summarised in its §8.5). Report as an established insensitivity. |
-| Sensitivity `bkg_gamma` (all 4 configs), `energy_maink` (all 4), `energy_spk` (lAPA/vdN/vdS), `charge_Q100` (lAPA/vdN/vdS), `charge_Q500` (all) | Pipeline stage not yet run |
+| ~~Sensitivity `bkg_gamma` (all 4 configs), `energy_maink` (all 4), `energy_spk` (lAPA/vdN/vdS), `charge_Q100` (lAPA/vdN/vdS), `charge_Q500` (all)~~ | **Ran.** `energy_spk` VD Shielded in rerun 34 (2026-10-15/16, `--no-strict_validation`); all of these Sensitivity legs on the rerun-40 samples, charge thresholds in the `charge40` queue (2026-10-21/22). Status: `output/logs/study_status_queue_20261022.md`. |
 | `unc_bkg4`/`unc_bkg6` HEP | `RERUN-B` (08-28); vdN/vdS values pathological (vdN maxPL[80] 2.88→7.02) |
 | `charge_Q100`, `charge_Q500`, `energy_maink` | `RERUN-B` — pre-date the one-knob policy |
 | Orphan purge (337 files, 2.29 GB) | Awaiting approval; manifest at `output/logs/orphan_purge_manifest_20260907_023811.txt` |

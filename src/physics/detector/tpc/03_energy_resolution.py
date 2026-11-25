@@ -29,6 +29,10 @@ parser.add_argument(
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument(
+    "--figures", action=argparse.BooleanOptionalAction, default=True,
+    help="Save the diagnostic figures; --no-figures writes only the data (figure export dominates the run time)",
+)
+parser.add_argument(
     "--no-sb-classifier", action="store_true",
     help="Disable the signal/background gate in SolarEnergy and write separately named outputs",
 )
@@ -338,7 +342,7 @@ for label, params in zip(
                     xaxis_title="(Truth - MainK) / Truth",
                     yaxis_title="Counts",
                 )
-                if not args.no_sb_classifier:
+                if args.figures and not args.no_sb_classifier:
                     save_figure(
                         fig3,
                         save_path,
@@ -433,6 +437,39 @@ for label, params in zip(
 
                 RMS_error.append(float(error))
 
+            # Calibrate this variable/drift/nhit variant on its own events before the resolution: response
+            # R(E) = <E_reco>/E_true from the bin means, solved per event as E_cal = E_reco / R(E_cal) (fixed point;
+            # R interpolated, constant outside the populated bins, so a flat response cannot diverge).
+            # The plain RMS above is taken around zero, so it also counts the mean offset left by the shared
+            # calibration; the calibrated RMS measures the spread only.
+            true_energy = np.asarray(data[truth][data["NHits"] >= nhit], dtype=float)
+            reco_energy = np.asarray(data[column][data["NHits"] >= nhit], dtype=float)
+            centers, bin_means = [], []
+            for energy_bin in reco_energy_centers:
+                in_bin = np.abs(true_energy - energy_bin) < reco_ebin / 2
+                if np.sum(in_bin) >= 10:
+                    centers.append(energy_bin), bin_means.append(np.mean(reco_energy[in_bin]))
+            ratio = np.array(bin_means) / np.array(centers)
+            calibrated_energy = reco_energy / np.interp(reco_energy, centers, ratio)
+            for _ in range(30):
+                calibrated_energy = reco_energy / np.interp(calibrated_energy, centers, ratio)
+
+            bias, sigma68, calibrated_rms, calibrated_rms_error, calibrated_bias, calibrated_sigma68 = [], [], [], [], [], []
+            for energy_bin in reco_energy_centers:
+                in_bin = (np.abs(true_energy - energy_bin) < reco_ebin / 2) & (true_energy > 0)
+                if np.sum(in_bin) < 10:
+                    for values in (bias, sigma68, calibrated_rms, calibrated_rms_error, calibrated_bias, calibrated_sigma68):
+                        values.append(np.nan)
+                    continue
+                residual = (true_energy[in_bin] - reco_energy[in_bin]) / true_energy[in_bin]
+                calibrated_residual = (true_energy[in_bin] - calibrated_energy[in_bin]) / true_energy[in_bin]
+                bias.append(float(np.mean(residual)))
+                sigma68.append(float(np.diff(np.percentile(residual, [16, 84]))[0] / 2))
+                calibrated_rms.append(float(np.sqrt(np.mean(np.power(calibrated_residual, 2)))))
+                calibrated_rms_error.append(calibrated_rms[-1] / np.sqrt(2 * np.sum(in_bin)))
+                calibrated_bias.append(float(np.mean(calibrated_residual)))
+                calibrated_sigma68.append(float(np.diff(np.percentile(calibrated_residual, [16, 84]))[0] / 2))
+
             RMS_data.append(
                 {
                     "Geometry": info["GEOMETRY"],
@@ -444,6 +481,13 @@ for label, params in zip(
                     "Values": reco_energy_centers,
                     "RMS": RMS,
                     "RMSError": RMS_error,
+                    "Bias": bias,
+                    "Sigma68": sigma68,
+                    "CalibratedRMS": calibrated_rms,
+                    "CalibratedRMSError": calibrated_rms_error,
+                    "CalibratedBias": calibrated_bias,
+                    "CalibratedSigma68": calibrated_sigma68,
+                    "CalibrationResponse": np.array(bin_means),
                 }
             )
 
@@ -526,7 +570,7 @@ for label, params in zip(
                 yaxis2_range=[0, 0.5],
             )
 
-            if not args.no_sb_classifier:
+            if args.figures and not args.no_sb_classifier:
                 save_figure(
                     fig1,
                     save_path,
@@ -552,7 +596,7 @@ for label, params in zip(
             # Set axis range
             range=[0, 0.5],
         )
-        if not args.no_sb_classifier:
+        if args.figures and not args.no_sb_classifier:
             save_figure(
                 fig2,
                 save_path,

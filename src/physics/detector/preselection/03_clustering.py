@@ -171,8 +171,49 @@ for config in configs:
                     }
                 )
 
+        # --- drift scan: purity/completeness vs true drift distance to the anode (all NHits) ---
+        # HD: APA at x = 0 (|x| in the central-APA workspace, x in the lateral one); VD: CRP at DETECTOR_MAX_X.
+        _x = np.asarray(_reco["SignalParticleX"], dtype=float)
+        _drift = np.abs(_x) if info["GEOMETRY"] == "hd" else info["DETECTOR_MAX_X"] - _x
+        _max_drift = info["DETECTOR_MAX_X"] if info["GEOMETRY"] == "hd" else info["DETECTOR_SIZE_X"]
+        _drift_edges = np.linspace(0, _max_drift, 19)
+        _drift_centers = 0.5 * (_drift_edges[1:] + _drift_edges[:-1])
+        drift_scan_list = []
+        for energy in [None, 6, 10, 20]:
+            _emask = _base_mask if energy is None else _base_mask & (
+                (_reco["SignalParticleK"] >= energy - lowe_ebin / 2)
+                & (_reco["SignalParticleK"] < energy + lowe_ebin / 2)
+            )
+            _vals = {"Purity": ([], []), "Completeness": ([], [])}
+            _centers = []
+            for lo, hi, centre in zip(_drift_edges[:-1], _drift_edges[1:], _drift_centers):
+                _dmask = _emask & (_drift >= lo) & (_drift < hi)
+                _purity_vals = _reco["Purity"][_dmask]
+                _comp_vals = _reco["Charge"][_dmask] / _reco["ElectronCharge"][_dmask]
+                if len(_purity_vals) < 10:
+                    continue
+                n = len(_purity_vals)
+                _centers.append(centre)
+                for _var, _arr in [("Purity", _purity_vals), ("Completeness", _comp_vals)]:
+                    _vals[_var][0].append(100 * np.mean(_arr))
+                    _vals[_var][1].append(100 * np.std(_arr) / np.sqrt(n))
+            for _var, (_mean, _err) in _vals.items():
+                drift_scan_list.append(
+                    {
+                        "Geometry": info["GEOMETRY"],
+                        "Config": config,
+                        "Name": name,
+                        "Energy": energy,
+                        "Values": np.asarray(_centers, dtype=float),
+                        "Counts": np.asarray(_mean),
+                        "CountsError": np.asarray(_err),
+                        "Variable": _var,
+                    }
+                )
+
         nhit_df = pd.DataFrame(nhit_list)
         energy_df = pd.DataFrame(energy_scan_list)
+        drift_df = pd.DataFrame(drift_scan_list)
 
         for df_label in ["Purity", "Completeness"]:
             this_plot_df = nhit_df[nhit_df["Variable"] == df_label].copy()
@@ -223,6 +264,15 @@ for config in configs:
             config,
             name,
             filename="Clustering_Efficiency_Energy",
+            rm=user_input["rewrite"],
+            debug=user_input["debug"],
+        )
+        save_df(
+            drift_df,
+            data_path,
+            config,
+            name,
+            filename="Clustering_Efficiency_Drift",
             rm=user_input["rewrite"],
             debug=user_input["debug"],
         )

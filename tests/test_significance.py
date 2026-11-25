@@ -119,6 +119,48 @@ class TestProfileLikelihoodDiscovery:
             b = np.abs(rng.normal(5.0, 1.0, 15))
             assert evaluate_profile_likelihood_discovery(s, b) >= 0.0
 
+    # Regression 2026-11-20: HEP spectra from 0 MeV carry radiological bins with b ~ 1e12 next to
+    # background-free hep bins. Solving for β̂ directly lost ~9 digits (B·σ² ~ 4e8) and the per-bin
+    # deviance subtracted O(b) numbers, so q0 became rounding noise: the VD Top energy-limit curve
+    # jumped from 0.13 to 0.67 sigma at one window edge and fell back at the next.
+    @staticmethod
+    def _large_background_spectrum():
+        b = np.array([6.1e12, 3.0e11, 2.0e9, 4.0e5, 3.5, 1.4, 1.7, 1.06, 0.39, 0.35, 0.054, 8e-3, 1e-2, 1e-121])
+        s = np.array([1.0, 2.0, 4.0, 5.0, 0.13, 0.11, 0.08, 0.07, 0.022, 0.031, 1.2e-3, 1e-11, 1.3e-2, 1e-41])
+        return s, b
+
+    def test_large_background_bins_monotone_in_window(self):
+        # Adding a bin adds a non-negative deviance for every β, so the profiled q0 cannot decrease.
+        s, b = self._large_background_spectrum()
+        z = [evaluate_profile_likelihood_discovery(s[:k], b[:k], background_uncertainty=0.02)
+             for k in range(1, len(s) + 1)]
+        assert all(np.isfinite(z))
+        assert all(z2 >= z1 - 1e-9 for z1, z2 in zip(z, z[1:]))
+
+    def test_large_background_bins_match_high_precision(self):
+        mpmath = pytest.importorskip("mpmath")
+        mpmath.mp.dps = 60
+        s, b = self._large_background_spectrum()
+        sigma = mpmath.mpf("0.02")
+        for k in (5, 9, 10, 11, len(s)):
+            S = [mpmath.mpf(float(x)) for x in s[:k]]
+            B = [mpmath.mpf(float(x)) for x in b[:k]]
+            Stot, Btot = sum(S), sum(B)
+            a = 1 + Btot * sigma ** 2
+            delta = 2 * Stot * sigma ** 2 / (a + mpmath.sqrt(a * a + 4 * Stot * sigma ** 2))
+            q0 = (delta / sigma) ** 2
+            for si, bi in zip(S, B):
+                n, mu = si + bi, (1 + delta) * bi
+                q0 += 2 * (n * mpmath.log(n / mu) - (n - mu))
+            ref = float(mpmath.sqrt(q0))
+            got = evaluate_profile_likelihood_discovery(s[:k], b[:k], background_uncertainty=0.02)
+            assert got == pytest.approx(ref, rel=1e-6, abs=1e-9)
+
+    def test_beta_hat_large_background_stable(self):
+        # β̂ − 1 ≈ S·σ²/(1 + B·σ²) ≈ S/B for B·σ² >> 1; the direct quadratic root returned ~1e-7 noise.
+        beta = _solve_global_beta_hat(N_total=1e12 + 10.0, B_total=1e12, sigma_rel=0.02)
+        assert beta - 1.0 == pytest.approx(10.0 * 0.02 ** 2 / (1.0 + 1e12 * 0.02 ** 2), rel=1e-3)
+
 
 # ── evaluate_significance: Gaussian ──────────────────────────────────────────
 
