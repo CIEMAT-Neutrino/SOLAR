@@ -122,7 +122,9 @@ parser.add_argument(
     help="Display only (config NCAP_DISPLAY_ENERGY_MIN, user 2026-10-22): apply the neutron-capture veto also below its "
          "classifier region, from the AnalysisData_SolarEnergyNCapLow_Ref export (03_analysis.py --energy SolarEnergyNCapLow "
          "with SOLAR_NCAP_DISPLAY=1): those clusters are drawn without offset before the Fiducial stage and removed from it "
-         "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export.",
+         "on, as the flagged clusters inside the region. DayNight and Sensitivity, --energy SolarEnergy; skipped without the export. "
+         "Clusters the export draws with a higher energy than SolarEnergy (SOLAR_NCAP_DISPLAY_MAX: veto off below that energy) "
+         "get their offset back and are kept from the Fiducial stage on.",
 )
 parser.add_argument(
     "--check_counts", action=argparse.BooleanOptionalAction, default=True,
@@ -543,10 +545,12 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
             _display = np.asarray(pickle.load(open(_low_pkl, "rb")), dtype=float)
             if len(_display) != len(reco):
                 raise SystemExit(f"[ERROR] {name}: {_low_pkl} has {len(_display)} clusters, SolarEnergy {len(reco)}.")
-            _low = _display != reco
-            reco = np.where(_low, _display, reco)
-            fid_keep = fid_keep & ~_low
-            rprint(f"[cyan][INFO][/cyan] {name}: display veto below the neutron-capture region, {np.mean(_low):.2%} of clusters")
+            _low = _display < reco    # flagged for display only (no offset): removed from the Fiducial stage on
+            _back = _display > reco   # display veto off (SOLAR_NCAP_DISPLAY_MAX): offset back, kept
+            reco = np.where(_low | _back, _display, reco)
+            fid_keep = (fid_keep & ~_low) | _back
+            rprint(f"[cyan][INFO][/cyan] {name}: display veto below the neutron-capture region, {np.mean(_low):.2%} of clusters; "
+                   f"display veto off, {np.mean(_back):.2%} of clusters")
         else:
             rprint(f"[yellow][WARNING][/yellow] {name}: no {_low_pkl}; cut flow without the display veto below the region")
     if args.remove_no_offset:
