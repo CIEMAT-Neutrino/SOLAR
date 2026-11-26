@@ -35,6 +35,9 @@ params = json.load(open(f"{root}/config/{config}/{config}_params.json"))
 dx = info["DETECTOR_SIZE_X"] + 2 * info["DETECTOR_GAP_X"]; dy = info["DETECTOR_SIZE_Y"] + 2 * info["DETECTOR_GAP_Y"]
 fids = json.load(open(f"{root}/config/analysis/fiducial/{folder.lower()}/BestFiducials.json"))
 bands = get_best_fiducial_bands(fids, config, "SolarEnergy", "HEP")
+if not bands:
+    # one volume for the whole analysis (final production): a single band over every energy
+    bands = [{**get_best_fiducial(fids, config, "SolarEnergy", "HEP"), "energy_min": -np.inf, "energy_max": np.inf}]
 cal = f"{root}/config/{config}/marley_final/{config}_calib"
 disc = json.load(open(f"{cal}/{config}_discriminant_calibration.json"))
 sbj = json.load(open(f"{cal}/{config}_signal_background.json"))
