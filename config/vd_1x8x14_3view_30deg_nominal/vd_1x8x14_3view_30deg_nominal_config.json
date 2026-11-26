@@ -4,6 +4,7 @@
     "GEOMETRY": "vd",
     "VERSION": "vd_1x8x14_3view_30deg_nominal",
     "BACKGROUND": true,
+    "MODULE_VOLUMES": 2,
     
     "FULL_DETECTOR_FACTOR": 6,
     "TIMEWINDOW": 0.00425,

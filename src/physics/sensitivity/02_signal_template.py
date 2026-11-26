@@ -145,6 +145,10 @@ parser.add_argument(
     "--adjcls", type=int, help="The adjacent cluster cut for the analysis", default=None
 )
 parser.add_argument("--test", action=argparse.BooleanOptionalAction)
+parser.add_argument("--extra_points", nargs="+", type=str, default=[],
+                    help="With --scan_mode, also build the templates of these oscillation points, DM2:SIN12[:SIN13] (e.g. the JUNO best fit 7.388e-5:0.3036 of the Phase I paper's Fig. 11); SIN13 defaults to the analysis value.")
+parser.add_argument("--output_dir", type=str, default=None,
+                    help="Write the templates under OUTPUT_DIR/{config}/{name}/... instead of the production {PATH}/SENSITIVITY (exports that must not touch the production tree; the best-cut map is still read from production).")
 parser.add_argument("--rewrite", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--plot", action=argparse.BooleanOptionalAction, default=True)
@@ -451,6 +455,7 @@ for config in configs:
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
+    _template_root = args.output_dir or f"{info['PATH']}/SENSITIVITY"
     _solar_dm2 = analysis_info["SOLAR_DM2"]
     _react_dm2 = analysis_info["REACT_DM2"]
     _sin13     = analysis_info["SIN13"]
@@ -461,6 +466,9 @@ for config in configs:
         dm2_list   = _ref_dm2s
         sin13_list = [_sin13] * len(_ref_dm2s)
         sin12_list = [_sin12] * len(_ref_dm2s)
+        for _point in args.extra_points:
+            _v = [float(x) for x in _point.split(":")]
+            dm2_list.append(_v[0]); sin12_list.append(_v[1]); sin13_list.append(_v[2] if len(_v) > 2 else _sin13)
     elif args.oscillation_backend == "file":
         (dm2_list, sin13_list, sin12_list) = get_oscillation_datafiles(
             dm2=None,
@@ -649,7 +657,7 @@ for config in configs:
             save_pkl(
                 # per-year template: detector_mass_kT x rate
                 _base_to_save,
-                f"{info['PATH']}/SENSITIVITY",
+                _template_root,
                 config=args.config,
                 name=args.signal,
                 subfolder=f"{folder.lower()}/{energy}{_template_suffix}",
@@ -658,7 +666,7 @@ for config in configs:
                 debug=args.debug,
             )
             write_template_normalization(
-                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
+                f"{_template_root}/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
                 detector_mass,
             )
             if args.debug:
@@ -748,7 +756,7 @@ for config in configs:
                     # per-year template: detector_mass_kT x rate. 06_significance.py
                     # multiplies by the requested exposure at load time.
                     _template_to_save,
-                    f"{info['PATH']}/SENSITIVITY",
+                    _template_root,
                     config=args.config,
                     name=args.signal,
                     subfolder=f"{folder.lower()}/{energy}{_template_suffix}",
@@ -757,7 +765,7 @@ for config in configs:
                     debug=args.debug,
                 )
                 write_template_normalization(
-                    f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/"
+                    f"{_template_root}/{args.config}/{args.signal}/"
                     f"{folder.lower()}/{energy}{_template_suffix}",
                     detector_mass,
                 )
@@ -821,7 +829,7 @@ for config in configs:
         # regenerated cut is never reported as current to 04_best_cuts.py / 06_significance.py.
         for nhits, adjcl, ophits, h_array, fig, title in cut_data:
             write_template_sampling_marker(
-                f"{info['PATH']}/SENSITIVITY/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
+                f"{_template_root}/{args.config}/{args.signal}/{folder.lower()}/{energy}{_template_suffix}",
                 args.config, args.signal, nhits, adjcl, ophits,
                 scope="scan" if args.scan_mode else "grid",
                 backend=args.oscillation_backend,

@@ -161,8 +161,7 @@ if args.cuts_signal is None:
 _OP_PLANE_CUT  = _analysis_info.get("QUALITY_CUTS", {}).get("OPFLASH_PLANE", 0)
 _export_path   = f"{root}/output/data/results"   # mirrors 03_analysis.py export_path
 
-if not os.path.exists(f"{save_path}/{args.folder.lower()}"):
-    os.makedirs(f"{save_path}/{args.folder.lower()}")
+os.makedirs(f"{save_path}/{args.folder.lower()}", exist_ok=True)   # several samples run at once (paper_phaseI_exports.sh)
 
 user_input = {
     "workflow": "SIGNIFICANCE",

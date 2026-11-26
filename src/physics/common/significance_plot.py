@@ -413,8 +413,8 @@ parser.add_argument("--analysis_input_dir", type=str, default="/pnfs/ciemat.es/d
                     help="Root of the 01_daynight.py / 01_hep.py outputs read here (Results, SignificanceBins): {dir}/{DAYNIGHT,HEP}/{folder}/{config}/{name}/.")
 parser.add_argument("--output_dir", type=str, default=None,
                     help="Write the exported tables (Counts, Significance) and figures under this directory only, instead of the production {PATH}/<ANALYSIS> and output/data/analysis.")
-parser.add_argument("--volumes", type=int, default=1,
-                    help="Simulated volumes of the per-bin significances drawn in the lower panels (2: full VD module); the SignificanceBins must have been written for them (01_*.py --display_volumes). The counts stay per simulated volume.")
+parser.add_argument("--volumes", type=int, default=None,
+                    help="Simulated volumes of the per-bin significances drawn in the lower panels; default MODULE_VOLUMES of the config (2 for VD: the full module). The DayNight/HEP SignificanceBins must have been written for them (01_*.py --display_volumes). The counts stay per simulated volume.")
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
@@ -559,15 +559,15 @@ for this_path in [save_path, data_path] + ([local_data_path] if local_data_path 
 smoothing_info = smoothing_metadata(smoothing_config) if smoothing_config is not None else {}
 
 
-def _check_bins_exposure(bins_df, config, energy):
+def _check_bins_exposure(bins_df, config, energy, expected_volumes):
     """Warn when the per-bin significances (SignificanceBins) were not evaluated at the drawn exposure and volumes: the
     lower panels would not belong to the spectra above them (01_*.py --display_exposure, --display_volumes)."""
     exposure = float(bins_df["ExposureYears"].iloc[0]) if "ExposureYears" in bins_df.columns else float("nan")
     volumes = int(bins_df["Volumes"].iloc[0]) if "Volumes" in bins_df.columns else 1
-    if not np.isclose(exposure, args.exposure) or volumes != args.volumes:
+    if not np.isclose(exposure, args.exposure) or volumes != expected_volumes:
         rprint(f"[yellow][WARNING][/yellow] {config} {energy}: per-bin significances at {exposure:g} yr x {volumes} volume(s), "
-               f"spectra at {args.exposure:g} yr x {args.volumes}; rerun {args.analysis} 01 with --display_exposure "
-               f"{args.exposure:g} --display_volumes {args.volumes}.")
+               f"spectra at {args.exposure:g} yr x {expected_volumes}; rerun {args.analysis} 01 with --display_exposure "
+               f"{args.exposure:g} --display_volumes {expected_volumes}.")
 
 # ── HEP derived vars ───────────────────────────────────────────────────────────
 
@@ -597,6 +597,7 @@ for _sl in _study_labels_to_run:
     for config, name, energy in product(args.config, args.signal, args.energy):
         info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
         detector_mass = get_full_detector_mass(config, info)
+        _volumes = args.volumes or int(info.get("MODULE_VOLUMES", 1))
 
         # ══════════════════════════════════════════════════════════════════════════
         # DayNight
@@ -702,7 +703,7 @@ for _sl in _study_labels_to_run:
                 continue
 
             selected_bins = selected_bins.sort_values("BinIndex")
-            _check_bins_exposure(selected_bins, config, energy)
+            _check_bins_exposure(selected_bins, config, energy, _volumes)
             stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
             raw_significance = np.nan_to_num(
                 np.asarray(selected_bins["RawGaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
@@ -1174,7 +1175,7 @@ for _sl in _study_labels_to_run:
                     continue
 
                 selected_no_rebin = selected_no_rebin.sort_values("BinIndex")
-                _check_bins_exposure(selected_no_rebin, config, energy)
+                _check_bins_exposure(selected_no_rebin, config, energy, _volumes)
                 selected_adaptive = selected_adaptive.sort_values("BinIndex")
 
             if _sig_bins_available:
@@ -1818,13 +1819,25 @@ for _sl in _study_labels_to_run:
             purity_vals = np.divide(s, s + b, out=np.zeros_like(s, dtype=float), where=(s + b) > 0)
             lower_panel_max = float(np.max(asimov_density)) if asimov_density.size > 0 else 1.0
 
-            # Mirror the Asimov TS density onto the signal rows, matching DayNight/HEP which
-            # carry their per-bin significance in the Counts pkl alongside Sensitivity_Significance.
-            for _row in _counts_list:
-                if _row.get("Analysis") == "Sensitivity" and _row.get("Component") == "Solar (osc)" and _row.get("EnergyLabel") == energy:
-                    _row["Significance"] = asimov_density.tolist()
-                    _row["SignificanceUnit"] = r"MeV^{-1}"
-                    _row["SignificanceLabel"] = "Asimov TS density"
+            # Per-bin significance of the exported spectra (lower panels), as DayNight/HEP carry theirs in the Counts pkl:
+            # sqrt(q_i) per MeV, q_i = 2 [(s+b) ln(1+s/b) - s] of the solar signal over the summed backgrounds, for the raw
+            # and the smoothed spectrum separately, for --volumes simulated volumes (the full VD module), zero where the
+            # fit mask drops the bin (no background). It shows where the signal stands out in energy, not the
+            # solar-reactor test statistic.
+            for _spec in ("Raw", "Smoothed"):
+                _rows = [r for r in _counts_list if r.get("Analysis") == "Sensitivity" and r.get("EnergyLabel") == energy
+                         and r.get("SpectrumType") == _spec]
+                _sig_rows = [r for r in _rows if r["Component"] == "Solar (osc)"]
+                if len(_sig_rows) != 1:
+                    continue
+                _s = _volumes * bin_widths * np.asarray(_sig_rows[0]["Counts"], dtype=float)
+                _b = _volumes * bin_widths * sum(np.asarray(r["Counts"], dtype=float) for r in _rows if r["Component"] != "Solar (osc)")
+                _q = np.zeros_like(_s)
+                _m = (_b > 0) & (_s > 0)
+                _q[_m] = 2.0 * ((_s[_m] + _b[_m]) * np.log1p(_s[_m] / _b[_m]) - _s[_m])
+                _sig_rows[0]["Significance"] = (np.sqrt(np.maximum(_q, 0.0)) / bin_widths).tolist()
+                _sig_rows[0]["SignificanceUnit"] = r"\sigma \cdot MeV^{-1}"
+                _sig_rows[0]["SignificanceLabel"] = f"Asimov significance density ({_volumes} volume(s))"
 
             figure_name = f"{energy}_Sensitivity_Significance_Exposure_{args.exposure:.0f}"
             if args.nhits is not None or args.ophits is not None or args.adjcls is not None:

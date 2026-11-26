@@ -161,6 +161,15 @@ parser.add_argument(
          "touch the production tree.",
 )
 parser.add_argument(
+    "--hep_working_point", type=str, choices=["analysis", "none"], default="analysis",
+    help="HEP cut flow: analysis (the S/B classifier at its HEP working point above --hep_gate_energy, SolarEnergyHEP, "
+         "as the analysis) or none (the default working point everywhere: above the gate the decision of SolarEnergy, "
+         "below it SolarEnergyHEP, identical there; the clusters without the offset are removed). Cross-check of the "
+         "technical note (tools/hep_working_point_check.sh); needs --output_label or --output_dir.",
+)
+parser.add_argument("--hep_gate_energy", type=float, default=14.0,
+    help="Offset-inclusive energy (MeV) above which the HEP working point applies (SB_HEP_GATE_ENERGY of the calibration).")
+parser.add_argument(
     "--truth_fiducial",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -197,6 +206,8 @@ if len(args.config) > 1 or len(args.analysis) > 1:
             "--check_counts" if args.check_counts else "--no-check_counts",
             "--check_counts_rtol",    str(args.check_counts_rtol),
             "--first_stage",          args.first_stage,
+            "--hep_working_point",    args.hep_working_point,
+            "--hep_gate_energy",      str(args.hep_gate_energy),
         ]
         if args.output_dir:
             _cmd += ["--output_dir", args.output_dir]
@@ -242,6 +253,8 @@ if args.remove_no_offset and args.energy != "SolarEnergy":
     raise SystemExit("[ERROR] --remove_no_offset needs --energy SolarEnergy (the flags are read from its offset versions).")
 if (args.remove_no_offset or args.mc_filter_stages != "final") and not args.output_label:
     raise SystemExit("[ERROR] --remove_no_offset / --mc_filter_stages all are display variants: pass --output_label.")
+if args.hep_working_point != "analysis" and not (args.output_label or args.output_dir):
+    raise SystemExit("[ERROR] --hep_working_point none is a cross-check: pass --output_label or --output_dir.")
 
 os.makedirs(f"{save_path}/{args.folder.lower()}/{args.analysis.lower()}", exist_ok=True)
 
@@ -490,6 +503,15 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
             if len(_hep) != len(reco):
                 raise SystemExit(f"[ERROR] {name}: {_hep_pkl} has {len(_hep)} clusters, SolarEnergy {len(reco)}.")
             rprint(f"[cyan][INFO][/cyan] {name}: HEP cut flow in SolarEnergyHEP ({np.mean(_hep != reco):.1%} of clusters differ from SolarEnergy)")
+            if args.hep_working_point == "none":
+                # no HEP working point: above the gate the decision of the default working point (SolarEnergy; the
+                # neutron-capture veto acts only below the gate), below it SolarEnergyHEP (identical there); the analysis
+                # removes the clusters without the offset
+                _off = np.asarray(pickle.load(open(_ref_pkl(name, "AnalysisData_SolarEnergyOffset_Ref"), "rb")), dtype=float)
+                _nowp = np.where(_off >= args.hep_gate_energy, reco, _hep)
+                _nowp_keep = _nowp == _off
+                rprint(f"[cyan][INFO][/cyan] {name}: no HEP working point, {np.mean(_nowp != _hep):.2%} of clusters change energy")
+                _hep = _nowp
             reco = _hep
     weights  = _folder_weights(name, np.asarray(pickle.load(open(required[1], "rb")), dtype=float), args.energy)
     geo_fid  =np.asarray(pickle.load(open(required[2], "rb")), dtype=bool)
@@ -512,6 +534,9 @@ def _load_all_stages(name: str, weight_filename: str) -> list[np.ndarray]:
         if len(fid_keep) != len(reco):
             raise SystemExit(f"[ERROR] {name}: {_keep_pkl} has {len(fid_keep)} clusters, SolarEnergy {len(reco)}.")
         rprint(f"[cyan][INFO][/cyan] {name}: {np.mean(~fid_keep):.2%} of clusters removed by the analysis at the Fiducial stage (AnalysisKeep)")
+    if "_nowp_keep" in locals():
+        rprint(f"[cyan][INFO][/cyan] {name}: AnalysisKeep removes {np.mean(~fid_keep):.2%}, no-WP keep removes {np.mean(~_nowp_keep):.2%}")
+        fid_keep = _nowp_keep
     if args.ncap_display_low and args.analysis != "HEP" and args.energy == "SolarEnergy" and not args.study_label:
         _low_pkl = _ref_pkl(name, "AnalysisData_SolarEnergyNCapLow_Ref")
         if os.path.exists(_low_pkl):

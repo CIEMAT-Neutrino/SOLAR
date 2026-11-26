@@ -2048,6 +2048,22 @@ for config, folder in product(args.config, args.folder):
                 "--plot"    if args.plot else "--no-plot",
             ] + membrane_veto_args_for() + study_label_args_for() + truth_fiducial_args_for() + cut_args_for(),
         )
+        # The same cut flow with the classifier vetoes as the first stage (Phase I paper Fig. 5 and technote), output label
+        # vetoes: *_Cutflow_vetoes.pkl next to the default one.
+        run_analysis_script(
+            "src/physics/signal/cutflow_plot.py",
+            [
+                "--config",   config,
+                "--signal",   *available_names,
+                "--folder",   folder,
+                "--energy",   energy,
+                "--analysis", *args.analysis,
+                "--first_stage", "vetoes", "--output_label", "vetoes",
+                "--rewrite" if args.rewrite else "--no-rewrite",
+                "--debug"   if args.verbose == "verbose" else "--no-debug",
+                "--plot"    if args.plot else "--no-plot",
+            ] + membrane_veto_args_for() + study_label_args_for() + truth_fiducial_args_for() + cut_args_for(),
+        )
 
     # Pass 5: ch. 7 energy-estimator flow (ElectronEnergy, SolarEnergy with the offset, SolarEnergy after the vetoes) from the
     # Pass 3b exports, under the output label energystages (plotting repo study "energystages").

@@ -46,6 +46,7 @@ def main():
     parser.add_argument("--energy", default="SolarEnergy")
     parser.add_argument("--input_dir", required=True,
                         help="Directory holding {config}_{name}_{energy}_Sensitivity_Templates.pkl; the output is written here too.")
+    parser.add_argument("--output_dir", default=None, help="Directory of the output pkl (default: --input_dir).")
     parser.add_argument("--reactor", required=True, help="Raw per-year reactor-point signal template (.pkl, nadir x energy).")
     parser.add_argument("--exposure", type=float, default=30.0, help="Exposure in years (default: 30, the Sensitivity reference).")
     args = parser.parse_args()
@@ -106,7 +107,8 @@ def main():
                  "Counts": None, "CountsUnit": None,
                  "Residual": residual.tolist(), "ResidualUnit": r"\sigma"})
 
-    output = input_dir / f"{args.config}_{args.name}_{args.energy}_Sensitivity_Hypotheses.pkl"
+    Path(args.output_dir or input_dir).mkdir(parents=True, exist_ok=True)
+    output = Path(args.output_dir or input_dir) / f"{args.config}_{args.name}_{args.energy}_Sensitivity_Hypotheses.pkl"
     pd.DataFrame(rows).to_pickle(output)
 
     chi2_0 = float(np.nansum(residual**2))

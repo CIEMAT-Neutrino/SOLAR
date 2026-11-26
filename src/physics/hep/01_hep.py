@@ -233,9 +233,9 @@ parser.add_argument("--display_exposure", type=float, default=None,
                     help="Exposure in years of the per-bin display spectra (SignificanceBins), the lower panels of significance_plot.py. "
                          "Default: EVALUATION_EXPOSURE_YEARS of the analysis, the exposure significance_plot.py draws the spectra at "
                          "(before 2026-11-26 they were evaluated at --exposure, the end of the exposure scan).")
-parser.add_argument("--display_volumes", type=int, default=1,
-                    help="Number of simulated volumes the per-bin display spectra are evaluated for (2: the full VD module, "
-                         "twice the simulated drift volume). Results are unaffected.")
+parser.add_argument("--display_volumes", type=int, default=None,
+                    help="Number of simulated volumes the per-bin display spectra are evaluated for. Default: MODULE_VOLUMES of the "
+                         "config (2 for VD: the module is twice the simulated drift volume; 1 otherwise). Results are unaffected.")
 parser.add_argument("--output_dir", type=str, default=None,
                     help="Write Results and SignificanceBins under this directory instead of the production {PATH}/HEP/{folder} "
                          "(exports that must not touch the production tree).")
@@ -405,6 +405,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                          else get_evaluation_exposure(str(root), "HEP", config=config))
     _output_dir = args.output_dir or f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _display_volumes = args.display_volumes or int(info.get("MODULE_VOLUMES", 1))
     detector_mass = get_full_detector_mass(config, info)
 
     sigmas = []
@@ -856,7 +857,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
             _display_bin_mask = _display_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
         if _compute_significance_bins:
-            display_factor = _display_exposure * detector_mass * args.display_volumes
+            display_factor = _display_exposure * detector_mass * _display_volumes
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
@@ -881,7 +882,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 smoothed_display["starts_adaptive"],
             )
         elif _compute_asimov_significance_bins:
-            display_factor = _display_exposure * detector_mass * args.display_volumes
+            display_factor = _display_exposure * detector_mass * _display_volumes
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
@@ -1051,7 +1052,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
                         "ExposureYears": float(_display_exposure),
-                        "Volumes": int(args.display_volumes),
+                        "Volumes": int(_display_volumes),
                         "BinMode": "NoRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
@@ -1087,7 +1088,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
                         "ExposureYears": float(_display_exposure),
-                        "Volumes": int(args.display_volumes),
+                        "Volumes": int(_display_volumes),
                         "BinMode": "AdaptiveRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
@@ -1117,7 +1118,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
                         "ExposureYears": float(_display_exposure),
-                        "Volumes": int(args.display_volumes),
+                        "Volumes": int(_display_volumes),
                         "BinMode": "NoRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),

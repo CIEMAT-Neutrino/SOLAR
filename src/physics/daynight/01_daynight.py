@@ -69,9 +69,9 @@ parser.add_argument("--display_exposure", type=float, default=None,
                     help="Exposure in years of the per-bin display spectra (SignificanceBins), the lower panels of significance_plot.py. "
                          "Default: EVALUATION_EXPOSURE_YEARS of the analysis, the exposure significance_plot.py draws the spectra at "
                          "(before 2026-11-26 they were evaluated at --exposure, the end of the exposure scan).")
-parser.add_argument("--display_volumes", type=int, default=1,
-                    help="Number of simulated volumes the per-bin display spectra are evaluated for (2: the full VD module, "
-                         "twice the simulated drift volume). Results are unaffected.")
+parser.add_argument("--display_volumes", type=int, default=None,
+                    help="Number of simulated volumes the per-bin display spectra are evaluated for. Default: MODULE_VOLUMES of the "
+                         "config (2 for VD: the module is twice the simulated drift volume; 1 otherwise). Results are unaffected.")
 parser.add_argument("--output_dir", type=str, default=None,
                     help="Write Results and SignificanceBins under this directory instead of the production {PATH}/DAYNIGHT/{folder} "
                          "(exports that must not touch the production tree).")
@@ -237,6 +237,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                          else get_evaluation_exposure(str(root), "DayNight", config=config))
     _output_dir = args.output_dir or f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
+    _display_volumes = args.display_volumes or int(info.get("MODULE_VOLUMES", 1))
     detector_mass = get_full_detector_mass(config, info)
 
     sigmas = []
@@ -634,7 +635,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Per-bin display spectra — only computed when significance_bins is active.
         _n_bins_display = len(daynight_rebin_centers) - threshold_idx
         if _compute_significance_bins:
-            factor_display = _display_exposure * detector_mass * args.display_volumes
+            factor_display = _display_exposure * detector_mass * _display_volumes
             raw_night_display   = factor_display * night_fraction * (raw_background + raw_signal_night)
             raw_day_display     = factor_display * day_fraction   * (raw_background + raw_signal_day)
             raw_background_effective_display = (
@@ -754,7 +755,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "AdjCl": adjcl_value,
                         "Threshold": float(args.threshold),
                         "ExposureYears": float(_display_exposure),
-                        "Volumes": int(args.display_volumes),
+                        "Volumes": int(_display_volumes),
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
                         "RawGaussian": float(raw_gauss),

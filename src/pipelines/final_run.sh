@@ -14,7 +14,8 @@
 #                 --no-fiducialization; 2026-10-20, rerun39_final keeps the rerun-38 volumes)
 # Analysis: run_sensitivity Truncated (default background model) and the bkgmodel_pessimistic study, then
 # study_status, a snapshot of config, output/logs and output/data on pnfs (SOLAR_SNAPSHOT_DIR, linked as _runs/LABEL;
-# 2026-10-18: copies on /pc filled the shared disk), weighted extras and the staging for the plotting repository.
+# 2026-10-18: copies on /pc filled the shared disk), weighted extras, the staging for the plotting repository and the
+# Phase I paper exports (tools/paper_phaseI_exports.sh, into STAGE_DIR/LABEL/paper_phaseI).
 # Logs: SOLAR-sb/output/logs/LABEL_{calib,ana,realistic}; driver log next to this script (LABEL.log).
 LABEL=""; FROM=analysis; PS=3; ONLY=""; XHDC=0; EXTRAS_ONLY=0; FIDARG=""  # 2026-10-09: HD Central on the new PIC samples (light overlay): S/B classifier with the matched-flash inputs
 while getopts l:f:p:c:x:EF o; do case $o in l) LABEL=$OPTARG;; f) FROM=$OPTARG;; p) PS=$OPTARG;; c) ONLY=$OPTARG;; x) XHDC=$OPTARG;; E) EXTRAS_ONLY=1;; F) FIDARG="--no-fiducialization";; esac; done
@@ -77,3 +78,7 @@ grep -l "Traceback" $L/extra_*.log | sed "s/^/  FAILED: /"
 rm -rf $STAGE_DIR/$LABEL
 $IMG python3 $B/src/tools/stage_compare.py $B $STAGE_DIR/$LABEL $LABEL > $L/stage.log 2>&1; tail -1 $L/stage.log
 log "STAGED"
+# Phase I paper and technote exports (cut flows with the vetoes stage, weighted distributions at the selected cuts, spectra
+# with the per-bin significances at the drawn exposure, fit hypotheses), staged with the production
+tools/paper_phaseI_exports.sh $STAGE_DIR/$LABEL/paper_phaseI > $L/paper_phaseI_exports.log 2>&1; grep -v "^20" $L/paper_phaseI_exports.log | sed "s/^/  /"
+log "PAPER EXPORTS DONE"
