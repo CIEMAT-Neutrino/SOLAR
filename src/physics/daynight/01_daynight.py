@@ -65,6 +65,16 @@ parser.add_argument(
 )
 parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "DAYNIGHT"),
                     help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['DAYNIGHT'] in config/analysis/config.json.")
+parser.add_argument("--display_exposure", type=float, default=None,
+                    help="Exposure in years of the per-bin display spectra (SignificanceBins), the lower panels of significance_plot.py. "
+                         "Default: EVALUATION_EXPOSURE_YEARS of the analysis, the exposure significance_plot.py draws the spectra at "
+                         "(before 2026-11-26 they were evaluated at --exposure, the end of the exposure scan).")
+parser.add_argument("--display_volumes", type=int, default=1,
+                    help="Number of simulated volumes the per-bin display spectra are evaluated for (2: the full VD module, "
+                         "twice the simulated drift volume). Results are unaffected.")
+parser.add_argument("--output_dir", type=str, default=None,
+                    help="Write Results and SignificanceBins under this directory instead of the production {PATH}/DAYNIGHT/{folder} "
+                         "(exports that must not touch the production tree).")
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
@@ -223,6 +233,9 @@ if args.debug:
     )
 
 for config, name, energy in product(args.config, args.signal, args.energy):
+    _display_exposure = (args.display_exposure if args.display_exposure is not None
+                         else get_evaluation_exposure(str(root), "DayNight", config=config))
+    _output_dir = args.output_dir or f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
@@ -621,7 +634,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Per-bin display spectra — only computed when significance_bins is active.
         _n_bins_display = len(daynight_rebin_centers) - threshold_idx
         if _compute_significance_bins:
-            factor_display = args.exposure * detector_mass
+            factor_display = _display_exposure * detector_mass * args.display_volumes
             raw_night_display   = factor_display * night_fraction * (raw_background + raw_signal_night)
             raw_day_display     = factor_display * day_fraction   * (raw_background + raw_signal_day)
             raw_background_effective_display = (
@@ -740,7 +753,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "OpHits": ophit_value,
                         "AdjCl": adjcl_value,
                         "Threshold": float(args.threshold),
-                        "ExposureYears": float(args.exposure),
+                        "ExposureYears": float(_display_exposure),
+                        "Volumes": int(args.display_volumes),
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
                         "RawGaussian": float(raw_gauss),
@@ -756,7 +770,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     sigmas_df = pd.DataFrame(sigmas)
     sigmas_df = merge_with_existing_df(
         sigmas_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+        _output_dir,
         config=config,
         name=name,
         filename=f"{energy}_DayNight_Results{_study_suffix}",
@@ -765,7 +779,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     )
     save_df(
         sigmas_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+        _output_dir,
         config=config,
         name=name,
         filename=f"{energy}_DayNight_Results{_study_suffix}",
@@ -777,7 +791,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Preserve columns from prior runs when recomputing only subset of metrics
         significance_bins_df = merge_with_existing_df(
             significance_bins_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+            _output_dir,
             config=config,
             name=name,
             filename=f"{energy}_DayNight_SignificanceBins{_study_suffix}",
@@ -786,7 +800,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         )
         save_df(
             significance_bins_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}",
+            _output_dir,
             config=config,
             name=name,
             filename=f"{energy}_DayNight_SignificanceBins{_study_suffix}",

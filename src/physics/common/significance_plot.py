@@ -409,6 +409,12 @@ parser.add_argument(
     "--energy", nargs="+", type=str,
     default=["ClusterEnergy", "TotalEnergy", "SelectedEnergy", "SolarEnergy"],
 )
+parser.add_argument("--analysis_input_dir", type=str, default="/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR",
+                    help="Root of the 01_daynight.py / 01_hep.py outputs read here (Results, SignificanceBins): {dir}/{DAYNIGHT,HEP}/{folder}/{config}/{name}/.")
+parser.add_argument("--output_dir", type=str, default=None,
+                    help="Write the exported tables (Counts, Significance) and figures under this directory only, instead of the production {PATH}/<ANALYSIS> and output/data/analysis.")
+parser.add_argument("--volumes", type=int, default=1,
+                    help="Simulated volumes of the per-bin significances drawn in the lower panels (2: full VD module); the SignificanceBins must have been written for them (01_*.py --display_volumes). The counts stay per simulated volume.")
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
@@ -541,11 +547,27 @@ else:
     local_data_path = None
     smoothing_config = None
 
+if args.output_dir:
+    save_path = f"{args.output_dir}/images"
+    data_path = args.output_dir
+    local_data_path = args.output_dir if local_data_path else None
+
 for this_path in [save_path, data_path] + ([local_data_path] if local_data_path else []):
     if not os.path.exists(this_path):
         os.makedirs(this_path)
 
 smoothing_info = smoothing_metadata(smoothing_config) if smoothing_config is not None else {}
+
+
+def _check_bins_exposure(bins_df, config, energy):
+    """Warn when the per-bin significances (SignificanceBins) were not evaluated at the drawn exposure and volumes: the
+    lower panels would not belong to the spectra above them (01_*.py --display_exposure, --display_volumes)."""
+    exposure = float(bins_df["ExposureYears"].iloc[0]) if "ExposureYears" in bins_df.columns else float("nan")
+    volumes = int(bins_df["Volumes"].iloc[0]) if "Volumes" in bins_df.columns else 1
+    if not np.isclose(exposure, args.exposure) or volumes != args.volumes:
+        rprint(f"[yellow][WARNING][/yellow] {config} {energy}: per-bin significances at {exposure:g} yr x {volumes} volume(s), "
+               f"spectra at {args.exposure:g} yr x {args.volumes}; rerun {args.analysis} 01 with --display_exposure "
+               f"{args.exposure:g} --display_volumes {args.volumes}.")
 
 # ── HEP derived vars ───────────────────────────────────────────────────────────
 
@@ -589,7 +611,7 @@ for _sl in _study_labels_to_run:
                 continue
             sigma = pickle.load(open(_dn_path, "rb"))
             _dn_results_path = (
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
+                f"{args.analysis_input_dir}/DAYNIGHT/{args.folder.lower()}"
                 f"/{config}/{name}/{config}_{name}_{energy}_DayNight_Results{_study_suffix}.pkl"
             )
             if not os.path.exists(_dn_results_path):
@@ -597,7 +619,7 @@ for _sl in _study_labels_to_run:
                 continue
             sigmas_df = pd.read_pickle(_dn_results_path)
             significance_bins_path = (
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/DAYNIGHT/{args.folder.lower()}"
+                f"{args.analysis_input_dir}/DAYNIGHT/{args.folder.lower()}"
                 f"/{config}/{name}/{config}_{name}_{energy}_DayNight_SignificanceBins{_study_suffix}.pkl"
             )
             if not os.path.exists(significance_bins_path):
@@ -680,6 +702,7 @@ for _sl in _study_labels_to_run:
                 continue
 
             selected_bins = selected_bins.sort_values("BinIndex")
+            _check_bins_exposure(selected_bins, config, energy)
             stored_energy_axis = np.asarray(selected_bins["RecoEnergy"].values, dtype=float)
             raw_significance = np.nan_to_num(
                 np.asarray(selected_bins["RawGaussian"].values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0,
@@ -1092,7 +1115,7 @@ for _sl in _study_labels_to_run:
             adjcl_value = args.adjcls if args.adjcls is not None else int(ref_plot["AdjCl"])
 
             significance_bins_path = (
-                f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
+                f"{args.analysis_input_dir}/HEP/{args.folder.lower()}"
                 f"/{config}/{name}/{config}_{name}_{energy}_HEP_SignificanceBins{_study_suffix}.pkl"
             )
             _sig_bins_available = os.path.exists(significance_bins_path)
@@ -1151,6 +1174,7 @@ for _sl in _study_labels_to_run:
                     continue
 
                 selected_no_rebin = selected_no_rebin.sort_values("BinIndex")
+                _check_bins_exposure(selected_no_rebin, config, energy)
                 selected_adaptive = selected_adaptive.sort_values("BinIndex")
 
             if _sig_bins_available:

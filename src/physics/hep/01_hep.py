@@ -229,6 +229,16 @@ parser.add_argument(
 )
 parser.add_argument("--exposure", type=float, default=get_analysis_exposure(str(root), "HEP"),
                     help="Exposure the analysis is run to, in years. Default from ANALYSIS_EXPOSURES['HEP'] in config/analysis/config.json.")
+parser.add_argument("--display_exposure", type=float, default=None,
+                    help="Exposure in years of the per-bin display spectra (SignificanceBins), the lower panels of significance_plot.py. "
+                         "Default: EVALUATION_EXPOSURE_YEARS of the analysis, the exposure significance_plot.py draws the spectra at "
+                         "(before 2026-11-26 they were evaluated at --exposure, the end of the exposure scan).")
+parser.add_argument("--display_volumes", type=int, default=1,
+                    help="Number of simulated volumes the per-bin display spectra are evaluated for (2: the full VD module, "
+                         "twice the simulated drift volume). Results are unaffected.")
+parser.add_argument("--output_dir", type=str, default=None,
+                    help="Write Results and SignificanceBins under this directory instead of the production {PATH}/HEP/{folder} "
+                         "(exports that must not touch the production tree).")
 parser.add_argument("--nhits", type=int, default=None)
 parser.add_argument("--ophits", type=int, default=None)
 parser.add_argument("--adjcls", type=int, default=None)
@@ -391,6 +401,9 @@ _prob_events  = 0.0 if _min_prob <= 0 else -np.log(1.0 - min(_min_prob, 1.0 - 1e
 detection_threshold = max(_min_expected, _prob_events)
 
 for config, name, energy in product(args.config, args.signal, args.energy):
+    _display_exposure = (args.display_exposure if args.display_exposure is not None
+                         else get_evaluation_exposure(str(root), "HEP", config=config))
+    _output_dir = args.output_dir or f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}"
     info = json.loads(open(f"{root}/config/{config}/{config}_config.json").read())
     detector_mass = get_full_detector_mass(config, info)
 
@@ -843,7 +856,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         if os.environ.get("SOLAR_HEP_BIN_MASK") == "external":
             _display_bin_mask = _display_bin_mask & (external_mc_counts >= args.min_mc_per_bin)
         if _compute_significance_bins:
-            display_factor = args.exposure * detector_mass
+            display_factor = _display_exposure * detector_mass * args.display_volumes
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
@@ -868,7 +881,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                 smoothed_display["starts_adaptive"],
             )
         elif _compute_asimov_significance_bins:
-            display_factor = args.exposure * detector_mass
+            display_factor = _display_exposure * detector_mass * args.display_volumes
             display_detection_requirement = 3.0
             raw_display = _hep_display_spectrum(
                 raw_signal_rate, raw_background_rate, raw_bkg_error_rate,
@@ -1037,7 +1050,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "OpHits": int(ophit),
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
-                        "ExposureYears": float(args.exposure),
+                        "ExposureYears": float(_display_exposure),
+                        "Volumes": int(args.display_volumes),
                         "BinMode": "NoRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
@@ -1072,7 +1086,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "OpHits": int(ophit),
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
-                        "ExposureYears": float(args.exposure),
+                        "ExposureYears": float(_display_exposure),
+                        "Volumes": int(args.display_volumes),
                         "BinMode": "AdaptiveRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
@@ -1101,7 +1116,8 @@ for config, name, energy in product(args.config, args.signal, args.energy):
                         "OpHits": int(ophit),
                         "AdjCl": int(adjcl),
                         "Threshold": float(args.threshold),
-                        "ExposureYears": float(args.exposure),
+                        "ExposureYears": float(_display_exposure),
+                        "Volumes": int(args.display_volumes),
                         "BinMode": "NoRebin",
                         "BinIndex": int(bin_idx),
                         "RecoEnergy": float(energy_value),
@@ -1147,7 +1163,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     # Preserve columns from prior runs when recomputing only subset of metrics
     sigmas_df = merge_with_existing_df(
         sigmas_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+        _output_dir,
         config, name,
         filename=f"{energy}_HEP_Results{_study_suffix}",
         key_cols=["Config", "Name", "Energy", "NHits", "OpHits", "AdjCl"],
@@ -1155,7 +1171,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
     )
     save_df(
         sigmas_df,
-        f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+        _output_dir,
         config,
         name,
         filename=f"{energy}_HEP_Results{_study_suffix}",
@@ -1167,7 +1183,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         # Preserve columns from prior runs when recomputing only subset of metrics
         significance_bins_df = merge_with_existing_df(
             significance_bins_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+            _output_dir,
             config, name,
             filename=f"{energy}_HEP_SignificanceBins{_study_suffix}",
             key_cols=["Config", "Name", "EnergyLabel", "NHits", "OpHits", "AdjCl", "BinMode", "BinIndex"],
@@ -1175,7 +1191,7 @@ for config, name, energy in product(args.config, args.signal, args.energy):
         )
         save_df(
             significance_bins_df,
-            f"/pnfs/ciemat.es/data/neutrinos/DUNE/SOLAR/HEP/{args.folder.lower()}",
+            _output_dir,
             config,
             name,
             filename=f"{energy}_HEP_SignificanceBins{_study_suffix}",
